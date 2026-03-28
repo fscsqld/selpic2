@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SELPIC TETRIS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="game-root">
+      <div class="game-layout">
+        <div class="game-main">
+          <button id="sidebarToggle" class="sidebar-toggle" title="Toggle Sidebar">
+            <span id="sidebarToggleIcon">◀</span>
+          </button>
+          <div id="startScreen" class="start-screen">
+            <h2 class="start-title">SELPIC TETRIS</h2>
+            <p class="start-subtitle">Collect characters and match blocks!</p>
+            <div class="start-buttons">
+              <button id="startButton" class="start-button">▶ Start Game</button>
+              <button id="tutorialButton" class="tutorial-button">📖 Tutorial</button>
+            </div>
+          </div>
+
+        <!-- Tutorial Modal -->
+        <div id="tutorialModal" class="tutorial-modal hidden">
+          <div class="tutorial-content">
+            <button id="tutorialClose" class="tutorial-close">✕</button>
+            <h2 class="tutorial-title">🎮 How to Play</h2>
+            <div class="tutorial-steps">
+              <div class="tutorial-step">
+                <div class="tutorial-step-number">1</div>
+                <div class="tutorial-step-content">
+                  <h3>Move Blocks</h3>
+                  <p>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to move blocks left and right. Use <kbd>↓</kbd> to drop blocks faster. Blocks fall automatically at a speed that increases with each level.</p>
+                </div>
+              </div>
+              <div class="tutorial-step">
+                <div class="tutorial-step-number">2</div>
+                <div class="tutorial-step-content">
+                  <h3>Match Blocks</h3>
+                  <p>Match exactly 3 blocks of the same content horizontally or vertically to clear them. Each block cleared gives random points (5-50 points). Match 3 blocks = 1 explosion!</p>
+                </div>
+              </div>
+              <div class="tutorial-step">
+                <div class="tutorial-step-number">3</div>
+                <div class="tutorial-step-content">
+                  <h3>Block Types</h3>
+                  <p><strong>English Blocks</strong> (Blue): Match blocks with your English name. <strong>Korean Blocks</strong> (Orange/Red): Match blocks with your Korean name - collect all characters! <strong>SELPIC Blocks</strong> (Purple, "SP"): Match 3 to explode entire row or column! <strong>Random Blocks</strong> (Yellow, symbols): Cannot be matched - they act as obstacles.</p>
+                </div>
+              </div>
+              <div class="tutorial-step">
+                <div class="tutorial-step-number">4</div>
+                <div class="tutorial-step-content">
+                  <h3>Complete Levels</h3>
+                  <p>Complete 10 explosions (3 blocks = 1 explosion) to finish each level. Complete all 5 levels to unlock exclusive promo codes and get up to 15% discount! Each level has faster block falling speed.</p>
+                </div>
+              </div>
+              <div class="tutorial-step">
+                <div class="tutorial-step-number">5</div>
+                <div class="tutorial-step-content">
+                  <h3>Game Over</h3>
+                  <p>If blocks stack to the top row (row 0), the game ends. Try to clear blocks before they reach the top! Plan your moves carefully to create chain reactions.</p>
+                </div>
+              </div>
+            </div>
+            <div class="tutorial-tips">
+              <h3>💡 Tips & Block Features</h3>
+              <ul>
+                <li><strong>Random blocks</strong> (yellow symbols like ★, ◆, ●) cannot be matched - they act as obstacles</li>
+                <li><strong>SELPIC blocks</strong> (purple "SP") are powerful - match 3 horizontally to clear the entire row, or vertically to clear the entire column!</li>
+                <li><strong>Korean blocks</strong> can be collected - try to collect all characters from your Korean name</li>
+                <li><strong>Mission Progress</strong>: Each explosion (3 blocks matched) = 10% progress. You need 10 explosions to complete a level</li>
+                <li><strong>Scoring</strong>: Each block gives random points (5-50 points) when cleared</li>
+                <li>Press <kbd>SPACE</kbd> or <kbd>P</kbd> to pause anytime</li>
+                <li>Plan your moves to create row/column explosions with SELPIC blocks for maximum effect</li>
+              </ul>
+            </div>
+            <button id="tutorialStartButton" class="tutorial-start-button">Start Game</button>
+          </div>
+        </div>
+          <canvas id="gameCanvas" width="500" height="400"></canvas>
+          <div id="gameBottomText" class="game-bottom-text">
+            <!-- 여기에 게임과 상관없는 텍스트를 넣을 수 있습니다 -->
+          </div>
+          <div class="hud">
+            <div class="hud-row">
+              <div class="hud-item">
+                <span class="hud-label">Score</span>
+                <span id="scoreValue" class="hud-value">0</span>
+              </div>
+              <div class="hud-item">
+                <span class="hud-label">Level</span>
+                <span id="levelValue" class="hud-value">1</span>
+              </div>
+              <div class="hud-item">
+                <span class="hud-label">Lines</span>
+                <span id="linesValue" class="hud-value">0</span>
+              </div>
+            </div>
+            <div id="statusMessage" class="status-message"></div>
+            <div id="levelProgress" class="level-progress"></div>
+          </div>
+        </div>
+
+        <!-- Level Complete Modal -->
+        <div id="levelCompleteModal" class="level-complete-modal hidden">
+          <div class="level-complete-content">
+            <h2 id="levelCompleteTitle" class="level-complete-title">Level Complete!</h2>
+            <p id="levelCompleteMessage" class="level-complete-message"></p>
+            <div id="promoCodeSection" class="promo-code-section hidden">
+              <h3 class="promo-code-title">🎉 Congratulations! 🎉</h3>
+              <p class="promo-code-description">You've completed all levels! Here's your promo code:</p>
+              <div class="promo-code-display">
+                <input type="text" id="promoCodeValue" class="promo-code-input" readonly />
+                <button id="copyPromoCode" class="copy-promo-code-button">Copy</button>
+              </div>
+              <p class="promo-code-hint">Use this code at checkout for a special discount!</p>
+              <div class="promo-code-link-section">
+                <a href="/promo-codes" target="_blank" class="promo-code-link-button">
+                  📋 View All Promo Codes
+                </a>
+              </div>
+            </div>
+            <button id="continueButton" class="continue-button">Continue</button>
+          </div>
+        </div>
+
+        <aside class="game-sidebar" id="gameSidebar">
+          <button id="sidebarCloseButton" class="sidebar-close-button" title="Close Sidebar">
+            ✕
+          </button>
+          <!-- Game Score Board -->
+          <div class="sidebar-section score-board-section">
+            <h3 class="sidebar-heading score-board-title">🎮 Game Score Board</h3>
+            <div class="score-board">
+              <div class="score-board-item">
+                <div class="score-board-label">Player</div>
+                <div id="sidebarPlayerValue" class="score-board-value">—</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Score</div>
+                <div id="sidebarScoreValue" class="score-board-value">0</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Level</div>
+                <div id="sidebarLevelValue" class="score-board-value">1</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Mission Progress</div>
+                <div id="sidebarMissionProgress" class="score-board-progress">0%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section score-board-section">
+            <h3 class="sidebar-heading score-board-title">⚙️ Current Settings</h3>
+            <div class="score-board">
+              <div class="score-board-item">
+                <div class="score-board-label">English Name</div>
+                <div id="settingEnglishName" class="score-board-value">—</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Korean Name</div>
+                <div id="settingKoreanName" class="score-board-value">—</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Material</div>
+                <div id="settingMaterial" class="score-board-value">—</div>
+              </div>
+            </div>
+            
+            <h3 class="sidebar-heading score-board-title" style="margin-top: 20px;">🎮 Controls</h3>
+            <div class="score-board">
+              <div class="score-board-item">
+                <div class="score-board-label">Move</div>
+                <div class="score-board-value">← / →</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Soft Drop</div>
+                <div class="score-board-value">↓</div>
+              </div>
+              <div class="score-board-item">
+                <div class="score-board-label">Pause</div>
+                <div class="score-board-value">SPACE / P</div>
+              </div>
+            </div>
+            <div class="score-board" style="margin-top: 12px;">
+              <div class="score-board-item">
+                <button id="pauseButton" class="score-board-button">
+                  ⏸️ Pause
+                </button>
+              </div>
+              <div class="score-board-item">
+                <button id="musicToggle" class="score-board-button">
+                  🎵 Music: OFF
+                </button>
+              </div>
+            </div>
+            
+            <h3 class="sidebar-heading score-board-title" style="margin-top: 20px;">📊 Status</h3>
+            <div id="gameOverPanel" class="score-board hidden">
+              <div class="score-board-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <div class="score-board-label" style="color: #fecaca; font-size: 14px;">게임 실패</div>
+                <div class="score-board-value" style="color: #fca5a5; font-size: 12px; text-align: left;">맨 위 행에 블록이 쌓였습니다.</div>
+                <button id="restartButton" class="score-board-button" style="width: 100%; margin-top: 8px;">
+                  Play Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Background music 
+         음악을 사용하려면: 
+         1. MP3 형식의 배경음악 파일을 준비하세요
+         2. 파일 이름을 정확히 "music.mp3"로 저장하거나, 아래 src를 실제 파일 이름으로 변경하세요
+         3. 이 파일과 같은 폴더(public/custom-game/)에 넣으세요
+         4. 파일이 없어도 게임은 정상 작동합니다 (음악만 재생되지 않음)
+    -->
+    <audio id="bgm" src="./BGM%20Tetris%20Bradinsky.mp3" loop preload="auto"></audio>
+
+    <script src="./game.js" defer></script>
+  </body>
+</html>
+
+

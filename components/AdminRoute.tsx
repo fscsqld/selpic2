@@ -1,0 +1,174 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { useAdminSession } from '@/lib/adminSession'
+
+interface AdminRouteProps {
+  children: React.ReactNode
+  requiredPermissions?: string[]
+}
+
+export default function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
+  const { isLoggedIn, adminUser, logout } = useAdminAuth()
+  const { currentSessionId, isSessionValid, updateActivity } = useAdminSession()
+  const router = useRouter()
+  const [hasHydrated, setHasHydrated] = useState(false)
+
+  // Wait for persisted admin auth to hydrate before deciding
+  useEffect(() => {
+    // 하이드레이션 상태를 더 안전하게 처리
+    const checkHydration = () => {
+      try {
+        const persistApi: any = (useAdminAuth as any).persist
+        if (persistApi?.hasHydrated) {
+          const hydrated = persistApi.hasHydrated()
+          console.log('🔄 AdminRoute hydration check:', hydrated)
+          setHasHydrated(hydrated)
+        } else {
+          // persist API가 없는 경우 바로 true로 설정
+          console.log('⚠️ AdminRoute: No persist API found, setting hydrated to true')
+          setHasHydrated(true)
+        }
+
+        // 하이드레이션 완료 리스너 등록
+        const unsub = persistApi?.onFinishHydration?.(() => {
+          console.log('✅ AdminRoute: Hydration finished')
+          setHasHydrated(true)
+        })
+        
+        return unsub
+      } catch (error) {
+        console.error('❌ AdminRoute hydration error:', error)
+        // 에러 발생 시 바로 하이드레이션 완료로 처리
+        setHasHydrated(true)
+        return undefined
+      }
+    }
+
+    const unsub = checkHydration()
+    
+    // 타임아웃으로 최대 3초 후 강제 하이드레이션 완료
+    const timeout = setTimeout(() => {
+      console.log('⏰ AdminRoute: Forcing hydration completion after timeout')
+      setHasHydrated(true)
+    }, 3000)
+
+    return () => {
+      if (typeof unsub === 'function') unsub()
+      clearTimeout(timeout)
+    }
+  }, [])
+
+  // Check permissions on mount and when permissions change
+  const checkPermissions = useCallback(() => {
+    if (!hasHydrated || !isLoggedIn) return
+
+    // Check session validity on mount
+    if (currentSessionId && !isSessionValid(currentSessionId)) {
+      console.log('Session invalid on mount, logging out...')
+      logout()
+      router.push('/admin/login')
+      return
+    }
+
+    // 권한 확인
+    if (requiredPermissions.length > 0 && adminUser) {
+      const hasPermission = requiredPermissions.every(permission =>
+        adminUser.permissions.includes(permission)
+      )
+
+      if (!hasPermission) {
+        console.log('Permission denied, redirecting to dashboard...')
+        router.push('/admin/dashboard')
+      }
+    }
+  }, [hasHydrated, isLoggedIn, adminUser, requiredPermissions, router, currentSessionId, isSessionValid, logout])
+
+  // Check session validity periodically
+  useEffect(() => {
+    if (!hasHydrated || !isLoggedIn || !currentSessionId) return
+
+    // Update activity on mount and periodically
+    if (currentSessionId) {
+      updateActivity(currentSessionId)
+    }
+
+    // Check session validity every 30 seconds
+    const sessionCheckInterval = setInterval(() => {
+      if (currentSessionId) {
+        updateActivity(currentSessionId)
+        
+        // Check if session is still valid
+        if (!isSessionValid(currentSessionId)) {
+          console.log('Session expired, logging out...')
+          logout()
+          router.push('/admin/login')
+        }
+      }
+    }, 30000)
+
+    return () => clearInterval(sessionCheckInterval)
+  }, [hasHydrated, isLoggedIn, currentSessionId, isSessionValid, updateActivity, logout, router])
+
+  useEffect(() => {
+    checkPermissions()
+  }, [checkPermissions])
+
+  // Listen for permission changes
+  useEffect(() => {
+    if (!hasHydrated) return
+
+    const handleAuthUpdate = () => {
+      console.log('🔄 Admin auth updated, checking permissions...')
+      // Get latest admin user from store
+      const latestAdminUser = useAdminAuth.getState().adminUser
+      
+      // Check if current user's permissions changed
+      if (latestAdminUser && adminUser && latestAdminUser.username === adminUser.username) {
+        // Re-check permissions
+        setTimeout(() => {
+          checkPermissions()
+        }, 100)
+      }
+    }
+
+    window.addEventListener('admin-auth-updated', handleAuthUpdate)
+    return () => window.removeEventListener('admin-auth-updated', handleAuthUpdate)
+  }, [hasHydrated, adminUser, checkPermissions])
+
+  // 하이드레이션 완료 후 isLoggedIn이 false면 로그인 페이지로 리다이렉트
+  useEffect(() => {
+    if (hasHydrated && !isLoggedIn) {
+      console.log('🔄 AdminRoute: Not logged in, redirecting to login')
+      router.push('/admin/login')
+    }
+  }, [hasHydrated, isLoggedIn, router])
+
+  // 모든 Hooks 호출 후 조건부 렌더링 (중요: Hooks는 항상 같은 순서로 호출되어야 함)
+  if (!hasHydrated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 하이드레이션 완료 후 isLoggedIn이 false면 리다이렉트 중 로딩 화면
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">인증 확인 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+} 

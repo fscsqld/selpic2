@@ -1,0 +1,227 @@
+---
+globs: app/**/*.tsx,components/**/*.tsx
+description: 컴포넌트 수정 시 오류 방지 가이드
+---
+
+# 오류 방지 및 안전한 코딩 규칙
+
+## 🛡️ 컴포넌트 수정 시 필수 안전 수칙
+
+### 1. Import 문 안전 관리
+
+#### 필수 Import (절대 제거 금지):
+```typescript
+// ✅ 홈페이지 핵심 imports - 절대 제거하지 말 것!
+import { motion, useScroll, useTransform, useInView } from 'framer-motion'
+import { 
+  Package, Star, Zap, Heart, ArrowRight, Palette, 
+  Scissors, Truck, Shield, Award, Sparkles, Play, CheckCircle 
+} from 'lucide-react'
+```
+
+#### 새 Import 추가 시:
+```typescript
+// ✅ 기존 import 뒤에 새로운 import 추가
+import { NewIcon, AnotherIcon } from 'lucide-react'
+import { newUtility } from '@/lib/newUtility'
+```
+
+### 2. 상태 관리 안전 규칙
+
+#### 기존 상태 보호:
+```typescript
+// ✅ 기존 상태는 그대로 유지
+const { products, setIsCustomizationModalOpen } = useStore()
+const { t } = useTranslation()
+const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+
+// ✅ 새 상태만 추가
+const [newFeature, setNewFeature] = useState(false)
+const [additionalData, setAdditionalData] = useState([])
+```
+
+#### 금지사항:
+```typescript
+// ❌ 기존 상태 제거 또는 수정 금지
+// const { products } = useStore() // setIsCustomizationModalOpen 제거 금지
+// const [selectedProduct] = useState<Product>(null) // 타입 변경 금지
+```
+
+### 3. JSX 구조 안전 수정
+
+#### 허용되는 추가:
+```typescript
+// ✅ 기존 섹션 뒤에 새 섹션 추가
+      {/* CTA Section */}
+      <section className="py-20 bg-white">
+        {/* 기존 내용 */}
+      </section>
+
+      {/* ✅ 새 섹션 추가 */}
+      <section className="py-20 bg-gray-50">
+        <NewFeatureComponent />
+      </section>
+
+      {/* Customization Modal */}
+      {selectedProduct && (
+        <CustomizationModal product={selectedProduct} />
+      )}
+```
+
+#### 금지사항:
+```typescript
+// ❌ 기존 Hero 섹션 내용 수정 금지
+<motion.section 
+  className="relative min-h-screen" // 기존 클래스 변경 금지
+>
+  {/* 기존 내용 수정 금지 */}
+</motion.section>
+```
+
+### 4. CSS 클래스 안전 관리
+
+#### 기존 클래스 보호:
+```typescript
+// ✅ 기존 클래스는 그대로 유지
+<h1 className="text-8xl lg:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 drop-shadow-2xl">
+  SELPIC
+</h1>
+
+// ✅ 새 요소에만 새 클래스 적용
+<div className="new-feature-container bg-blue-50 p-8">
+  <NewComponent />
+</div>
+```
+
+### 5. 이벤트 핸들러 안전 수정
+
+#### 기존 핸들러 보호:
+```typescript
+// ✅ 기존 핸들러는 그대로 유지
+const handleCustomize = (product: Product) => {
+  setSelectedProduct(product)
+  setIsCustomizationModalOpen(true)
+}
+
+// ✅ 새 핸들러만 추가
+const handleNewFeature = () => {
+  setNewFeature(true)
+}
+```
+
+### 6. 애니메이션 설정 보호
+
+#### 절대 변경 금지:
+```typescript
+// ❌ 기존 애니메이션 설정 변경 금지
+// transition={{ duration: 1 }} -> transition={{ duration: 2 }} 변경 금지
+// whileHover={{ scale: 1.05 }} -> whileHover={{ scale: 1.1 }} 변경 금지
+
+// ✅ 새 요소에만 새 애니메이션 적용
+<motion.div
+  className="new-element"
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  transition={{ duration: 0.5 }}
+>
+```
+
+### 7. 데이터 배열 안전 처리
+
+#### 기존 데이터 보호:
+```typescript
+// ✅ 기존 배열 처리는 그대로 유지
+const featuredProducts = products.slice(0, 3)
+const stats = [
+  { number: "50,000+", label: "만족한 고객" },
+  // 기존 데이터 유지
+]
+
+// ✅ 새 데이터만 추가
+const newFeatureData = [
+  { id: 1, title: "새 기능" }
+]
+```
+
+### 8. 에러 처리 필수 패턴
+
+#### 모든 새 기능에 에러 처리 추가:
+```typescript
+// ✅ Try-Catch 블록 사용
+const handleNewAction = async () => {
+  try {
+    // 새 기능 로직
+    await newFeatureAction()
+  } catch (error) {
+    console.error('New feature error:', error)
+    // 기존 상태로 롤백
+  }
+}
+
+// ✅ 조건부 렌더링으로 안전성 확보
+{newFeature && (
+  <SafeNewComponent />
+)}
+```
+
+### 9. 타입 안전성 보장
+
+#### 기존 타입 보호:
+```typescript
+// ✅ 기존 타입은 절대 변경하지 않음
+const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+
+// ✅ 새 타입만 추가
+interface NewFeatureType {
+  id: number
+  name: string
+}
+const [newData, setNewData] = useState<NewFeatureType[]>([])
+```
+
+### 10. 성능 최적화 유지
+
+#### 기존 최적화 보호:
+```typescript
+// ✅ 기존 useEffect, useMemo, useCallback 유지
+useEffect(() => {
+  const interval = setInterval(() => {
+    setCurrentTestimonial((prev) => (prev + 1) % testimonials.length)
+  }, 5000)
+  return () => clearInterval(interval)
+}, [])
+
+// ✅ 새 최적화만 추가
+const memoizedNewData = useMemo(() => {
+  return newData.filter(item => item.active)
+}, [newData])
+```
+
+### 11. 디버깅 및 모니터링
+
+#### 개발 시 필수 확인사항:
+```typescript
+// ✅ 콘솔 로그로 새 기능 추적
+console.log('New feature initialized:', newFeature)
+
+// ✅ 에러 바운더리 적용
+<ErrorBoundary fallback={<ErrorFallback />}>
+  <NewFeatureComponent />
+</ErrorBoundary>
+```
+
+### 12. 코드 리뷰 체크리스트
+
+새 코드 추가 시 확인사항:
+- [ ] 기존 import 문 보존됨
+- [ ] 기존 상태 변수 그대로 유지됨
+- [ ] 기존 JSX 구조 변경하지 않음
+- [ ] 기존 CSS 클래스 수정하지 않음
+- [ ] 기존 애니메이션 설정 보존됨
+- [ ] 새 기능에 에러 처리 추가됨
+- [ ] 타입 안전성 확보됨
+- [ ] 성능 저하 없음 확인됨
+
+---
+
+**⚠️ 이 규칙들을 따르면 기존 홈페이지를 안전하게 보호하면서 새 기능을 추가할 수 있습니다!**

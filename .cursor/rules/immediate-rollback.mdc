@@ -1,0 +1,150 @@
+---
+globs: app/**/*.tsx,components/**/*.tsx
+description: 즉시 원상복구 실행 가이드
+---
+
+# 즉시 원상복구 실행 매뉴얼
+
+## 🚨 "원상복구해줘" 요청 시 즉시 실행
+
+### 1. 즉시 중단 및 복구
+```bash
+# 현재 작업 즉시 중단
+Ctrl + C
+
+# 서버 완전 종료
+taskkill /F /IM node.exe
+
+# 바로 직전 상태로 복구
+git checkout HEAD -- app/page.tsx
+```
+
+### 2. 파일별 우선순위 복구
+```typescript
+// 우선순위 1: app/page.tsx
+git checkout HEAD -- app/page.tsx
+
+// 우선순위 2: app/globals.css  
+git checkout HEAD -- app/globals.css
+
+// 우선순위 3: components/Header.tsx
+git checkout HEAD -- components/Header.tsx
+```
+
+### 3. 즉시 서버 재시작
+```bash
+# 캐시 정리 후 재시작
+Remove-Item -Path ".next" -Recurse -Force -ErrorAction SilentlyContinue
+npm run dev
+```
+
+## ⚡ 한 줄 복구 명령어
+
+### 전체 복구:
+```bash
+taskkill /F /IM node.exe; git checkout HEAD -- .; npm run dev
+```
+
+### 홈페이지만 복구:
+```bash
+git checkout HEAD -- app/page.tsx; npm run dev
+```
+
+### 스타일만 복구:
+```bash
+git checkout HEAD -- app/globals.css; npm run dev
+```
+
+## 🎯 복구 후 즉시 확인사항
+
+### 1. 서버 상태 확인
+- [ ] `npm run dev` 정상 실행
+- [ ] 포트 3000에서 실행 중
+- [ ] 에러 메시지 없음
+
+### 2. 홈페이지 상태 확인  
+- [ ] http://localhost:3000 접속 가능
+- [ ] 페이지 로딩 정상
+- [ ] 기본 기능 작동
+
+### 3. 핵심 요소 확인
+- [ ] SELPIC 로고 표시
+- [ ] 네비게이션 메뉴 작동
+- [ ] 기본 스타일 적용
+
+## 🔄 상황별 복구 전략
+
+### 상황 1: 페이지가 아예 안 뜰 때
+```bash
+# 홈페이지 파일 복구
+git checkout HEAD -- app/page.tsx
+git checkout HEAD -- app/layout.tsx
+npm run dev
+```
+
+### 상황 2: 디자인이 깨졌을 때
+```bash
+# 스타일 파일 복구
+git checkout HEAD -- app/globals.css
+git checkout HEAD -- tailwind.config.js
+npm run dev
+```
+
+### 상황 3: 기능이 작동 안 할 때
+```bash
+# 컴포넌트 파일 복구
+git checkout HEAD -- components/Header.tsx
+git checkout HEAD -- components/ProductCard.tsx
+npm run dev
+```
+
+### 상황 4: 서버 에러가 날 때
+```bash
+# 전체 복구
+git checkout HEAD -- .
+npm install
+npm run dev
+```
+
+## 📋 복구 완료 보고 템플릿
+
+### 성공적 복구 시:
+```
+✅ 원상복구 완료!
+- 파일: [복구된 파일명]
+- 상태: 정상 작동
+- 확인: http://localhost:3000
+```
+
+### 복구 중 문제 발생 시:
+```
+⚠️ 복구 중 이슈 발생
+- 문제: [구체적 에러 메시지]
+- 시도: [시도한 복구 방법]
+- 다음 단계: [추가 복구 계획]
+```
+
+## 🛡️ 안전한 복구를 위한 체크포인트
+
+### 복구 전 체크:
+- [ ] 현재 상태가 정말 문제인지 확인
+- [ ] 마지막 정상 상태 파악
+- [ ] 백업 생성 여부 확인
+
+### 복구 중 체크:
+- [ ] 한 번에 하나씩 파일 복구
+- [ ] 각 단계별 결과 즉시 확인
+- [ ] 문제 지속 시 추가 조치
+
+### 복구 후 체크:
+- [ ] 모든 기본 기능 테스트
+- [ ] 에러 로그 완전 정리
+- [ ] 향후 예방책 수립
+
+---
+
+**⚡ 원칙: "원상복구해줘" = 즉시 바로 직전 상태로 되돌리기**
+
+**🎯 목표: 최소한의 명령어로 최대한 빠른 복구**
+
+**✅ 성공 기준: 사용자가 다시 정상적으로 작업할 수 있는 상태**

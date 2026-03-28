@@ -1,0 +1,260 @@
+---
+description: 긴급 복구 및 문제 해결 가이드
+---
+
+# 🚨 긴급 복구 및 문제 해결 매뉴얼
+
+## 1. 즉시 실행할 긴급 복구 명령어
+
+### 홈페이지가 작동하지 않을 때:
+```bash
+# Step 1: 모든 Node.js 프로세스 종료
+taskkill /F /IM node.exe
+
+# Step 2: 포트 확인 및 정리
+netstat -an | findstr :3000
+
+# Step 3: 캐시 정리
+npm run clean
+
+# Step 4: 의존성 재설치
+npm install
+
+# Step 5: 서버 재시작
+npm run dev
+
+# Step 6: 브라우저에서 확인
+# http://localhost:3000
+```
+
+### Git에서 원본 파일 복구:
+```bash
+# 핵심 파일들 즉시 복구
+git checkout HEAD -- app/page.tsx
+git checkout HEAD -- app/globals.css
+git checkout HEAD -- app/layout.tsx
+git checkout HEAD -- components/Header.tsx
+git checkout HEAD -- tailwind.config.js
+git checkout HEAD -- package.json
+```
+
+## 2. 자주 발생하는 문제별 해결책
+
+### 문제 1: "Zap is not defined" 에러
+```bash
+# 원인: Lucide React import 누락
+# 해결: app/page.tsx 상단 import 확인
+```
+```typescript
+// ✅ 올바른 import
+import { 
+  Package, Star, Zap, Heart, ArrowRight, Palette, 
+  Scissors, Truck, Shield, Award, Sparkles, Play, CheckCircle 
+} from 'lucide-react'
+```
+
+### 문제 2: "Framer Motion" 에러
+```bash
+# 원인: framer-motion 설치 안됨
+npm install framer-motion
+
+# 또는 import 누락 확인
+```
+```typescript
+// ✅ 올바른 import
+import { motion, useScroll, useTransform, useInView } from 'framer-motion'
+```
+
+### 문제 3: "HOT ITEM" 배지 안보임
+```typescript
+// ✅ 복구 코드 - Featured Products 섹션에 추가
+<motion.div
+  className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-500 to-pink-500 text-white px-6 py-2 rounded-full text-sm font-bold mb-4"
+  initial={{ scale: 0 }}
+  whileInView={{ scale: 1 }}
+  transition={{ duration: 0.5, type: "spring", stiffness: 300 }}
+  viewport={{ once: true }}
+>
+  <span className="animate-pulse">🔥</span>
+  <span>HOT ITEM</span>
+  <span className="animate-pulse">🔥</span>
+</motion.div>
+```
+
+### 문제 4: SELPIC 로고 스타일 깨짐
+```typescript
+// ✅ 올바른 SELPIC 로고 코드
+<h1 className="text-8xl lg:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 drop-shadow-2xl">
+  SELPIC
+</h1>
+```
+
+### 문제 5: 배경 그래디언트 사라짐
+```typescript
+// ✅ 올바른 Hero 섹션 배경
+<motion.section 
+  className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900"
+>
+```
+
+## 3. 파일별 핵심 백업 코드
+
+### app/page.tsx 핵심 구조:
+```typescript
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { motion, useScroll, useTransform, useInView } from 'framer-motion'
+import Header from '@/components/Header'
+import ProductCard from '@/components/ProductCard'
+import CustomizationModal from '@/components/CustomizationModal'
+import { useStore, Product } from '@/lib/store'
+import { useTranslation } from '@/lib/useTranslation'
+import { 
+  Package, Star, Zap, Heart, ArrowRight, Palette, 
+  Scissors, Truck, Shield, Award, Sparkles, Play, CheckCircle 
+} from 'lucide-react'
+
+export default function HomePage() {
+  // 기존 상태 유지
+  const { products, setIsCustomizationModalOpen } = useStore()
+  const { t } = useTranslation()
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  
+  // 나머지 코드...
+}
+```
+
+### app/globals.css 핵심 스타일:
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 핵심 변수들 */
+:root {
+  --font-playfair: 'Playfair Display', 'Georgia', serif;
+  --primary-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+}
+
+/* 그래디언트 텍스트 */
+.text-gradient {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+```
+
+## 4. 단계별 문제 진단
+
+### Level 1: 기본 확인
+```bash
+# 1. 서버 실행 상태 확인
+netstat -an | findstr :3000
+
+# 2. Node.js 프로세스 확인
+tasklist | findstr node
+
+# 3. 패키지 설치 상태 확인
+npm list framer-motion lucide-react
+```
+
+### Level 2: 파일 무결성 확인
+```bash
+# 1. 핵심 파일 존재 확인
+ls app/page.tsx
+ls components/Header.tsx
+ls app/globals.css
+
+# 2. 문법 오류 확인
+npm run type-check
+```
+
+### Level 3: 의존성 문제 해결
+```bash
+# 1. node_modules 완전 재설치
+rm -rf node_modules package-lock.json
+npm install
+
+# 2. 캐시 완전 정리
+npm cache clean --force
+```
+
+## 5. 예방적 백업 시스템
+
+### 정기 백업 명령어:
+```bash
+# 핵심 파일들 백업
+cp app/page.tsx app/page.tsx.backup
+cp app/globals.css app/globals.css.backup
+cp components/Header.tsx components/Header.tsx.backup
+
+# Git 커밋으로 백업
+git add .
+git commit -m "Working homepage backup - $(date)"
+```
+
+### 자동 복구 스크립트:
+```bash
+#!/bin/bash
+# auto-recovery.sh
+
+echo "🚨 Starting emergency recovery..."
+
+# 1. 서버 중지
+taskkill /F /IM node.exe
+
+# 2. 핵심 파일 복구
+git checkout HEAD -- app/page.tsx
+git checkout HEAD -- app/globals.css
+git checkout HEAD -- components/Header.tsx
+
+# 3. 의존성 재설치
+npm install
+
+# 4. 서버 재시작
+npm run dev
+
+echo "✅ Recovery completed!"
+```
+
+## 6. 응급 연락 체크리스트
+
+문제 발생 시 순서대로 실행:
+- [ ] `taskkill /F /IM node.exe` 실행
+- [ ] `git checkout HEAD -- app/page.tsx` 실행
+- [ ] `npm install` 실행
+- [ ] `npm run dev` 실행
+- [ ] http://localhost:3000 접속 확인
+- [ ] SELPIC 로고 애니메이션 확인
+- [ ] HOT ITEM 배지 확인
+- [ ] 모든 섹션 정상 작동 확인
+
+## 7. 문제 예방을 위한 개발 습관
+
+### 매일 실행할 명령어:
+```bash
+# 1. 홈페이지 정상 작동 확인
+npm run dev
+# http://localhost:3000 접속
+
+# 2. 에러 로그 확인
+# 브라우저 개발자 도구 콘솔 체크
+
+# 3. 백업 생성
+git add app/page.tsx app/globals.css
+git commit -m "Daily backup"
+```
+
+### 새 기능 개발 전 체크리스트:
+- [ ] 현재 홈페이지 정상 작동 확인
+- [ ] 작업 브랜치 생성: `git checkout -b feature/new-feature`
+- [ ] 백업 커밋: `git commit -m "Before adding new feature"`
+- [ ] 별도 파일에서 개발 시작
+
+---
+
+**🆘 응급상황 시 이 매뉴얼을 참고하여 즉시 복구하세요!**
+
+**💡 예방이 최선의 치료법입니다. 정기적으로 백업하고 안전한 개발 습관을 유지하세요!**

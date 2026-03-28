@@ -1,0 +1,113 @@
+# Translation Management Rules
+
+## Translation File Structure
+
+### File: [lib/translations.ts](mdc:lib/translations.ts)
+
+**Critical Rules:**
+1. **Maximum file size**: 500 lines to prevent timeout issues
+2. **No duplicate keys**: Each key must be unique across the entire file
+3. **Simple structure**: Avoid deeply nested objects (max 3 levels)
+4. **Consistent naming**: Use descriptive, unique key names
+
+### Key Naming Convention
+```typescript
+// ✅ Good - Unique, descriptive keys
+loginPage: { title: 'Login' }
+registerPage: { title: 'Register' }
+profilePage: { title: 'Profile' }
+
+// ❌ Bad - Duplicate keys
+login: { title: 'Login' }
+login: 'Login' // This creates a conflict
+```
+
+### Translation Structure Guidelines
+```typescript
+export const translations = {
+  ko: {
+    // Basic navigation
+    home: '홈',
+    cart: '장바구니',
+    
+    // Page-specific translations
+    loginPage: {
+      title: '로그인',
+      email: '이메일'
+    },
+    
+    // Feature sections
+    hero: {
+      title: '나만의 특별한',
+      highlight: '네임 스티커'
+    }
+  },
+  en: {
+    // Mirror the same structure
+    home: 'Home',
+    cart: 'Cart',
+    
+    loginPage: {
+      title: 'Login',
+      email: 'Email'
+    },
+    
+    hero: {
+      title: 'Your Special',
+      highlight: 'Name Sticker'
+    }
+  }
+}
+```
+
+## Usage in Components
+
+### Import and Use
+```typescript
+import { useTranslation } from '@/lib/useTranslation'
+
+export default function MyComponent() {
+  const { t } = useTranslation()
+  
+  return (
+    <div>
+      <h1>{t('loginPage.title')}</h1>
+      <p>{t('hero.description')}</p>
+    </div>
+  )
+}
+```
+
+## Error Prevention
+
+### Common Issues to Avoid
+1. **Duplicate Keys**: Check for same key names at different levels
+2. **Missing Keys**: Ensure both `ko` and `en` have the same structure
+3. **Deep Nesting**: Keep objects shallow for better performance
+4. **Large Files**: Split into multiple files if over 500 lines
+
+### Validation Checklist
+- [ ] No duplicate keys in the same language
+- [ ] Same structure in both `ko` and `en`
+- [ ] File size under 500 lines
+- [ ] Maximum nesting depth of 3 levels
+- [ ] All keys are used in components
+- [ ] Proper TypeScript types defined
+
+## Maintenance
+
+### When Adding New Translations
+1. Add to both `ko` and `en` sections
+2. Use unique, descriptive key names
+3. Keep the structure consistent
+4. Test the translation in the component
+
+### When Refactoring
+1. Update all component references
+2. Maintain backward compatibility
+3. Update TypeScript types if needed
+4. Test all affected components
+description:
+globs:
+alwaysApply: false
+---

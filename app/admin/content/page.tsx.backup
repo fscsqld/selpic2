@@ -1,0 +1,3046 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle, Save, EyeOff, Play, Image as ImageIcon, Video, Type, Grid, List, ArrowRight, BarChart3 } from 'lucide-react'
+import Header from '@/components/Header'
+import MediaUpload from '@/components/MediaUpload'
+import { useContentStore, ContentItem } from '@/lib/contentStore'
+import { 
+  sections, 
+  contentTypes, 
+  getSectionColor, 
+  findContentByTitle, 
+  QuickEditData 
+} from './utils'
+import QuickEditCard from './components/QuickEditCard'
+import SidebarMenuManager from './components/SidebarMenuManager'
+import HeroSlideManager from './components/HeroSlideManager'
+import ContentModal from './components/ContentModal'
+
+interface ContentFormData {
+  id: string
+  type: 'text' | 'image' | 'video' | 'link' | 'button'
+  section: 'hero' | 'how-it-works' | 'cta' | 'header' | 'categories' | 'footer' | 'about' | 'privacy' | 'terms'
+  title: string
+  content: string
+  mediaUrl?: string
+  order: number
+  isActive: boolean
+  // 헤더 전용 필드들
+  linkUrl?: string
+  buttonStyle?: 'primary' | 'secondary'
+  iconName?: string
+  target?: '_self' | '_blank'
+  // 카테고리 전용 필드들
+  categoryType?: 'stickers' | 'stamps' | 'phone-cases' | 'hot-goods' | 'others' | 'custom-design'
+  gradientFrom?: string
+  gradientTo?: string
+  emoji?: string
+}
+
+export default function AdminContentPage() {
+  const { 
+    _hasHydrated,
+    contentItems, 
+    addContent, 
+    updateContent, 
+    deleteContent, 
+    toggleContentActive,
+    getContentBySection,
+    getActiveContentBySection,
+    sidebarMenuItems,
+    addSidebarMenuItem,
+    updateSidebarMenuItem,
+    deleteSidebarMenuItem,
+    getActiveSidebarMenuItems,
+    reorderSidebarMenuItem: storeReorderSidebarMenuItem,
+    heroSlides,
+    addHeroSlide,
+    updateHeroSlide,
+    deleteHeroSlide,
+    toggleHeroSlideActive,
+    reorderHeroSlide,
+    getActiveHeroSlides
+  } = useContentStore()
+
+  // 컴포넌트 마운트 시 기존 헤더 콘텐츠 로드
+  useEffect(() => {
+    // 클라이언트 사이드에서만 실행
+    if (typeof window !== 'undefined') {
+    const headerContent = getActiveContentBySection('header')
+    
+    // 회사명 로드
+    const companyNameItem = headerContent.find(item => item.title === '회사명')
+    if (companyNameItem) {
+      setCompanyName(companyNameItem.content)
+    }
+    
+    // 홈 링크 로드
+    const homeLinkItem = headerContent.find(item => item.title === '홈 링크')
+    if (homeLinkItem && homeLinkItem.linkUrl) {
+      setHomeLinkUrl(homeLinkItem.linkUrl)
+    }
+    
+    // 제품 링크 로드
+    const productsLinkItem = headerContent.find(item => item.title === '제품 링크')
+    if (productsLinkItem && productsLinkItem.linkUrl) {
+      setProductsLinkUrl(productsLinkItem.linkUrl)
+      }
+      
+      // 로고 로드
+      const logoItem = headerContent.find(item => item.title === '로고')
+      if (logoItem && logoItem.mediaUrl) {
+        setLogoUrl(logoItem.mediaUrl)
+      }
+      
+      // 테마 색상 로드
+      const themeItem = headerContent.find(item => item.title === '테마 색상')
+      if (themeItem && themeItem.content) {
+        setThemeColor(themeItem.content)
+      }
+    }
+  }, [getActiveContentBySection])
+  
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingContent, setEditingContent] = useState<ContentItem | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedSection, setSelectedSection] = useState<'hero' | 'how-it-works' | 'cta' | 'header' | 'footer' | 'about' | 'privacy' | 'terms'>('header')
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [previewData, setPreviewData] = useState<ContentItem[]>([])
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error' | 'info'
+    message: string
+    show: boolean
+  }>({ type: 'info', message: '', show: false })
+
+  // 빠른 편집을 위한 상태 변수들
+  const [companyName, setCompanyName] = useState('')
+  const [homeLinkUrl, setHomeLinkUrl] = useState('/')
+  const [productsLinkUrl, setProductsLinkUrl] = useState('/products')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [themeColor, setThemeColor] = useState('#3B82F6')
+  const [formData, setFormData] = useState<ContentFormData>({
+    id: '',
+    type: 'text',
+    section: 'header',
+    title: '',
+    content: '',
+    mediaUrl: '',
+    order: 0,
+    isActive: true
+  })
+
+
+
+  // 현재 선택된 섹션의 콘텐츠만 필터링
+  const currentSectionContent = contentItems
+    .filter(item => item.section === selectedSection)
+    .filter(item => {
+      const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           item.content.toLowerCase().includes(searchTerm.toLowerCase())
+      return matchesSearch
+    })
+    .sort((a, b) => a.order - b.order)
+
+  // 알림 표시 함수
+  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
+    setNotification({ type, message, show: true })
+    setTimeout(() => {
+      setNotification({ type: 'info', message: '', show: false })
+    }, 3000)
+  }
+
+  // 모달 열기/닫기 함수
+  const openModal = (content?: ContentItem) => {
+    if (content) {
+      setEditingContent(content)
+      setFormData(content)
+    } else {
+      setEditingContent(null)
+      setFormData({
+        id: '',
+        type: 'text',
+        section: selectedSection,
+        title: '',
+        content: '',
+        mediaUrl: '',
+        order: currentSectionContent.length + 1,
+        isActive: true
+      })
+    }
+    setIsModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setEditingContent(null)
+    setFormData({
+      id: '',
+      type: 'text',
+              section: 'header',
+      title: '',
+      content: '',
+      mediaUrl: '',
+      order: 0,
+      isActive: true
+    })
+  }
+
+  // 폼 제출 처리
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (editingContent) {
+      updateContent(editingContent.id, formData)
+      showNotification('success', '콘텐츠가 성공적으로 수정되었습니다.')
+    } else {
+      addContent(formData)
+      showNotification('success', '새 콘텐츠가 성공적으로 추가되었습니다.')
+    }
+    
+    closeModal()
+  }
+
+  // 미디어 업로드 처리
+  const handleMediaUpload = (file: File, url: string) => {
+    setFormData(prev => ({
+      ...prev,
+      mediaUrl: url
+    }))
+  }
+
+  // 미디어 제거 처리
+  const handleMediaRemove = () => {
+    setFormData(prev => ({
+      ...prev,
+      mediaUrl: ''
+    }))
+  }
+
+  // 미리보기 모드 토글
+  const togglePreviewMode = () => {
+    if (isPreviewMode) {
+      setIsPreviewMode(false)
+      setPreviewData([])
+    } else {
+      setPreviewData([...contentItems])
+      setIsPreviewMode(true)
+    }
+  }
+
+  // 홈페이지에 적용
+  const applyToHomepage = () => {
+    showNotification('success', '변경사항이 홈페이지에 성공적으로 적용되었습니다!')
+    setIsPreviewMode(false)
+    setPreviewData([])
+  }
+
+
+
+  // 섹션 변경 시 검색어 초기화
+  const handleSectionChange = (section: 'hero' | 'how-it-works' | 'cta' | 'header' | 'footer') => {
+    setSelectedSection(section)
+    setSearchTerm('')
+  }
+
+  // 콘텐츠 모달 핸들러들
+  const openContentModal = (content?: ContentItem) => {
+    setEditingContent(content || null)
+    setIsModalOpen(true)
+  }
+
+  const closeContentModal = () => {
+    setEditingContent(null)
+    setIsModalOpen(false)
+  }
+
+  const handleContentSave = (data: ContentItem) => {
+    if (editingContent) {
+      updateContent(data.id, data)
+    } else {
+      addContent(data)
+    }
+    closeContentModal()
+  }
+
+  const handleContentDelete = (id: string) => {
+    if (confirm('정말로 이 콘텐츠를 삭제하시겠습니까?')) {
+      deleteContent(id)
+    }
+  }
+
+  // 통합된 빠른 편집 저장 함수
+  const handleQuickEditSave = (data: QuickEditData) => {
+    console.log('빠른 편집 저장:', data)
+    console.log('현재 콘텐츠 아이템들:', contentItems.length)
+    
+    // 섹션별로 기존 콘텐츠 찾기
+    let existingContent = findContentByTitle(contentItems, 'header', data.title)
+    let targetSection = 'header'
+    
+    if (!existingContent) {
+      existingContent = findContentByTitle(contentItems, 'footer', data.title)
+      targetSection = 'footer'
+    }
+    
+    if (!existingContent) {
+      existingContent = findContentByTitle(contentItems, 'how-it-works', data.title)
+      targetSection = 'how-it-works'
+    }
+    
+    if (!existingContent) {
+      existingContent = findContentByTitle(contentItems, 'about', data.title)
+      targetSection = 'about'
+    }
+    
+    if (!existingContent) {
+      existingContent = findContentByTitle(contentItems, 'privacy', data.title)
+      targetSection = 'privacy'
+    }
+    
+    if (!existingContent) {
+      existingContent = findContentByTitle(contentItems, 'terms', data.title)
+      targetSection = 'terms'
+    }
+    
+    console.log('찾은 기존 콘텐츠:', existingContent)
+    console.log('대상 섹션:', targetSection)
+    
+    if (existingContent) {
+      // 기존 콘텐츠 업데이트
+      console.log('기존 콘텐츠 업데이트:', existingContent.id)
+      const updatedContent = {
+        ...existingContent,
+        content: data.content,
+        linkUrl: data.linkUrl,
+        updatedAt: new Date()
+      }
+      console.log('업데이트할 콘텐츠:', updatedContent)
+      
+      updateContent(existingContent.id, updatedContent)
+      
+      // 성공 메시지 표시
+      alert(`콘텐츠가 성공적으로 저장되었습니다!\n제목: ${data.title}\n내용: ${data.content}`)
+      
+      // 업데이트 후 상태 확인
+      setTimeout(() => {
+        const updatedItem = contentItems.find(item => item.id === existingContent.id)
+        console.log('업데이트 후 아이템:', updatedItem)
+      }, 100)
+    } else {
+      // 새 콘텐츠 추가
+      console.log('새 콘텐츠 추가')
+      addContent({
+        type: data.type,
+        section: targetSection as any,
+        title: data.title,
+        content: data.content,
+        linkUrl: data.linkUrl,
+        order: data.order,
+        isActive: true
+      })
+      
+      // 성공 메시지 표시
+      alert('새 콘텐츠가 성공적으로 추가되었습니다!')
+    }
+  }
+
+  // 빠른 편집 상태 업데이트 함수들
+  const handleLogoUpload = (file: File, url: string) => {
+    setLogoUrl(url)
+    // 로고 URL을 콘텐츠에 저장
+    const existingLogo = contentItems.find(item => item.section === 'header' && item.title === '로고')
+    if (existingLogo) {
+      updateContent(existingLogo.id, { ...existingLogo, mediaUrl: url })
+    } else {
+      addContent({
+        type: 'image',
+        section: 'header',
+        title: '로고',
+        content: '회사 로고',
+        mediaUrl: url,
+      order: 1,
+        isActive: true
+      })
+    }
+    showNotification('success', '로고가 성공적으로 업로드되었습니다.')
+  }
+
+
+
+  // 하이드레이션이 완료될 때까지 로딩 표시
+  if (!_hasHydrated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <div className="bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => window.location.href = '/admin/dashboard'}
+                className="flex items-center text-gray-600 hover:text-gray-900"
+              >
+                <ArrowRight className="w-5 h-5 mr-2 rotate-180" />
+                Dashboard
+              </button>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">콘텐츠 관리</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-500">
+                홈페이지 콘텐츠 관리
+              </span>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm"
+              >
+                새로고침
+              </button>
+              <button
+                onClick={() => window.open('/privacy', '_blank')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm"
+              >
+                Privacy Policy 확인
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 페이지 설명 */}
+        <div className="mb-8">
+          <p className="text-gray-600">홈페이지의 각 섹션별로 텍스트, 이미지, 동영상을 체계적으로 관리할 수 있습니다.</p>
+        </div>
+
+
+
+        {/* 섹션 탭 네비게이션 */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-wrap gap-2">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => handleSectionChange(section.id as any)}
+                className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  selectedSection === section.id
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="font-semibold">{section.name}</div>
+                  <div className="text-xs opacity-80 mt-1">{section.description}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 헤더 섹션 빠른 편집 */}
+        {selectedSection === 'header' && (
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg shadow-sm border border-indigo-200 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-indigo-900">🚀 빠른 편집</h3>
+                <p className="text-sm text-indigo-700">자주 사용하는 헤더 요소를 빠르게 수정할 수 있습니다.</p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">
+                  Header 섹션
+                </span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 회사명 빠른 편집 */}
+              <QuickEditCard
+                title="회사명"
+                    value={companyName || contentItems.find(item => item.section === 'header' && item.title === '회사명')?.content || ''}
+                    placeholder="회사명 입력"
+                type="text"
+                description="홈페이지 헤더에 즉시 반영됩니다."
+                onSave={handleQuickEditSave}
+                existingContent={contentItems.find(item => item.section === 'header' && item.title === '회사명')}
+                showNotification={showNotification}
+              />
+
+              {/* 홈 링크 빠른 편집 */}
+              <QuickEditCard
+                title="홈 링크"
+                value={homeLinkUrl || contentItems.find(item => item.section === 'header' && item.title === '홈 링크')?.linkUrl || '/'}
+                placeholder="홈 링크 URL"
+                type="url"
+                description="네비게이션 홈 버튼 링크를 변경합니다."
+                onSave={handleQuickEditSave}
+                existingContent={contentItems.find(item => item.section === 'header' && item.title === '홈 링크')}
+                showNotification={showNotification}
+              />
+
+              {/* 제품 링크 빠른 편집 */}
+              <QuickEditCard
+                title="제품 링크"
+                value={productsLinkUrl || contentItems.find(item => item.section === 'header' && item.title === '제품 링크')?.linkUrl || '/products'}
+                placeholder="제품 링크 URL"
+                type="url"
+                description="네비게이션 제품 버튼 링크를 변경합니다."
+                onSave={handleQuickEditSave}
+                existingContent={contentItems.find(item => item.section === 'header' && item.title === '제품 링크')}
+                showNotification={showNotification}
+              />
+
+              {/* 로고 업로드 */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-900">로고 업로드</h4>
+                  <ImageIcon className="w-4 h-4 text-gray-400" />
+                </div>
+                <div className="space-y-3">
+                  {logoUrl ? (
+                    <div className="relative">
+                      <img
+                        src={logoUrl}
+                        alt="로고"
+                        className="w-full h-20 object-contain rounded-lg border border-gray-200"
+                  />
+                  <button
+                        onClick={() => {
+                          setLogoUrl('')
+                          showNotification('success', '로고가 제거되었습니다.')
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                      >
+                        <X className="w-3 h-3" />
+                  </button>
+                </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                      <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-xs text-gray-500">로고 이미지를 업로드하세요</p>
+                    </div>
+                  )}
+                  <MediaUpload
+                    type="image"
+                    currentUrl={logoUrl}
+                    onUpload={handleLogoUpload}
+                    onRemove={() => setLogoUrl('')}
+                  />
+                </div>
+              </div>
+              </div>
+
+            {/* 테마 색상 설정 */}
+            <div className="mt-6 bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-gray-900">테마 색상</h4>
+                <div className="w-6 h-6 rounded-full border-2 border-gray-300" style={{ backgroundColor: themeColor }}></div>
+                </div>
+              <div className="flex items-center space-x-4">
+                  <input
+                  type="color"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="w-12 h-8 border border-gray-300 rounded cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  placeholder="#3B82F6"
+                  />
+                  <button
+                  onClick={() => {
+                    const existingTheme = contentItems.find(item => item.section === 'header' && item.title === '테마 색상')
+                    if (existingTheme) {
+                      updateContent(existingTheme.id, { ...existingTheme, content: themeColor })
+                    } else {
+                      addContent({
+                        type: 'text',
+                        section: 'header',
+                        title: '테마 색상',
+                        content: themeColor,
+                        order: 10,
+                        isActive: true
+                      })
+                    }
+                    showNotification('success', '테마 색상이 저장되었습니다.')
+                  }}
+                  className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+
+            {/* 사이드바 메뉴 관리 */}
+            <div className="mt-8">
+              <SidebarMenuManager
+                sidebarMenuItems={sidebarMenuItems}
+                onAddMenuItem={addSidebarMenuItem}
+                onUpdateMenuItem={updateSidebarMenuItem}
+                onDeleteMenuItem={deleteSidebarMenuItem}
+                onReorderMenuItem={storeReorderSidebarMenuItem}
+                showNotification={showNotification}
+              />
+                 </div>
+          </div>
+        )}
+
+        {/* Hero 섹션 관리 */}
+        {selectedSection === 'hero' && (
+          <div className="space-y-6">
+            {/* Hero 슬라이드 관리 */}
+            <HeroSlideManager
+              heroSlides={heroSlides}
+              onAddSlide={addHeroSlide}
+              onUpdateSlide={updateHeroSlide}
+              onDeleteSlide={deleteHeroSlide}
+              onToggleSlideActive={toggleHeroSlideActive}
+              onReorderSlide={reorderHeroSlide}
+              showNotification={showNotification}
+            />
+
+            {/* 카테고리 섹션 관리 */}
+            <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg p-6 border border-pink-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-pink-900">🛍️ 카테고리 섹션 관리</h4>
+                  <p className="text-sm text-pink-700">홈페이지의 상품 카테고리 섹션을 관리할 수 있습니다.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingContent(null)
+                    setFormData({
+                      id: '',
+                      type: 'button',
+                      section: 'categories',
+                      title: '',
+                      content: '',
+                      order: getContentBySection('categories').length + 1,
+                      isActive: true,
+                      categoryType: 'stickers',
+                      gradientFrom: '#3B82F6',
+                      gradientTo: '#8B5CF6',
+                      emoji: '📦'
+                    })
+                    setIsModalOpen(true)
+                  }}
+                  className="px-4 py-2 bg-pink-600 text-white text-sm font-medium rounded-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  카테고리 추가
+                </button>
+              </div>
+
+              {/* 카테고리 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('categories').map((category) => (
+                  <div 
+                    key={category.id} 
+                    className="bg-white rounded-lg border border-pink-200 p-4 relative overflow-hidden"
+                    style={{
+                      background: category.gradientFrom && category.gradientTo 
+                        ? `linear-gradient(135deg, ${category.gradientFrom}20, ${category.gradientTo}20)` 
+                        : undefined
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-2xl">{category.emoji || '📦'}</span>
+                        <h5 className="font-medium text-pink-900">{category.title}</h5>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleContentActive(category.id)}
+                          className={`p-1 rounded ${category.isActive ? 'text-green-600' : 'text-gray-400'}`}
+                        >
+                          {category.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                                              <button
+                        onClick={() => {
+                          setEditingContent(category)
+                          setFormData({
+                            ...category,
+                            section: 'categories' // 카테고리 편집 시 섹션을 categories로 설정
+                          })
+                          setIsModalOpen(true)
+                        }}
+                        className="p-1 text-pink-600 hover:text-pink-700"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                        <button
+                          onClick={() => deleteContent(category.id)}
+                          className="p-1 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {category.categoryType || '미설정'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">링크:</span> {category.linkUrl || '미설정'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">설명:</span> {category.content || '설명 없음'}
+                      </div>
+                      {category.gradientFrom && category.gradientTo && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-600 font-medium">그라디언트:</span>
+                          <div 
+                            className="w-12 h-6 rounded border shadow-sm"
+                            style={{ 
+                              background: `linear-gradient(to right, ${category.gradientFrom}, ${category.gradientTo})` 
+                            }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {getContentBySection('categories').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">🛍️</div>
+                  <h3 className="text-lg font-medium text-pink-900 mb-2">카테고리가 없습니다</h3>
+                  <p className="text-pink-600 mb-4">새로운 카테고리를 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'button',
+                        section: 'categories',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true,
+                        categoryType: 'stickers',
+                        gradientFrom: '#3B82F6',
+                        gradientTo: '#8B5CF6',
+                        emoji: '📦'
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-pink-600 text-white text-sm font-medium rounded-md hover:bg-pink-700"
+                  >
+                    첫 번째 카테고리 추가
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer 섹션 관리 */}
+        {selectedSection === 'footer' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">📄 Footer 섹션 관리</h4>
+                  <p className="text-sm text-gray-700">홈페이지 하단의 회사 정보, 연락처, 소셜 미디어 링크 등을 관리할 수 있습니다.</p>
+                </div>
+                <button
+                  onClick={() => openContentModal()}
+                  className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Footer 콘텐츠 추가
+                </button>
+              </div>
+
+              {/* Footer 빠른 편집 */}
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-4">🚀 빠른 편집</h5>
+                <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
+                  <strong>디버그 정보:</strong> Footer 콘텐츠 개수: {getContentBySection('footer').length}개
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* 회사명 빠른 편집 */}
+                  <QuickEditCard
+                    title="회사명"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '회사명')?.content || 'SELPIC'}
+                    placeholder="회사명 입력"
+                    type="text"
+                    description="Footer에 표시되는 회사명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '회사명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 회사 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="회사 설명"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '회사 설명')?.content || 'Your digital sticker journey starts here.'}
+                    placeholder="회사 설명 입력"
+                    type="text"
+                    description="Footer에 표시되는 회사 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '회사 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Instagram 링크 빠른 편집 */}
+                  <QuickEditCard
+                    title="Instagram 링크"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === 'Instagram 링크')?.linkUrl || '#'}
+                    placeholder="Instagram URL"
+                     type="url"
+                    description="Instagram 소셜 미디어 링크"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === 'Instagram 링크')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Facebook 링크 빠른 편집 */}
+                  <QuickEditCard
+                    title="Facebook 링크"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === 'Facebook 링크')?.linkUrl || '#'}
+                    placeholder="Facebook URL"
+                    type="url"
+                    description="Facebook 소셜 미디어 링크"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === 'Facebook 링크')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Twitter 링크 빠른 편집 */}
+                  <QuickEditCard
+                    title="Twitter 링크"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === 'Twitter 링크')?.linkUrl || '#'}
+                    placeholder="Twitter URL"
+                    type="url"
+                    description="Twitter 소셜 미디어 링크"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === 'Twitter 링크')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Privacy Policy 링크 빠른 편집 */}
+                  <QuickEditCard
+                    title="Privacy Policy 링크"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === 'Privacy Policy 링크')?.linkUrl || '/privacy'}
+                    placeholder="Privacy Policy URL"
+                    type="url"
+                    description="개인정보처리방침 페이지 링크"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === 'Privacy Policy 링크')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Terms and Conditions 링크 빠른 편집 */}
+                  <QuickEditCard
+                    title="Terms and Conditions 링크"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === 'Terms and Conditions 링크')?.linkUrl || '/terms'}
+                    placeholder="Terms and Conditions URL"
+                    type="url"
+                    description="이용약관 페이지 링크"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === 'Terms and Conditions 링크')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 뉴스레터 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="뉴스레터 설명"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '뉴스레터 설명')?.content || 'Subscribe to our newsletter for updates.'}
+                    placeholder="뉴스레터 설명 입력"
+                    type="text"
+                    description="뉴스레터 섹션 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '뉴스레터 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 소셜 미디어 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="소셜 미디어 제목"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '소셜 미디어 제목')?.content || 'Follow Us'}
+                    placeholder="소셜 미디어 제목 입력"
+                    type="text"
+                    description="Follow Us 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '소셜 미디어 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 빠른 링크 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="빠른 링크 제목"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '빠른 링크 제목')?.content || 'Quick Links'}
+                    placeholder="빠른 링크 제목 입력"
+                    type="text"
+                    description="Quick Links 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '빠른 링크 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 뉴스레터 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="뉴스레터 제목"
+                    value={contentItems.find(item => item.section === 'footer' && item.title === '뉴스레터 제목')?.content || 'Newsletter'}
+                    placeholder="뉴스레터 제목 입력"
+                    type="text"
+                    description="Newsletter 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'footer' && item.title === '뉴스레터 제목')}
+                    showNotification={showNotification}
+                  />
+                </div>
+              </div>
+
+              {/* Footer 콘텐츠 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('footer').map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="bg-white rounded-lg border border-gray-200 p-4 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-4 h-4 text-gray-600" />}
+                        {item.type === 'link' && <ArrowRight className="w-4 h-4 text-gray-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-4 h-4 text-gray-600" />}
+                        <h5 className="font-medium text-gray-900">{item.title}</h5>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                   <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`p-1 rounded ${item.isActive ? 'text-green-600' : 'text-gray-400'}`}
+                        >
+                          {item.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => openContentModal(item)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="편집"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleContentDelete(item.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                   </button>
+                 </div>
+               </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {item.type}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">내용:</span> {item.content || '내용 없음'}
+                      </div>
+                      {item.linkUrl && (
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">링크:</span> {item.linkUrl}
+                        </div>
+                      )}
+                      {item.mediaUrl && (
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">미디어:</span> 
+                          {item.type === 'image' ? (
+                            <img src={item.mediaUrl} alt={item.title} className="w-16 h-16 object-cover rounded mt-1" />
+                          ) : (
+                            <span className="ml-1">동영상 파일</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+             </div>
+
+              {getContentBySection('footer').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">📄</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Footer 콘텐츠가 없습니다</h3>
+                  <p className="text-gray-600 mb-4">회사 정보, 연락처, 소셜 미디어 링크 등을 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'text',
+                        section: 'footer',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700"
+                  >
+                    첫 번째 Footer 콘텐츠 추가
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* How It Works 섹션 관리 */}
+        {selectedSection === 'how-it-works' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 border border-green-200">
+               <div className="flex items-center justify-between mb-4">
+                 <div>
+                  <h4 className="text-lg font-semibold text-green-900">⚙️ How It Works 섹션 관리</h4>
+                  <p className="text-sm text-green-700">홈페이지의 3단계 제작 프로세스 설명을 관리할 수 있습니다.</p>
+                 </div>
+                 <button
+                  onClick={() => openContentModal()}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                 >
+                   <Plus className="w-4 h-4 mr-2" />
+                  How It Works 콘텐츠 추가
+                 </button>
+               </div>
+
+              {/* How It Works 빠른 편집 */}
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-4">🚀 빠른 편집</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* How It Works 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="How It Works 제목"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === 'How It Works 제목')?.content || 'How It Works'}
+                    placeholder="섹션 제목 입력"
+                    type="text"
+                    description="How It Works 섹션의 메인 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === 'How It Works 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* How It Works 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="How It Works 부제목"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === 'How It Works 부제목')?.content || ''}
+                    placeholder="섹션 부제목 입력"
+                    type="text"
+                    description="How It Works 섹션의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === 'How It Works 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 1단계 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="1단계 제목"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '1단계 제목')?.content || 'Choose Your Design'}
+                    placeholder="1단계 제목 입력"
+                    type="text"
+                    description="첫 번째 단계의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '1단계 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 1단계 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="1단계 설명"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '1단계 설명')?.content || 'Select from our templates or upload your own design'}
+                    placeholder="1단계 설명 입력"
+                    type="text"
+                    description="첫 번째 단계의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '1단계 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 2단계 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="2단계 제목"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '2단계 제목')?.content || 'Customize & Preview'}
+                    placeholder="2단계 제목 입력"
+                    type="text"
+                    description="두 번째 단계의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '2단계 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 2단계 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="2단계 설명"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '2단계 설명')?.content || 'Adjust colors, text, and layout to match your vision'}
+                    placeholder="2단계 설명 입력"
+                    type="text"
+                    description="두 번째 단계의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '2단계 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 3단계 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="3단계 제목"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '3단계 제목')?.content || 'Order & Receive'}
+                    placeholder="3단계 제목 입력"
+                    type="text"
+                    description="세 번째 단계의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '3단계 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 3단계 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="3단계 설명"
+                    value={contentItems.find(item => item.section === 'how-it-works' && item.title === '3단계 설명')?.content || 'Place your order and receive high-quality stickers'}
+                    placeholder="3단계 설명 입력"
+                    type="text"
+                    description="세 번째 단계의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'how-it-works' && item.title === '3단계 설명')}
+                    showNotification={showNotification}
+                  />
+                </div>
+              </div>
+
+              {/* How It Works 콘텐츠 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('how-it-works').map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="bg-white rounded-lg border border-green-200 p-4 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-4 h-4 text-green-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-4 h-4 text-green-600" />}
+                        <h5 className="font-medium text-green-900">{item.title}</h5>
+                       </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`p-1 rounded ${item.isActive ? 'text-green-600' : 'text-gray-400'}`}
+                        >
+                          {item.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => openContentModal(item)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="편집"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleContentDelete(item.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                       </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {item.type}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">내용:</span> {item.content || '내용 없음'}
+                      </div>
+                      {item.mediaUrl && (
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">미디어:</span> 
+                          {item.type === 'image' ? (
+                            <img src={item.mediaUrl} alt={item.title} className="w-16 h-16 object-cover rounded mt-1" />
+                          ) : (
+                            <span className="ml-1">동영상 파일</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {getContentBySection('how-it-works').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">⚙️</div>
+                  <h3 className="text-lg font-medium text-green-900 mb-2">How It Works 콘텐츠가 없습니다</h3>
+                  <p className="text-green-600 mb-4">3단계 제작 프로세스 설명을 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'text',
+                        section: 'how-it-works',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700"
+                  >
+                    첫 번째 How It Works 콘텐츠 추가
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* About Us 섹션 관리 */}
+        {selectedSection === 'about' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+              <div className="flex items-center justify-between mb-4">
+                       <div>
+                  <h4 className="text-lg font-semibold text-blue-900">👥 About Us 섹션 관리</h4>
+                  <p className="text-sm text-blue-700">About Us 페이지의 텍스트 내용을 관리할 수 있습니다.</p>
+                </div>
+                <button
+                  onClick={() => openContentModal()}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  About Us 콘텐츠 추가
+                </button>
+              </div>
+
+              {/* About Us 빠른 편집 */}
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-4">🚀 빠른 편집</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* About Us 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="About Us 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'About Us 제목')?.content || 'About Us'}
+                    placeholder="페이지 제목 입력"
+                    type="text"
+                    description="About Us 페이지의 메인 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'About Us 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* About Us 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="About Us 부제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'About Us 부제목')?.content || 'Your digital sticker journey starts here.'}
+                    placeholder="페이지 부제목 입력"
+                    type="text"
+                    description="About Us 페이지의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'About Us 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Why SELPIC 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Why SELPIC 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Why SELPIC 제목')?.content || '왜 SELPIC인가요?'}
+                    placeholder="Why SELPIC 제목 입력"
+                    type="text"
+                    description="Why SELPIC 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Why SELPIC 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Why SELPIC 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Why SELPIC 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Why SELPIC 설명')?.content || '최고의 품질과 서비스로 고객 만족을 실현합니다'}
+                    placeholder="Why SELPIC 설명 입력"
+                    type="text"
+                    description="Why SELPIC 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Why SELPIC 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Quality 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Quality 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Quality 제목')?.content || 'Quality'}
+                    placeholder="Quality 제목 입력"
+                    type="text"
+                    description="Quality 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Quality 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Quality 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Quality 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Quality 설명')?.content || 'Premium materials and professional printing'}
+                    placeholder="Quality 설명 입력"
+                    type="text"
+                    description="Quality 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Quality 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Customer Satisfaction 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Customer Satisfaction 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Customer Satisfaction 제목')?.content || 'Customer Satisfaction'}
+                    placeholder="Customer Satisfaction 제목 입력"
+                    type="text"
+                    description="Customer Satisfaction 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Customer Satisfaction 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Customer Satisfaction 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Customer Satisfaction 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Customer Satisfaction 설명')?.content || '24/7 customer support and satisfaction guarantee'}
+                    placeholder="Customer Satisfaction 설명 입력"
+                    type="text"
+                    description="Customer Satisfaction 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Customer Satisfaction 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Company Story 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Company Story 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 제목')?.content || 'Our Story'}
+                    placeholder="Company Story 제목 입력"
+                    type="text"
+                    description="회사 스토리 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Company Story 첫 번째 문단 빠른 편집 */}
+                  <QuickEditCard
+                    title="Company Story 첫 번째 문단"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 첫 번째 문단')?.content || 'SELPIC was born from a simple idea...'}
+                    placeholder="Company Story 첫 번째 문단 입력"
+                    type="text"
+                    description="회사 스토리 첫 번째 문단"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 첫 번째 문단')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Company Story 두 번째 문단 빠른 편집 */}
+                  <QuickEditCard
+                    title="Company Story 두 번째 문단"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 두 번째 문단')?.content || 'Today, we have grown into a trusted platform...'}
+                    placeholder="Company Story 두 번째 문단 입력"
+                    type="text"
+                    description="회사 스토리 두 번째 문단"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 두 번째 문단')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Company Story 세 번째 문단 빠른 편집 */}
+                  <QuickEditCard
+                    title="Company Story 세 번째 문단"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 세 번째 문단')?.content || 'We believe that every idea deserves to be brought to life...'}
+                    placeholder="Company Story 세 번째 문단 입력"
+                    type="text"
+                    description="회사 스토리 세 번째 문단"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Company Story 세 번째 문단')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 최고 품질 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="최고 품질 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === '최고 품질 제목')?.content || '최고 품질'}
+                    placeholder="최고 품질 제목 입력"
+                    type="text"
+                    description="최고 품질 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === '최고 품질 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 최고 품질 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="최고 품질 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === '최고 품질 설명')?.content || '최첨단 기술로 완벽한 품질을 보장합니다...'}
+                    placeholder="최고 품질 설명 입력"
+                    type="text"
+                    description="최고 품질 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === '최고 품질 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 고객 만족 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="고객 만족 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === '고객 만족 제목')?.content || '고객 만족'}
+                    placeholder="고객 만족 제목 입력"
+                    type="text"
+                    description="고객 만족 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === '고객 만족 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* 고객 만족 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="고객 만족 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === '고객 만족 설명')?.content || '100% 만족하지 않으면 전액 환불을 보장합니다...'}
+                    placeholder="고객 만족 설명 입력"
+                    type="text"
+                    description="고객 만족 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === '고객 만족 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* SELPIC의 약속 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="SELPIC의 약속 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'SELPIC의 약속 제목')?.content || 'SELPIC의 약속'}
+                    placeholder="SELPIC의 약속 제목 입력"
+                    type="text"
+                    description="SELPIC의 약속 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'SELPIC의 약속 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* SELPIC의 약속 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="SELPIC의 약속 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'SELPIC의 약속 설명')?.content || '우리는 단순히 제품을 판매하는 것이 아니라...'}
+                    placeholder="SELPIC의 약속 설명 입력"
+                    type="text"
+                    description="SELPIC의 약속 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'SELPIC의 약속 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Values 섹션 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Values 섹션 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Values 섹션 제목')?.content || 'Our Values'}
+                    placeholder="Values 섹션 제목 입력"
+                    type="text"
+                    description="Values 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Values 섹션 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Values 섹션 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Values 섹션 부제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Values 섹션 부제목')?.content || 'What drives us every day'}
+                    placeholder="Values 섹션 부제목 입력"
+                    type="text"
+                    description="Values 섹션의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Values 섹션 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Innovation 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Innovation 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Innovation 제목')?.content || 'Innovation'}
+                    placeholder="Innovation 제목 입력"
+                    type="text"
+                    description="Innovation 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Innovation 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Innovation 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Innovation 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Innovation 설명')?.content || 'We constantly push the boundaries...'}
+                    placeholder="Innovation 설명 입력"
+                    type="text"
+                    description="Innovation 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Innovation 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Quality Values 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Quality Values 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Quality Values 제목')?.content || 'Quality'}
+                    placeholder="Quality Values 제목 입력"
+                    type="text"
+                    description="Quality Values 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Quality Values 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Quality Values 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Quality Values 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Quality Values 설명')?.content || 'Every product meets our strict quality standards...'}
+                    placeholder="Quality Values 설명 입력"
+                    type="text"
+                    description="Quality Values 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Quality Values 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Customer Values 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Customer Values 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Customer Values 제목')?.content || 'Customer First'}
+                    placeholder="Customer Values 제목 입력"
+                    type="text"
+                    description="Customer Values 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Customer Values 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Customer Values 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Customer Values 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Customer Values 설명')?.content || 'Your satisfaction is our top priority...'}
+                    placeholder="Customer Values 설명 입력"
+                    type="text"
+                    description="Customer Values 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Customer Values 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Team 섹션 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Team 섹션 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Team 섹션 제목')?.content || 'Meet Our Team'}
+                    placeholder="Team 섹션 제목 입력"
+                    type="text"
+                    description="Team 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Team 섹션 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Team 섹션 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Team 섹션 부제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Team 섹션 부제목')?.content || 'The passionate people behind SELPIC'}
+                    placeholder="Team 섹션 부제목 입력"
+                    type="text"
+                    description="Team 섹션의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Team 섹션 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Design Team 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Design Team 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Design Team 제목')?.content || 'Design Team'}
+                    placeholder="Design Team 제목 입력"
+                    type="text"
+                    description="Design Team 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Design Team 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Design Team 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Design Team 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Design Team 설명')?.content || 'Creative minds who bring your ideas to life'}
+                    placeholder="Design Team 설명 입력"
+                    type="text"
+                    description="Design Team 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Design Team 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Production Team 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Production Team 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Production Team 제목')?.content || 'Production Team'}
+                    placeholder="Production Team 제목 입력"
+                    type="text"
+                    description="Production Team 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Production Team 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Production Team 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Production Team 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Production Team 설명')?.content || 'Experts who ensure every product meets our quality standards'}
+                    placeholder="Production Team 설명 입력"
+                    type="text"
+                    description="Production Team 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Production Team 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Support Team 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Support Team 제목"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Support Team 제목')?.content || 'Support Team'}
+                    placeholder="Support Team 제목 입력"
+                    type="text"
+                    description="Support Team 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Support Team 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Support Team 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Support Team 설명"
+                    value={contentItems.find(item => item.section === 'about' && item.title === 'Support Team 설명')?.content || 'Dedicated professionals who are here to help you succeed'}
+                    placeholder="Support Team 설명 입력"
+                    type="text"
+                    description="Support Team 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'about' && item.title === 'Support Team 설명')}
+                    showNotification={showNotification}
+                  />
+                </div>
+              </div>
+
+              {/* About Us 콘텐츠 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('about').map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="bg-white rounded-lg border border-blue-200 p-4 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                         <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-4 h-4 text-blue-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-4 h-4 text-blue-600" />}
+                        <h5 className="font-medium text-blue-900">{item.title}</h5>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`p-1 rounded ${item.isActive ? 'text-blue-600' : 'text-gray-400'}`}
+                        >
+                          {item.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => openContentModal(item)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="편집"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleContentDelete(item.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {item.type}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">내용:</span> {item.content || '내용 없음'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {getContentBySection('about').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">👥</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">About Us 콘텐츠가 없습니다</h3>
+                  <p className="text-gray-600 mb-4">About Us 페이지의 텍스트 내용을 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'text',
+                        section: 'about',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
+                  >
+                    첫 번째 About Us 콘텐츠 추가
+                  </button>
+                </div>
+                           )}
+                         </div>
+                         </div>
+        )}
+
+        {/* Privacy Policy 섹션 관리 */}
+        {selectedSection === 'privacy' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-purple-900">🔒 Privacy Policy 섹션 관리</h4>
+                  <p className="text-sm text-purple-700">Privacy Policy 페이지의 텍스트 내용을 관리할 수 있습니다.</p>
+                       </div>
+                <button
+                  onClick={() => openContentModal()}
+                  className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Privacy Policy 콘텐츠 추가
+                </button>
+                     </div>
+
+              {/* Privacy Policy 빠른 편집 */}
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-4">🚀 빠른 편집</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Privacy Policy 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Privacy Policy 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 제목')?.content || 'Privacy Policy'}
+                    placeholder="페이지 제목 입력"
+                    type="text"
+                    description="Privacy Policy 페이지의 메인 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Privacy Policy 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Privacy Policy 부제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 부제목')?.content || 'Last updated: September 3, 2025'}
+                    placeholder="페이지 부제목 입력"
+                    type="text"
+                    description="Privacy Policy 페이지의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Introduction 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Introduction 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 제목')?.content || 'Introduction'}
+                    placeholder="Introduction 제목 입력"
+                    type="text"
+                    description="Introduction 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Introduction 내용 빠른 편집 */}
+                  <QuickEditCard
+                    title="Introduction 내용"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 내용')?.content || 'At SELPIC, we are committed to protecting your privacy...'}
+                    placeholder="Introduction 내용 입력"
+                    type="text"
+                    description="Introduction 섹션의 내용"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 내용')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Information We Collect 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Information We Collect 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Information We Collect 제목')?.content || 'Information We Collect'}
+                    placeholder="Information We Collect 제목 입력"
+                    type="text"
+                    description="Information We Collect 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Information We Collect 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Personal Information 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Personal Information 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Personal Information 제목')?.content || 'Personal Information'}
+                    placeholder="Personal Information 제목 입력"
+                    type="text"
+                    description="Personal Information 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Personal Information 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Personal Information 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Personal Information 목록"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Personal Information 목록')?.content || 'Name and contact information, Email address...'}
+                    placeholder="Personal Information 목록 입력"
+                    type="text"
+                    description="Personal Information 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Personal Information 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Usage Information 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Usage Information 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Usage Information 제목')?.content || 'Usage Information'}
+                    placeholder="Usage Information 제목 입력"
+                    type="text"
+                    description="Usage Information 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Usage Information 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Usage Information 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Usage Information 목록"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Usage Information 목록')?.content || 'Website usage patterns, Product preferences...'}
+                    placeholder="Usage Information 목록 입력"
+                    type="text"
+                    description="Usage Information 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Usage Information 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* How We Use Information 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="How We Use Information 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Use Information 제목')?.content || 'How We Use Your Information'}
+                    placeholder="How We Use Information 제목 입력"
+                    type="text"
+                    description="How We Use Information 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Use Information 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* How We Use Information 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="How We Use Information 목록"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Use Information 목록')?.content || 'Process and fulfill your orders, Provide customer support...'}
+                    placeholder="How We Use Information 목록 입력"
+                    type="text"
+                    description="How We Use Information 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Use Information 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Data Security 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Data Security 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 제목')?.content || 'Data Security'}
+                    placeholder="Data Security 제목 입력"
+                    type="text"
+                    description="Data Security 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Data Security 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Data Security 설명"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 설명')?.content || 'We implement industry-standard security measures...'}
+                    placeholder="Data Security 설명 입력"
+                    type="text"
+                    description="Data Security 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Data Security 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Data Security 목록"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 목록')?.content || 'SSL encryption for all data transmission...'}
+                    placeholder="Data Security 목록 입력"
+                    type="text"
+                    description="Data Security 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Your Rights 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Your Rights 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 제목')?.content || 'Your Rights'}
+                    placeholder="Your Rights 제목 입력"
+                    type="text"
+                    description="Your Rights 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Your Rights 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Your Rights 설명"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 설명')?.content || 'You have the following rights regarding your personal information...'}
+                    placeholder="Your Rights 설명 입력"
+                    type="text"
+                    description="Your Rights 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Your Rights 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Your Rights 목록"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 목록')?.content || 'Access your personal data, Correct inaccurate information...'}
+                    placeholder="Your Rights 목록 입력"
+                    type="text"
+                    description="Your Rights 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Contact Information 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Contact Information 제목"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 제목')?.content || 'Contact Us'}
+                    placeholder="Contact Information 제목 입력"
+                    type="text"
+                    description="Contact Information 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Contact Information 설명 빠른 편집 */}
+                  <QuickEditCard
+                    title="Contact Information 설명"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 설명')?.content || 'If you have any questions about this Privacy Policy...'}
+                    placeholder="Contact Information 설명 입력"
+                    type="text"
+                    description="Contact Information 섹션의 설명"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 설명')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Contact Email 빠른 편집 */}
+                  <QuickEditCard
+                    title="Contact Email"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Email')?.content || 'privacy@selpic.com'}
+                    placeholder="Contact Email 입력"
+                    type="text"
+                    description="연락처 이메일"
+                    onSave={(data) => {
+                      console.log('Contact Email 저장 시도:', data)
+                      handleQuickEditSave(data)
+                    }}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Email')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Contact Phone 빠른 편집 */}
+                  <QuickEditCard
+                    title="Contact Phone"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Phone')?.content || '+1 (555) 123-4567'}
+                    placeholder="Contact Phone 입력"
+                    type="text"
+                    description="연락처 전화번호"
+                    onSave={(data) => {
+                      console.log('Contact Phone 저장 시도:', data)
+                      handleQuickEditSave(data)
+                    }}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Phone')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Contact Address 빠른 편집 */}
+                  <QuickEditCard
+                    title="Contact Address"
+                    value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Address')?.content || '123 Sticker Street, Design City, DC 12345'}
+                    placeholder="Contact Address 입력"
+                    type="text"
+                    description="연락처 주소"
+                    onSave={(data) => {
+                      console.log('Contact Address 저장 시도:', data)
+                      handleQuickEditSave(data)
+                    }}
+                    existingContent={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Address')}
+                    showNotification={showNotification}
+                  />
+                </div>
+              </div>
+
+              {/* Privacy Policy 콘텐츠 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('privacy').map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="bg-white rounded-lg border border-purple-200 p-4 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                     <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-4 h-4 text-purple-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-4 h-4 text-purple-600" />}
+                        <h5 className="font-medium text-purple-900">{item.title}</h5>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                       <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`p-1 rounded ${item.isActive ? 'text-purple-600' : 'text-gray-400'}`}
+                        >
+                          {item.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => openContentModal(item)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="편집"
+                       >
+                         <Edit className="w-4 h-4" />
+                       </button>
+                       <button
+                          onClick={() => handleContentDelete(item.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="삭제"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {item.type}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">내용:</span> {item.content || '내용 없음'}
+                      </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+
+              {getContentBySection('privacy').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">🔒</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Privacy Policy 콘텐츠가 없습니다</h3>
+                  <p className="text-gray-600 mb-4">Privacy Policy 페이지의 텍스트 내용을 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'text',
+                        section: 'privacy',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+                  >
+                    첫 번째 Privacy Policy 콘텐츠 추가
+                  </button>
+                </div>
+              )}
+             </div>
+           </div>
+         )}
+
+        {/* Terms and Conditions 섹션 관리 */}
+        {selectedSection === 'terms' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-orange-900">📋 Terms and Conditions 섹션 관리</h4>
+                  <p className="text-sm text-orange-700">Terms and Conditions 페이지의 텍스트 내용을 관리할 수 있습니다.</p>
+                </div>
+                <button
+                  onClick={() => openContentModal()}
+                  className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Terms and Conditions 콘텐츠 추가
+                </button>
+              </div>
+
+              {/* Terms and Conditions 빠른 편집 */}
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h5 className="text-sm font-medium text-gray-900 mb-4">🚀 빠른 편집</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Terms and Conditions 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Terms and Conditions 제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 제목')?.content || 'Terms and Conditions'}
+                    placeholder="페이지 제목 입력"
+                    type="text"
+                    description="Terms and Conditions 페이지의 메인 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Terms and Conditions 부제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Terms and Conditions 부제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 부제목')?.content || 'Last updated: September 3, 2025'}
+                    placeholder="페이지 부제목 입력"
+                    type="text"
+                    description="Terms and Conditions 페이지의 부제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 부제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Agreement to Terms 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Agreement to Terms 제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 제목')?.content || 'Agreement to Terms'}
+                    placeholder="Agreement to Terms 제목 입력"
+                    type="text"
+                    description="Agreement to Terms 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Agreement to Terms 내용 빠른 편집 */}
+                  <QuickEditCard
+                    title="Agreement to Terms 내용"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 내용')?.content || 'By accessing and using SELPIC\'s services...'}
+                    placeholder="Agreement to Terms 내용 입력"
+                    type="text"
+                    description="Agreement to Terms 섹션의 내용"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 내용')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Use of Service 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Use of Service 제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Use of Service 제목')?.content || 'Use of Service'}
+                    placeholder="Use of Service 제목 입력"
+                    type="text"
+                    description="Use of Service 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Use of Service 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Permitted Uses 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Permitted Uses 제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 제목')?.content || 'Permitted Uses'}
+                    placeholder="Permitted Uses 제목 입력"
+                    type="text"
+                    description="Permitted Uses 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Permitted Uses 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Permitted Uses 목록"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 목록')?.content || 'Browse and purchase our products, Create custom sticker designs...'}
+                    placeholder="Permitted Uses 목록 입력"
+                    type="text"
+                    description="Permitted Uses 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 목록')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Prohibited Uses 제목 빠른 편집 */}
+                  <QuickEditCard
+                    title="Prohibited Uses 제목"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 제목')?.content || 'Prohibited Uses'}
+                    placeholder="Prohibited Uses 제목 입력"
+                    type="text"
+                    description="Prohibited Uses 섹션의 제목"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 제목')}
+                    showNotification={showNotification}
+                  />
+
+                  {/* Prohibited Uses 목록 빠른 편집 */}
+                  <QuickEditCard
+                    title="Prohibited Uses 목록"
+                    value={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 목록')?.content || 'Violate any applicable laws or regulations...'}
+                    placeholder="Prohibited Uses 목록 입력"
+                    type="text"
+                    description="Prohibited Uses 섹션의 목록"
+                    onSave={handleQuickEditSave}
+                    existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 목록')}
+                    showNotification={showNotification}
+                  />
+                </div>
+              </div>
+
+              {/* Terms and Conditions 콘텐츠 목록 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getContentBySection('terms').map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="bg-white rounded-lg border border-orange-200 p-4 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-4 h-4 text-orange-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-4 h-4 text-orange-600" />}
+                        <h5 className="font-medium text-orange-900">{item.title}</h5>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`p-1 rounded ${item.isActive ? 'text-orange-600' : 'text-gray-400'}`}
+                        >
+                          {item.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => openContentModal(item)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="편집"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleContentDelete(item.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">타입:</span> {item.type}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">내용:</span> {item.content || '내용 없음'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {getContentBySection('terms').length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-4">📋</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Terms and Conditions 콘텐츠가 없습니다</h3>
+                  <p className="text-gray-600 mb-4">Terms and Conditions 페이지의 텍스트 내용을 추가해보세요.</p>
+                  <button
+                    onClick={() => {
+                      setEditingContent(null)
+                      setFormData({
+                        id: '',
+                        type: 'text',
+                        section: 'terms',
+                        title: '',
+                        content: '',
+                        order: 1,
+                        isActive: true
+                      })
+                      setIsModalOpen(true)
+                    }}
+                    className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700"
+                  >
+                    첫 번째 Terms and Conditions 콘텐츠 추가
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 상단 액션 바 - Hero 섹션이 아닐 때만 표시 */}
+        {selectedSection !== 'hero' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div className="flex gap-2">
+              <button
+                onClick={() => openModal()}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                새 콘텐츠 추가
+              </button>
+              
+              <button
+                onClick={togglePreviewMode}
+                className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  isPreviewMode
+                    ? 'border-red-300 text-red-700 bg-red-50 hover:bg-red-100 focus:ring-red-500'
+                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500'
+                }`}
+              >
+                {isPreviewMode ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                {isPreviewMode ? '미리보기 종료' : '미리보기'}
+              </button>
+
+              {isPreviewMode && (
+                <button
+                  onClick={applyToHomepage}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  홈페이지에 적용
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder={`${sections.find(s => s.id === selectedSection)?.name}에서 검색...`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex border border-gray-300 rounded-md">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  <Grid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 섹션 정보 및 통계 - Hero 섹션이 아닐 때만 표시 */}
+        {selectedSection !== 'hero' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{currentSectionContent.length}</div>
+              <div className="text-sm text-blue-800">전체 콘텐츠</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">
+                {currentSectionContent.filter(item => item.isActive).length}
+              </div>
+              <div className="text-sm text-green-800">활성 콘텐츠</div>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">
+                {currentSectionContent.filter(item => item.type === 'image').length}
+              </div>
+              <div className="text-sm text-purple-800">이미지</div>
+            </div>
+            <div className="text-center p-4 bg-orange-50 rounded-lg">
+              <div className="text-2xl font-bold text-orange-600">
+                {currentSectionContent.filter(item => item.type === 'video').length}
+              </div>
+              <div className="text-sm text-orange-800">동영상</div>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* 콘텐츠 목록 - Hero 섹션이 아닐 때만 표시 */}
+        {selectedSection !== 'hero' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">
+                {sections.find(s => s.id === selectedSection)?.name} - {currentSectionContent.length}개 콘텐츠
+              </span>
+            </div>
+          </div>
+
+          {viewMode === 'grid' ? (
+            /* 그리드 뷰 */
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {currentSectionContent.map((item) => (
+                  <div key={item.id} className="bg-gray-50 rounded-lg p-6 border border-gray-200 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        {item.type === 'text' && <Type className="w-5 h-5 text-blue-600" />}
+                        {item.type === 'image' && <ImageIcon className="w-5 h-5 text-green-600" />}
+                        {item.type === 'video' && <Video className="w-5 h-5 text-purple-600" />}
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getSectionColor(item.section)}`}>
+                          {item.type}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openModal(item)}
+                          className="text-blue-600 hover:text-blue-900 p-1"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('정말로 이 콘텐츠를 삭제하시겠습니까?')) {
+                              deleteContent(item.id)
+                              showNotification('success', '콘텐츠가 삭제되었습니다.')
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-900 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <h3 className="font-semibold text-gray-900 mb-2">{item.title}</h3>
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{item.content}</p>
+
+                    {item.type === 'image' && item.mediaUrl && (
+                      <div className="mb-4">
+                        <img
+                          src={item.mediaUrl}
+                          alt={item.title}
+                          className="w-full h-32 object-cover rounded-lg"
+                        />
+                      </div>
+                    )}
+
+                    {item.type === 'video' && item.mediaUrl && (
+                      <div className="mb-4 bg-gray-200 rounded-lg p-4 text-center">
+                        <Video className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                        <p className="text-xs text-gray-600">동영상 파일</p>
+                      </div>
+                    )}
+
+                    {/* 헤더 콘텐츠 정보 표시 */}
+                    {(item.type === 'link' || item.type === 'button') && (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                        <div className="text-xs text-blue-800 space-y-1">
+                          {item.linkUrl && (
+                            <div className="flex items-center">
+                              <span className="font-medium">링크:</span>
+                              <span className="ml-2 text-blue-600 truncate">{item.linkUrl}</span>
+                            </div>
+                          )}
+                          {item.type === 'button' && item.buttonStyle && (
+                            <div className="flex items-center">
+                              <span className="font-medium">스타일:</span>
+                              <span className="ml-2 px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
+                                {item.buttonStyle === 'primary' ? 'Primary' : 'Secondary'}
+                              </span>
+                            </div>
+                          )}
+                          {item.iconName && (
+                            <div className="flex items-center">
+                              <span className="font-medium">아이콘:</span>
+                              <span className="ml-2 text-blue-600">{item.iconName}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">순서: {item.order}</span>
+                      <button
+                        onClick={() => toggleContentActive(item.id)}
+                        className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          item.isActive
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {item.isActive ? '활성' : '비활성'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* 리스트 뷰 */
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      콘텐츠
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      타입
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      순서
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      상태
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      작업
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentSectionContent.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            {item.type === 'image' && item.mediaUrl ? (
+                              <img
+                                src={item.mediaUrl}
+                                alt={item.title}
+                                className="h-10 w-10 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-lg bg-gray-200 flex items-center justify-center">
+                                {item.type === 'text' && <Type className="w-4 h-4" />}
+                                {item.type === 'image' && <ImageIcon className="w-4 h-4" />}
+                                {item.type === 'video' && <Video className="w-4 h-4" />}
+                                {item.type === 'link' && <ArrowRight className="w-4 h-4" />}
+                                {item.type === 'button' && <CheckCircle className="w-4 h-4" />}
+                              </div>
+                            )}
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{item.title}</div>
+                            <div className="text-sm text-gray-500 truncate max-w-xs">{item.content}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          {item.type === 'text' && <Type className="w-4 h-4" />}
+                          {item.type === 'image' && <ImageIcon className="w-4 h-4" />}
+                          {item.type === 'video' && <Video className="w-4 h-4" />}
+                          {item.type === 'link' && <ArrowRight className="w-4 h-4" />}
+                          {item.type === 'button' && <CheckCircle className="w-4 h-4" />}
+                          <span className="ml-2 text-sm text-gray-900">{item.type}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.order}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => toggleContentActive(item.id)}
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            item.isActive
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {item.isActive ? '활성' : '비활성'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openModal(item)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('정말로 이 콘텐츠를 삭제하시겠습니까?')) {
+                                deleteContent(item.id)
+                                showNotification('success', '콘텐츠가 삭제되었습니다.')
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* 미리보기 모드 */}
+        {isPreviewMode && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">홈페이지 미리보기</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={applyToHomepage}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      홈페이지에 적용
+                    </button>
+                    <button
+                      onClick={togglePreviewMode}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="space-y-8">
+                  {sections.map(section => {
+                    const sectionContent = previewData.filter(item => item.section === section.id && item.isActive)
+                    if (sectionContent.length === 0) return null
+                    
+                    return (
+                      <div key={section.id} className="border border-gray-200 rounded-lg p-6">
+                        <h4 className="text-xl font-semibold text-gray-900 mb-4 capitalize">{section.name}</h4>
+                        <div className="space-y-4">
+                          {sectionContent
+                            .sort((a, b) => a.order - b.order)
+                            .map(item => (
+                              <div key={item.id} className="p-4 bg-gray-50 rounded-lg">
+                                <div className="flex items-start gap-4">
+                                  {item.type === 'image' && item.mediaUrl && (
+                                    <img
+                                      src={item.mediaUrl}
+                                      alt={item.title}
+                                      className="w-24 h-24 object-cover rounded-lg"
+                                    />
+                                  )}
+                                  {item.type === 'video' && item.mediaUrl && (
+                                    <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
+                                      <Play className="w-8 h-8 text-gray-600" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-gray-900 mb-2">{item.title}</h5>
+                                    {item.type === 'text' ? (
+                                      <p className="text-gray-700">{item.content}</p>
+                                    ) : (
+                                      <p className="text-sm text-gray-500">{item.content}</p>
+                                    )}
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getSectionColor(item.section)}`}>
+                                        {item.section}
+                                      </span>
+                                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                        {item.type === 'text' && <Type className="w-3 h-3 mr-1" />}
+                                        {item.type === 'image' && <ImageIcon className="w-3 h-3 mr-1" />}
+                                        {item.type === 'video' && <Video className="w-3 h-3 mr-1" />}
+                                        <span>{item.type}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 콘텐츠 추가/수정 모달 */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {editingContent ? '콘텐츠 수정' : '새 콘텐츠 추가'}
+                  </h3>
+                  <button
+                    onClick={closeModal}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      섹션
+                    </label>
+                    <select
+                      value={formData.section}
+                      onChange={(e) => setFormData({ ...formData, section: e.target.value as any })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      {sections.map(section => (
+                        <option key={section.id} value={section.id}>{section.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      콘텐츠 타입
+                    </label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      {contentTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    제목
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="콘텐츠 제목을 입력하세요"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {formData.type === 'text' ? '텍스트 내용' : '설명'}
+                  </label>
+                  {formData.type === 'text' ? (
+                    <textarea
+                      value={formData.content}
+                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="텍스트 내용을 입력하세요"
+                      required
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.content}
+                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="콘텐츠 설명을 입력하세요"
+                      required
+                    />
+                  )}
+                </div>
+
+                {/* 미디어 업로드 영역 */}
+                {(formData.type === 'image' || formData.type === 'video') && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {formData.type === 'image' ? '이미지' : '동영상'} 업로드
+                    </label>
+                    <MediaUpload
+                      type={formData.type}
+                      currentUrl={formData.mediaUrl}
+                      onUpload={handleMediaUpload}
+                      onRemove={handleMediaRemove}
+                    />
+                  </div>
+                )}
+
+                {/* 카테고리 전용 편집 필드들 */}
+                {(formData.section === 'categories' || (formData.section === 'hero' && formData.type === 'button')) && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        카테고리 타입
+                      </label>
+                      <select
+                        value={formData.categoryType || ''}
+                        onChange={(e) => setFormData({ ...formData, categoryType: e.target.value as any })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      >
+                        <option value="">카테고리 타입 선택</option>
+                        <option value="stickers">Stickers</option>
+                        <option value="stamps">Stamps</option>
+                        <option value="phone-cases">Phone Cases</option>
+                        <option value="hot-goods">HOT GOODS</option>
+                        <option value="others">Others</option>
+                        <option value="custom-design">Custom Design</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        이모지
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.emoji || ''}
+                        onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="🏷️, 📮, 📱, 🔥, 🎁, 🎨"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        링크 URL
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.linkUrl || ''}
+                        onChange={(e) => setFormData({ ...formData, linkUrl: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="/products, /stamp, /phone-cases, /customize"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          그라디언트 시작 색상
+                        </label>
+                        <input
+                          type="color"
+                          value={formData.gradientFrom || '#3B82F6'}
+                          onChange={(e) => setFormData({ ...formData, gradientFrom: e.target.value })}
+                          className="w-full h-10 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          그라디언트 끝 색상
+                        </label>
+                        <input
+                          type="color"
+                          value={formData.gradientTo || '#8B5CF6'}
+                          onChange={(e) => setFormData({ ...formData, gradientTo: e.target.value })}
+                          className="w-full h-10 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 그라디언트 미리보기 */}
+                    {formData.gradientFrom && formData.gradientTo && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          그라디언트 미리보기
+                        </label>
+                        <div 
+                          className="w-full h-16 rounded-lg border border-gray-300"
+                          style={{ 
+                            background: `linear-gradient(to right, ${formData.gradientFrom}, ${formData.gradientTo})` 
+                          }}
+                        ></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 헤더 전용 편집 필드들 */}
+                {(formData.type === 'link' || formData.type === 'button') && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        링크 URL
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.linkUrl || ''}
+                        onChange={(e) => setFormData({ ...formData, linkUrl: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="https://example.com"
+                        required
+                      />
+                    </div>
+
+                    {formData.type === 'button' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            버튼 스타일
+                          </label>
+                          <select
+                            value={formData.buttonStyle || 'primary'}
+                            onChange={(e) => setFormData({ ...formData, buttonStyle: e.target.value as 'primary' | 'secondary' })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="primary">Primary (파란색)</option>
+                            <option value="secondary">Secondary (회색)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            아이콘 이름
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.iconName || ''}
+                            onChange={(e) => setFormData({ ...formData, iconName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="ShoppingCart, User, Search 등"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        링크 타겟
+                      </label>
+                      <select
+                        value={formData.target || '_self'}
+                        onChange={(e) => setFormData({ ...formData, target: e.target.value as '_self' | '_blank' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="_self">현재 창에서 열기</option>
+                        <option value="_blank">새 창에서 열기</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      표시 순서
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.order}
+                      onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      min="1"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+                      활성 상태
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    {editingContent ? '수정' : '추가'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 콘텐츠 모달 */}
+        <ContentModal
+          isOpen={isModalOpen}
+          onClose={closeContentModal}
+          onSave={handleContentSave}
+          content={editingContent}
+          section={selectedSection}
+        />
+
+        {/* 알림 */}
+        {notification.show && (
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-green-500 text-white' :
+            notification.type === 'error' ? 'bg-red-500 text-white' :
+            'bg-blue-500 text-white'
+          }`}>
+            <div className="flex items-center">
+              {notification.type === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
+              {notification.type === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

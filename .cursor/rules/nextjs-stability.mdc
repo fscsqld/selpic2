@@ -1,0 +1,94 @@
+# Next.js Stability and Configuration Rules
+
+## Critical Issues to Prevent
+
+### 1. Cache Corruption Issues
+- **Problem**: `SyntaxError: Unexpected end of JSON input` and `ENOENT` errors
+- **Solution**: Always clear cache when issues occur:
+  ```bash
+  Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
+  npm run clean
+  ```
+
+### 2. Port Conflicts
+- **Problem**: `EADDRINUSE: address already in use :::3003`
+- **Solution**: Kill existing processes before starting:
+  ```bash
+  taskkill /f /im node.exe
+  netstat -ano | findstr :3003
+  ```
+
+### 3. Translation File Issues
+- **Problem**: Duplicate keys in `lib/translations.ts` causing linter errors
+- **Solution**: 
+  - Keep translation file simple and avoid duplicate keys
+  - Use unique key names (e.g., `loginPage` instead of `login`)
+  - Maximum file size: 500 lines to prevent timeout issues
+
+### 4. Font Loading Issues
+- **Problem**: Google Fonts download failures due to network issues
+- **Solution**: 
+  - Use local fonts or system fonts as fallback
+  - Implement proper error handling for font loading
+  - Consider using `next/font/local` instead of Google Fonts
+
+## Configuration Best Practices
+
+### next.config.js
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    unoptimized: true
+  },
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY || 'default'
+  },
+  experimental: {
+    // Remove appDir as it's default in Next.js 14
+  }
+}
+```
+
+### package.json Scripts
+```json
+{
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "start": "next start --port 3003",
+    "clean": "Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue",
+    "reset": "npm run clean && Remove-Item -Recurse -Force node_modules && npm install"
+  }
+}
+```
+
+## Development Workflow
+
+### Before Starting Development
+1. Check for running processes: `netstat -ano | findstr :3003`
+2. Kill if needed: `taskkill /f /im node.exe`
+3. Clear cache: `npm run clean`
+
+### When Issues Occur
+1. **Cache Issues**: Run `npm run reset`
+2. **Port Issues**: Kill processes and restart
+3. **Translation Issues**: Simplify `lib/translations.ts`
+4. **Font Issues**: Use system fonts as fallback
+
+### File Structure Guidelines
+- Keep `lib/translations.ts` under 500 lines
+- Use unique translation keys
+- Avoid nested objects deeper than 3 levels
+- Implement proper error boundaries
+
+## Error Prevention Checklist
+- [ ] Clear cache before major changes
+- [ ] Check port availability
+- [ ] Validate translation file structure
+- [ ] Test font loading
+- [ ] Verify next.config.js settings
+- [ ] Check for duplicate keys in translations
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,178 @@
+# Font Handling Rules
+
+## Problem: Google Fonts Download Failures
+
+**Symptoms:**
+- `AbortError: The user aborted a request`
+- `Failed to download 'Inter' from Google Fonts`
+- `Failed to download 'Poppins' from Google Fonts`
+
+## Solutions
+
+### 1. Use Local Fonts Instead of Google Fonts
+
+**File: [app/layout.tsx](mdc:app/layout.tsx)**
+
+```typescript
+// ❌ Avoid Google Fonts
+import { Inter, Poppins } from 'next/font/google'
+
+// ✅ Use local fonts or system fonts
+import localFont from 'next/font/local'
+
+const inter = localFont({
+  src: './fonts/Inter-Regular.woff2',
+  fallback: ['system-ui', 'arial']
+})
+
+const poppins = localFont({
+  src: './fonts/Poppins-Regular.woff2',
+  fallback: ['system-ui', 'arial']
+})
+```
+
+### 2. Implement Proper Fallback Strategy
+
+**File: [tailwind.config.js](mdc:tailwind.config.js)**
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: [
+          'Inter',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif'
+        ],
+        display: [
+          'Poppins',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif'
+        ]
+      }
+    }
+  }
+}
+```
+
+### 3. Error Handling for Font Loading
+
+```typescript
+// In layout.tsx
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <head>
+        {/* Fallback font loading */}
+        <link
+          rel="preconnect"
+          href="https://fonts.googleapis.com"
+          crossOrigin="anonymous"
+        />
+        <style jsx global>{`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+          
+          /* Fallback to system fonts if Google Fonts fail */
+          body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          }
+          
+          .font-display {
+            font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          }
+        `}</style>
+      </head>
+      <body className={inter.className}>
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+## Best Practices
+
+### 1. Font Loading Strategy
+- **Primary**: Local fonts (most reliable)
+- **Secondary**: Google Fonts with fallback
+- **Fallback**: System fonts
+
+### 2. Performance Optimization
+```typescript
+// Preload critical fonts
+<link
+  rel="preload"
+  href="/fonts/Inter-Regular.woff2"
+  as="font"
+  type="font/woff2"
+  crossOrigin="anonymous"
+/>
+```
+
+### 3. Error Handling
+```typescript
+// Check if fonts loaded successfully
+useEffect(() => {
+  document.fonts.ready.then(() => {
+    console.log('Fonts loaded successfully')
+  }).catch(() => {
+    console.warn('Font loading failed, using fallbacks')
+  })
+}, [])
+```
+
+## Implementation Steps
+
+### 1. Download Local Font Files
+- Download Inter and Poppins from Google Fonts
+- Place in `public/fonts/` directory
+- Use WOFF2 format for best performance
+
+### 2. Update Layout Configuration
+- Replace Google Fonts imports with local fonts
+- Add proper fallback chains
+- Implement error handling
+
+### 3. Test Font Loading
+- Test with network throttling
+- Verify fallback fonts work
+- Check performance impact
+
+## Monitoring
+
+### Font Loading Status
+```typescript
+// Add to layout for debugging
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    document.fonts.ready.then(() => {
+      console.log('✅ Fonts loaded:', document.fonts.size)
+    }).catch((error) => {
+      console.warn('⚠️ Font loading error:', error)
+    })
+  }
+}, [])
+```
+
+### Performance Metrics
+- Monitor font loading time
+- Check for layout shifts
+- Verify fallback font usage
+description:
+globs:
+alwaysApply: false
+---
