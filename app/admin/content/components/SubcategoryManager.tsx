@@ -162,6 +162,7 @@ export default function SubcategoryManager({
       title: '',
       description: '',
       emoji: '📝',
+      imageUrl: '',
       linkUrl: '',
       pageTitle: '',
       pageSubtitle: '',

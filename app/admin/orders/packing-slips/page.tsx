@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { getColorName } from '@/lib/colorUtils'
 
 // 단일 창에서 여러 패킹 슬립을 연속 렌더링하여 한 번에 인쇄
-export default function PackingSlipsBatchPage() {
+function PackingSlipsBatchContent() {
   const searchParams = useSearchParams()
   const { orders } = useStore()
 
@@ -226,3 +226,16 @@ export default function PackingSlipsBatchPage() {
   )
 }
 
+export default function PackingSlipsBatchPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-gray-600">Loading…</div>
+        </div>
+      }
+    >
+      <PackingSlipsBatchContent />
+    </Suspense>
+  )
+}

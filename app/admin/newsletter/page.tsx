@@ -25,7 +25,11 @@ import {
   Plus,
   BookOpen,
   Paperclip,
-  File
+  File,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminAuth } from '@/lib/adminAuth'
@@ -229,7 +233,9 @@ export default function NewsletterManagementPage() {
       const activeSubscriberIds = paginatedSubscribers
         .filter(sub => sub.isActive)
         .map(sub => sub.id)
-      setSelectedSubscribers(prev => [...new Set([...prev, ...activeSubscriberIds])])
+      setSelectedSubscribers((prev) =>
+        Array.from(new Set([...prev, ...activeSubscriberIds]))
+      )
     }
   }
 

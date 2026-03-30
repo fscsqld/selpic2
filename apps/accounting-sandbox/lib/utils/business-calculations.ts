@@ -41,6 +41,8 @@ export interface BusinessCalculations {
   taxableExpenses: number
   directorsLoanBalance: number
   personalSpendingNonDeductible: number
+  /** EQUITY_SHARE_CAPITAL credits (company/sole trader only) */
+  shareCapital: number
 }
 
 /**

@@ -3,9 +3,10 @@ import { emailTrackingService } from '@/lib/emailTrackingService'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { emailId: string } }
+  { params }: { params: Promise<{ emailId: string }> }
 ) {
   try {
+    const { emailId } = await params
     const { searchParams } = new URL(request.url)
     const originalUrl = searchParams.get('url')
     const linkName = searchParams.get('link') || 'default'
@@ -13,8 +14,6 @@ export async function GET(
     if (!originalUrl) {
       return new NextResponse('Original URL required', { status: 400 })
     }
-
-    const emailId = params.emailId
     const userAgent = request.headers.get('user-agent') || undefined
 
     // Record link click

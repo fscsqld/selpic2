@@ -16,7 +16,7 @@ import { DuplicateCheckResult, TransactionMatchResult } from './types'
  */
 export function checkDuplicateOrder(
   orderId: string,
-  existingOrders: Order[]
+  existingOrders: Array<Pick<Order, 'orderId'> & { matchedTransactionId?: string }>
 ): DuplicateCheckResult {
   const existing = existingOrders.find(order => order.orderId === orderId)
   

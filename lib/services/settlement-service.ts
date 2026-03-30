@@ -18,7 +18,8 @@ import {
   SalesAgent,
   DesignerProfile,
   SettlementAdjustment,
-  SettlementDashboard
+  SettlementDashboard,
+  PartnerBalance
 } from '@/lib/types/production-platform-extended'
 
 // ============================================================================
@@ -158,16 +159,28 @@ export function calculateCompositeOrderRevenueAdvanced(
     const designer = item.designerId ? designers.get(item.designerId) : undefined
     const agent = item.agentId ? agents.get(item.agentId) : undefined
     
-    const revenue = calculateRevenueAdvanced({
-      orderId,
-      customOrderId: item.customOrderId,
-      totalPrice: item.totalPrice,
-      productionCost: item.productionCost,
-      designerRevenueRate: item.designerRevenueRate,
-      agentId: item.agentId,
-      agentCode: item.agentCode,
-      agentRevenueRate: item.agentRevenueRate || 0.10
-    }, designer, agent)
+    const agentRate = item.agentRevenueRate || 0.1
+    const productionRate =
+      item.totalPrice > 0 ? item.productionCost / item.totalPrice : 0.4
+    const platformRevenueRate = Math.max(
+      0,
+      1 - productionRate - item.designerRevenueRate - (item.agentId ? agentRate : 0)
+    )
+    const revenue = calculateRevenueAdvanced(
+      {
+        orderId,
+        customOrderId: item.customOrderId,
+        totalPrice: item.totalPrice,
+        productionCost: item.productionCost,
+        designerRevenueRate: item.designerRevenueRate,
+        platformRevenueRate,
+        agentId: item.agentId,
+        agentCode: item.agentCode,
+        agentRevenueRate: agentRate,
+      },
+      designer,
+      agent
+    )
     
     return {
       customOrderId: item.customOrderId,
@@ -475,7 +488,8 @@ export function generateSettlementDashboard(
   partnerId: string,
   partnerType: 'designer' | 'agent',
   revenueShares: RevenueShare[],
-  adjustments: SettlementAdjustment[]
+  adjustments: SettlementAdjustment[],
+  partnerBalance?: PartnerBalance
 ): SettlementDashboard {
   // 파트너 관련 수익만 필터링
   const partnerRevenueShares = revenueShares.filter(rs => {
@@ -537,8 +551,9 @@ export function generateSettlementDashboard(
   const availableForPayout = readyRevenue - pendingAdjustments
   
   // 🆕 파트너 잔액 (마이너스 허용)
-  const currentBalance = partnerBalance?.currentBalance ?? 0
-  const isNegativeBalance = partnerBalance?.isNegative ?? false
+  const currentBalance =
+    partnerBalance?.currentBalance ?? availableForPayout
+  const isNegativeBalance = currentBalance < 0
   
   // 통계
   const stats = {
@@ -566,7 +581,7 @@ export function generateSettlementDashboard(
     isNegativeBalance, // 🆕 마이너스 잔액 여부
     stats,
     adjustments: partnerAdjustments,
-    calculationDetails // 🆕 계산 근거 (투명한 대시보드)
+    calculationDetails: undefined,
   }
 }
 
@@ -690,7 +705,7 @@ function extractChangedFields(oldValue: any, newValue: any): Record<string, { ol
   // 모든 키를 순회하며 변경된 필드 찾기
   const allKeys = new Set([...Object.keys(oldValue), ...Object.keys(newValue)])
   
-  for (const key of allKeys) {
+  for (const key of Array.from(allKeys)) {
     const oldVal = oldValue[key]
     const newVal = newValue[key]
     

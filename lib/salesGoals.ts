@@ -154,7 +154,8 @@ export const useSalesGoals = create<SalesGoalsState>()(
       goals: defaultGoals,
       alerts: defaultAlerts,
       reportSchedules: defaultReportSchedules,
-      
+      notifications: [],
+
       setGoal: (goal) => {
         set((state) => ({
           goals: state.goals.map((g) => 

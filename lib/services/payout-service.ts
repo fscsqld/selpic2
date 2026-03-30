@@ -66,7 +66,7 @@ export function createPayoutRequest(
   canProcess: boolean
   reason?: string
 } {
-  const totalRevenue = partnerBalance.totalRevenue || 0
+  const totalRevenue = partnerBalance.currentBalance || 0
   const isNegativeBalance = totalRevenue < 0
   
   // 마이너스 잔액인 경우 출금 불가
@@ -145,7 +145,7 @@ export function applyNegativeBalanceDeduction(
   deductionAmount: number // 공제된 금액
   remainingBalance: number // 남은 잔액
 } {
-  const currentBalance = partnerBalance.totalRevenue || 0
+  const currentBalance = partnerBalance.currentBalance || 0
   const isNegative = currentBalance < 0
   
   if (!isNegative) {
@@ -153,7 +153,7 @@ export function applyNegativeBalanceDeduction(
     return {
       updatedBalance: {
         ...partnerBalance,
-        totalRevenue: currentBalance + newRevenue,
+        currentBalance: currentBalance + newRevenue,
         lastUpdatedAt: new Date()
       },
       deductionAmount: 0,
@@ -169,7 +169,7 @@ export function applyNegativeBalanceDeduction(
   return {
     updatedBalance: {
       ...partnerBalance,
-      totalRevenue: remainingBalance,
+      currentBalance: remainingBalance,
       lastUpdatedAt: new Date()
     },
     deductionAmount,

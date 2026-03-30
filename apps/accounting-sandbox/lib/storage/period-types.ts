@@ -32,6 +32,7 @@ export interface FinancialPeriod {
 }
 
 export interface PeriodCarryForward {
+  id: string
   fromPeriodId: string
   toPeriodId: string
   directorLoanBalance: number

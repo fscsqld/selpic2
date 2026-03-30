@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { Mail, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
-export default function UnsubscribePage() {
+function UnsubscribeContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { unsubscribeFromNewsletter, newsletterSubscribers } = useStore()
@@ -208,3 +208,18 @@ export default function UnsubscribePage() {
   )
 }
 
+export default function UnsubscribePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center px-4 py-12">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center text-gray-600">
+            Loading…
+          </div>
+        </div>
+      }
+    >
+      <UnsubscribeContent />
+    </Suspense>
+  )
+}

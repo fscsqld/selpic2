@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { X, Search, Image as ImageIcon, Video, File, Check, Grid3x3, List, Folder, Package, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMediaStore, MediaFile } from '@/lib/mediaStore'
+import { useMediaStore, MediaFile, getStandardTagFromUsage, type MediaUsage } from '@/lib/mediaStore'
 import { indexedDBStorage } from '@/lib/indexedDBStorage'
 
 interface MediaLibraryModalProps {
@@ -11,7 +11,7 @@ interface MediaLibraryModalProps {
   onSelect: (url: string) => void
   type?: 'image' | 'video' | 'all'
   category?: string
-  usage?: MediaFile['usage'] // 🆕 태그 필터링을 위한 usage prop
+  usage?: MediaUsage | 'all' // filter by usage; 'all' = no usage filter
 }
 
 export default function MediaLibraryModal({ 
@@ -25,7 +25,7 @@ export default function MediaLibraryModal({
   const { mediaFiles, searchMediaFiles, updateMediaFile, deleteMediaFile } = useMediaStore()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
-  const [selectedUsageTag, setSelectedUsageTag] = useState<MediaFile['usage'] | 'all'>(usage || 'all') // 🆕 태그 필터 상태
+  const [selectedUsageTag, setSelectedUsageTag] = useState<MediaUsage | 'all'>(usage === 'all' || !usage ? 'all' : usage)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
   const [restoredUrls, setRestoredUrls] = useState<Record<string, string>>({})
@@ -34,7 +34,7 @@ export default function MediaLibraryModal({
 
   // 🆕 usage prop 변경 시 selectedUsageTag 업데이트
   useEffect(() => {
-    if (usage) {
+    if (usage && usage !== 'all') {
       setSelectedUsageTag(usage)
       console.log('🔄 [MediaLibraryModal] Usage tag updated:', usage)
     }
@@ -112,10 +112,12 @@ export default function MediaLibraryModal({
         }
         
         // selectedUsageTag가 usage 형식인지 표준 태그 형식인지 확인
-        const standardTag = tagMap[selectedUsageTag] || selectedUsageTag
+        const standardTag =
+          tagMap[selectedUsageTag as keyof typeof tagMap] || selectedUsageTag
         
+        if (!standardTag) return false
         // file.usage 필드 또는 file.tags 배열에서 태그 확인
-        return file.usage === selectedUsageTag || 
+        return file.usage === selectedUsageTag ||
                file.tags.includes(standardTag) ||
                file.tags.includes(selectedUsageTag as string)
       })
@@ -135,17 +137,16 @@ export default function MediaLibraryModal({
     // 🆕 6단계: 우선순위 정렬 (usage prop이 전달된 경우 해당 태그가 있는 파일을 먼저 표시)
     return files.sort((a, b) => {
       // usage prop이 있고, 해당 태그가 있는 파일을 우선순위로
-      if (usage) {
-        const usageTag = usage === 'hero-banner' ? 'Hero_Banner' :
-                        usage === 'category-bg' ? 'Category_BG' :
-                        usage === 'subcategory-card' ? 'Subcategory_Card' :
-                        usage === 'header-logo' ? 'Header_Logo' :
-                        usage === 'product-media' ? 'Product_Media' :
-                        usage === 'general-content' ? 'General_Content' : null
-        
+      if (usage && usage !== 'all') {
+        const usageTag = getStandardTagFromUsage(usage)
+
         if (usageTag) {
-          const aHasTag = a.usage === usageTag || a.tags.includes(usageTag)
-          const bHasTag = b.usage === usageTag || b.tags.includes(usageTag)
+          const aHasTag =
+            (a.usage ? getStandardTagFromUsage(a.usage) === usageTag : false) ||
+            a.tags.includes(usageTag)
+          const bHasTag =
+            (b.usage ? getStandardTagFromUsage(b.usage) === usageTag : false) ||
+            b.tags.includes(usageTag)
           
           if (aHasTag && !bHasTag) return -1 // a가 우선
           if (!aHasTag && bHasTag) return 1  // b가 우선
@@ -162,13 +163,6 @@ export default function MediaLibraryModal({
   // 페이지네이션 설정
   const itemsPerPage = viewMode === 'grid' ? 20 : 10
   const totalPages = Math.max(1, Math.ceil(filteredFiles.length / itemsPerPage))
-
-  // 🆕 usage prop이 변경되면 태그 필터도 업데이트
-  useEffect(() => {
-    if (usage && usage !== 'all') {
-      setSelectedUsageTag(usage)
-    }
-  }, [usage])
 
   // 필터 변경 시 첫 페이지로 리셋
   useEffect(() => {
@@ -611,17 +605,19 @@ export default function MediaLibraryModal({
           <div className="flex flex-wrap gap-1.5">
             <span className="text-xs text-gray-600 font-medium self-center mr-1">Tags:</span>
             {[
-              { value: 'all', label: 'All Tags' },
-              { value: 'Hero_Banner', label: 'Hero Banner' },
-              { value: 'Category_BG', label: 'Category BG' },
-              { value: 'Subcategory_Card', label: 'Subcategory Card' },
-              { value: 'Header_Logo', label: 'Header Logo' },
-              { value: 'Product_Media', label: 'Product Media' },
-              { value: 'General_Content', label: 'General Content' }
+              { value: 'all' as const, label: 'All Tags' },
+              { value: 'hero-banner' as const, label: 'Hero Banner' },
+              { value: 'category-bg' as const, label: 'Category BG' },
+              { value: 'subcategory-card' as const, label: 'Subcategory Card' },
+              { value: 'header-logo' as const, label: 'Header Logo' },
+              { value: 'product-media' as const, label: 'Product Media' },
+              { value: 'general-content' as const, label: 'General Content' }
             ].map(tag => (
               <button
                 key={tag.value}
-                onClick={() => setSelectedUsageTag(tag.value as MediaFile['usage'] | 'all')}
+                onClick={() =>
+                  setSelectedUsageTag(tag.value === 'all' ? 'all' : tag.value)
+                }
                 className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                   selectedUsageTag === tag.value
                     ? 'bg-emerald-600 text-white shadow-md'

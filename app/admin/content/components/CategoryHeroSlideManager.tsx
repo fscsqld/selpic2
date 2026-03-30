@@ -99,11 +99,22 @@ export default function CategoryHeroSlideManager({
         direction: slide.direction || 'left',
         effect: slide.effect || 'slide',
         opacity: slide.opacity ?? 1,
-        responsive: slide.responsive || {
-          mobile: { speed: slide.speed ?? 5, opacity: slide.opacity ?? 1, pauseVideoOnMobile: true },
-          tablet: { speed: slide.speed ?? 5, opacity: slide.opacity ?? 1 },
-          desktop: { speed: slide.speed ?? 5, opacity: slide.opacity ?? 1 }
-        },
+        responsive: (() => {
+          const sp = slide.speed ?? 5
+          const op = slide.opacity ?? 1
+          const base = {
+            mobile: { speed: sp, opacity: op, pauseVideoOnMobile: true as boolean },
+            tablet: { speed: sp, opacity: op },
+            desktop: { speed: sp, opacity: op }
+          }
+          const r = slide.responsive
+          if (!r) return base
+          return {
+            mobile: { ...base.mobile, ...r.mobile, pauseVideoOnMobile: r.mobile?.pauseVideoOnMobile ?? true },
+            tablet: { ...base.tablet, ...r.tablet },
+            desktop: { ...base.desktop, ...r.desktop }
+          }
+        })(),
         order: slide.order,
         isActive: slide.isActive ?? true
       })
@@ -604,8 +615,9 @@ export default function CategoryHeroSlideManager({
                           key={index}
                           type="button"
                           onClick={() => {
-                            setFormData(prev => ({ 
-                              title: prev.title ? `${prev.title} ${emoji}` : emoji 
+                            setFormData((prev) => ({
+                              ...prev,
+                              title: prev.title ? `${prev.title} ${emoji}` : emoji
                             }))
                             setShowEmojiPicker(false)
                           }}

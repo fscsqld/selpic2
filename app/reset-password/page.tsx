@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
@@ -8,7 +8,7 @@ import { Mail, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import Header from '@/components/Header'
 import Link from 'next/link'
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useTranslation()
@@ -262,3 +262,21 @@ export default function ResetPasswordPage() {
   )
 }
 
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50">
+          <Header />
+          <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center text-gray-600">
+              Loading…
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  )
+}

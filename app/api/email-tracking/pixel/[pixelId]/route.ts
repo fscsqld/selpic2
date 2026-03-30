@@ -6,9 +6,10 @@ const TRACKING_PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { pixelId: string } }
+  { params }: { params: Promise<{ pixelId: string }> }
 ) {
   try {
+    await params // segment id available for future routing; open uses query emailId
     const { searchParams } = new URL(request.url)
     const emailId = searchParams.get('emailId')
     

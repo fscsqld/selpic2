@@ -24,6 +24,8 @@ interface EditStageModalProps {
     watermarkPosition?: WatermarkPosition
   }) => void
   onCancel: () => void
+  onWebPProgress?: (progress: number) => void
+  webPProgress?: number
 }
 
 const PRODUCT_CATEGORIES = [

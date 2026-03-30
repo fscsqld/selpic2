@@ -49,7 +49,7 @@ import { useMediaStore, MediaFile, MediaUsage } from '@/lib/mediaStore'
 import EditStageModal from '@/components/EditStageModal'
 import SortableFileItem from '@/components/SortableFileItem'
 
-interface ProductCategory {
+export interface ProductCategory {
   id: string
   name: string
   icon: string

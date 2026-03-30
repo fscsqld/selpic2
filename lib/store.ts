@@ -21,6 +21,8 @@ export interface Product {
   safetyStock?: number
   incomingStock?: number
   brand?: string
+  /** Device / product model (e.g. phone case compatibility). */
+  model?: string
   size?: string
   color?: string
   type?: string
@@ -74,7 +76,14 @@ export interface CartItem {
   customizations: Record<string, string>
 }
 
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'cancelled'
+export type OrderStatus =
+  | 'pending'
+  | 'paid'
+  | 'processing'
+  | 'shipped'
+  | 'cancelled'
+  /** Admin/accounting approval step (e.g. before processing) */
+  | 'approved'
 
 export interface OrderItemSnapshot {
   productId: string
@@ -116,6 +125,8 @@ export interface OrderRecord {
   promoCode?: string
   promoDiscount?: number // 프로모션 코드 할인 (별도 저장)
   paymentFee?: number
+  /** GST amount when stored separately; else often inferred as total/11 (10% inclusive). */
+  gst?: number
   total: number
   shippingOptionId: string
   shippingOptionName?: string
@@ -1129,9 +1140,9 @@ export const useStore = create<Store>()(
       generateEmailContent: (template: any, order: OrderRecord, companyName: string): string => {
         const variables = {
           orderId: order.id,
-          customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+          customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
           companyName: companyName,
-          orderDate: new Date(order.createdAt).toLocaleDateString('en-AU', { 
+          orderDate: new Date(order.createdAtIso).toLocaleDateString('en-AU', { 
             day: 'numeric', 
             month: 'short', 
             year: 'numeric' 
@@ -1139,7 +1150,7 @@ export const useStore = create<Store>()(
           orderTotal: `$${order.total.toFixed(2)}`,
           orderStatus: order.status,
           itemCount: order.items.length,
-          shippingAddress: order.shippingAddress?.address || 'N/A',
+          shippingAddress: order.address.asSingleLine || 'N/A',
           paymentMethod: order.paymentMethod || 'N/A'
         }
 
@@ -1251,7 +1262,7 @@ export const useStore = create<Store>()(
           // Subject 생성
           const subjectVariables = {
             orderId: order.id,
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             companyName: companyName
           }
           const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
@@ -1259,8 +1270,8 @@ export const useStore = create<Store>()(
           // 이메일 발송
           const { emailService } = await import('./emailService')
           const result = await emailService.sendResponse({
-            customerEmail: order.customerEmail || '',
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerEmail: order.customer.email || '',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
             adminName: companyName
@@ -1335,7 +1346,7 @@ export const useStore = create<Store>()(
           // Subject 생성
           const subjectVariables = {
             orderId: order.id,
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             companyName: companyName
           }
           const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
@@ -1343,8 +1354,8 @@ export const useStore = create<Store>()(
           // 이메일 발송
           const { emailService } = await import('./emailService')
           const result = await emailService.sendResponse({
-            customerEmail: order.customerEmail || '',
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerEmail: order.customer.email || '',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
             adminName: companyName
@@ -1427,7 +1438,7 @@ export const useStore = create<Store>()(
           // Subject 생성
           const subjectVariables = {
             orderId: order.id,
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             companyName: companyName
           }
           const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
@@ -1435,8 +1446,8 @@ export const useStore = create<Store>()(
           // 이메일 발송
           const { emailService } = await import('./emailService')
           const result = await emailService.sendResponse({
-            customerEmail: order.customerEmail || '',
-            customerName: order.customerName || order.customerEmail?.split('@')[0] || 'Customer',
+            customerEmail: order.customer.email || '',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
             adminName: companyName

@@ -1023,7 +1023,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
     try {
       let successCount = 0
       let failCount = 0
-      for (const username of selectedAdmins) {
+      for (const username of Array.from(selectedAdmins)) {
         if (username === adminUser?.username) {
           failCount++
           continue

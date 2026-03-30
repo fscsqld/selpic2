@@ -130,7 +130,7 @@ export class WestpacParser implements PDFParser {
 
     return {
       bankName: 'Westpac',
-      accountNumber,
+      accountNumber: accountNumber ?? undefined,
       statementPeriod,
       openingBalance: balances.opening,
       closingBalance: balances.closing,
@@ -420,7 +420,9 @@ export class WestpacParser implements PDFParser {
     }
 
     // Fallback: use first and last transaction dates
-    const dateMatches = text.matchAll(/(\d{1,2}\/\d{1,2}\/\d{4})/g)
+    const dateMatches = Array.from(
+      text.matchAll(/(\d{1,2}\/\d{1,2}\/\d{4})/g)
+    )
     const dates: string[] = []
     for (const match of dateMatches) {
       const formatted = this.formatDate(match[1])
@@ -487,7 +489,9 @@ export class WestpacParser implements PDFParser {
 
     // Fallback: extract from transaction balances
     if (opening === 0 || closing === 0) {
-      const balanceMatches = text.matchAll(/([\d,]+\.?\d*)\s*$/gm)
+      const balanceMatches = Array.from(
+        text.matchAll(/([\d,]+\.?\d*)\s*$/gm)
+      )
       const balances: number[] = []
       for (const match of balanceMatches) {
         const balance = parseFloat(match[1].replace(/,/g, ''))

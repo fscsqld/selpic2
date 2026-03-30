@@ -453,8 +453,8 @@ export default function CommunityPage() {
     // 차단 여부 확인
     if (userToCheck.isBanned) {
       // 차단 만료 시간 확인
-      if (user.banExpiresAt) {
-        const banExpires = new Date(user.banExpiresAt)
+      if (userToCheck.banExpiresAt) {
+        const banExpires = new Date(userToCheck.banExpiresAt)
         const now = new Date()
         
         if (now > banExpires) {

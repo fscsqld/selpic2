@@ -2,7 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { InvoiceTemplateProps, InvoiceLineItem } from '@/components/invoice/InvoiceTemplate'
 import { OrderRecord } from '@/lib/store'
-import { validateInvoicePeriod, InvoiceValidationContext, getCriticalWarnings } from '@/lib/invoice-validation'
+import {
+  validateInvoicePeriod,
+  InvoiceValidationContext,
+  getCriticalWarnings as readStoredCriticalWarnings,
+} from '@/lib/invoice-validation'
 import { COMPANY_LEGAL, COMPANY_BANK, COMPANY_CONTACT, COMPANY_LOGO_URL } from '@/lib/companyLegal'
 
 // 인보이스 템플릿 기본 데이터 타입
@@ -181,7 +185,8 @@ export const useInvoiceStore = create<InvoiceStore>()(
       },
       getInvoiceByOrderId: (orderId) => {
         return get().generatedInvoices.find(inv => inv.orderId === orderId)
-      }
+      },
+      getCriticalWarnings: () => readStoredCriticalWarnings(),
     }),
     {
       name: 'invoice-store',

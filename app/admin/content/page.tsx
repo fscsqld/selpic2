@@ -1970,7 +1970,7 @@ export default function ContentManagementPage() {
                       const homeLinkItem = contentItems.find(item => item.section === 'header' && item.title === 'Home Link')
                       if (homeLinkItem) {
                         updateContent(homeLinkItem.id, {
-                          linkUrl: data.value || '/'
+                          linkUrl: data.linkUrl || '/'
                         })
                         showNotificationToast('success', 'Home Link URL updated successfully')
                       } else {
@@ -1979,7 +1979,7 @@ export default function ContentManagementPage() {
                           section: 'header',
                           title: 'Home Link',
                           content: 'Home',
-                          linkUrl: data.value || '/',
+                          linkUrl: data.linkUrl || '/',
                           order: 2,
                           isActive: true
                         })
@@ -2002,7 +2002,7 @@ export default function ContentManagementPage() {
                       const loginButtonItem = contentItems.find(item => item.section === 'header' && item.title === 'Login Button')
                       if (loginButtonItem) {
                         updateContent(loginButtonItem.id, {
-                          linkUrl: data.value || '/login'
+                          linkUrl: data.linkUrl || '/login'
                         })
                         showNotificationToast('success', 'Login Link URL updated successfully')
                       } else {
@@ -2012,7 +2012,7 @@ export default function ContentManagementPage() {
                           title: 'Login Button',
                           content: 'Login',
                           buttonStyle: 'primary',
-                          linkUrl: data.value || '/login',
+                          linkUrl: data.linkUrl || '/login',
                           order: 4,
                           isActive: true
                         })
@@ -2035,7 +2035,7 @@ export default function ContentManagementPage() {
                       const cartButtonItem = contentItems.find(item => item.section === 'header' && item.title === 'Cart Button')
                       if (cartButtonItem) {
                         updateContent(cartButtonItem.id, {
-                          linkUrl: data.value || '/cart'
+                          linkUrl: data.linkUrl || '/cart'
                         })
                         showNotificationToast('success', 'Cart Link URL updated successfully')
                       } else {
@@ -2046,7 +2046,7 @@ export default function ContentManagementPage() {
                           content: 'Cart',
                           buttonStyle: 'secondary',
                           iconName: 'ShoppingCart',
-                          linkUrl: data.value || '/cart',
+                          linkUrl: data.linkUrl || '/cart',
                           order: 5,
                           isActive: true
                         })

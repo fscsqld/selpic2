@@ -75,7 +75,6 @@ function SalesOverviewPageContent() {
         avgPrice: '평균 가격',
         vipGrade: 'VIP 등급',
         customers: '고객 수',
-        orders: '주문 수',
         close: '닫기'
       }
     : {
@@ -124,7 +123,6 @@ function SalesOverviewPageContent() {
         avgPrice: 'Average Price',
         vipGrade: 'VIP Grade',
         customers: 'Customers',
-        orders: 'Orders',
         close: 'Close'
       }
 
@@ -429,7 +427,9 @@ function SalesOverviewPageContent() {
       data.push([v.grade, `$${v.revenue.toFixed(2)}`, v.orders, v.customers])
     })
     
-    const csv = data.map(row => row.map(field => `"${String(field)}"`).join(',')).join('\n')
+    const csv = data
+      .map((row) => row.map((field: unknown) => `"${String(field)}"`).join(','))
+      .join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -583,7 +583,11 @@ function SalesOverviewPageContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="period" />
                     <YAxis />
-                    <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                    <Tooltip
+                      formatter={(value) =>
+                        `$${typeof value === 'number' ? value.toFixed(2) : String(value ?? '')}`
+                      }
+                    />
                     <Legend />
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name={T.revenue} />
                   </LineChart>
@@ -663,7 +667,9 @@ function SalesOverviewPageContent() {
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          label={({ name, percent }) =>
+                            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                          }
                           outerRadius={80}
                           fill="#8884d8"
                           dataKey="value"
@@ -672,7 +678,11 @@ function SalesOverviewPageContent() {
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Tooltip
+                      formatter={(value) =>
+                        `$${typeof value === 'number' ? value.toFixed(2) : String(value ?? '')}`
+                      }
+                    />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -718,7 +728,11 @@ function SalesOverviewPageContent() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="grade" />
                         <YAxis />
-                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Tooltip
+                      formatter={(value) =>
+                        `$${typeof value === 'number' ? value.toFixed(2) : String(value ?? '')}`
+                      }
+                    />
                         <Legend />
                         <Bar dataKey="revenue" fill="#3b82f6" name={T.sales} />
                       </BarChart>

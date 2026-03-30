@@ -510,7 +510,8 @@ export interface CalculateRevenueRequest {
   totalPrice: number
   productionCost: number
   designerRevenueRate: number
-  platformRevenueRate: number
+  /** Optional; settlement helpers derive platform share when omitted. */
+  platformRevenueRate?: number
   agentId?: string // 🆕 영업사원 ID (있으면 4자 분배, 없으면 3자 분배)
   agentCode?: string // 영업사원 코드 (선택사항)
   agentRevenueRate?: number // 🆕 영업사원 수익률 (기본값: 0.10, agentId가 있을 때만 사용)
@@ -651,6 +652,7 @@ export interface CalculateCompositeOrderRevenueRequest {
     totalPrice: number
     productionCost: number
     designerRevenueRate: number
+    designerId?: string
     agentId?: string // 각 상품별로 개별 설정 가능
     agentCode?: string
     agentRevenueRate?: number

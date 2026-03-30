@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useStore } from '@/lib/store'
+import { useStore, type CustomizationOption } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, X, CheckCircle, AlertCircle } from 'lucide-react'
 import ProductImageUpload from '@/components/ProductImageUpload'
 
@@ -49,6 +49,7 @@ interface ProductFormData {
   tags?: string[]
   hasDetailPage?: boolean // 상세 페이지 표시 여부
   detailDescription?: string // 상세 페이지 전용 상세 설명
+  customizationOptions?: CustomizationOption[]
 }
 
 export default function CategoryProductManager({

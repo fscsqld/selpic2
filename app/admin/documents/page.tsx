@@ -358,12 +358,12 @@ export default function DocumentSenderPage() {
   }, [createDocumentType, createInvoiceData.items, createInvoiceData.discounts?.vipDiscountPercent, createInvoiceData.discounts?.promoDiscountPercent, createInvoiceData.shipping, createInvoiceData.paymentFee, createQuoteData.items, createQuoteData.discounts?.vipDiscountPercent, createQuoteData.discounts?.promoDiscountPercent, createQuoteData.shipping, createQuoteData.paymentFee])
 
   // 고객 목록 (주문 이력이 있는 고객 + 일반 사용자)
-  const allCustomers = [
-    ...new Set([
-      ...orders.map(o => o.customer.email),
-      ...users.map(u => u.email)
+  const allCustomers = Array.from(
+    new Set([
+      ...orders.map((o) => o.customer.email),
+      ...users.map((u) => u.email)
     ])
-  ].map(email => {
+  ).map((email) => {
     const order = orders.find(o => o.customer.email === email)
     const user = users.find(u => u.email === email)
     return {
@@ -561,7 +561,7 @@ ${companyName} Team`
           setDocumentData(prev => ({
             ...prev,
             subject: `Invoice - ${invoice.invoiceMeta.invoiceNumber}`,
-            content: `Dear ${order.customer.name},\n\nPlease find your invoice attached.\n\nInvoice Number: ${invoice.invoiceMeta.invoiceNumber}\nAmount Due: $${invoice.totals.total.toFixed(2)}\nDue Date: ${new Date(invoice.invoiceMeta.dueDate).toLocaleDateString()}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
+            content: `Dear ${order.customer.name},\n\nPlease find your invoice attached.\n\nInvoice Number: ${invoice.invoiceMeta.invoiceNumber}\nAmount Due: $${invoice.totals.total.toFixed(2)}\nDue Date: ${invoice.invoiceMeta.dueDate ? new Date(invoice.invoiceMeta.dueDate).toLocaleDateString() : 'TBD'}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
           }))
         }
       } else {
@@ -573,7 +573,7 @@ ${companyName} Team`
             setDocumentData(prev => ({
               ...prev,
               subject: `Invoice - ${blankInvoice.invoiceMeta.invoiceNumber}`,
-              content: `Dear Customer,\n\nPlease find your invoice attached.\n\nInvoice Number: ${blankInvoice.invoiceMeta.invoiceNumber}\nAmount Due: $${blankInvoice.totals.total.toFixed(2)}\nDue Date: ${new Date(blankInvoice.invoiceMeta.dueDate).toLocaleDateString()}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
+              content: `Dear Customer,\n\nPlease find your invoice attached.\n\nInvoice Number: ${blankInvoice.invoiceMeta.invoiceNumber}\nAmount Due: $${blankInvoice.totals.total.toFixed(2)}\nDue Date: ${blankInvoice.invoiceMeta.dueDate ? new Date(blankInvoice.invoiceMeta.dueDate).toLocaleDateString() : 'TBD'}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
             }))
           }
         }
@@ -657,9 +657,9 @@ ${companyName} Team`
       const totalWidth = element.scrollWidth
       
       const opt = {
-        margin: [10, 10, 10, 10],
+        margin: [10, 10, 10, 10] as [number, number, number, number],
         filename: `Invoice-${invoiceData.invoiceMeta.invoiceNumber}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { 
           scale: 2, 
           useCORS: true,
@@ -686,10 +686,10 @@ ${companyName} Team`
             }
           }
         },
-        jsPDF: { 
-          unit: 'mm', 
-          format: 'a4', 
-          orientation: 'portrait',
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait' as const,
           compress: true
         },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.page-break-before', after: '.page-break-after', avoid: ['.no-break'] }
@@ -1372,8 +1372,22 @@ ${companyName} Team`
                                     quantity: item.quantity,
                                     customizations: item.customizations || {}
                                   })),
-                                  shippingOption: shippingOrder.shippingOption,
-                                  tracking: shippingOrder.tracking,
+                                  shippingOption:
+                                    order != null
+                                      ? {
+                                          name:
+                                            order.shippingOptionName ||
+                                            order.shippingOptionId ||
+                                            'Shipping',
+                                          price: order.shippingPrice
+                                        }
+                                      : (shippingOrder as { shippingOption: { name: string; price: number } })
+                                          .shippingOption,
+                                  tracking:
+                                    order != null
+                                      ? order.tracking
+                                      : (shippingOrder as { tracking: NonNullable<OrderRecord['tracking']> })
+                                          .tracking,
                                   createdAtIso: shippingOrder.createdAtIso
                                 }}
                                 company={defaultTemplate?.company}
@@ -1467,7 +1481,11 @@ ${companyName} Team`
                                     customizations: item.customizations || {}
                                   })),
                                   subtotal: confirmationOrder.subtotal,
-                                  shipping: confirmationOrder.shippingPrice || confirmationOrder.shipping || 0,
+                                  shipping:
+                                    'shippingPrice' in confirmationOrder &&
+                                    confirmationOrder.shippingPrice != null
+                                      ? confirmationOrder.shippingPrice
+                                      : (confirmationOrder as { shipping?: number }).shipping ?? 0,
                                   total: confirmationOrder.total,
                                   discount: confirmationOrder.discount || 0,
                                   createdAtIso: confirmationOrder.createdAtIso
@@ -1718,9 +1736,9 @@ ${companyName} Team`
                                       await new Promise(resolve => setTimeout(resolve, 100))
                                       
                                       const opt = {
-                                        margin: [10, 10, 10, 10],
+                                        margin: [10, 10, 10, 10] as [number, number, number, number],
                                         filename: `${invoice.invoiceNumber}.pdf`,
-                                        image: { type: 'jpeg', quality: 0.98 },
+                                        image: { type: 'jpeg' as const, quality: 0.98 },
                                         html2canvas: { 
                                           scale: 2, 
                                           useCORS: true,
@@ -1766,10 +1784,10 @@ ${companyName} Team`
                                             }
                                           }
                                         },
-                                        jsPDF: { 
-                                          unit: 'mm', 
-                                          format: 'a4', 
-                                          orientation: 'portrait',
+                                        jsPDF: {
+                                          unit: 'mm',
+                                          format: 'a4',
+                                          orientation: 'portrait' as const,
                                           compress: true
                                         },
                                         pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.page-break-before', after: '.page-break-after', avoid: ['.no-break'] }
@@ -3485,24 +3503,28 @@ ${companyName} Team`
                               customerName: recipientDisplayName,
                               subject: `${docTypeLabel.charAt(0).toUpperCase() + docTypeLabel.slice(1)} ${docNumber} from ${companyName}`,
                               message: `Dear ${recipientDisplayName},\n\nPlease find attached your ${docTypeLabel} ${docNumber}.\n\nThank you for your business!\n\n${companyName} Team`,
-                              adminName: adminUser?.username || 'SELPIC Admin',
-                              attachments: pdfFile ? [pdfFile] : undefined
+                              adminName: adminUser?.username || 'SELPIC Admin'
                             })
+                            void pdfFile
 
-                            // 생성된 Invoice를 저장
                             if (createDocumentType === 'invoice') {
                               addGeneratedInvoice({
                                 id: `inv-${Date.now()}`,
+                                orderId: `doc-email-${Date.now()}`,
                                 invoiceNumber: createInvoiceData.invoiceMeta.invoiceNumber,
-                                customerName:
-                                  (createInvoiceData.billing.companyName || '').trim() ||
-                                  (createInvoiceData.billing.name || '').trim() ||
-                                  'Customer',
                                 customerEmail: emailToSend,
-                                total: createInvoiceData.totals.total,
-                                issueDate: createInvoiceData.invoiceMeta.issueDate,
-                                dueDate: createInvoiceData.invoiceMeta.dueDate,
-                                status: 'sent',
+                                invoiceData: {
+                                  company: createInvoiceData.company,
+                                  billing: createInvoiceData.billing,
+                                  invoiceMeta: createInvoiceData.invoiceMeta,
+                                  items: createInvoiceData.items,
+                                  totals: createInvoiceData.totals,
+                                  discounts: createInvoiceData.discounts,
+                                  shipping: createInvoiceData.shipping,
+                                  paymentFee: createInvoiceData.paymentFee,
+                                  payment: createInvoiceData.payment,
+                                  notes: createInvoiceData.notes
+                                },
                                 createdAt: new Date().toISOString()
                               })
                             }

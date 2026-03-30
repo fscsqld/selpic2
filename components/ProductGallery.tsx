@@ -443,7 +443,10 @@ export default function ProductGallery({
         })
       
       const formattedImagesResults = await Promise.all(formattedImagesPromises)
-      let formattedImages = formattedImagesResults.filter((img): img is NonNullable<typeof img> => img !== null && img.original && img.thumbnail) // 유효한 URL만 포함
+      let formattedImages = formattedImagesResults.filter(
+        (img): img is NonNullable<typeof img> =>
+          img !== null && !!img.original && !!img.thumbnail
+      )
 
       // 연결된 이미지가 없고 fallback 이미지가 있으면 추가
       if (formattedImages.length === 0) {
@@ -473,7 +476,13 @@ export default function ProductGallery({
             thumbnailAlt: 'Product thumbnail',
             description: '',
             originalClass: 'gallery-image',
-            thumbnailClass: 'gallery-thumbnail'
+            thumbnailClass: 'gallery-thumbnail',
+            fileId: 'fallback',
+            fileName: 'fallback',
+            backupUrls: [] as string[],
+            isVideo: false,
+            videoUrl: undefined,
+            fallbackImageUrl: undefined,
           })
         } else {
           console.log('⚠️ [ProductGallery] No images found and fallback is invalid:', {
@@ -544,10 +553,14 @@ export default function ProductGallery({
           if (isVideo && videoUrl) {
             return (
               <div className="image-gallery-image relative">
-                <VideoPlayer
-                  videoUrl={videoUrl}
-                  fallbackImage={fallbackImageUrl}
-                  alt={safeAlt}
+                <video
+                  className="w-full max-h-[600px] object-contain bg-black"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  poster={fallbackImageUrl || undefined}
+                  src={videoUrl}
+                  aria-label={safeAlt}
                 />
               </div>
             )

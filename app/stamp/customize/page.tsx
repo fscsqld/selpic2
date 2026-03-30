@@ -559,11 +559,7 @@ function StampCustomizeContent() {
                       setSelectedProduct(product)
                       setCustomText(product.name)
                     }}
-                    className={`p-4 border-2 rounded-lg text-left transition-all ${
-                      selectedProduct?.id === product.id
-                        ? 'border-blue-500 bg-blue-500/20'
-                        : 'border-slate-600 hover:border-slate-500 bg-slate-700/50'
-                    }`}
+                    className="p-4 border-2 rounded-lg text-left transition-all border-slate-600 hover:border-slate-500 bg-slate-700/50"
                   >
                     <img
                       src={product.image}
@@ -602,11 +598,14 @@ function StampCustomizeContent() {
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                           {products
-                            .filter((p): p is Product => 
-                              p.category === 'Stamps' && 
-                              p.subcategory !== 'Set' &&
-                              p.customizationOptions && 
-                              p.customizationOptions.length > 0
+                            .filter(
+                              (p): p is Product =>
+                                p.category === 'Stamps' &&
+                                p.subcategory !== 'Set' &&
+                                !!(
+                                  p.customizationOptions &&
+                                  p.customizationOptions.length > 0
+                                )
                             )
                             .map((designProduct) => {
                               const isSelected = item.selectedDesign?.id === designProduct.id

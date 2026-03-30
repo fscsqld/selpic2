@@ -209,20 +209,23 @@ export default function StickersPage() {
     }
     
     try {
-      const hasStickerDims = formData.stickerWidthMm != null && formData.stickerWidthMm !== '' &&
-        formData.stickerHeightMm != null && formData.stickerHeightMm !== '' &&
-        formData.stickerCols != null && formData.stickerCols !== '' &&
-        formData.stickerRows != null && formData.stickerRows !== ''
+      const hasStickerDims =
+        formData.stickerWidthMm != null &&
+        formData.stickerHeightMm != null &&
+        formData.stickerCols != null &&
+        formData.stickerRows != null
       const optionalSticker = hasStickerDims
         ? {
             stickerWidthMm: Number(formData.stickerWidthMm),
             stickerHeightMm: Number(formData.stickerHeightMm),
             stickerCols: Number(formData.stickerCols),
             stickerRows: Number(formData.stickerRows),
-            stickerGapMm: formData.stickerGapMm != null && formData.stickerGapMm !== '' ? Number(formData.stickerGapMm) : 2
+            stickerGapMm:
+              formData.stickerGapMm != null ? Number(formData.stickerGapMm) : 2
           }
         : {}
-      const twoLineSurchargeVal = formData.twoLineSurcharge != null && formData.twoLineSurcharge !== '' ? Number(formData.twoLineSurcharge) : undefined
+      const twoLineSurchargeVal =
+        formData.twoLineSurcharge != null ? Number(formData.twoLineSurcharge) : undefined
       if (editingProduct) {
         // Update product
         const updatedProduct = {

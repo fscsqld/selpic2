@@ -9,7 +9,11 @@ import {
   EmailTemplate, 
   EmailHistory 
 } from '@/lib/emailService'
-import { emailTrackingService, getStatusColor, getStatusText } from '@/lib/emailTrackingService'
+import {
+  emailTrackingService,
+  getStatusColor as getEmailDeliveryStatusColor,
+  getStatusText as getEmailDeliveryStatusText
+} from '@/lib/emailTrackingService'
 import { 
   Mail, MailOpen, Search, Filter, Eye, Reply, Trash2, 
   Clock, User, Tag, AlertCircle, CheckCircle, MessageSquare,
@@ -895,8 +899,8 @@ function AdminMessagesPageContent() {
                               {email.status}
                             </span>
                             {updatedEmail.deliveryStatus && (
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(updatedEmail.deliveryStatus)}`}>
-                                {getStatusText(updatedEmail.deliveryStatus)}
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEmailDeliveryStatusColor(updatedEmail.deliveryStatus)}`}>
+                                {getEmailDeliveryStatusText(updatedEmail.deliveryStatus)}
                               </span>
                             )}
                             {email.templateUsed && (

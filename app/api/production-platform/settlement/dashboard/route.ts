@@ -11,10 +11,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   generateSettlementDashboard,
-  SettlementDashboard,
   calculateRevenueWithDetails
 } from '@/lib/services/settlement-service'
-import { CalculateRevenueRequest } from '@/lib/types/production-platform-extended'
+import {
+  CalculateRevenueRequest,
+  type SettlementDashboard
+} from '@/lib/types/production-platform-extended'
 
 // ============================================================================
 // API 엔드포인트
@@ -85,15 +87,20 @@ export async function GET(request: NextRequest) {
       // const designer = await getDesignerProfile(rs.designerId)
       // const agent = rs.agentId ? await getSalesAgent(rs.agentId) : undefined
       
+      const tr = rs.totalRevenue > 0 ? rs.totalRevenue : 1
+      const designerRevenueRate = rs.designerRevenue / tr
+      const agentRevenueRate = rs.agentRevenue / tr
+      const productionRate = rs.productionCost / tr
       const request: CalculateRevenueRequest = {
         orderId: rs.orderId,
         customOrderId: rs.customOrderId,
         totalPrice: rs.totalRevenue,
         productionCost: rs.productionCost,
-        designerRevenueRate: rs.designerRevenue / rs.totalRevenue,
+        designerRevenueRate,
+        platformRevenueRate: Math.max(0, 1 - designerRevenueRate - agentRevenueRate - productionRate),
         agentId: rs.agentId,
         agentCode: rs.agentCode,
-        agentRevenueRate: rs.agentRevenue / rs.totalRevenue
+        agentRevenueRate
       }
       
       // 계산식 포함 상세 정보

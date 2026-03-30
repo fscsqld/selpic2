@@ -20,18 +20,6 @@ export const translations = {
       yes: '예',
       no: '아니오'
     },
-    admin: {
-      products: {
-        totalItems: 'Total {count} items',
-        rowsPerPage: 'Rows',
-      },
-    },
-    admin: {
-      products: {
-        totalItems: '총 {count}개 상품',
-        rowsPerPage: '페이지당',
-      },
-    },
     nav: {
       home: '홈',
       products: '상품',
@@ -400,9 +388,13 @@ export const translations = {
       emailNotFound: '등록된 이메일이 아닙니다',
       error: '오류가 발생했습니다. 다시 시도해주세요'
     },
-                  adminLogin: '관리자 로그인',
-      profile: '프로필',
-             admin: {
+    adminLogin: '관리자 로그인',
+    profile: '프로필',
+    admin: {
+      productTable: {
+        totalItems: '총 {count}개 상품',
+        rowsPerPage: '페이지당',
+      },
          login: {
            title: '관리자 로그인',
            subtitle: '관리자 계정으로 로그인하세요',
@@ -1722,9 +1714,13 @@ export const translations = {
       emailNotFound: 'Email not found',
       error: 'An error occurred. Please try again'
     },
-                  adminLogin: 'Admin Login',
-      profile: 'Profile',
-             admin: {
+    adminLogin: 'Admin Login',
+    profile: 'Profile',
+    admin: {
+      productTable: {
+        totalItems: 'Total {count} items',
+        rowsPerPage: 'Rows',
+      },
          login: {
            title: 'Admin Login',
            subtitle: 'Sign in to your admin account',

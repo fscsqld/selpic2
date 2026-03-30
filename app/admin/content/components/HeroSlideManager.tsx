@@ -640,11 +640,13 @@ export default function HeroSlideManager({
         
         // 🆕 formData를 완전한 객체로 변환하여 전달
         // fallback 이미지가 없으면 기존 fallback 이미지 유지
+        const { eventStartDate: evStart, eventEndDate: evEnd, ...formRest } = formData
         const updateData: Partial<HeroSlide> = {
-          ...formData,
-          // 🆕 fallback 이미지가 없으면 기존 fallback 이미지 유지
+          ...formRest,
           fallbackImage: formData.fallbackImage.trim() || editingSlide.fallbackImage || '',
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          eventStartDate: evStart ? new Date(evStart) : undefined,
+          eventEndDate: evEnd ? new Date(evEnd) : undefined
         }
         
         // 🆕 모달을 먼저 닫아서 상태 업데이트로 인한 리렌더링 시 모달이 다시 열리지 않도록 함
@@ -687,8 +689,12 @@ export default function HeroSlideManager({
         // 🆕 모달을 먼저 닫아서 상태 업데이트로 인한 리렌더링 시 모달이 다시 열리지 않도록 함
         closeModal()
         
-        // 새 슬라이드 추가
-        onAddSlide(formData)
+        const { eventStartDate: addStart, eventEndDate: addEnd, ...addRest } = formData
+        onAddSlide({
+          ...addRest,
+          eventStartDate: addStart ? new Date(addStart) : undefined,
+          eventEndDate: addEnd ? new Date(addEnd) : undefined
+        })
         showNotification('success', isFromTemplate ? 'Slide created from template successfully!' : 'New slide added successfully!')
       } catch (error) {
         console.error('❌ Error adding slide:', error)

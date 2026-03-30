@@ -7,7 +7,8 @@
 
 import { Order } from '../../shared/types/order'
 import { Transaction } from '../../shared/types/transaction'
-import { checkDuplicateOrder, approveOrder, createTransactionFromOrder } from './order-approval'
+import { approveOrder, createTransactionFromOrder } from './order-approval'
+import { checkDuplicateOrder } from './duplicate-detector'
 import { auditLogger } from '../../shared/logging/audit-logger'
 import { indexedDBStorage } from '../../../lib/storage/indexed-db'
 
@@ -99,7 +100,12 @@ export async function recordOrderToAccounting(
       occurredAt: order.transactionDate,
       customerName: order.metadata?.customerName || 'Unknown',
       customerEmail: order.metadata?.customerEmail || '',
-      items: order.metadata?.items || [],
+      items: (order.metadata?.items || []).map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.price,
+        totalPrice: i.quantity * i.price,
+      })),
       subtotal: order.amount,
       shipping: 0,
       discount: 0,

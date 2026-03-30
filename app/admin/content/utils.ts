@@ -34,6 +34,8 @@ export interface QuickEditData {
   content: string
   linkUrl?: string
   type: 'text' | 'link'
+  /** Target content section (e.g. header, hero) */
+  section?: string
   order: number
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Edit3, Save, RotateCcw, Plus, Trash2, GripVertical } from 'lucide-react'
+import { Edit3, Save, RotateCcw, Plus, Trash2, GripVertical, X } from 'lucide-react'
 import { SidebarMenuItem, loadSidebarMenuConfig, saveSidebarMenuConfig, updateMenuItemIcon } from '@/lib/sidebarIcons'
 import IconSelector from './IconSelector'
 

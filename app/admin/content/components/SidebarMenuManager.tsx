@@ -5,8 +5,8 @@ import { SidebarMenuItem } from '@/lib/contentStore'
 
 interface SidebarMenuManagerProps {
   sidebarMenuItems: SidebarMenuItem[]
-  onAddMenuItem: (item: Omit<SidebarMenuItem, 'id'>) => void
-  onUpdateMenuItem: (id: string, item: Omit<SidebarMenuItem, 'id'>) => void
+  onAddMenuItem: (item: Omit<SidebarMenuItem, 'id' | 'createdAt' | 'updatedAt'>) => void
+  onUpdateMenuItem: (id: string, updates: Partial<SidebarMenuItem>) => void
   onDeleteMenuItem: (id: string) => void
   onReorderMenuItem: (fromIndex: number, toIndex: number) => void
   showNotification: (type: 'success' | 'error' | 'info', message: string) => void

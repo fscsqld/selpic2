@@ -3,8 +3,6 @@ import { Resend } from 'resend'
 import { useUserAuth } from '@/lib/userAuth'
 import crypto from 'crypto'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()
@@ -40,8 +38,10 @@ export async function POST(request: NextRequest) {
     const resetLink = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
 
     // Resend API 키가 설정되어 있으면 실제 이메일 전송
-    if (process.env.RESEND_API_KEY) {
+    const resendKey = process.env.RESEND_API_KEY
+    if (resendKey) {
       try {
+        const resend = new Resend(resendKey)
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL || 'SELPIC <noreply@selpic.com.au>',
           to: email,

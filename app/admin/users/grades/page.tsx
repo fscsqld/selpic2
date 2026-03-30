@@ -489,9 +489,11 @@ export default function GradeStatusMonitoringPage() {
               ? calculateUserTotalSales(selectedUser.email, orders, selectedUser.phone)
               : (selectedUser.totalSalesAmount || 0)
             
-            const currentGradeInfo = vipGradeConfigs.find(g => g.code === selectedUser.currentGrade ?? 0)
-            const selectedGradeInfo = vipGradeConfigs.find(g => g.code === editFormData.gradeCode)
-            const isGradeChanged = editFormData.gradeCode !== (selectedUser.currentGrade ?? 0)
+            const currentGradeInfo = vipGradeConfigs.find(
+              (g) => g.code === selectedUser.currentGrade
+            )
+            const selectedGradeInfo = vipGradeConfigs.find((g) => g.code === editFormData.gradeCode)
+            const isGradeChanged = editFormData.gradeCode !== selectedUser.currentGrade
             
             return (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

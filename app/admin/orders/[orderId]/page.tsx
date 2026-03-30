@@ -87,7 +87,7 @@ export default function AdminOrderDetailPage() {
         {
           id: order.id,
           orderId: order.id,
-          transactionDate: order.createdAtIso || order.createdAt || new Date().toISOString(),
+          transactionDate: order.createdAtIso || new Date().toISOString(),
           amount: order.total - (order.gst || order.total / 11), // GST 제외한 금액
           gst: order.gst || order.total / 11, // GST 금액
           status: 'approved',
@@ -101,7 +101,7 @@ export default function AdminOrderDetailPage() {
               price: item.price,
             })) || [],
           },
-          createdAt: order.createdAtIso || order.createdAt || new Date().toISOString(),
+          createdAt: order.createdAtIso || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
         adminUser?.username,

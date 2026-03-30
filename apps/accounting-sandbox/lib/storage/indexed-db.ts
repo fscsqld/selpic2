@@ -748,6 +748,53 @@ class IndexedDBStorage {
   }
 
   /**
+   * Save a receipt file linked to a bank transaction (evidence blob).
+   */
+  async saveTransactionReceipt(transactionId: string, file: File): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    const imageData = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
+      reader.readAsDataURL(file)
+    })
+
+    const id = `tx_receipt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const storedReceipt = {
+      id,
+      transactionId,
+      imageData,
+      fileName: file.name,
+      fileType: file.type || 'application/octet-stream',
+      uploadedAt: new Date().toISOString(),
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([TRANSACTION_RECEIPTS_STORE], 'readwrite')
+      const store = transaction.objectStore(TRANSACTION_RECEIPTS_STORE)
+      const request = store.add(storedReceipt)
+
+      request.onsuccess = () => {
+        console.log('[IndexedDB] Transaction receipt saved:', id)
+        resolve(id)
+      }
+
+      request.onerror = () => {
+        console.error('[IndexedDB] Error saving transaction receipt:', request.error)
+        reject(request.error)
+      }
+    })
+  }
+
+  /**
    * Get receipt image by ID
    */
   async getReceiptImage(receiptId: string): Promise<any | null> {
@@ -1765,12 +1812,20 @@ class IndexedDBStorage {
    */
   async logAuditTrail(entry: {
     transactionId: string
-    action: 'created' | 'updated' | 'deleted' | 'category_changed' | 'department_changed'
+    action:
+      | 'created'
+      | 'updated'
+      | 'deleted'
+      | 'category_changed'
+      | 'department_changed'
+      | 'period_locked'
+      | 'period_carry_forward'
     userId: string
-    userName: string
+    userName?: string
     oldValue?: any
     newValue?: any
     description?: string
+    details?: any
   }): Promise<string> {
     if (!this.db) {
       await this.init()
@@ -1781,10 +1836,11 @@ class IndexedDBStorage {
       transactionId: entry.transactionId,
       action: entry.action,
       userId: entry.userId,
-      userName: entry.userName,
+      userName: entry.userName ?? entry.userId,
       oldValue: entry.oldValue,
       newValue: entry.newValue,
       description: entry.description,
+      ...(entry.details !== undefined ? { details: entry.details } : {}),
       timestamp: new Date().toISOString(),
     }
 

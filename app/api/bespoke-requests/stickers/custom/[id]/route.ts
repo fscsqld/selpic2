@@ -36,8 +36,8 @@ async function writeRecords(records: BespokeStickerRequestRecord[]) {
   await fs.writeFile(DATA_FILE, JSON.stringify(records, null, 2), 'utf-8')
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const requestId = params.id
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: requestId } = await params
   const body = await req.json().catch(() => null)
 
   const status: any = body?.status
@@ -76,8 +76,8 @@ async function unlinkIfExists(filePath: string) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const requestId = params.id
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: requestId } = await params
 
   const records = await readRecords()
   const idx = records.findIndex((r) => r.id === requestId)
