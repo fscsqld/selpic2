@@ -6,36 +6,15 @@ import { SubcategoryItem } from '@/lib/contentStore'
 import { useStore } from '@/lib/store'
 import MediaUpload from '@/components/MediaUpload'
 
-// 이미지 컴포넌트 (indexeddb:// 지원)
 const SubcategoryImage = ({ src, emoji, alt, className = '', wrapperClassName = '' }: { src?: string, emoji?: string, alt: string, className?: string, wrapperClassName?: string }) => {
-  const [actualSrc, setActualSrc] = useState<string>(src || '')
   const [imageError, setImageError] = useState(false)
-  
+  const actualSrc = src?.trim() && !src.startsWith('indexeddb://') ? src : ''
+
   useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      if (src && src.startsWith('indexeddb://')) {
-        const fileId = src.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            setActualSrc(fileUrl)
-          } else {
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('Failed to load image from IndexedDB:', error)
-          setImageError(true)
-        }
-      } else if (src) {
-        setActualSrc(src)
-      }
-    }
-    
-    loadFromIndexedDB()
+    setImageError(false)
   }, [src])
   
-  if (imageError || !actualSrc || !src) {
+  if (imageError || !actualSrc) {
     return <div className={wrapperClassName || className}>{emoji || '📝'}</div>
   }
   

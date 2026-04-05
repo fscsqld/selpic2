@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { ShoppingCart, Eye, Star, Tag } from 'lucide-react'
@@ -9,120 +8,48 @@ import { useStore } from '@/lib/store'
 import { useTranslation } from '@/lib/useTranslation'
 import { useUserAuth } from '@/lib/userAuth'
 
-// 🆕 Product Image Component (indexeddb:// 지원)
-const ProductImage = ({ src, alt, fill, className, onError }: { 
-  src: string, 
-  alt: string, 
-  fill?: boolean, 
-  className?: string,
-  onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void 
+const ProductImage = ({
+  src,
+  alt,
+  fill,
+  className,
+  onError
+}: {
+  src: string
+  alt: string
+  fill?: boolean
+  className?: string
+  onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void
 }) => {
-  const [actualSrc, setActualSrc] = useState<string>(src)
   const [imageError, setImageError] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const loadImage = async () => {
-      // ✅ 디버깅: 이미지 로드 시작
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🖼️ [ProductImage] Loading image:', {
-          src: src,
-          srcType: typeof src,
-          srcLength: src?.length || 0,
-          isEmpty: !src || src.trim() === '' || src === 'undefined'
-        })
-      }
-      
-      if (!src || src.trim() === '' || src === 'undefined') {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('⚠️ [ProductImage] Empty or invalid src:', src)
-        }
-        setImageError(true)
-        return
-      }
-
-      // indexeddb:// URL인 경우 blob URL로 변환
-      if (src.startsWith('indexeddb://')) {
-        setIsLoading(true)
-        try {
-          const fileId = src.replace('indexeddb://', '')
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📦 [ProductImage] Loading from IndexedDB:', fileId)
-          }
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✅ [ProductImage] Loaded from IndexedDB:', {
-                fileId: fileId,
-                fileUrl: fileUrl.substring(0, 50) + '...'
-              })
-            }
-            setActualSrc(fileUrl)
-            setImageError(false)
-          } else {
-            console.warn('⚠️ [ProductImage] File not found in IndexedDB:', fileId)
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('❌ [ProductImage] Failed to load from IndexedDB:', error)
-          setImageError(true)
-        } finally {
-          setIsLoading(false)
-        }
-      } else {
-        // 일반 URL인 경우 바로 사용
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ [ProductImage] Using regular URL:', src.substring(0, 50) + '...')
-        }
-        setActualSrc(src)
-        setImageError(false)
-      }
+    if (!src || src.trim() === '' || src === 'undefined' || src.startsWith('indexeddb://')) {
+      setImageError(true)
+      return
     }
-
-    loadImage()
+    setImageError(false)
   }, [src])
 
-  if (isLoading) {
+  if (imageError) {
     return (
-      <div className={`${fill ? 'absolute inset-0' : ''} bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center ${className || ''}`}>
-        <Tag className="w-8 h-8 text-gray-400 animate-pulse" />
-        <span className="text-xs text-gray-500 mt-2">Loading...</span>
-      </div>
-    )
-  }
-
-  if (imageError || !actualSrc) {
-    return (
-      <div className={`${fill ? 'absolute inset-0' : ''} bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center ${className || ''}`}>
+      <div
+        className={`${fill ? 'absolute inset-0' : ''} bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center ${className || ''}`}
+      >
         <Tag className="w-8 h-8 text-gray-400" />
         <span className="text-xs text-gray-500 mt-2">No Image</span>
       </div>
     )
   }
 
-  // indexeddb:// URL이 아닌 경우에만 Next.js Image 사용 (최적화)
-  if (!src.startsWith('indexeddb://') && fill) {
-    return (
-      <Image
-        src={actualSrc}
-        alt={alt}
-        fill
-        className={className}
-        onError={onError}
-      />
-    )
-  }
-
-  // indexeddb:// URL인 경우 일반 img 태그 사용
   return (
     <img
-      src={actualSrc}
+      src={src}
       alt={alt}
       className={fill ? 'absolute inset-0 w-full h-full object-cover' : className}
       onError={(e) => {
         setImageError(true)
-        if (onError) onError(e)
+        onError?.(e)
       }}
     />
   )

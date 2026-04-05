@@ -153,7 +153,7 @@ function ImageManagementPageContent() {
   const [linkingFileId, setLinkingFileId] = useState<string | null>(null)
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null)
   const [isWebPInfoExpanded, setIsWebPInfoExpanded] = useState(false) // WebP 정보 접기/펼치기
-  const [isRestoring, setIsRestoring] = useState(true) // 파일 복원 중 상태
+  const [isRestoring] = useState(false)
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'info'
     message: string
@@ -176,10 +176,6 @@ function ImageManagementPageContent() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 이미 복원한 파일 ID 추적 (무한 루프 방지)
-  const restoredFileIdsRef = useRef<Set<string>>(new Set())
-  const isRestoringRef = useRef(false)
-
   // 🆕 activeTab 변경 시 activeCategory 초기화
   useEffect(() => {
     if (activeTab === 'product') {
@@ -191,141 +187,6 @@ function ImageManagementPageContent() {
     setSearchTerm('')
     setCurrentPage(1)
   }, [activeTab])
-  
-  // 페이지 로드 시 IndexedDB에서 파일 복원 확인 (무한 루프 방지)
-  useEffect(() => {
-    // 이미 복원 중이면 실행하지 않음
-    if (isRestoringRef.current) {
-      console.log('⏸️ [Restore] Already restoring, skipping...')
-      return
-    }
-    
-    const restoreFiles = async () => {
-      // 복원 중 플래그 설정
-      if (isRestoringRef.current) return
-      isRestoringRef.current = true
-      
-      try {
-        console.log(`📦 [Restore] Total mediaFiles in store: ${mediaFiles.length}`)
-        
-        if (mediaFiles.length === 0) {
-          console.log('ℹ️ [Restore] No files in store yet, waiting for hydration...')
-          isRestoringRef.current = false
-          return
-        }
-        
-        // IndexedDB에 저장된 파일 중 복원이 필요한 것만 복원
-        // - blob URL은 새로고침 후 만료되므로 항상 IndexedDB에서 다시 복원
-        // - url 없음/빈 문자열도 복원 대상
-        const filesToRestore = mediaFiles.filter(file => {
-          if (!file.storedInIndexedDB) return false
-          if (restoredFileIdsRef.current.has(file.id)) return false
-          const needsRestore =
-            !file.url ||
-            file.url === '' ||
-            file.url.startsWith('blob:') // blob은 새로고침 후 무효화되므로 복원 필요
-          return needsRestore
-        })
-        
-        if (filesToRestore.length > 0) {
-          console.log(`🔄 [Restore] Restoring ${filesToRestore.length} files from IndexedDB...`)
-          setIsRestoring(true)
-          
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          
-          // 순차적으로 복원하여 IndexedDB 부하 방지
-          for (const file of filesToRestore) {
-            try {
-              // 이미 복원 중인 파일은 건너뛰기
-              if (restoredFileIdsRef.current.has(file.id)) {
-                continue
-              }
-              
-              // 🆕 이미지인 경우 WebP 파일 먼저 복원 시도
-              if (file.type === 'image') {
-                // 1. data: URL만 유효하게 유지됨 (blob은 새로고침 후 만료되므로 복원 필요)
-                if (file.webpUrl && file.webpUrl.startsWith('data:')) {
-                  restoredFileIdsRef.current.add(file.id)
-                  console.log(`✅ [Restore] Using existing WebP data URL for: ${file.name}`)
-                  continue
-                }
-                
-                // 2. IndexedDB에서 WebP 파일 복원 시도
-                // 🆕 hasWebp가 true이거나, webpUrl이 있거나, 또는 모든 이미지에 대해 시도 (더 적극적인 복원)
-                const shouldTryWebP = file.hasWebp || file.webpUrl || file.storedInIndexedDB
-                if (shouldTryWebP) {
-                  try {
-                    const webpFileId = file.id + '_webp'
-                    console.log(`🔍 [Restore] Attempting to restore WebP file: ${webpFileId} (hasWebp: ${file.hasWebp}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                    const webpUrl = await indexedDBStorage.getFile(webpFileId)
-                    if (webpUrl && webpUrl.trim()) {
-                      console.log(`✅ [Restore] Restored WebP URL from IndexedDB for: ${file.name} (${file.id})`)
-                      restoredFileIdsRef.current.add(file.id)
-                      // 🆕 WebP URL을 webpUrl과 url 모두에 설정 (우선순위 보장)
-                      updateMediaFile(file.id, { 
-                        webpUrl: webpUrl,
-                        url: webpUrl, // WebP를 기본 URL로 사용
-                        hasWebp: true // WebP 파일이 있음을 명시
-                      })
-                      continue
-                    } else {
-                      console.log(`ℹ️ [Restore] WebP file ID ${webpFileId} not found in IndexedDB, will try original`)
-                    }
-                  } catch (webpError) {
-                    console.log(`ℹ️ [Restore] WebP restore error for ${file.name}, using original:`, webpError)
-                    // WebP가 없으면 원본으로 계속 진행
-                  }
-                } else {
-                  console.log(`ℹ️ [Restore] File ${file.name} skipping WebP restore (hasWebp: ${file.hasWebp}, webpUrl: ${!!file.webpUrl}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                }
-              }
-              
-              // 3. 원본 파일 복원 (WebP가 없을 때 또는 동영상인 경우)
-              console.log(`🔍 [Restore] Attempting to restore file by ID: ${file.id} (name: ${file.name})`)
-              const restoredUrl = await indexedDBStorage.getFile(file.id)
-              if (restoredUrl && restoredUrl !== file.url) {
-                // 복원 전에 ID를 추가하여 중복 복원 방지
-                restoredFileIdsRef.current.add(file.id)
-                updateMediaFile(file.id, { url: restoredUrl })
-                console.log(`✅ [Restore] Restored ${file.type} file ${file.name} (ID: ${file.id}, category: ${file.category || file.usage}) from IndexedDB`)
-                console.log(`📝 [Restore] File name mapping: "${file.name}" -> ID: ${file.id} (name changes do not affect ID-based lookup)`)
-              } else if (restoredUrl === file.url) {
-                // 이미 같은 URL이면 복원 완료로 표시
-                restoredFileIdsRef.current.add(file.id)
-                console.log(`ℹ️ [Restore] File ${file.name} (ID: ${file.id}) already has correct URL`)
-              } else {
-                console.warn(`⚠️ [Restore] File ${file.name} (ID: ${file.id}) not found in IndexedDB`)
-                console.warn(`⚠️ [Restore] Note: File lookup is based on ID, not filename. If file name changed, it should still work if ID matches.`)
-              }
-            } catch (error) {
-              console.error(`❌ [Restore] Failed to restore file ${file.name}:`, error)
-            }
-          }
-          
-          console.log(`✅ [Restore] All ${filesToRestore.length} files restored from IndexedDB`)
-        } else {
-          console.log('✅ [Restore] All files already have valid URLs or already restored')
-        }
-      } catch (error) {
-        console.error('❌ [Restore] Error restoring files:', error)
-      } finally {
-        setIsRestoring(false)
-        isRestoringRef.current = false
-      }
-    }
-
-    // 약간의 지연 후 복원 (localStorage hydration 완료 대기)
-    // ⚠️ 중요: mediaFiles.length만 의존성으로 사용하여 무한 루프 방지
-    // mediaFiles 배열 자체가 변경되면 실행되지만, 개별 파일의 URL 변경으로는 실행되지 않음
-    const timer = setTimeout(() => {
-      restoreFiles()
-    }, 500)
-
-    return () => {
-      clearTimeout(timer)
-      // cleanup 시 복원 중 플래그는 유지 (타이머가 취소되어도 복원은 계속 진행)
-    }
-  }, [mediaFiles.length, updateMediaFile]) // ⚠️ mediaFiles.length만 사용하여 무한 루프 방지
 
   // previewFile이 변경될 때 WebP 정보 접기 상태 초기화
   useEffect(() => {

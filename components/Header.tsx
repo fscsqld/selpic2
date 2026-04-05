@@ -108,8 +108,9 @@ export function HeaderLogoPlaceholder({ className }: { className: string }) {
 }
 
 /**
- * Never puts `indexeddb://` on <img src> (invalid). Resolves to blob/data/http or falls back to
+ * Never puts invalid schemes on <img src>`. Uses http(s)/data/blob/relative URLs or falls back to
  * `HEADER_LOGO_STATIC_FALLBACKS` (PNG if present, then `/images/logo.svg`, `/logo.svg`).
+ * Legacy `indexeddb://` values are treated as missing and use fallbacks.
  */
 export function HeaderLogoImage({
   src,
@@ -130,13 +131,11 @@ export function HeaderLogoImage({
   const phaseRef = useRef<'loading' | 'primary' | 'fallback'>('loading')
 
   const [phase, setPhase] = useState<'loading' | 'primary' | 'fallback'>(() => {
-    if (!primary) return 'fallback'
-    if (primary.startsWith('indexeddb://')) return 'loading'
+    if (!primary || primary.startsWith('indexeddb://')) return 'fallback'
     return 'primary'
   })
   const [displaySrc, setDisplaySrc] = useState(() => {
-    if (!primary) return staticFallbacks[0] || ''
-    if (primary.startsWith('indexeddb://')) return ''
+    if (!primary || primary.startsWith('indexeddb://')) return staticFallbacks[0] || ''
     return primary
   })
   const [fallbackIndex, setFallbackIndex] = useState(0)
@@ -175,50 +174,19 @@ export function HeaderLogoImage({
     setExhausted(false)
     setFallbackIndex(0)
 
-    if (!primary) {
+    if (!primary || primary.startsWith('indexeddb://')) {
       setPhase('fallback')
       phaseRef.current = 'fallback'
       applyFallback(0)
-      return
-    }
-
-    if (!primary.startsWith('indexeddb://')) {
-      setPhase('primary')
-      phaseRef.current = 'primary'
-      setDisplaySrc(primary)
       return () => {
         cancelled = true
         revokeBlob()
       }
     }
 
-    setPhase('loading')
-    phaseRef.current = 'loading'
-    setDisplaySrc('')
-
-    ;(async () => {
-      try {
-        const fileId = primary.replace('indexeddb://', '')
-        const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-        const resolved = await indexedDBStorage.getFile(fileId)
-        if (cancelled) {
-          if (resolved?.startsWith('blob:')) URL.revokeObjectURL(resolved)
-          return
-        }
-        if (resolved) {
-          if (resolved.startsWith('blob:')) blobUrlRef.current = resolved
-          setPhase('primary')
-          phaseRef.current = 'primary'
-          setDisplaySrc(resolved)
-        } else {
-          applyFallback(0)
-        }
-      } catch (e) {
-        console.error('Header logo: IndexedDB resolve failed:', e)
-        if (!cancelled) applyFallback(0)
-      }
-    })()
-
+    setPhase('primary')
+    phaseRef.current = 'primary'
+    setDisplaySrc(primary)
     return () => {
       cancelled = true
       revokeBlob()
@@ -240,15 +208,6 @@ export function HeaderLogoImage({
       setDisplaySrc('')
       return idx
     })
-  }
-
-  if (phase === 'loading' && primary.startsWith('indexeddb://')) {
-    return (
-      <div
-        className={`h-8 lg:h-10 w-[140px] max-w-[200px] bg-gray-100 animate-pulse rounded ${className}`}
-        aria-hidden
-      />
-    )
   }
 
   if (exhausted || !displaySrc) {
@@ -421,28 +380,11 @@ export default function Header() {
           )
           console.log('[debugHeaderLogo] Header center uses logo (not text):', useLogo)
           if (picked?.mediaUrl?.trim().startsWith('indexeddb://')) {
-            console.log(
-              '[debugHeaderLogo] Run: await debugHeaderLogo.testIndexedDb()  — checks IndexedDB file exists'
+            console.warn(
+              '[debugHeaderLogo] Logo URL is legacy indexeddb:// — re-upload in Admin → Images / Content.'
             )
           }
           return { logoRows, picked, useLogoImage: useLogo, companyName: name }
-        }
-        w.debugHeaderLogo.testIndexedDb = async () => {
-          const { contentItems } = useContentStore.getState()
-          const picked = pickLogoImageItem(contentItems)
-          const url = picked?.mediaUrl?.trim() || ''
-          if (!url.startsWith('indexeddb://')) {
-            console.log('[debugHeaderLogo] Picked row has no indexeddb:// URL')
-            return null
-          }
-          const fileId = url.replace('indexeddb://', '')
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const resolved = await indexedDBStorage.getFile(fileId)
-          console.log(
-            '[debugHeaderLogo] IndexedDB getFile(' + fileId + '):',
-            resolved ? resolved.slice(0, 96) + (resolved.length > 96 ? '…' : '') : null
-          )
-          return resolved
         }
       }
     }

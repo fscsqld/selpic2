@@ -35,11 +35,6 @@ const isValidVideoUrl = (url: string): boolean => {
     return false
   }
   
-  // ✅ indexeddb:// 형식은 항상 허용 (Media Library에서 선택한 파일)
-  if (url.startsWith('indexeddb://')) {
-    return true
-  }
-  
   // Check for common video file extensions
   const videoExtensions = ['.mp4', '.webm', '.ogg', '.ogv', '.m4v', '.3gp', '.avi', '.mov', '.wmv', '.flv', '.mkv', '.mpg', '.mpeg']
   const hasVideoExtension = videoExtensions.some(ext => url.toLowerCase().includes(ext))
@@ -75,49 +70,15 @@ const isValidVideoUrl = (url: string): boolean => {
   return hasVideoExtension || isBlobUrl || isDataVideoUrl || (isHttpUrl && !isImageUrl) || isRelativePath || isPublicPath
 }
 
-// Image Slide Component (indexeddb:// 형식 지원)
 const ImageSlide = React.memo(({ src }: { src: string }) => {
-  const [actualSrc, setActualSrc] = useState<string>(src)
-  const [imageError, setImageError] = useState(false)
-  
-  // indexeddb:// 형식의 URL을 IndexedDB에서 파일을 가져와서 실제 URL로 변환
-  useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      if (src && src.startsWith('indexeddb://')) {
-        const fileId = src.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            devLog('✅ ImageSlide: Loaded file from IndexedDB:', fileId)
-            setActualSrc(fileUrl)
-          } else {
-            // 파일이 없음: IndexedDB 초기화/다른 기기 등으로 참조만 남은 경우. 경고만 하고 빈 슬라이드로 표시
-            devWarn('⚠️ ImageSlide: File not found in IndexedDB (stale reference):', fileId)
-            setImageError(true)
-          }
-        } catch (error) {
-          devWarn('⚠️ ImageSlide: Failed to load from IndexedDB:', error)
-          setImageError(true)
-        }
-      } else {
-        setActualSrc(src)
-      }
-    }
-    
-    loadFromIndexedDB()
-  }, [src])
-  
-  if (imageError || !actualSrc || actualSrc.trim() === '') {
-    return (
-      <div className="w-full h-full bg-cover bg-center bg-no-repeat bg-gray-800" />
-    )
+  const s = (src || '').trim()
+  if (!s || s.startsWith('indexeddb://')) {
+    return <div className="w-full h-full bg-cover bg-center bg-no-repeat bg-gray-800" />
   }
-
   return (
     <div
       className="w-full h-full bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url('${actualSrc}')` }}
+      style={{ backgroundImage: `url('${s}')` }}
     />
   )
 })
@@ -128,65 +89,29 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
   const normalizedSrc = (src || '').trim()
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  // indexeddb://는 즉시 렌더링하면 <video>가 알 수 없는 스킴 오류를 내므로 빈 상태에서 로드 완료 후 설정
-  const [actualSrc, setActualSrc] = useState<string>(normalizedSrc.startsWith('indexeddb://') ? '' : normalizedSrc)
+  const [actualSrc, setActualSrc] = useState<string>(
+    normalizedSrc && !normalizedSrc.startsWith('indexeddb://') ? normalizedSrc : ''
+  )
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  
-  // indexeddb:// 형식의 URL을 IndexedDB에서 파일을 가져와서 실제 URL로 변환
-  useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      const trimmedSrc = (src || '').trim()
-      if (trimmedSrc.startsWith('indexeddb://')) {
-        setActualSrc('') // 로딩 중에는 비워서 <video>가 알 수 없는 스킴을 보지 않도록 함
-        const fileId = trimmedSrc.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            devLog('✅ VideoSlide: Loaded file from IndexedDB:', fileId)
-            setActualSrc(fileUrl) // blob/data/http(s) URL
-            // ✅ CategoryHeroBackgrounds와 동일하게 video.load() 호출 추가
-            setTimeout(() => {
-              if (videoRef.current && fileUrl) {
-                try {
-                  videoRef.current.load()
-                  devLog('✅ VideoSlide: load() called after IndexedDB restore')
-                } catch (error) {
-                  devWarn('VideoSlide: Failed to load video after IndexedDB restore:', error)
-                }
-              }
-            }, 100)
-          } else {
-            // 파일이 IndexedDB에 없으면 조용히 fallback 이미지로 전환
-            devWarn('⚠️ VideoSlide: File not found in IndexedDB, using fallback image:', fileId)
-            setVideoError(true)
-            setActualSrc('') // 잘못된 indexeddb://가 비디오에 꽂히는 것을 방지
-          }
-        } catch (error) {
-          // IndexedDB 로드 실패는 정상적인 상황일 수 있음 (파일이 삭제되었거나 데이터가 정리됨)
-          devWarn('⚠️ VideoSlide: Failed to load file from IndexedDB, using fallback image:', error)
-          setVideoError(true)
-          setActualSrc('') // 실패 시 비워둬서 비디오 태그에 invalid 스킴이 설정되지 않도록
-        }
-        return
-      }
 
-      // ✅ Category Hero Backgrounds와 동일하게 간단하게 처리
-      if (trimmedSrc) {
-        // 일반 URL인 경우
-        const safeSrc = trimmedSrc.startsWith('data:') || trimmedSrc.startsWith('blob:') || trimmedSrc.startsWith('http://') || trimmedSrc.startsWith('https://')
-          ? trimmedSrc
-          : encodeURI(trimmedSrc)
-        setActualSrc(safeSrc)
-        setVideoError(false)
-        setVideoLoaded(false)
-      } else {
-        setActualSrc('')
-        setVideoError(true)
-      }
+  useEffect(() => {
+    const trimmedSrc = (src || '').trim()
+    if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) {
+      setActualSrc('')
+      setVideoError(true)
+      setVideoLoaded(false)
+      return
     }
-    
-    loadFromIndexedDB()
+    const safeSrc =
+      trimmedSrc.startsWith('data:') ||
+      trimmedSrc.startsWith('blob:') ||
+      trimmedSrc.startsWith('http://') ||
+      trimmedSrc.startsWith('https://')
+        ? trimmedSrc
+        : encodeURI(trimmedSrc)
+    setActualSrc(safeSrc)
+    setVideoError(false)
+    setVideoLoaded(false)
   }, [src])
   
   // ✅ 이전 미디어 엘리먼트가 확실히 언마운트되도록 cleanup 처리
@@ -382,43 +307,11 @@ import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import '@/lib/store-debug' // 디버깅 유틸리티 로드
 
-// SELPIC N 배경 이미지 컴포넌트 (indexeddb:// 형식 지원)
 const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string }) => {
-  const [actualSrc, setActualSrc] = useState<string>(backgroundImage || '')
-  const [isLoading, setIsLoading] = useState(false)
-  
-  // indexeddb:// 형식의 URL을 IndexedDB에서 파일을 가져와서 실제 URL로 변환
-  useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      if (backgroundImage && backgroundImage.startsWith('indexeddb://')) {
-        setIsLoading(true)
-        const fileId = backgroundImage.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            devLog('✅ SELPIC N Background: Loaded file from IndexedDB:', fileId)
-            setActualSrc(fileUrl)
-          } else {
-            devWarn('⚠️ SELPIC N Background: File not found in IndexedDB (stale reference):', fileId)
-            setActualSrc('')
-          }
-        } catch (error) {
-          devWarn('⚠️ SELPIC N Background: Failed to load from IndexedDB:', error)
-          setActualSrc('')
-        } finally {
-          setIsLoading(false)
-        }
-      } else {
-        setActualSrc(backgroundImage || '')
-      }
-    }
-    
-    loadFromIndexedDB()
-  }, [backgroundImage])
-  
   const defaultImage = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop&q=80'
-  const imageUrl = actualSrc || defaultImage
+  const bg = backgroundImage?.trim()
+  const imageUrl =
+    bg && !bg.startsWith('indexeddb://') ? bg : defaultImage
   
   return (
     <>
@@ -963,54 +856,15 @@ export default function HomePage() {
     return items
   }, [allCategoryItems])
 
-  // 🆕 카테고리 배경 이미지 indexeddb:// URL을 실제 URL로 변환
-  const [resolvedCategoryBackgrounds, setResolvedCategoryBackgrounds] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    let isMounted = true
-
-    const loadCategoryBackgroundImages = async () => {
-      const updates: Record<string, string> = {}
-
-      for (const category of categoryItems) {
-        const bg = category.backgroundImage
-        if (!bg) continue
-
-        if (bg.startsWith('indexeddb://')) {
-          const fileId = bg.replace('indexeddb://', '')
-          try {
-            const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-            const fileUrl = await indexedDBStorage.getFile(fileId)
-            if (fileUrl && isMounted) {
-              updates[category.id] = fileUrl
-              devLog('✅ HomePage: Loaded category background image from IndexedDB:', {
-                categoryId: category.id,
-                categoryTitle: category.title,
-                fileId: fileId
-              })
-            }
-          } catch (error) {
-            devError('❌ HomePage: Failed to load category background image from IndexedDB:', {
-              categoryId: category.id,
-              categoryTitle: category.title,
-              error
-            })
-          }
-        } else {
-          updates[category.id] = bg
-        }
-      }
-
-      if (isMounted) {
-        setResolvedCategoryBackgrounds(updates)
+  const resolvedCategoryBackgrounds = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const category of categoryItems) {
+      const bg = category.backgroundImage?.trim()
+      if (bg && !bg.startsWith('indexeddb://')) {
+        m[category.id] = bg
       }
     }
-
-    loadCategoryBackgroundImages()
-
-    return () => {
-      isMounted = false
-    }
+    return m
   }, [categoryItems])
 
   // content-store-updated 이벤트 리스너 추가 (같은 탭에서 변경 감지)
@@ -1529,7 +1383,6 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {categoryItems.map((category) => {
               const productCount = getProductCountForCategory(category)
-              // indexeddb:// URL은 resolved 값 우선, 없으면 원본 사용 (기존 동작)
               const backgroundImageUrl = resolvedCategoryBackgrounds[category.id] || category.backgroundImage
 
               return (

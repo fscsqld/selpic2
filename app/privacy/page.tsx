@@ -47,8 +47,8 @@ export default function PrivacyPolicy() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="bg-white rounded-2xl shadow-lg p-8"
         >
+          <div className="bg-white rounded-2xl shadow-lg p-8">
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-4xl font-bold text-gray-900">{getContent('Privacy Policy 제목') || 'SELPIC Privacy Policy'}</h1>
@@ -287,6 +287,7 @@ export default function PrivacyPolicy() {
               <p><strong>Address:</strong> {getContent('Contact Address') || 'Harvest St, Mansfield QLD 4122'}</p>
               <p className="text-[11px] text-gray-600 pt-2 whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
             </div>
+          </div>
           </div>
         </motion.div>
       </div>

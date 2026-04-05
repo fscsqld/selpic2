@@ -74,7 +74,6 @@ export default function HeroSlideManager({
     }
   })
 
-  // Preview Slide Content Component (indexeddb:// 지원)
   // 동영상 전체 노출: object-contain + bg-black (홈 Hero와 동일)
   const PreviewSlideContent = ({ slide }: { slide: HeroSlide }) => {
     const [imageSrc, setImageSrc] = useState<string>(slide.src)
@@ -84,68 +83,30 @@ export default function HeroSlideManager({
     const [imageError, setImageError] = useState(false)
     const [fallbackSrc, setFallbackSrc] = useState<string>(slide.fallbackImage || '')
 
-    // indexeddb:// 형식의 URL 처리
     useEffect(() => {
-      const loadFromIndexedDB = async () => {
-        // 이미지/비디오 src 처리
-        if (slide.src && slide.src.startsWith('indexeddb://')) {
-          const fileId = slide.src.replace('indexeddb://', '')
-          try {
-            const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-            const fileUrl = await indexedDBStorage.getFile(fileId)
-            if (fileUrl) {
-              if (slide.type === 'video') {
-                setVideoSrc(fileUrl)
-              } else {
-                setImageSrc(fileUrl)
-              }
-            } else {
-              // 파일이 IndexedDB에 없음(삭제/다른 브라우저/DB 초기화). 에러 상태로 fallback 표시
-              if (slide.type === 'video') {
-                setVideoError(true)
-              } else {
-                setImageError(true)
-              }
-            }
-          } catch (error) {
-            // IndexedDB 로드 실패 시 fallback으로 전환
-            if (slide.type === 'video') {
-              setVideoError(true)
-            } else {
-              setImageError(true)
-            }
-            if (slide.type === 'video') {
-              setVideoError(true)
-            } else {
-              setImageError(true)
-            }
-          }
+      const s = (slide.src || '').trim()
+      if (!s || s.startsWith('indexeddb://')) {
+        if (slide.type === 'video') {
+          setVideoSrc('')
+          setVideoError(true)
         } else {
-          // 일반 URL인 경우 바로 설정
-          if (slide.type === 'video') {
-            setVideoSrc(slide.src)
-          } else {
-            setImageSrc(slide.src)
-          }
+          setImageSrc('')
+          setImageError(true)
         }
-
-        // Fallback 이미지 처리 (indexeddb:// 지원)
-        if (slide.fallbackImage && slide.fallbackImage.startsWith('indexeddb://')) {
-          const fileId = slide.fallbackImage.replace('indexeddb://', '')
-          try {
-            const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-            const fileUrl = await indexedDBStorage.getFile(fileId)
-            if (fileUrl) {
-              setFallbackSrc(fileUrl)
-            }
-          } catch {
-            // Fallback 이미지 로드 실패 시 무시(기본 빈 fallback 유지)
-          }
-        } else if (slide.fallbackImage) {
-          setFallbackSrc(slide.fallbackImage)
-        }
+      } else if (slide.type === 'video') {
+        setVideoSrc(s)
+        setVideoError(false)
+      } else {
+        setImageSrc(s)
+        setImageError(false)
       }
-      loadFromIndexedDB()
+
+      const fb = (slide.fallbackImage || '').trim()
+      if (!fb || fb.startsWith('indexeddb://')) {
+        setFallbackSrc('')
+      } else {
+        setFallbackSrc(fb)
+      }
     }, [slide.src, slide.fallbackImage, slide.type])
 
     const safeFallback = useMemo(() => 
@@ -310,86 +271,20 @@ export default function HeroSlideManager({
     eventStartDate: '',
     eventEndDate: ''
   })
-  const [previewSrc, setPreviewSrc] = useState<string>('') // 미리보기용 실제 URL (indexeddb:// → blob 변환)
-  const [previewFallbackSrc, setPreviewFallbackSrc] = useState<string>('') // Fallback Image 미리보기용 실제 URL
+  const [previewSrc, setPreviewSrc] = useState<string>('')
+  const [previewFallbackSrc, setPreviewFallbackSrc] = useState<string>('')
   const [fallbackImageInputMethod, setFallbackImageInputMethod] = useState<'upload' | 'url'>('upload') // Fallback Image 입력 방식
 
-  // 미리보기 src 해석 (indexeddb:// → blob/data URL 변환)
   useEffect(() => {
-    let isMounted = true
-    const resolvePreviewSrc = async () => {
-      const src = formData.src?.trim() || ''
-      if (!src) {
-        if (isMounted) setPreviewSrc('')
-        return
-      }
-
-      // indexeddb://인 경우 파일을 blob URL로 변환
-      if (src.startsWith('indexeddb://')) {
-        try {
-          const fileId = src.replace('indexeddb://', '')
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (isMounted) {
-            setPreviewSrc(fileUrl || '')
-          }
-        } catch (error) {
-          if (isMounted) {
-            setPreviewSrc('')
-          }
-        }
-        return
-      }
-
-      // 그 외(src, data:, blob:, http/https, /상대경로)는 그대로 사용
-      if (isMounted) {
-        setPreviewSrc(src)
-      }
-    }
-
-    resolvePreviewSrc()
-    return () => {
-      isMounted = false
-    }
+    const src = formData.src?.trim() || ''
+    if (!src || src.startsWith('indexeddb://')) setPreviewSrc('')
+    else setPreviewSrc(src)
   }, [formData.src])
 
-  // Fallback Image 미리보기 src 해석 (indexeddb:// → blob/data URL 변환)
   useEffect(() => {
-    let isMounted = true
-    const resolvePreviewFallbackSrc = async () => {
-      const fallbackSrc = formData.fallbackImage?.trim() || ''
-      if (!fallbackSrc) {
-        if (isMounted) setPreviewFallbackSrc('')
-        return
-      }
-
-      // indexeddb://인 경우 파일을 blob URL로 변환
-      if (fallbackSrc.startsWith('indexeddb://')) {
-        try {
-          const fileId = fallbackSrc.replace('indexeddb://', '')
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (isMounted) {
-            setPreviewFallbackSrc(fileUrl || '')
-          }
-        } catch (error) {
-          if (isMounted) {
-            setPreviewFallbackSrc('')
-          }
-        }
-        return
-      }
-
-      // 그 외(src, data:, blob:, http/https, /상대경로)는 그대로 사용
-      if (isMounted) {
-        setPreviewFallbackSrc(fallbackSrc)
-      }
-    }
-
-    resolvePreviewFallbackSrc()
-    return () => {
-      isMounted = false
-    }
+    const fallbackSrc = formData.fallbackImage?.trim() || ''
+    if (!fallbackSrc || fallbackSrc.startsWith('indexeddb://')) setPreviewFallbackSrc('')
+    else setPreviewFallbackSrc(fallbackSrc)
   }, [formData.fallbackImage])
 
   // formData 변경 감지
@@ -434,9 +329,8 @@ export default function HeroSlideManager({
       })
       // Fallback Image 입력 방식 자동 감지
       if (templateFallbackImage) {
-        const isUploadType = templateFallbackImage.startsWith('indexeddb://') || 
-                            templateFallbackImage.startsWith('data:') || 
-                            templateFallbackImage.startsWith('blob:')
+        const isUploadType =
+          templateFallbackImage.startsWith('data:') || templateFallbackImage.startsWith('blob:')
         setFallbackImageInputMethod(isUploadType ? 'upload' : 'url')
       } else {
         setFallbackImageInputMethod('upload')
@@ -461,9 +355,8 @@ export default function HeroSlideManager({
       })
       // Fallback Image 입력 방식 자동 감지
       if (slideFallbackImage) {
-        const isUploadType = slideFallbackImage.startsWith('indexeddb://') || 
-                            slideFallbackImage.startsWith('data:') || 
-                            slideFallbackImage.startsWith('blob:')
+        const isUploadType =
+          slideFallbackImage.startsWith('data:') || slideFallbackImage.startsWith('blob:')
         setFallbackImageInputMethod(isUploadType ? 'upload' : 'url')
       } else {
         setFallbackImageInputMethod('upload')
@@ -541,15 +434,19 @@ export default function HeroSlideManager({
     // URL 형식 검증 (더 유연하지만 위험한 URL 차단)
     const url = formData.src.trim()
 
-    // 🆕 indexeddb:// 형식은 항상 허용 (Media Library에서 선택한 파일)
-    const isIndexedDBUrl = url.startsWith('indexeddb://')
-    
+    if (url.startsWith('indexeddb://')) {
+      const errorMessage =
+        'Legacy indexeddb:// URLs are no longer supported. Select the file again from Media Library to get a public URL.'
+      setModalError(errorMessage)
+      showNotification('error', errorMessage)
+      return
+    }
+
     // 동영상 금지 패턴: 이미지 도메인/확장자만 체크 (data: URL은 Media Library에서 온 것이므로 허용)
     const isImageLike = (u: string) => /images\.(unsplash|pexels)\.com|\.(jpg|jpeg|png|gif|webp)$/i.test(u)
     // data:video/로 시작하는 경우는 Media Library에서 선택한 동영상이므로 허용
     const isForbiddenForVideo = (u: string) => {
-      // indexeddb://는 항상 허용 (Media Library에서 선택한 파일)
-      if (u.startsWith('indexeddb://')) return false
+      if (u.startsWith('indexeddb://')) return true
       // data:video/는 허용 (Media Library에서 선택한 동영상)
       if (u.startsWith('data:video/')) return false
       // blob:는 허용하지 않음
@@ -578,8 +475,7 @@ export default function HeroSlideManager({
       return
     }
 
-    // 🆕 indexeddb:// 형식은 URL 형식 검증 건너뛰기
-    if (!isIndexedDBUrl && url && !url.includes('://') && !url.startsWith('/')) {
+    if (url && !url.startsWith('indexeddb://') && !url.includes('://') && !url.startsWith('/')) {
       // 상대 경로나 파일명만 입력된 경우 경고
       if (confirm('입력한 경로가 올바른 형식이 아닐 수 있습니다. 계속 진행하시겠습니까?')) {
         // 사용자가 계속 진행하기로 선택한 경우
@@ -600,9 +496,7 @@ export default function HeroSlideManager({
       return
     }
     
-    // 🆕 fallback 이미지가 indexeddb:// 형식이면 유효한 것으로 간주
     const isValidFallback = hasNewFallback && (
-      formData.fallbackImage.startsWith('indexeddb://') ||
       formData.fallbackImage.startsWith('http://') ||
       formData.fallbackImage.startsWith('https://') ||
       formData.fallbackImage.startsWith('/') ||
@@ -1183,7 +1077,7 @@ export default function HeroSlideManager({
                           onChange={(e) => {
                             setFallbackImageInputMethod('upload')
                             // URL 입력 방식에서 업로드로 전환 시 URL 필드 비우기 (선택사항)
-                            if (formData.fallbackImage && !formData.fallbackImage.startsWith('indexeddb://') && !formData.fallbackImage.startsWith('data:') && !formData.fallbackImage.startsWith('blob:')) {
+                            if (formData.fallbackImage && !formData.fallbackImage.startsWith('data:') && !formData.fallbackImage.startsWith('blob:')) {
                               // URL 형식이면 비우기
                               setFormData({ ...formData, fallbackImage: '' })
                             }
@@ -1200,8 +1094,11 @@ export default function HeroSlideManager({
                           checked={fallbackImageInputMethod === 'url'}
                           onChange={(e) => {
                             setFallbackImageInputMethod('url')
-                            // 업로드 방식에서 URL로 전환 시 indexeddb:// 형식이면 비우기 (선택사항)
-                            if (formData.fallbackImage && formData.fallbackImage.startsWith('indexeddb://')) {
+                            if (
+                              formData.fallbackImage &&
+                              (formData.fallbackImage.startsWith('data:') ||
+                                formData.fallbackImage.startsWith('blob:'))
+                            ) {
                               setFormData({ ...formData, fallbackImage: '' })
                             }
                           }}
