@@ -14,6 +14,14 @@ export function createSupabaseBrowserClient() {
   const url = rawUrl?.trim() ?? ''
   const anon = rawAnon?.trim() ?? ''
 
+  if (typeof window !== 'undefined' && !url) {
+    console.error(
+      '%c ERROR: URL IS MISSING ',
+      'font-size: 22px; font-weight: 900; color: #fff; background: #b91c1c; padding: 10px 14px; border-radius: 6px; line-height: 2;',
+      '\nNEXT_PUBLIC_SUPABASE_URL is empty in this browser bundle (Vercel: set env + redeploy so NEXT_PUBLIC_* is inlined at build).'
+    )
+  }
+
   if (!url || !anon) {
     const detail = {
       hasUrl: Boolean(url),
