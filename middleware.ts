@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createSupabaseMiddlewareClient } from '@/lib/supabase/middleware'
 import { userHasAdminAccess } from '@/lib/supabase/adminClaims'
+import { hasUsableSupabaseBrowserEnv } from '@/lib/supabase/publicEnv'
 
 function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -17,9 +18,10 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
     response.headers.set('X-Frame-Options', 'SAMEORIGIN')
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    // connect-src required: without it, some browsers restrict fetch() to Supabase/Stripe from this origin.
     response.headers.set(
       'Content-Security-Policy',
-      'upgrade-insecure-requests; block-all-mixed-content'
+      "upgrade-insecure-requests; block-all-mixed-content; connect-src 'self' https: wss:"
     )
   }
   return response
@@ -54,9 +56,7 @@ export async function middleware(request: NextRequest) {
   const isAdminLogin = path === '/admin/login' || path.startsWith('/admin/login/')
   const isAdminArea = path === '/admin' || path.startsWith('/admin/')
 
-  const hasPublicSupabase =
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+  const hasPublicSupabase = hasUsableSupabaseBrowserEnv()
 
   if (isAdminArea && !isAdminLogin && hasPublicSupabase) {
     try {

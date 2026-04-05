@@ -99,9 +99,19 @@ export default function AdminLoginPage() {
 
           if (!allowLegacy) {
             const msg = sbError?.message || ''
+            const code = (sbError as { code?: string })?.code
+            // Wrong password / email — not an env issue
+            if (
+              /invalid login credentials/i.test(msg) ||
+              code === 'invalid_credentials' ||
+              /email not confirmed/i.test(msg)
+            ) {
+              setError(msg || 'Invalid email or password.')
+              return
+            }
             if (/invalid value/i.test(msg) || /failed to fetch/i.test(msg)) {
               setError(
-                'Supabase 연결에 실패했습니다. Vercel에서 NEXT_PUBLIC_SUPABASE_URL(전체 https 주소)과 ANON 키가 Preview·Production에 설정돼 있는지 확인 후 재배포하세요.'
+                '브라우저에서 Supabase로 연결하지 못했습니다. (1) Vercel 환경 변수·재배포 확인 (2) 광고 차단/프라이버시 확장 끄고 재시도 (3) 프로젝트가 일시 중지됐는지 Supabase 대시보드 확인'
               )
             } else {
               setError(msg || 'Invalid email or password.')
