@@ -5,7 +5,6 @@
  */
 
 import { PDFParser, ParsedStatement, BankTransaction } from './types'
-import pdfParse = require('pdf-parse');
 
 export class WestpacParser implements PDFParser {
   /**
@@ -96,10 +95,13 @@ export class WestpacParser implements PDFParser {
     
     let pdfData
     try {
-      console.log('[WESTPAC-PARSER] Extracting text from PDF...')
-      pdfData = await (pdfParse as any)(pdfBuffer)
-      console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters')
-      console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages)
+      console.log('[WESTPAC-PARSER] Extracting text from PDF...');
+      // 동적 임포트로 타입 체크 우회
+      const pdf = (await import('pdf-parse')).default;
+      pdfData = await (pdf as any)(pdfBuffer);
+
+      console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters');
+      console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages);
     } catch (error: any) {
       console.error('[WESTPAC-PARSER] Error parsing PDF:', error)
       throw new Error(`Failed to extract text from PDF: ${error.message}`)
