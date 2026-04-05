@@ -2,6 +2,10 @@
 // This is a client-side email service using EmailJS with tracking capabilities
 
 import { emailTrackingService, TrackedEmailTemplate } from './emailTrackingService'
+import {
+  appendTransactionalEmailBrandingHtml,
+  appendTransactionalEmailBrandingPlainText
+} from './transactionalEmailBranding'
 
 export interface EmailTemplate {
   id: string
@@ -17,6 +21,12 @@ export interface EmailResponse {
   messageId?: string
   emailId?: string
   trackingId?: string
+}
+
+export type EmailAttachment = {
+  filename: string
+  content: string
+  contentType?: string
 }
 
 // Default email templates
@@ -154,10 +164,15 @@ export class EmailService {
     customerName: string
     subject: string
     message: string
+    /** When set, sent as HTML instead of escaping `message` (tracking pixel + link wrapping still applied). */
+    html?: string
     originalSubject?: string
     submissionDate?: string
     adminName?: string
     messageId?: string
+    attachments?: File[]
+    /** When true, do not append shared signature / logo / confidentiality. */
+    skipBranding?: boolean
   }): Promise<EmailResponse> {
     if (!this.isInitialized) {
       await this.initialize()
@@ -182,27 +197,65 @@ export class EmailService {
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#039;')
 
-      // Convert plaintext template output into HTML for Resend.
-      // (We preserve newlines using `white-space: pre-wrap`.)
-      const escaped = escapeHtml(params.message || '')
-      const baseHtml = `<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #111; white-space: pre-wrap;">${escaped}</div>`
+      const withBranding = !params.skipBranding
+      let plainForSend = params.message || ''
+      let htmlForSend = params.html && params.html.trim().length > 0 ? params.html : ''
+
+      if (withBranding) {
+        plainForSend = appendTransactionalEmailBrandingPlainText(plainForSend)
+        if (htmlForSend) {
+          htmlForSend = appendTransactionalEmailBrandingHtml(htmlForSend)
+        }
+      }
+
+      // Full HTML or plaintext → HTML for Resend (shared transactional footer already applied when withBranding).
+      const baseHtml =
+        htmlForSend && htmlForSend.trim().length > 0
+          ? htmlForSend
+          : (() => {
+              const escaped = escapeHtml(plainForSend)
+              return `<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #111; white-space: pre-wrap;">${escaped}</div>`
+            })()
 
       const trackedHtml = TrackedEmailTemplate.addTrackingToContent(baseHtml, emailId)
 
-      const res = await fetch('/api/orders/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: params.customerEmail,
-          subject: params.subject,
-          html: trackedHtml
-        })
+      const fileToBase64 = async (file: File): Promise<string> => {
+        const buf = await file.arrayBuffer()
+        let binary = ''
+        const bytes = new Uint8Array(buf)
+        const chunkSize = 0x8000
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+        }
+        return btoa(binary)
+      }
+
+      let attachments: EmailAttachment[] | undefined = undefined
+      if (params.attachments && params.attachments.length > 0) {
+        const safe = params.attachments.filter((f) => f && f.size > 0)
+        if (safe.length > 0) {
+          attachments = await Promise.all(
+            safe.map(async (f) => ({
+              filename: f.name || 'attachment',
+              contentType: f.type || undefined,
+              content: await fileToBase64(f)
+            }))
+          )
+        }
+      }
+
+      const { sendAdminComposeEmailAction } = await import('@/app/actions/emails')
+      const sendResult = await sendAdminComposeEmailAction({
+        to: params.customerEmail,
+        subject: params.subject,
+        html: trackedHtml,
+        skipBranding: true,
+        skipTracking: true,
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
       })
 
-      const data = await res.json().catch(() => ({})) as any
-
-      if (!res.ok) {
-        throw new Error(data?.message || 'Failed to send email')
+      if (!sendResult.ok) {
+        throw new Error(sendResult.error || 'Failed to send email')
       }
 
       // Mark delivery as done for in-app tracking UI.
@@ -232,6 +285,7 @@ export class EmailService {
     variables?: Record<string, string>
     adminName?: string
     messageId?: string
+    attachments?: File[]
   }): Promise<EmailResponse> {
     const template = emailTemplates.find(t => t.id === params.templateId)
     if (!template) {
@@ -264,7 +318,8 @@ export class EmailService {
       subject,
       message: content,
       adminName: params.adminName,
-      messageId: params.messageId
+      messageId: params.messageId,
+      attachments: params.attachments
     })
   }
 

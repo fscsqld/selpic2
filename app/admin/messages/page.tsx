@@ -150,7 +150,8 @@ function AdminMessagesPageContent() {
             submissionDate: new Date(selectedMessage.createdAt).toLocaleDateString()
           },
           adminName: 'SELPIC Support Team',
-          messageId: selectedMessage.id
+          messageId: selectedMessage.id,
+          attachments: attachedFiles
         })
       } else {
         // Send custom message
@@ -162,7 +163,8 @@ function AdminMessagesPageContent() {
           originalSubject: selectedMessage.subject,
           submissionDate: new Date(selectedMessage.createdAt).toLocaleDateString(),
           adminName: 'SELPIC Support Team',
-          messageId: selectedMessage.id
+          messageId: selectedMessage.id,
+          attachments: attachedFiles
         })
       }
 

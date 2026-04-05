@@ -39,12 +39,14 @@ import {
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useContentStore, ContentItem } from '@/lib/contentStore'
+import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { useStore, NewsletterSubscriber } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
 import AdminRoute from '@/components/AdminRoute'
 import QuickEditCard from './components/QuickEditCard'
 import ContentModal from './components/ContentModal'
 import MediaUpload from '@/components/MediaUpload'
+import { HeaderLogoImage } from '@/components/Header'
 import HeroSlideManager from './components/HeroSlideManager'
 import CategoryHeroSlideManager from './components/CategoryHeroSlideManager'
 import CategoryManager from './components/CategoryManager'
@@ -471,14 +473,28 @@ export default function ContentManagementPage() {
     .filter((section): section is NonNullable<typeof section> => Boolean(section))
     .slice(0, 5)
 
-  // Filter content for currently selected section only
-  const filteredContent = contentItems
-    .filter(item => item.section === selectedSection)
-    .filter(item => 
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.content.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => a.order - b.order)
+  // Filter content for currently selected section only (dedupe by id — persisted data can contain duplicates)
+  const filteredContent = useMemo(() => {
+    const filtered = contentItems
+      .filter(item => item.section === selectedSection)
+      .filter(item =>
+        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.content.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .sort((a, b) => a.order - b.order)
+
+    const seen = new Set<string>()
+    return filtered.filter((item) => {
+      if (seen.has(item.id)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[admin/content] Skipping duplicate content id in list:', item.id, item.title)
+        }
+        return false
+      }
+      seen.add(item.id)
+      return true
+    })
+  }, [contentItems, selectedSection, searchTerm])
 
   // Newsletter subscriber filters
   const filteredNewsletterSubscribers = useMemo(() => {
@@ -2070,7 +2086,7 @@ export default function ContentManagementPage() {
                       </div>
                       <button
                         onClick={() => {
-                          const logoItem = contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')
+                          const logoItem = pickLogoImageItem(contentItems)
                           if (logoItem) {
                             updateContent(logoItem.id, {
                               isActive: !logoItem.isActive
@@ -2091,14 +2107,14 @@ export default function ContentManagementPage() {
                           }
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.isActive 
+                          pickLogoImageItem(contentItems)?.isActive 
                             ? 'bg-blue-600' 
                             : 'bg-gray-300'
                         }`}
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.isActive 
+                            pickLogoImageItem(contentItems)?.isActive 
                               ? 'translate-x-6' 
                               : 'translate-x-1'
                           }`}
@@ -2107,7 +2123,7 @@ export default function ContentManagementPage() {
                     </div>
 
                     {/* Logo Image Upload */}
-                    {contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.isActive && (
+                    {pickLogoImageItem(contentItems)?.isActive && (
                       <div className="space-y-4 p-4 bg-white rounded-lg border border-blue-200">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2116,9 +2132,9 @@ export default function ContentManagementPage() {
                           <div className="space-y-2">
                             <input
                               type="url"
-                              value={contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.mediaUrl || ''}
+                              value={pickLogoImageItem(contentItems)?.mediaUrl || ''}
                               onChange={(e) => {
-                                const logoItem = contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')
+                                const logoItem = pickLogoImageItem(contentItems)
                                 if (logoItem) {
                                   updateContent(logoItem.id, {
                                     mediaUrl: e.target.value
@@ -2130,10 +2146,10 @@ export default function ContentManagementPage() {
                             />
                             <MediaUpload
                               type="image"
-                              currentUrl={contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.mediaUrl}
+                              currentUrl={pickLogoImageItem(contentItems)?.mediaUrl}
                               usage="header-logo"
                               onUpload={(file, url) => {
-                                const logoItem = contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')
+                                const logoItem = pickLogoImageItem(contentItems)
                                 if (logoItem) {
                                   updateContent(logoItem.id, {
                                     mediaUrl: url
@@ -2142,7 +2158,7 @@ export default function ContentManagementPage() {
                                 }
                               }}
                               onRemove={() => {
-                                const logoItem = contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')
+                                const logoItem = pickLogoImageItem(contentItems)
                                 if (logoItem) {
                                   updateContent(logoItem.id, {
                                     mediaUrl: ''
@@ -2162,9 +2178,9 @@ export default function ContentManagementPage() {
                           </label>
                           <input
                             type="url"
-                            value={contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.linkUrl || ''}
+                            value={pickLogoImageItem(contentItems)?.linkUrl || ''}
                             onChange={(e) => {
-                              const logoItem = contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')
+                              const logoItem = pickLogoImageItem(contentItems)
                               if (logoItem) {
                                 updateContent(logoItem.id, {
                                   linkUrl: e.target.value || ''
@@ -2180,19 +2196,18 @@ export default function ContentManagementPage() {
                         </div>
 
                         {/* Logo Preview */}
-                        {contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.mediaUrl && (
+                        {pickLogoImageItem(contentItems)?.mediaUrl && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Preview
                             </label>
-                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 flex items-center justify-center">
-                              <img
-                                src={contentItems.find(item => item.section === 'header' && item.title === 'Logo Image')?.mediaUrl}
-                                alt="Logo Preview"
+                            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 flex items-center justify-center min-h-[5rem]">
+                              {/* indexeddb:// is not a valid raw img src; same resolver as site header */}
+                              <HeaderLogoImage
+                                key={pickLogoImageItem(contentItems)?.mediaUrl}
+                                src={pickLogoImageItem(contentItems)?.mediaUrl || ''}
+                                alt="Logo preview"
                                 className="max-h-20 max-w-full object-contain"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none'
-                                }}
                               />
                             </div>
                           </div>

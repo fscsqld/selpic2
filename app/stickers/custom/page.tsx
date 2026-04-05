@@ -318,10 +318,10 @@ export default function CustomStickersPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
         {/* Page header */}
         <div className="mb-4">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{pageTitle}</h1>
-          <p className="text-gray-600">
-            {pageSubtitle}
-          </p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{pageTitle}</h1>
+            <p className="text-gray-600">
+              {pageSubtitle}
+            </p>
           <p className="text-gray-700 font-semibold tracking-wide mt-2">
             Think it. Design it. Stick it.
           </p>

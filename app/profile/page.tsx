@@ -3,11 +3,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Phone, MapPin, LogOut, Settings, Edit3, Save, X, Globe, Lock, Eye, EyeOff, Home, Bell, BellOff, Award, TrendingUp, Gift } from 'lucide-react'
+import { User, Mail, Phone, MapPin, LogOut, Edit3, Save, X, Globe, Lock, Eye, EyeOff, Bell, BellOff, Award, TrendingUp, Gift } from 'lucide-react'
 import Header from '@/components/Header'
 import { useUserAuth } from '@/lib/userAuth'
 import { useStore } from '@/lib/store'
-import { useTranslation } from '@/lib/useTranslation'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
@@ -16,10 +15,8 @@ import { calculateUserTotalSales } from '@/lib/userGradeUtils'
 export default function ProfilePage() {
   const router = useRouter()
   const { user, logout, isLoggedIn, updateUser, changePassword } = useUserAuth()
-  const { clearCart, language, setLanguage, newsletterSubscribers, unsubscribeFromNewsletter } = useStore()
+  const { clearCart, newsletterSubscribers, unsubscribeFromNewsletter } = useStore()
   const { getVIPGradeBenefitForCheckout, getActiveVIPGradeConfigs } = useContentStore()
-  const isKo = language === 'ko'
-  const { t } = useTranslation()
   
   // VIP 등급 정보 상태
   const [vipGradeInfo, setVipGradeInfo] = useState<{
@@ -234,17 +231,17 @@ export default function ProfilePage() {
     if (!user) return
 
     if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      setPasswordError('모든 필드를 입력해주세요.')
+      setPasswordError('Please fill in all fields.')
       return
     }
 
     if (passwordForm.newPassword.length < 6) {
-      setPasswordError('새 비밀번호는 6자 이상이어야 합니다.')
+      setPasswordError('New password must be at least 6 characters.')
       return
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError('새 비밀번호가 일치하지 않습니다.')
+      setPasswordError('New passwords do not match.')
       return
     }
 
@@ -259,10 +256,10 @@ export default function ProfilePage() {
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
         setShowPasswords({ current: false, new: false, confirm: false })
       } else {
-        setPasswordError('현재 비밀번호가 올바르지 않습니다.')
+        setPasswordError('Current password is incorrect.')
       }
     } catch (error) {
-      setPasswordError('비밀번호 변경에 실패했습니다.')
+      setPasswordError('Could not update password. Please try again.')
     } finally {
       setIsChangingPassword(false)
     }
@@ -296,13 +293,13 @@ export default function ProfilePage() {
             <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
               <User size={32} className="text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">{isKo ? '로그인이 필요합니다' : 'Login required'}</h2>
-            <p className="text-gray-600 mb-8">{isKo ? '프로필을 확인하려면 먼저 로그인해주세요' : 'Please log in to view your profile'}</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Login Required</h2>
+            <p className="text-gray-600 mb-8">Please log in to view your profile.</p>
             <button 
               onClick={() => router.push('/login')}
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
             >
-              {isKo ? '로그인하기' : 'Log in'}
+              Log In
             </button>
           </div>
         </div>
@@ -321,7 +318,7 @@ export default function ProfilePage() {
             <User size={40} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.name}</h1>
-          <p className="text-gray-600">{isKo ? 'SELPIC 회원' : 'SELPIC Member'}</p>
+          <p className="text-gray-600">SELPIC Member</p>
         </div>
 
         {/* VIP 등급 정보 카드 */}
@@ -333,8 +330,8 @@ export default function ProfilePage() {
                   <Award size={24} className="text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{isKo ? 'VIP 등급 정보' : 'VIP Grade Information'}</h2>
-                  <p className="text-sm text-gray-600">{isKo ? '현재 등급 및 혜택을 확인하세요' : 'Check your current grade and benefits'}</p>
+                  <h2 className="text-xl font-semibold text-gray-900">VIP Grade Information</h2>
+                  <p className="text-sm text-gray-600">Check your current grade and benefits.</p>
                 </div>
               </div>
               <GradeBadge gradeCode={vipGradeInfo.gradeCode} size="lg" />
@@ -344,7 +341,7 @@ export default function ProfilePage() {
                 href="/benefits"
                 className="inline-flex items-center text-sm font-semibold text-purple-700 hover:text-purple-800 underline"
               >
-                {isKo ? '전체 혜택 보기' : 'View all benefits & promo codes'}
+                View All Benefits & Promo Codes
               </Link>
             </div>
             
@@ -353,23 +350,23 @@ export default function ProfilePage() {
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/40">
                 <div className="flex items-center space-x-2 mb-4">
                   <TrendingUp size={20} className="text-purple-600" />
-                  <h3 className="font-semibold text-gray-900">{isKo ? '현재 등급' : 'Current Grade'}</h3>
+                  <h3 className="font-semibold text-gray-900">Current Grade</h3>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">{isKo ? '등급명' : 'Grade Name'}</p>
+                    <p className="text-sm text-gray-600 mb-1">Grade Name</p>
                     <p className="text-2xl font-bold text-purple-700">{vipGradeInfo.gradeName}</p>
                   </div>
                   {vipGradeInfo.discountPercentage > 0 && (
                     <div>
-                      <p className="text-sm text-gray-600 mb-1">{isKo ? '할인율' : 'Discount Rate'}</p>
+                      <p className="text-sm text-gray-600 mb-1">Discount Rate</p>
                       <p className="text-xl font-bold text-green-600">{vipGradeInfo.discountPercentage}%</p>
                     </div>
                   )}
                   {vipGradeInfo.freeShipping && (
                     <div className="flex items-center space-x-2 text-green-600">
                       <Gift size={16} />
-                      <span className="text-sm font-medium">{isKo ? '무료 배송 포함' : 'Free Shipping Included'}</span>
+                      <span className="text-sm font-medium">Free Shipping Included</span>
                     </div>
                   )}
                 </div>
@@ -379,16 +376,16 @@ export default function ProfilePage() {
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/40">
                 <div className="flex items-center space-x-2 mb-4">
                   <TrendingUp size={20} className="text-blue-600" />
-                  <h3 className="font-semibold text-gray-900">{isKo ? '구매 현황' : 'Purchase Status'}</h3>
+                  <h3 className="font-semibold text-gray-900">Purchase Status</h3>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">{isKo ? '누적 구매 금액' : 'Total Purchase Amount'}</p>
+                    <p className="text-sm text-gray-600 mb-1">Total Purchase Amount</p>
                     <p className="text-2xl font-bold text-blue-700">${vipGradeInfo.totalSalesAmount.toFixed(2)}</p>
                   </div>
                   {vipGradeInfo.nextGradeAmount && (
                     <div className="pt-3 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 mb-1">{isKo ? '다음 등급까지' : 'To Next Grade'}</p>
+                      <p className="text-sm text-gray-600 mb-1">To Next Grade</p>
                       <p className="text-lg font-bold text-purple-600">${vipGradeInfo.nextGradeAmount.toFixed(2)}</p>
                       <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                         <div 
@@ -410,14 +407,14 @@ export default function ProfilePage() {
           {/* 프로필 정보 */}
           <div className="bg-white/80 backdrop-blur-md border border-white/20 rounded-3xl p-8 shadow-xl">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-semibold text-gray-900">{isKo ? '기본 정보' : 'Profile'}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Profile</h2>
               {!isEditing ? (
                 <button
                   onClick={handleEditToggle}
                   className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-300"
                 >
                   <Edit3 size={16} />
-                  <span>{isKo ? '수정' : 'Edit'}</span>
+                  <span>Edit</span>
                 </button>
               ) : (
                 <div className="flex space-x-2">
@@ -431,14 +428,14 @@ export default function ProfilePage() {
                     ) : (
                       <Save size={16} />
                     )}
-                    <span>{isSaving ? (isKo ? '저장 중...' : 'Saving...') : (isKo ? '저장' : 'Save')}</span>
+                    <span>{isSaving ? 'Saving…' : 'Save'}</span>
                   </button>
                   <button
                     onClick={handleEditToggle}
                     className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
                   >
                     <X size={16} />
-                    <span>{isKo ? '취소' : 'Cancel'}</span>
+                    <span>Cancel</span>
                   </button>
                 </div>
               )}
@@ -451,7 +448,7 @@ export default function ProfilePage() {
                   <User size={20} className="text-blue-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-1">{isKo ? '이름' : 'Name'}</p>
+                  <p className="text-sm text-gray-500 mb-1">Name</p>
                   {isEditing ? (
                     <input
                       type="text"
@@ -459,7 +456,7 @@ export default function ProfilePage() {
                       value={editForm.name}
                       onChange={handleInputChange}
                       className="w-full text-lg font-medium text-gray-900 bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder={isKo ? '이름을 입력하세요' : 'Enter your name'}
+                      placeholder="Enter your name"
                     />
                   ) : (
                     <p className="text-lg font-medium text-gray-900">{user.name}</p>
@@ -473,7 +470,7 @@ export default function ProfilePage() {
                   <Mail size={20} className="text-purple-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-1">{isKo ? '이메일' : 'Email'}</p>
+                  <p className="text-sm text-gray-500 mb-1">Email</p>
                   {isEditing ? (
                     <input
                       type="email"
@@ -481,7 +478,7 @@ export default function ProfilePage() {
                       value={editForm.email}
                       onChange={handleInputChange}
                       className="w-full text-lg font-medium text-gray-900 bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder={isKo ? '이메일을 입력하세요' : 'Enter your email'}
+                      placeholder="Enter your email"
                     />
                   ) : (
                     <p className="text-lg font-medium text-gray-900">{user.email}</p>
@@ -495,7 +492,7 @@ export default function ProfilePage() {
                   <Phone size={20} className="text-green-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-1">{isKo ? '전화번호' : 'Phone Number'}</p>
+                  <p className="text-sm text-gray-500 mb-1">Phone Number</p>
                   {isEditing ? (
                     <input
                       type="tel"
@@ -503,10 +500,10 @@ export default function ProfilePage() {
                       value={editForm.phone}
                       onChange={handleInputChange}
                       className="w-full text-lg font-medium text-gray-900 bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder={isKo ? '전화번호를 입력하세요' : 'Enter your phone number'}
+                      placeholder="Enter your phone number"
                     />
                   ) : (
-                    <p className="text-lg font-medium text-gray-900">{user.phone || '미등록'}</p>
+                    <p className="text-lg font-medium text-gray-900">{user.phone || 'Not registered'}</p>
                   )}
                 </div>
               </div>
@@ -517,7 +514,7 @@ export default function ProfilePage() {
                   <MapPin size={20} className="text-orange-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 mb-1">{isKo ? '주소' : 'Address'}</p>
+                  <p className="text-sm text-gray-500 mb-1">Address</p>
                   {isEditing ? (
                     <input
                       type="text"
@@ -525,10 +522,10 @@ export default function ProfilePage() {
                       value={editForm.address}
                       onChange={handleInputChange}
                       className="w-full text-lg font-medium text-gray-900 bg-gray-50 border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      placeholder={isKo ? '주소를 입력하세요' : 'Enter your address'}
+                      placeholder="Enter your address"
                     />
                   ) : (
-                    <p className="text-lg font-medium text-gray-900">{user.address || '미등록'}</p>
+                    <p className="text-lg font-medium text-gray-900">{user.address || 'Not registered'}</p>
                   )}
                 </div>
               </div>
@@ -539,7 +536,7 @@ export default function ProfilePage() {
           <div className="space-y-6">
             {/* 계정 설정 */}
             <div className="bg-white/80 backdrop-blur-md border border-white/20 rounded-3xl p-8 shadow-xl">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">{isKo ? '설정' : 'Settings'}</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Settings</h2>
               
               <div className="space-y-4">
                 {/* 비밀번호 변경 */}
@@ -551,43 +548,20 @@ export default function ProfilePage() {
                     <Lock size={20} className="text-red-600" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-gray-900">{isKo ? '비밀번호 변경' : 'Change Password'}</p>
-                    <p className="text-sm text-gray-500">{isKo ? '계정 보안을 위해 정기적으로 변경하세요' : 'For security, update your password regularly'}</p>
+                    <p className="font-medium text-gray-900">Change Password</p>
+                    <p className="text-sm text-gray-500">For security, update your password regularly</p>
                   </div>
                 </button>
 
-                {/* 언어 설정 */}
                 <div className="p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center space-x-4 mb-4">
+                  <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
                       <Globe size={20} className="text-indigo-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{isKo ? '언어 설정' : 'Language'}</p>
-                      <p className="text-sm text-gray-500">{isKo ? '사용할 언어를 선택하세요' : 'Select your language'}</p>
+                      <p className="font-medium text-gray-900">Language</p>
+                      <p className="text-sm text-gray-500">This site is available in English only.</p>
                     </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setLanguage('ko')}
-                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-                        language === 'ko'
-                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      KOREAN
-                    </button>
-                    <button
-                      onClick={() => setLanguage('en')}
-                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-                        language === 'en'
-                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      English
-                    </button>
                   </div>
                 </div>
 
@@ -605,31 +579,28 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-gray-900">{isKo ? 'Newsletter 구독' : 'Newsletter Subscription'}</p>
+                        <p className="font-medium text-gray-900">Newsletter Subscription</p>
                         <p className="text-sm text-gray-500">
-                          {isNewsletterSubscribed 
-                            ? (isKo ? '구독 중입니다' : 'Currently subscribed')
-                            : (isKo ? '구독하지 않음' : 'Not subscribed')
-                          }
+                          {isNewsletterSubscribed ? 'Currently subscribed' : 'Not subscribed'}
                         </p>
                       </div>
                     </div>
                     {isNewsletterSubscribed ? (
                       <button
                         onClick={() => {
-                          if (confirm(isKo ? 'Newsletter 구독을 취소하시겠습니까?' : 'Are you sure you want to unsubscribe from the newsletter?')) {
+                          if (confirm('Are you sure you want to unsubscribe from the newsletter?')) {
                             unsubscribeFromNewsletter(user.email)
-                            alert(isKo ? '구독이 취소되었습니다.' : 'You have been unsubscribed from the newsletter.')
+                            alert('You have been unsubscribed from the newsletter.')
                           }
                         }}
                         className="w-full px-4 py-2 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
                       >
                         <BellOff size={16} />
-                        <span>{isKo ? '구독 취소' : 'Unsubscribe'}</span>
+                        <span>Unsubscribe</span>
                       </button>
                     ) : (
                       <p className="text-sm text-gray-500 text-center">
-                        {isKo ? '홈페이지에서 구독할 수 있습니다.' : 'You can subscribe on the homepage.'}
+                        You can subscribe on the homepage.
                       </p>
                     )}
                   </div>
@@ -644,8 +615,8 @@ export default function ProfilePage() {
                     <LogOut size={20} className="text-gray-600 group-hover:text-red-600 transition-colors" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-gray-900 group-hover:text-red-600 transition-colors">{isKo ? '로그아웃' : 'Log out'}</p>
-                    <p className="text-sm text-gray-500">{isKo ? '현재 계정에서 로그아웃합니다' : 'Sign out of your account'}</p>
+                    <p className="font-medium text-gray-900 group-hover:text-red-600 transition-colors">Log Out</p>
+                    <p className="text-sm text-gray-500">Sign out of your account</p>
                   </div>
                 </button>
 
@@ -658,8 +629,8 @@ export default function ProfilePage() {
                     <X size={20} className="text-red-600" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-red-700">{isKo ? '회원 탈퇴' : 'Cancel Membership'}</p>
-                    <p className="text-sm text-red-600">{isKo ? '계정과 데이터가 삭제됩니다' : 'Your account and data will be deleted'}</p>
+                    <p className="font-medium text-red-700">Cancel Membership</p>
+                    <p className="text-sm text-red-600">Your account and data will be deleted</p>
                   </div>
                 </button>
               </div>
@@ -667,20 +638,20 @@ export default function ProfilePage() {
 
             {/* 빠른 액션 */}
             <div className="bg-white/80 backdrop-blur-md border border-white/20 rounded-3xl p-8 shadow-xl">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">{isKo ? '빠른 액션' : 'Quick Actions'}</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
               
               <div className="space-y-3">
                 <button 
                   onClick={() => router.push('/cart')}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
                 >
-                  {isKo ? '장바구니' : 'Cart'}
+                  Cart
                 </button>
                 <button 
                   onClick={() => router.push('/stickers')}
                   className="w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-50 transition-colors"
                 >
-                  {isKo ? '제품 둘러보기' : 'Browse Products'}
+                  Browse Products
                 </button>
               </div>
             </div>
@@ -694,7 +665,7 @@ export default function ProfilePage() {
           <div className="bg-white/90 backdrop-blur-md border border-white/20 rounded-3xl shadow-2xl max-w-md w-full mx-4">
             <div className="p-8">
               <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-bold text-gray-900">비밀번호 변경</h3>
+                <h3 className="text-2xl font-bold text-gray-900">Change Password</h3>
                 <button
                   onClick={() => setShowPasswordModal(false)}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -713,7 +684,7 @@ export default function ProfilePage() {
 
                 {/* 현재 비밀번호 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">현재 비밀번호</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
                   <div className="relative">
                     <input
                       type={showPasswords.current ? 'text' : 'password'}
@@ -721,7 +692,8 @@ export default function ProfilePage() {
                       value={passwordForm.currentPassword}
                       onChange={handlePasswordInputChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
-                      placeholder="현재 비밀번호를 입력하세요"
+                      placeholder="Enter your current password"
+                      autoComplete="current-password"
                     />
                     <button
                       type="button"
@@ -735,7 +707,7 @@ export default function ProfilePage() {
 
                 {/* 새 비밀번호 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">새 비밀번호</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
                   <div className="relative">
                     <input
                       type={showPasswords.new ? 'text' : 'password'}
@@ -743,7 +715,8 @@ export default function ProfilePage() {
                       value={passwordForm.newPassword}
                       onChange={handlePasswordInputChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
-                      placeholder="새 비밀번호를 입력하세요"
+                      placeholder="Enter a new password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -753,12 +726,12 @@ export default function ProfilePage() {
                       {showPasswords.new ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">최소 6자 이상 입력해주세요</p>
+                  <p className="text-xs text-gray-500 mt-1">Use at least 6 characters</p>
                 </div>
 
                 {/* 새 비밀번호 확인 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">새 비밀번호 확인</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
                   <div className="relative">
                     <input
                       type={showPasswords.confirm ? 'text' : 'password'}
@@ -766,7 +739,8 @@ export default function ProfilePage() {
                       value={passwordForm.confirmPassword}
                       onChange={handlePasswordInputChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
-                      placeholder="새 비밀번호를 다시 입력하세요"
+                      placeholder="Re-enter your new password"
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -784,7 +758,7 @@ export default function ProfilePage() {
                     onClick={() => setShowPasswordModal(false)}
                     className="flex-1 px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors font-medium"
                   >
-                    취소
+                    Cancel
                   </button>
                   <button
                     onClick={handleChangePassword}
@@ -794,10 +768,10 @@ export default function ProfilePage() {
                     {isChangingPassword ? (
                       <div className="flex items-center justify-center space-x-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>변경 중...</span>
+                        <span>Updating…</span>
                       </div>
                     ) : (
-                      '변경하기'
+                      'Update Password'
                     )}
                   </button>
                 </div>
@@ -813,25 +787,25 @@ export default function ProfilePage() {
           <div className="bg-white/95 border border-white/20 rounded-3xl shadow-2xl max-w-md w-full mx-4">
             <div className="p-8">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">{isKo ? '회원 탈퇴' : 'Cancel Membership'}</h3>
+                <h3 className="text-2xl font-bold text-gray-900">Cancel Membership</h3>
                 <button onClick={() => setShowCancelModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={24} />
                 </button>
               </div>
-              <p className="text-gray-700 mb-6">{isKo ? '정말로 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없으며, 계정과 관련 데이터가 삭제됩니다.' : 'Are you sure you want to cancel your membership? This action cannot be undone and will delete your account and related data.'}</p>
+              <p className="text-gray-700 mb-6">Are you sure you want to cancel your membership? This action cannot be undone and will delete your account and related data.</p>
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowCancelModal(false)}
                   className="flex-1 px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors font-medium"
                 >
-                  {isKo ? '취소' : 'Cancel'}
+                  Cancel
                 </button>
                 <button
                   onClick={handleConfirmCancelMembership}
                   disabled={isCancelling}
                   className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:opacity-60"
                 >
-                  {isCancelling ? (isKo ? '처리 중...' : 'Processing...') : (isKo ? '탈퇴하기' : 'Confirm Delete')}
+                  {isCancelling ? 'Processing…' : 'Confirm Delete'}
                 </button>
               </div>
             </div>

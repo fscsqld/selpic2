@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
 import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { createPolicyContentGetter, TERMS_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function TermsAndConditions() {
   const { getActiveContentBySection, _hasHydrated } = useContentStore()
@@ -19,9 +20,13 @@ export default function TermsAndConditions() {
   // Terms and Conditions 섹션의 콘텐츠 가져오기
   const termsContent = getActiveContentBySection('terms')
   
-  // 각 콘텐츠 항목을 쉽게 접근할 수 있도록 함수 생성
-  const getContent = (title: string) => {
-    return termsContent.find(item => item.title === title)?.content || ''
+  const getContent = createPolicyContentGetter(termsContent, TERMS_TITLE_ALIASES)
+
+  function splitReturnPolicyList(raw: string): string[] {
+    const t = raw.trim()
+    if (!t) return []
+    if (t.includes('|')) return t.split(/\s*\|\s*/).map((s) => s.trim()).filter(Boolean)
+    return t.split(', ').map((s) => s.trim()).filter(Boolean)
   }
 
   // 하이드레이션 완료 전에는 기본값 표시
@@ -213,14 +218,18 @@ export default function TermsAndConditions() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">{getContent('Return Policy 제목') || 'Return Policy'}</h3>
                 <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  {getContent('Return Policy 목록')?.split(', ').map((item, index) => (
+                  {(getContent('Return Policy 목록')
+                    ? splitReturnPolicyList(getContent('Return Policy 목록'))
+                    : [
+                        'Where the ACL allows a non-faulty return for your order type, contact us within 14 days of delivery before sending anything back',
+                        'Since our stickers are personalised/customised, we do not accept returns for change of mind',
+                        'If the product is faulty or incorrect, please notify us within 7 days of delivery with photos',
+                        'Eligible returns must be in original condition unless we agree otherwise for inspection',
+                        'Return shipping costs may apply as advised when you contact us',
+                      ]
+                  ).map((item, index) => (
                     <li key={index}>{item}</li>
-                  )) || [
-                    <li key={1}>30-day return window from delivery date</li>,
-                    <li key={2}>Items must be in original condition</li>,
-                    <li key={3}>Custom products are non-returnable</li>,
-                    <li key={4}>Return shipping costs are customer's responsibility</li>
-                  ]}
+                  ))}
                 </ul>
               </div>
               <div>

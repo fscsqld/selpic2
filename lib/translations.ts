@@ -184,41 +184,35 @@ export const translations = {
         orderError: '주문 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
       viewAllShippingOptions: '모든 배송 옵션 보기',
       shippingOptionsDetails: {
-        auspostLetter: {
-          name: 'Australia Post Large Letter',
-          description: 'Small/Light mail (2-8 business days, no tracking)',
-          deliveryTime: '2-8 business days'
+        standardLetter: {
+          name: 'Standard Letter',
+          description: '네임스티커·얇은 맞춤 스티커에 권장 (추적 없음)',
+          deliveryTime: '2–8 영업일'
         },
-        auspostRegular: {
-          name: 'Australia Post Regular Parcel',
-          description: 'Domestic regular parcel (2-6 business days, no signature)',
-          deliveryTime: '2-6 business days'
+        trackedLetter: {
+          name: 'Tracked Letter',
+          description: '추적 가능한 레터 배송',
+          deliveryTime: '2–8 영업일'
         },
-        auspostTracked: {
-          name: 'Australia Post Regular Parcel (Signature)',
-          description: 'Domestic regular parcel + signature (2-6 business days)',
-          deliveryTime: '2-6 business days'
+        expressPost: {
+          name: 'Express Post',
+          description: '빠른 배송 (가능 지역·시점 기준)',
+          deliveryTime: '1–3 영업일'
         },
-        auspostExpress: {
-          name: 'Australia Post Express Post',
-          description: 'Domestic express delivery (1-2 business days, area limited)',
-          deliveryTime: '1-2 business days'
+        parcelPost: {
+          name: 'Parcel Post (Goods)',
+          description: '굿즈·소포 묶음 배송용 단일 소포 옵션',
+          deliveryTime: '3–10 영업일'
         },
         localPickup: {
           name: 'Click & Collect (Mansfield)',
-          description: '온라인 주문 후 Mansfield 매장에서 수령하세요. 준비 완료 시 알림을 보내드립니다.',
-          deliveryTime: '영업시간 내 당일 수령 가능'
+          description: '온라인 주문 후 Mansfield 매장에서 수령. 준비 완료 시 알림.',
+          deliveryTime: '매장 영업시간'
         },
         clickCollect: {
           name: 'Click & Collect (Mansfield)',
           description: 'Order online and collect in Mansfield store. Ready notification sent when prepared.',
           deliveryTime: 'Same day pickup (during business hours)'
-        },
-        cashOnDelivery: {
-          name: 'Cash on Delivery',
-          description: 'Mansfield area cash payment (pay cash on delivery)',
-          deliveryTime: '1-2 business days',
-          cashPayment: 'Cash Payment'
         },
         deliveryTime: 'Delivery Time',
         tracking: 'Tracking',
@@ -1515,36 +1509,30 @@ export const translations = {
         orderError: 'Something went wrong while processing your order. Please try again shortly.',
       viewAllShippingOptions: 'View all shipping options',
       shippingOptionsDetails: {
-        auspostLetter: {
-          name: 'Australia Post Large Letter',
-          description: 'Small/Light mail (2-8 business days, no tracking)',
-          deliveryTime: '2-8 business days'
+        standardLetter: {
+          name: 'Standard Letter',
+          description: 'Best for name stickers and flat custom sheets (no tracking)',
+          deliveryTime: '2–8 business days'
         },
-        auspostRegular: {
-          name: 'Australia Post Regular Parcel',
-          description: 'Domestic regular parcel (2-6 business days, no signature)',
-          deliveryTime: '2-6 business days'
+        trackedLetter: {
+          name: 'Tracked Letter',
+          description: 'Tracked letter service — peace of mind',
+          deliveryTime: '2–8 business days'
         },
-        auspostTracked: {
-          name: 'Australia Post Regular Parcel (Signature)',
-          description: 'Domestic regular parcel + signature (2-6 business days)',
-          deliveryTime: '2-6 business days'
+        expressPost: {
+          name: 'Express Post',
+          description: 'Fastest service where available',
+          deliveryTime: '1–3 business days'
         },
-        auspostExpress: {
-          name: 'Australia Post Express Post',
-          description: 'Domestic express delivery (1-2 business days, area limited)',
-          deliveryTime: '1-2 business days'
+        parcelPost: {
+          name: 'Parcel Post (Goods)',
+          description: 'Single parcel option for merchandise and heavier goods',
+          deliveryTime: '3–10 business days'
         },
         localPickup: {
           name: 'Click & Collect (Mansfield)',
           description: 'Order online and collect from our Mansfield store. We’ll notify you when it’s ready.',
-          deliveryTime: 'Same-day pickup during business hours'
-        },
-        cashOnDelivery: {
-          name: 'Cash on Delivery',
-          description: 'Mansfield area cash payment (pay cash on delivery)',
-          deliveryTime: '1-2 business days',
-          cashPayment: 'Cash Payment'
+          deliveryTime: 'During store business hours'
         },
         deliveryTime: 'Delivery Time',
         tracking: 'Tracking',

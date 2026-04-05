@@ -1,20 +1,23 @@
 import { NextResponse } from 'next/server'
-import { Resend } from 'resend'
+import { sendEmailViaResendServer } from '@/lib/email/resendServer'
+import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBranding'
+import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 
-const resendApiKey = process.env.RESEND_API_KEY
-const resendFrom = process.env.RESEND_FROM || process.env.RESEND_FROM_EMAIL || 'SELPIC <info@selpic.com.au>'
-
-const resendClient = resendApiKey ? new Resend(resendApiKey) : null
-
+/**
+ * @deprecated Public browser access removed. Use `sendNewsletterBulkAction` from `app/actions/emails.ts`.
+ * Optional: set INTERNAL_EMAIL_API_SECRET and send header x-internal-email-secret for server automation only.
+ */
 export async function POST(req: Request) {
-  try {
-    if (!resendClient) {
-      return NextResponse.json(
-        { success: false, message: 'Email service is not configured.' },
-        { status: 500 }
-      )
-    }
+  const secret = process.env.INTERNAL_EMAIL_API_SECRET?.trim()
+  const hdr = req.headers.get('x-internal-email-secret')?.trim()
+  if (!secret || hdr !== secret) {
+    return NextResponse.json(
+      { success: false, message: 'Forbidden. Use authenticated server actions to send email.' },
+      { status: 403 }
+    )
+  }
 
+  try {
     const { to, subject, html, attachments } = await req.json()
 
     if (!to || !subject || !html) {
@@ -24,49 +27,38 @@ export async function POST(req: Request) {
       )
     }
 
-    // 단일 이메일 또는 배열 처리
     const recipients = Array.isArray(to) ? to : [to]
+    const htmlWithBranding = appendTransactionalEmailBrandingHtml(String(html))
 
-    // Resend API로 이메일 발송
-    const emailOptions: any = {
-      from: resendFrom,
-      reply_to: process.env.RESEND_FROM_EMAIL || 'info@selpic.com.au',
+    const attach =
+      attachments && Array.isArray(attachments) && attachments.length > 0
+        ? attachments.map((file: { filename?: string; content?: string; contentType?: string }) => ({
+            filename: file.filename || 'attachment',
+            content: file.content || '',
+            contentType: file.contentType,
+          }))
+        : undefined
+
+    const r = await sendEmailViaResendServer({
       to: recipients,
-      subject: subject,
-      html: html
-    }
+      subject: String(subject),
+      html: htmlWithBranding,
+      skipBranding: true,
+      skipTracking: true,
+      attachments: attach,
+    })
 
-    // 파일 첨부가 있는 경우 처리 (나중에 구현)
-    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      // Resend는 base64 인코딩된 파일을 지원
-      emailOptions.attachments = attachments.map((file: any) => ({
-        filename: file.filename || 'attachment',
-        content: file.content, // base64 인코딩된 내용
-        contentType: file.contentType || 'application/octet-stream'
-      }))
-    }
-
-    const result = await resendClient.emails.send(emailOptions)
-
-    if (result.error) {
-      console.error('Resend API error:', result.error)
-      return NextResponse.json(
-        { success: false, message: result.error.message || 'Failed to send email' },
-        { status: 500 }
-      )
+    if (!r.ok) {
+      console.error('[newsletter/send internal]', r.logMessage)
+      return NextResponse.json({ success: false, message: SAFE_API_ERROR_MESSAGE }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
       message: 'Email sent successfully',
-      data: result.data
     })
-  } catch (error: any) {
-    console.error('Newsletter send API error:', error)
-    return NextResponse.json(
-      { success: false, message: error.message || 'Something went wrong while sending email.' },
-      { status: 500 }
-    )
+  } catch (error: unknown) {
+    logAndSafeMessage('newsletter/send', error)
+    return NextResponse.json({ success: false, message: SAFE_API_ERROR_MESSAGE }, { status: 500 })
   }
 }
-

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { useUserAuth } from '@/lib/userAuth'
+import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBranding'
 import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
@@ -42,18 +43,8 @@ export async function POST(request: NextRequest) {
     if (resendKey) {
       try {
         const resend = new Resend(resendKey)
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'SELPIC <noreply@selpic.com.au>',
-          to: email,
-          subject: 'Password Reset Request - SELPIC',
-          html: `
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              </head>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        const coreHtml = `
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                   <h1 style="color: white; margin: 0; font-size: 28px;">SELPIC</h1>
                 </div>
@@ -70,20 +61,29 @@ export async function POST(request: NextRequest) {
                   <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
                   <p style="color: #4F46E5; font-size: 12px; word-break: break-all; background: #f3f4f6; padding: 10px; border-radius: 4px;">${resetLink}</p>
                   <p style="color: #ef4444; font-size: 14px; margin-top: 30px;">
-                    <strong>⚠️ Important:</strong> This link will expire in <strong>1 hour</strong>.
+                    <strong>Important:</strong> This link will expire in <strong>1 hour</strong>.
                   </p>
                   <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
                     If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
                   </p>
-                  <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-                    © 2024 SELPIC. All rights reserved.<br>
-                    Phone: (61) 0466-894-279 | Email: info@selpic.com.au
-                  </p>
                 </div>
-              </body>
-            </html>
-          `
+                </div>`
+        const bodyInner = appendTransactionalEmailBrandingHtml(coreHtml.trim())
+        const htmlDoc = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="margin:0;padding:0;background:#f9fafb;">
+    ${bodyInner}
+  </body>
+</html>`
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'SELPIC <noreply@selpic.com.au>',
+          to: email,
+          subject: 'Password Reset Request - SELPIC',
+          html: htmlDoc
         })
         console.log('✅ Password reset email sent successfully to:', email)
       } catch (emailError) {

@@ -6,7 +6,7 @@ import { useStore, Product } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { useContentStore } from '@/lib/contentStore'
-import { Type, Palette, Package, ShoppingCart, ArrowRight, ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react'
+import { Type, Palette, Package, ShoppingCart, ArrowRight, ChevronDown, ChevronUp, X, AlertCircle, Minus, Plus } from 'lucide-react'
 import Header from '@/components/Header'
 import { getStickerFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
 
@@ -39,7 +39,7 @@ function StickerCustomizeContent() {
   const { t } = useTranslation()
   const categoryItems = useContentStore(s => s.categoryItems)
   const getActiveCategoryItems = useContentStore(s => s.getActiveCategoryItems)
-
+  
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string>(DEFAULT_BG_IMAGE)
   const [isMounted, setIsMounted] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -55,6 +55,8 @@ function StickerCustomizeContent() {
   const [selectedFont, setSelectedFont] = useState('andika') // Font 1 (Andika) default
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  /** Lines added to cart / checkout from this page (cart page can still change qty later) */
+  const [orderQuantity, setOrderQuantity] = useState(1)
   const [customizedImage, setCustomizedImage] = useState<string | null>(null)
   const [textPosition, setTextPosition] = useState({ x: 50, y: 50 }) // 텍스트 위치 (퍼센트)
   const [textSize, setTextSize] = useState(14) // 텍스트 크기 (9자 한 줄에 맞춤)
@@ -112,9 +114,9 @@ function StickerCustomizeContent() {
   // URL ?product= 복원: 새로고침 시 같은 상품 유지. products 미로드 시에는 선택을 지우지 않음(일부만 보이는 현상 방지)
   useEffect(() => {
     if (!isMounted) return
-
+    
     const productId = searchParams.get('product')
-
+    
     if (!productId) {
       setSelectedProduct(null)
       setSetItems([])
@@ -123,25 +125,25 @@ function StickerCustomizeContent() {
 
     if (products.length === 0) return
 
-    const product = products.find(p => p.id === productId && p.category === 'Stickers')
-    if (product) {
-      setSelectedProduct(product)
+      const product = products.find(p => p.id === productId && p.category === 'Stickers')
+      if (product) {
+        setSelectedProduct(product)
       setCustomText('Emily')
-
-      if (product.subcategory === 'Set') {
-        const itemCount = (product as any).setItemCount ?? 3
-        setSetItems(Array(itemCount).fill(null).map(() => ({
+        
+        if (product.subcategory === 'Set') {
+          const itemCount = (product as any).setItemCount ?? 3
+          setSetItems(Array(itemCount).fill(null).map(() => ({
           selectedDesign: null,
           text: 'Emily',
           font: 'andika',
           color: '#000000',
-          customizedImage: null,
-          textPosition: { x: 50, y: 50 },
+            customizedImage: null,
+            textPosition: { x: 50, y: 50 },
           textSize: 14
-        })))
-      } else {
-        setSetItems([])
-      }
+          })))
+        } else {
+          setSetItems([])
+        }
     } else {
       setSelectedProduct(null)
       setSetItems([])
@@ -706,7 +708,7 @@ function StickerCustomizeContent() {
       // SET 상품의 원래 가격 유지
       const cartItem = {
         product: selectedProduct ?? displayProduct,
-        quantity: 1,
+        quantity: orderQuantity,
         customizations
       }
 
@@ -754,7 +756,7 @@ function StickerCustomizeContent() {
     
     const cartItem = {
       product: selectedProduct ?? displayProduct,
-      quantity: 1,
+      quantity: orderQuantity,
       customizations
     }
 
@@ -926,7 +928,7 @@ function StickerCustomizeContent() {
       // SET 상품의 원래 가격 유지
       const cartItem = {
         product: selectedProduct ?? displayProduct,
-        quantity: 1,
+        quantity: orderQuantity,
         customizations
       }
 
@@ -957,7 +959,7 @@ function StickerCustomizeContent() {
     
     const cartItem = {
       product: selectedProduct ?? displayProduct,
-      quantity: 1,
+      quantity: orderQuantity,
       customizations
     }
 
@@ -978,9 +980,9 @@ function StickerCustomizeContent() {
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
         <div className="flex-1 flex items-center justify-center px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading...</p>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading...</p>
           </div>
         </div>
       </div>
@@ -1062,11 +1064,11 @@ function StickerCustomizeContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 {resolvedProductImage ? (
-                  <img
+                <img
                     src={resolvedProductImage}
                     alt={displayProduct.name}
-                    className="w-20 h-20 object-cover rounded-lg"
-                  />
+                  className="w-20 h-20 object-cover rounded-lg"
+                />
                 ) : (
                   <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
                     <Package className="w-8 h-8 text-gray-400" />
@@ -1311,8 +1313,8 @@ function StickerCustomizeContent() {
                           <img
                             src={resolvedProductImage}
                             alt={displayProduct.name}
-                            className="w-full h-full object-contain"
-                          />
+                      className="w-full h-full object-contain"
+                    />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
                         )}
@@ -1324,7 +1326,7 @@ function StickerCustomizeContent() {
                       <p className="text-xs font-semibold text-slate-500 py-1.5">Sheet</p>
                       <div className="flex-shrink-0 flex flex-col items-center w-full gap-2 pt-2 pb-2 px-2">
                         <div
-                          style={{
+                        style={{
                             transform: `scale(${SHEET_SCALE})`,
                             transformOrigin: 'top center'
                           }}
@@ -1480,9 +1482,9 @@ function StickerCustomizeContent() {
                                             className="text-center block w-full leading-tight"
                                             style={{
                                               fontFamily: getCurrentFont().fontFamily,
-                                              color: selectedColor,
+                          color: selectedColor,
                                               fontSize: size1,
-                                              fontWeight: 'bold',
+                          fontWeight: 'bold',
                                               textShadow: '1px 1px 2px rgba(0,0,0,0.08)',
                                               whiteSpace: 'nowrap',
                                               maxWidth: '100%'
@@ -1518,9 +1520,9 @@ function StickerCustomizeContent() {
                                           textShadow: '1px 1px 2px rgba(0,0,0,0.08)',
                                           whiteSpace: 'nowrap',
                                           maxWidth: '100%'
-                                        }}
-                                      >
-                                        {customText}
+                        }}
+                      >
+                        {customText}
                                       </span>
                                     )
                                   })()
@@ -1528,8 +1530,8 @@ function StickerCustomizeContent() {
                                   <span className="text-slate-300 text-center" style={{ fontSize: 11 }}>
                                     {supportsTwoLines ? (twoLineFormat === 'name-phone' ? 'Name\nPhone' : 'Affiliation\nName') : 'Name'}
                                   </span>
-                                )}
-                              </div>
+                    )}
+                  </div>
                             </div>
                             )
                           })}
@@ -1574,6 +1576,31 @@ function StickerCustomizeContent() {
                     className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${designStats.completion}%` }}
                   />
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 bg-slate-800/90 rounded-lg p-2.5 border border-slate-600">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider">Quantity</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Decrease quantity"
+                      disabled={orderQuantity <= 1}
+                      onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                      className="p-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-10 text-center font-semibold text-white tabular-nums">{orderQuantity}</span>
+                    <button
+                      type="button"
+                      aria-label="Increase quantity"
+                      disabled={orderQuantity >= 999}
+                      onClick={() => setOrderQuantity((q) => Math.min(999, q + 1))}
+                      className="p-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Action Buttons */}
@@ -1834,8 +1861,8 @@ function StickerCustomizeContent() {
                     )}
                     {(!supportsTwoLines || lineMode !== 'two') && (
                       // 기본 1줄 또는 Option 1: Affiliation + Name 에서는 기존 textarea 사용
-                      <textarea
-                        value={customText}
+                    <textarea
+                      value={customText}
                         onChange={(e) => {
                           const raw = e.target.value
                           if (supportsTwoLines && lineMode === 'two') {
@@ -1959,7 +1986,7 @@ function StickerCustomizeContent() {
                           key={color}
                           onClick={() => setSelectedColor(color)}
                           className={`w-8 h-8 rounded-lg border-2 flex-shrink-0 transition-all ${
-                            selectedColor === color
+                            selectedColor === color 
                               ? 'border-blue-500 ring-2 ring-blue-300'
                               : 'border-slate-600 hover:border-slate-500'
                           }`}
@@ -1997,6 +2024,30 @@ function StickerCustomizeContent() {
         {/* SET product action buttons */}
         {displayProduct && displayProduct.subcategory === 'Set' && setItems.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-6">
+            <div className="flex items-center justify-center gap-3 mb-4 max-w-2xl mx-auto">
+              <span className="text-sm text-gray-600 font-medium">Quantity</span>
+              <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  disabled={orderQuantity <= 1}
+                  onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                  className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="w-10 text-center font-semibold tabular-nums">{orderQuantity}</span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  disabled={orderQuantity >= 999}
+                  onClick={() => setOrderQuantity((q) => Math.min(999, q + 1))}
+                  className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
               <button
                 onClick={handleAddToCartAndCheckout}

@@ -1,14 +1,71 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ShoppingCart, Menu, X, Search, Globe, Home, Package, ShoppingBag, ArrowRight, Lock, Info, Grid3X3, Smartphone, Flame, Palette, Gift, User, MessageSquare, BarChart3, Users, Settings, Ticket } from 'lucide-react'
+import { ShoppingCart, Menu, X, Search, Globe, Home, Package, ShoppingBag, ArrowRight, Lock, Info, Grid3X3, Smartphone, Flame, Palette, Gift, User, MessageSquare, BarChart3, Users, Settings, Ticket, Image as ImageIcon } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { useContentStore } from '@/lib/contentStore'
+import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
+import { HEADER_LOGO_STATIC_FALLBACKS } from '@/lib/headerLogoDisplay'
+
+/**
+ * CMS sometimes stores mistaken values (e.g. `public/image`, `/images/logo.png`) as link URLs.
+ * Those are not app routes — Next would navigate to `/public/image`. Force `/` for obvious asset paths.
+ */
+function normalizeHeaderHomeHref(input: string): string {
+  const t = (input ?? '').trim()
+  if (!t) return '/'
+
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      const u = new URL(t)
+      const p = u.pathname || ''
+      if (/^\/public(\/|$)/i.test(p)) return '/'
+    } catch {
+      return '/'
+    }
+    return t
+  }
+
+  const path = t.startsWith('/') ? t : `/${t}`
+  if (/^\/public(\/|$)/i.test(path)) return '/'
+  if (/\.(png|jpe?g|gif|webp|svg|ico|bmp)(\?.*)?$/i.test(path)) return '/'
+  if (/^\/images\/logo\.(png|svg)/i.test(path)) return '/'
+
+  return path
+}
+
+/** Company display name from CMS (does not require the row to be `isActive`). */
+function getHeaderCompanyName(contentItems: { section: string; title: string; content?: string }[]): string {
+  const raw = contentItems.find((item) => item.section === 'header' && item.title === 'Company Name')?.content
+  const t = typeof raw === 'string' ? raw.trim() : ''
+  return t || 'SELPIC'
+}
+
+/** Error fallback bar: company name text only (logo is reserved for the main header center on the landing bar). */
+function HeaderFallbackBar() {
+  const contentItems = useContentStore((s) => s.contentItems)
+  const companyName = getHeaderCompanyName(contentItems)
+  const homeLinkRow = contentItems.find(
+    (i) => i.section === 'header' && i.title === 'Home Link' && i.isActive
+  )
+  const homeUrl = normalizeHeaderHomeHref(homeLinkRow?.linkUrl || '/')
+
+  return (
+    <div className="flex justify-between items-center h-12">
+      <Link href={homeUrl} className="flex items-center min-w-0 max-w-[70%]">
+        <div className="text-xl font-playfair font-bold text-gray-900 tracking-wider truncate">{companyName}</div>
+      </Link>
+      <Link href="/login" className="text-blue-600 hover:text-blue-700 shrink-0">
+        Login
+      </Link>
+    </div>
+  )
+}
 
 // 에러 바운더리 컴포넌트
 function HeaderErrorBoundary({ children }: { children: React.ReactNode }) {
@@ -28,12 +85,7 @@ function HeaderErrorBoundary({ children }: { children: React.ReactNode }) {
     return (
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-12">
-            <div className="text-xl font-playfair font-bold text-gray-900 tracking-wider">SELPIC</div>
-            <Link href="/login" className="text-blue-600 hover:text-blue-700">
-              Login
-            </Link>
-          </div>
+          <HeaderFallbackBar />
         </div>
       </header>
     )
@@ -42,11 +94,182 @@ function HeaderErrorBoundary({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+/** Neutral block when logo URL fails — no company name text (image-only branding). */
+export function HeaderLogoPlaceholder({ className }: { className: string }) {
+  return (
+    <div
+      className={`flex items-center justify-center bg-gray-50 border border-dashed border-gray-200 rounded overflow-hidden ${className}`}
+      role="img"
+      aria-label="Logo"
+    >
+      <ImageIcon className="w-6 h-6 text-gray-400 shrink-0" aria-hidden />
+    </div>
+  )
+}
+
+/**
+ * Never puts `indexeddb://` on <img src> (invalid). Resolves to blob/data/http or falls back to
+ * `HEADER_LOGO_STATIC_FALLBACKS` (PNG if present, then `/images/logo.svg`, `/logo.svg`).
+ */
+export function HeaderLogoImage({
+  src,
+  alt,
+  className,
+  staticFallbacks = HEADER_LOGO_STATIC_FALLBACKS,
+  exhaustedFallback,
+}: {
+  src: string
+  alt: string
+  className: string
+  staticFallbacks?: readonly string[]
+  /** When primary + all static fallbacks fail, show this instead of the dashed placeholder (e.g. company name). */
+  exhaustedFallback?: ReactNode
+}) {
+  const primary = src?.trim() || ''
+  const blobUrlRef = useRef<string | null>(null)
+  const phaseRef = useRef<'loading' | 'primary' | 'fallback'>('loading')
+
+  const [phase, setPhase] = useState<'loading' | 'primary' | 'fallback'>(() => {
+    if (!primary) return 'fallback'
+    if (primary.startsWith('indexeddb://')) return 'loading'
+    return 'primary'
+  })
+  const [displaySrc, setDisplaySrc] = useState(() => {
+    if (!primary) return staticFallbacks[0] || ''
+    if (primary.startsWith('indexeddb://')) return ''
+    return primary
+  })
+  const [fallbackIndex, setFallbackIndex] = useState(0)
+  const [exhausted, setExhausted] = useState(false)
+
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
+
+  const applyFallback = useCallback(
+    (startIndex: number) => {
+      const next = staticFallbacks[startIndex]
+      if (next) {
+        setPhase('fallback')
+        phaseRef.current = 'fallback'
+        setFallbackIndex(startIndex)
+        setDisplaySrc(next)
+        setExhausted(false)
+      } else {
+        setExhausted(true)
+        setDisplaySrc('')
+      }
+    },
+    [staticFallbacks]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const revokeBlob = () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
+      }
+    }
+    revokeBlob()
+    setExhausted(false)
+    setFallbackIndex(0)
+
+    if (!primary) {
+      setPhase('fallback')
+      phaseRef.current = 'fallback'
+      applyFallback(0)
+      return
+    }
+
+    if (!primary.startsWith('indexeddb://')) {
+      setPhase('primary')
+      phaseRef.current = 'primary'
+      setDisplaySrc(primary)
+      return () => {
+        cancelled = true
+        revokeBlob()
+      }
+    }
+
+    setPhase('loading')
+    phaseRef.current = 'loading'
+    setDisplaySrc('')
+
+    ;(async () => {
+      try {
+        const fileId = primary.replace('indexeddb://', '')
+        const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
+        const resolved = await indexedDBStorage.getFile(fileId)
+        if (cancelled) {
+          if (resolved?.startsWith('blob:')) URL.revokeObjectURL(resolved)
+          return
+        }
+        if (resolved) {
+          if (resolved.startsWith('blob:')) blobUrlRef.current = resolved
+          setPhase('primary')
+          phaseRef.current = 'primary'
+          setDisplaySrc(resolved)
+        } else {
+          applyFallback(0)
+        }
+      } catch (e) {
+        console.error('Header logo: IndexedDB resolve failed:', e)
+        if (!cancelled) applyFallback(0)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      revokeBlob()
+    }
+  }, [primary, applyFallback])
+
+  const handleImgError = () => {
+    if (phaseRef.current === 'primary') {
+      applyFallback(0)
+      return
+    }
+    setFallbackIndex((idx) => {
+      const next = idx + 1
+      if (next < staticFallbacks.length) {
+        setDisplaySrc(staticFallbacks[next])
+        return next
+      }
+      setExhausted(true)
+      setDisplaySrc('')
+      return idx
+    })
+  }
+
+  if (phase === 'loading' && primary.startsWith('indexeddb://')) {
+    return (
+      <div
+        className={`h-8 lg:h-10 w-[140px] max-w-[200px] bg-gray-100 animate-pulse rounded ${className}`}
+        aria-hidden
+      />
+    )
+  }
+
+  if (exhausted || !displaySrc) {
+    if (exhaustedFallback != null) return <>{exhaustedFallback}</>
+    return <HeaderLogoPlaceholder className={className} />
+  }
+
+  return (
+    <img
+      src={displaySrc}
+      alt={alt}
+      className={`block ${className}`}
+      onError={handleImgError}
+    />
+  )
+}
+
 export default function Header() {
   const router = useRouter()
   const { t } = useTranslation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
   const [isNavigationOpen, setIsNavigationOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,7 +278,6 @@ export default function Header() {
 
   // 안전한 훅 사용
   const store = useStore()
-  const adminAuth = useAdminAuth()
   const userAuth = useUserAuth()
   const { getActiveSidebarMenuItems } = useContentStore()
   
@@ -70,34 +292,73 @@ export default function Header() {
     setIsMounted(true)
   }, [])
 
+  /**
+   * Supabase 세션은 쿠키에 남아 있어도 Zustand `user-auth-store`가 비어 있으면 헤더가 "로그아웃"으로 보인다.
+   * persist 복원이 끝난 뒤, 고객 세션만 Zustand에 맞춘다 (스태프는 관리자 스토어/로그인 플로우 사용).
+   */
+  useEffect(() => {
+    if (!isMounted) return
+    let cancelled = false
+
+    const syncStorefrontFromSupabase = async () => {
+      if (cancelled) return
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+      if (!url || !anon) return
+      if (useUserAuth.getState().isLoggedIn) return
+      if (useAdminAuth.getState().isLoggedIn) return
+      try {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+        const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
+        const supabase = createSupabaseBrowserClient()
+        const { data } = await supabase.auth.getSession()
+        if (cancelled) return
+        const u = data.session?.user
+        if (!u || userHasAdminAccess(u)) return
+        useUserAuth.getState().establishSessionFromSupabaseUser(u)
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    if (useUserAuth.persist.hasHydrated()) {
+      void syncStorefrontFromSupabase()
+    }
+    const unsub = useUserAuth.persist.onFinishHydration(() => {
+      if (!cancelled) void syncStorefrontFromSupabase()
+    })
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [isMounted])
+
   // 안전한 값 추출
   const cart = store?.cart || []
-  const language = store?.language || 'ko'
-  const setLanguage = store?.setLanguage || (() => {})
+  const language = store?.language || 'en'
   const products = store?.products || []
-  const isAdminLoggedIn = adminAuth?.isLoggedIn || false
   const isUserLoggedIn = userAuth?.isLoggedIn || false
   const currentUser = userAuth?.user || null
   const logoutUser = userAuth?.logout || (() => {})
-  
+  const staffSessionActive = useAdminAuth((s) => s.isLoggedIn)
+
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0)
 
-  // 헤더 콘텐츠에서 값 추출
-  const companyName = headerContent.find(item => item.title === 'Company Name')?.content || 'SELPIC'
-  const homeLink = headerContent.find(item => item.title === 'Home Link')
+  // Company name: always from CMS "Company Name" row when present (avoid extra SELPIC when row inactive)
+  const companyName = getHeaderCompanyName(contentItems)
   const loginButton = headerContent.find(item => item.title === 'Login Button')
   const cartButton = headerContent.find(item => item.title === 'Cart Button')
   const searchButtonEnabled = headerContent.find(item => item.title === 'Search Button Enabled')?.content !== 'false'
   const languageSelectorEnabled = headerContent.find(item => item.title === 'Language Selector Enabled')?.content !== 'false'
-  const logoItem = headerContent.find(item => item.title === 'Logo Image')
-  const useLogoImage = logoItem?.isActive && logoItem?.mediaUrl
-  const logoImageUrl = logoItem?.mediaUrl || ''
-  
-  // Home Link URL 우선순위: 로고 이미지의 linkUrl > Home Link의 linkUrl > 기본값 '/'
-  const homeLinkUrl = logoItem?.isActive && logoItem?.linkUrl 
-    ? logoItem.linkUrl 
-    : (homeLink?.linkUrl || '/')
-  
+  const logoItem = pickLogoImageItem(contentItems)
+  /** Same source as home footer: CMS media (e.g. indexeddb) → static files under `public/` via `HeaderLogoImage`. */
+  const logoMediaSrc = (logoItem?.mediaUrl ?? '').trim()
+  /** When CMS "Use Logo Image" is on, show image (CMS URL, IndexedDB, or static `/images/*` fallbacks) — not company name text. */
+  const useLogoImage = !!logoItem?.isActive
+
+  // Brand logo + company name: always `/` — CMS "Logo Click URL" / "Home Link" were often set to asset paths (e.g. `/public/image`).
+  const LOGO_BRAND_HREF = '/' as const
+
   // Login Link URL: Login Button의 linkUrl 또는 기본값 '/login'
   const loginLinkUrl = loginButton?.linkUrl || '/login'
   
@@ -128,30 +389,64 @@ export default function Header() {
         console.log('✅ Content store cleared from localStorage')
         window.location.reload()
       }
+
+      if (process.env.NODE_ENV === 'development') {
+        const w = window as any
+        w.debugHeaderLogo = () => {
+          const { contentItems } = useContentStore.getState()
+          const logoRows = contentItems.filter(
+            (i) => i.section === 'header' && i.title === 'Logo Image'
+          )
+          const picked = pickLogoImageItem(contentItems)
+          const name = getHeaderCompanyName(contentItems)
+          const useLogo = !!picked?.isActive
+          console.log('[debugHeaderLogo] Company Name (shown when logo off):', name)
+          console.log('[debugHeaderLogo] Logo Image row count:', logoRows.length)
+          console.table(
+            logoRows.map((r) => ({
+              id: r.id,
+              isActive: r.isActive,
+              mediaUrlPrefix: (r.mediaUrl || '').slice(0, 80),
+            }))
+          )
+          console.log(
+            '[debugHeaderLogo] pickLogoImageItem:',
+            picked
+              ? {
+                  id: picked.id,
+                  isActive: picked.isActive,
+                  mediaUrlPrefix: (picked.mediaUrl || '').slice(0, 80),
+                }
+              : null
+          )
+          console.log('[debugHeaderLogo] Header center uses logo (not text):', useLogo)
+          if (picked?.mediaUrl?.trim().startsWith('indexeddb://')) {
+            console.log(
+              '[debugHeaderLogo] Run: await debugHeaderLogo.testIndexedDb()  — checks IndexedDB file exists'
+            )
+          }
+          return { logoRows, picked, useLogoImage: useLogo, companyName: name }
+        }
+        w.debugHeaderLogo.testIndexedDb = async () => {
+          const { contentItems } = useContentStore.getState()
+          const picked = pickLogoImageItem(contentItems)
+          const url = picked?.mediaUrl?.trim() || ''
+          if (!url.startsWith('indexeddb://')) {
+            console.log('[debugHeaderLogo] Picked row has no indexeddb:// URL')
+            return null
+          }
+          const fileId = url.replace('indexeddb://', '')
+          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
+          const resolved = await indexedDBStorage.getFile(fileId)
+          console.log(
+            '[debugHeaderLogo] IndexedDB getFile(' + fileId + '):',
+            resolved ? resolved.slice(0, 96) + (resolved.length > 96 ? '…' : '') : null
+          )
+          return resolved
+        }
+      }
     }
   }, [sidebarMenuItems])
-
-  const handleLanguageChange = (newLanguage: 'ko' | 'en') => {
-    try {
-      console.log('🌐 Language change requested:', newLanguage)
-      console.log('🌐 Current language before change:', language)
-      console.log('🌐 setLanguage function:', typeof setLanguage)
-      
-      setLanguage(newLanguage)
-      
-      console.log('🌐 Language after setLanguage call:', newLanguage)
-      
-      // Force a re-render by checking the store state
-      setTimeout(() => {
-        const currentLang = useStore.getState().language
-        console.log('🌐 Language in store after change:', currentLang)
-      }, 100)
-      
-      setIsLanguageMenuOpen(false)
-    } catch (error) {
-      console.error('Language change error:', error)
-    }
-  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -232,30 +527,28 @@ export default function Header() {
               </button>
             </div>
 
-            {/* Center: Company Name / Logo */}
-            <div className="flex-1 flex justify-center">
-              <Link href={homeLinkUrl} className="flex items-center">
-                <div className="relative">
+            {/* Center: public /logo.png first; text only after image load failure */}
+            <div className="flex-1 flex justify-center items-center">
+              <Link
+                href={LOGO_BRAND_HREF}
+                className="flex items-center justify-center min-w-0 max-w-full"
+                aria-label="Home"
+              >
+                <div className="relative min-h-8 min-w-0 flex items-center justify-center w-full max-w-[min(280px,85vw)]">
                   {useLogoImage ? (
-                    <img
-                      src={logoImageUrl}
+                    <HeaderLogoImage
+                      key={logoMediaSrc || 'header-brand'}
+                      src={logoMediaSrc}
                       alt={companyName}
-                      className="h-8 lg:h-10 max-w-[200px] object-contain transform hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        // 이미지 로드 실패 시 텍스트로 대체
-                        const target = e.target as HTMLImageElement
-                        target.style.display = 'none'
-                        const parent = target.parentElement
-                        if (parent) {
-                          const textDiv = document.createElement('div')
-                          textDiv.className = 'text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider'
-                          textDiv.textContent = companyName
-                          parent.appendChild(textDiv)
-                        }
-                      }}
+                      className="h-8 lg:h-10 object-contain max-w-[min(280px,85vw)] w-auto transform hover:scale-105 transition-transform duration-300 shrink-0"
+                      exhaustedFallback={
+                        <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider text-center truncate max-w-full transform hover:scale-105 transition-transform duration-300">
+                          {companyName}
+                        </div>
+                      }
                     />
                   ) : (
-                    <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider transform hover:scale-105 transition-transform duration-300">
+                    <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider transform hover:scale-105 transition-transform duration-300 text-center truncate max-w-full">
                       {companyName}
                     </div>
                   )}
@@ -278,6 +571,15 @@ export default function Header() {
                 >
                   <Search size={22} />
                 </button>
+              )}
+
+              {staffSessionActive && (
+                <Link
+                  href="/admin/dashboard"
+                  className="hidden sm:inline-flex items-center rounded-full border border-violet-200 bg-violet-50/90 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition-colors"
+                >
+                  Staff dashboard
+                </Link>
               )}
 
               {/* Account / Login */}
@@ -307,6 +609,15 @@ export default function Header() {
                       <p className="text-sm text-gray-500">Signed in as</p>
                       <p className="text-sm font-semibold text-gray-900 truncate">{currentUser?.name || currentUser?.email}</p>
                     </div>
+                    {staffSessionActive && (
+                      <Link
+                        href="/admin/dashboard"
+                        onClick={() => setIsAccountMenuOpen(false)}
+                        className="block w-full text-left px-4 py-3 text-sm font-medium text-violet-800 hover:bg-violet-50 border-b border-gray-100"
+                      >
+                        Staff dashboard
+                      </Link>
+                    )}
                     <Link
                       href="/profile"
                       onClick={() => setIsAccountMenuOpen(false)}
@@ -357,54 +668,14 @@ export default function Header() {
                 )}
               </Link>
 
-              {/* 언어 변경 */}
               {languageSelectorEnabled && (
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      console.log('🌐 Language menu button clicked')
-                      setIsLanguageMenuOpen(!isLanguageMenuOpen)
-                    }}
-                    className="p-3 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200 flex items-center space-x-2"
-                  >
-                    <Globe size={22} />
-                    <span className="text-sm font-semibold">{language.toUpperCase()}</span>
-                  </button>
-                  
-
-                  
-                  {isLanguageMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          console.log('🇺🇸 English language selected')
-                          handleLanguageChange('en')
-                        }}
-                        className={`w-full px-4 py-3 text-left text-sm font-medium hover:bg-pink-50 transition-colors ${
-                          language === 'en' ? 'text-pink-600 bg-pink-50' : 'text-gray-700'
-                        }`}
-                      >
-                        English
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          console.log('🇰🇷 Korean language selected')
-                          handleLanguageChange('ko')
-                        }}
-                        className={`w-full px-4 py-3 text-left text-sm font-medium hover:bg-pink-50 transition-colors ${
-                          language === 'ko' ? 'text-pink-600 bg-pink-50' : 'text-gray-700'
-                        }`}
-                      >
-                        한국어
-                      </button>
-                    </div>
-                  )}
+                <div
+                  className="p-3 text-gray-600 flex items-center space-x-2 rounded-full"
+                  title="Site language: English"
+                  aria-label="Site language English"
+                >
+                  <Globe size={22} />
+                  <span className="text-sm font-semibold">{language.toUpperCase()}</span>
                 </div>
               )}
             </div>
@@ -422,20 +693,41 @@ export default function Header() {
               {/* 사이드 메뉴 */}
               <div className="absolute left-0 top-0 h-full w-80 bg-white shadow-2xl transform transition-transform duration-300">
                 <div className="flex flex-col h-full">
-                                                        {/* 헤더 */}
-                   <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                     <div className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600">
-                       SELPIC
-                     </div>
-                     <div className="flex items-center space-x-2">
-                       <button
-                         onClick={() => setIsNavigationOpen(false)}
-                         className="p-2 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200"
-                       >
-                         <X size={24} />
-                       </button>
-                     </div>
-                   </div>
+                  {/* Drawer: match main bar — logo when CMS enabled, else company name */}
+                  <div className="flex items-center justify-between p-6 border-b border-gray-200 gap-3">
+                    <Link
+                      href={LOGO_BRAND_HREF}
+                      onClick={() => setIsNavigationOpen(false)}
+                      className="flex items-center min-h-10 min-w-0 flex-1"
+                    >
+                      {useLogoImage ? (
+                        <HeaderLogoImage
+                          key={logoMediaSrc || 'header-drawer-brand'}
+                          src={logoMediaSrc}
+                          alt={companyName}
+                          className="h-10 max-w-[200px] w-auto object-contain object-left"
+                          exhaustedFallback={
+                            <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
+                              {companyName}
+                            </span>
+                          }
+                        />
+                      ) : (
+                        <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
+                          {companyName}
+                        </span>
+                      )}
+                    </Link>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsNavigationOpen(false)}
+                        className="p-2 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200"
+                      >
+                        <X size={24} />
+                      </button>
+                    </div>
+                  </div>
 
                   {/* 네비게이션 링크들 */}
                   <nav className="flex-1 overflow-y-auto scrollbar-thin max-h-[calc(100vh-120px)]">

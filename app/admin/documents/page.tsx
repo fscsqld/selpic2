@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   FileText, 
@@ -44,7 +44,12 @@ import OrderReceipt from '@/components/OrderReceipt'
 import ShippingNotificationTemplate from '@/components/ShippingNotificationTemplate'
 import OrderConfirmationTemplate from '@/components/OrderConfirmationTemplate'
 import { useDocumentTemplateStore, initializeDocumentTemplates, DocumentType } from '@/lib/documentTemplateStore'
-import { COMPANY_LEGAL, COMPANY_BANK, COMPANY_CONTACT, COMPANY_LOGO_URL } from '@/lib/companyLegal'
+import { COMPANY_LEGAL, COMPANY_BANK, COMPANY_CONTACT, COMPANY_LOGO_URL, getCompanyBrandName } from '@/lib/companyLegal'
+import {
+  computeAustralianInvoiceTotals,
+  lineLooksLikeShipping,
+  lineLooksLikePaymentFee
+} from '@/lib/invoiceTotals'
 
 // 문서 발송 이력 인터페이스
 interface DocumentSendHistory {
@@ -402,6 +407,7 @@ export default function DocumentSenderPage() {
     const order = orderId ? orders.find(o => o.id === orderId) : null
     const customerName = order?.customer.name || 'Customer'
     const companyName = defaultTemplate?.company.name || COMPANY_LEGAL.companyName
+    const brandName = getCompanyBrandName(companyName)
     
     switch (type) {
       case 'order_confirmation':
@@ -420,7 +426,7 @@ Your order has been confirmed and is being processed. You will receive a shippin
 If you have any questions, please don't hesitate to contact us.
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
       case 'shipping_notification':
         return {
@@ -440,7 +446,7 @@ Expected delivery: ${order?.tracking?.estimatedDelivery || 'Please check trackin
 Thank you for your purchase!
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
       case 'receipt':
         return {
@@ -460,7 +466,7 @@ Payment Method: ${order?.paymentMethod || 'N/A'}
 Thank you for your purchase!
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
       case 'invoice':
         return {
@@ -478,11 +484,11 @@ Payment is due within 30 days of the invoice date.
 If you have any questions about this invoice, please contact us.
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
       case 'contract':
         return {
-          subject: `Contract Document - ${companyName}`,
+          subject: `Contract Document - ${brandName}`,
           content: `Dear ${customerName},
 
 Please find the contract document attached.
@@ -492,11 +498,11 @@ This contract outlines the terms and conditions of our agreement.
 If you have any questions or need clarification on any terms, please don't hesitate to contact us.
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
       default:
         return {
-          subject: `Document from ${companyName}`,
+          subject: `Document from ${brandName}`,
           content: `Dear ${customerName},
 
 Please find the requested document attached.
@@ -504,7 +510,7 @@ Please find the requested document attached.
 If you have any questions, please contact us.
 
 Best regards,
-${companyName} Team`
+${brandName} Team`
         }
     }
   }
@@ -560,8 +566,16 @@ ${companyName} Team`
           setInvoiceData(invoice)
           setDocumentData(prev => ({
             ...prev,
-            subject: `Invoice - ${invoice.invoiceMeta.invoiceNumber}`,
-            content: `Dear ${order.customer.name},\n\nPlease find your invoice attached.\n\nInvoice Number: ${invoice.invoiceMeta.invoiceNumber}\nAmount Due: $${invoice.totals.total.toFixed(2)}\nDue Date: ${invoice.invoiceMeta.dueDate ? new Date(invoice.invoiceMeta.dueDate).toLocaleDateString() : 'TBD'}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
+            subject: `Tax Invoice ${invoice.invoiceMeta.invoiceNumber} from ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}`,
+            content:
+              `Dear ${order.customer.name},\n\n` +
+              `We appreciate your business with ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}.\n\n` +
+              `Please find the attached tax invoice (${invoice.invoiceMeta.invoiceNumber}) for your recent order/service.\n\n` +
+              `Payment Instructions:\n` +
+              `For bank transfers, please ensure the Invoice Number is included as your payment reference to help us identify your payment.\n\n` +
+              `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
+              `Kind regards,\n` +
+              `${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)} Team`
           }))
         }
       } else {
@@ -572,8 +586,16 @@ ${companyName} Team`
             setInvoiceData(blankInvoice)
             setDocumentData(prev => ({
               ...prev,
-              subject: `Invoice - ${blankInvoice.invoiceMeta.invoiceNumber}`,
-              content: `Dear Customer,\n\nPlease find your invoice attached.\n\nInvoice Number: ${blankInvoice.invoiceMeta.invoiceNumber}\nAmount Due: $${blankInvoice.totals.total.toFixed(2)}\nDue Date: ${blankInvoice.invoiceMeta.dueDate ? new Date(blankInvoice.invoiceMeta.dueDate).toLocaleDateString() : 'TBD'}\n\nPayment is due within 7 days of the invoice date.\n\nBest regards,\n${defaultTemplate?.company.name || COMPANY_LEGAL.companyName} Team`
+              subject: `Tax Invoice ${blankInvoice.invoiceMeta.invoiceNumber} from ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}`,
+              content:
+                `Dear Customer,\n\n` +
+                `We appreciate your business with ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}.\n\n` +
+                `Please find the attached tax invoice (${blankInvoice.invoiceMeta.invoiceNumber}) for your recent order/service.\n\n` +
+                `Payment Instructions:\n` +
+                `For bank transfers, please ensure the Invoice Number is included as your payment reference to help us identify your payment.\n\n` +
+                `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
+                `Kind regards,\n` +
+                `${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)} Team`
             }))
           }
         }
@@ -590,27 +612,45 @@ ${companyName} Team`
     }
   }, [activeTab])
 
-  // 인보이스 합계 자동 계산
+  // 인보이스 합계: AU GST + 배송/수수료 이중 합산 방지 (lib/invoiceTotals)
+  const invoiceItemsKey = useMemo(
+    () => JSON.stringify(invoiceData?.items ?? []),
+    [invoiceData?.items]
+  )
   useEffect(() => {
-    if (invoiceData && invoiceData.items) {
-      const subtotal = invoiceData.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
-      const tax = invoiceData.items.reduce(
-        (sum, item) => sum + (item.taxRate ? item.unitPrice * item.qty * item.taxRate : 0),
-        0
-      )
-      const total = subtotal + tax + (invoiceData.shipping || 0) + (invoiceData.paymentFee || 0) - (invoiceData.discounts?.totalDiscount || 0)
-      
-      // 합계가 변경된 경우에만 업데이트
-      if (Math.abs(invoiceData.totals.subtotal - subtotal) > 0.01 || 
-          Math.abs(invoiceData.totals.tax - tax) > 0.01 || 
-          Math.abs(invoiceData.totals.total - total) > 0.01) {
-        setInvoiceData(prev => prev ? {
-          ...prev,
-          totals: { ...prev.totals, subtotal, tax, total }
-        } : null)
+    if (!invoiceData?.items?.length) return
+    const c = computeAustralianInvoiceTotals({
+      items: invoiceData.items,
+      shipping: invoiceData.shipping,
+      paymentFee: invoiceData.paymentFee,
+      discounts: invoiceData.discounts
+    })
+    setInvoiceData((prev) => {
+      if (!prev) return null
+      const t = prev.totals
+      if (
+        Math.abs(t.subtotal - c.subtotalExclGSTGoods) < 0.01 &&
+        Math.abs((t.tax ?? 0) - c.gstAmount) < 0.01 &&
+        Math.abs(t.total - c.total) < 0.01
+      ) {
+        return prev
       }
-    }
-  }, [invoiceData?.items, invoiceData?.shipping, invoiceData?.paymentFee, invoiceData?.discounts?.totalDiscount])
+      return {
+        ...prev,
+        totals: {
+          ...prev.totals,
+          subtotal: c.subtotalExclGSTGoods,
+          tax: c.gstAmount,
+          total: c.total
+        }
+      }
+    })
+  }, [
+    invoiceItemsKey,
+    invoiceData?.shipping,
+    invoiceData?.paymentFee,
+    invoiceData?.discounts?.totalDiscount
+  ])
 
   // 문서 유형 변경 시 내용 자동 생성 (인보이스 제외)
   // defaultTemplate이 변경되면 모든 Document Type의 내용이 자동으로 재생성됨
@@ -704,6 +744,98 @@ ${companyName} Team`
     }
   }
 
+  const getPreviewFilename = (): string => {
+    const orderId = documentData.relatedOrderId || 'DOCUMENT'
+    switch (selectedDocumentType) {
+      case 'order_confirmation':
+        return `Order-Confirmation-${orderId}.pdf`
+      case 'shipping_notification':
+        return `Shipping-Notification-${orderId}.pdf`
+      case 'receipt':
+        return `Receipt-${orderId}.pdf`
+      case 'invoice':
+        return invoiceData?.invoiceMeta?.invoiceNumber
+          ? `Invoice-${invoiceData.invoiceMeta.invoiceNumber}.pdf`
+          : `Invoice-${orderId}.pdf`
+      case 'contract':
+        return `Contract-${orderId}.pdf`
+      default:
+        return `Document-${orderId}.pdf`
+    }
+  }
+
+  const generatePreviewPDF = async (): Promise<File | null> => {
+    try {
+      const html2pdf = (await import('html2pdf.js')).default
+      const previewElement = document.querySelector(
+        `[data-document-preview="${selectedDocumentType}"]`
+      ) as HTMLElement | null
+      if (!previewElement) return null
+
+      await new Promise((r) => setTimeout(r, 50))
+
+      const totalHeight = previewElement.scrollHeight
+      const totalWidth = previewElement.scrollWidth
+
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: getPreviewFilename(),
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true,
+          allowTaint: true,
+          height: totalHeight,
+          width: totalWidth,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: totalWidth,
+          windowHeight: totalHeight,
+          onclone: (clonedDoc: any) => {
+            try {
+              const clonedEl = clonedDoc?.querySelector?.(
+                `[data-document-preview="${selectedDocumentType}"]`
+              ) as HTMLElement | null
+              if (clonedEl?.style) {
+                clonedEl.style.overflow = 'visible'
+                clonedEl.style.maxHeight = 'none'
+                clonedEl.style.height = 'auto'
+                clonedEl.style.position = 'relative'
+              }
+              if (clonedDoc?.body?.style) {
+                clonedDoc.body.style.overflow = 'visible'
+                clonedDoc.body.style.height = 'auto'
+                clonedDoc.body.style.maxHeight = 'none'
+              }
+              if (clonedDoc?.documentElement?.style) {
+                clonedDoc.documentElement.style.overflow = 'visible'
+                clonedDoc.documentElement.style.height = 'auto'
+                clonedDoc.documentElement.style.maxHeight = 'none'
+              }
+            } catch {
+              // ignore
+            }
+          }
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait' as const,
+          compress: true
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      }
+
+      const pdfBlob = await html2pdf().set(opt).from(previewElement).outputPdf('blob')
+      return new File([pdfBlob], getPreviewFilename(), { type: 'application/pdf' })
+    } catch (error) {
+      console.error('Preview PDF generation error:', error)
+      return null
+    }
+  }
+
   // 문서 발송 핸들러
   const handleSendDocument = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -722,12 +854,24 @@ ${companyName} Team`
 
     setIsLoading(true)
     try {
-      // 인보이스인 경우 PDF 생성
+      // Attachments: existing + (optional) preview PDF
       let invoicePDF: File | null = null
+      const filesToSend: File[] = [...attachedFiles]
       if (selectedDocumentType === 'invoice' && invoiceData) {
         invoicePDF = await generateInvoicePDF()
         if (invoicePDF) {
+          filesToSend.push(invoicePDF)
           setAttachedFiles(prev => [...prev, invoicePDF!])
+        }
+      } else if (
+        selectedDocumentType === 'order_confirmation' ||
+        selectedDocumentType === 'shipping_notification' ||
+        selectedDocumentType === 'receipt'
+      ) {
+        const previewPDF = await generatePreviewPDF()
+        if (previewPDF) {
+          filesToSend.push(previewPDF)
+          setAttachedFiles((prev) => [...prev, previewPDF])
         }
       }
 
@@ -741,7 +885,8 @@ ${companyName} Team`
             customerName,
             subject: documentData.subject,
             message: documentData.content,
-            adminName: adminUser?.username || defaultTemplate?.company.name || `${COMPANY_LEGAL.companyName} Admin`
+            adminName: adminUser?.username || defaultTemplate?.company.name || `${COMPANY_LEGAL.companyName} Admin`,
+            attachments: filesToSend
           })
 
           // 인보이스인 경우 이력에 저장 (첫 번째 수신자에게만 저장하여 중복 방지)
@@ -761,8 +906,8 @@ ${companyName} Team`
           }
 
           // 발송 이력 저장
-          const attachmentUrl = attachedFiles.length > 0 
-            ? attachedFiles.map(f => URL.createObjectURL(f)).join(',')
+          const attachmentUrl = filesToSend.length > 0 
+            ? filesToSend.map(f => URL.createObjectURL(f)).join(',')
             : undefined
 
           const historyEntry: DocumentSendHistory = {
@@ -789,7 +934,7 @@ ${companyName} Team`
       const failedCount = results.length - successCount
 
       if (successCount > 0) {
-        setMessage(`Documents sent successfully to ${successCount} recipient(s)${failedCount > 0 ? `, ${failedCount} failed` : ''}${attachedFiles.length > 0 ? ` (${attachedFiles.length} file(s) attached)` : ''}.`)
+        setMessage(`Documents sent successfully to ${successCount} recipient(s)${failedCount > 0 ? `, ${failedCount} failed` : ''}${filesToSend.length > 0 ? ` (${filesToSend.length} file(s) attached)` : ''}.`)
         setIsSendModalOpen(false)
         setDocumentData({ subject: '', content: '', relatedOrderId: '' })
         setSelectedRecipients([])
@@ -1232,6 +1377,7 @@ ${companyName} Team`
                               )}
                             </label>
                             <div className="p-4 bg-white border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                              <div data-document-preview="receipt">
                               <OrderReceipt
                                 order={{
                                   id: receiptOrder.id,
@@ -1274,8 +1420,8 @@ ${companyName} Team`
                                   },
                                   createdAtIso: receiptOrder.createdAtIso
                                 }}
-                                language="en"
                               />
+                              </div>
                             </div>
                           </div>
                         )
@@ -1346,6 +1492,7 @@ ${companyName} Team`
                               )}
                             </label>
                             <div className="p-4 bg-white border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                              <div data-document-preview="shipping_notification">
                               <ShippingNotificationTemplate
                                 order={{
                                   id: shippingOrder.id,
@@ -1391,8 +1538,8 @@ ${companyName} Team`
                                   createdAtIso: shippingOrder.createdAtIso
                                 }}
                                 company={defaultTemplate?.company}
-                                language="en"
                               />
+                              </div>
                             </div>
                           </div>
                         )
@@ -1461,6 +1608,7 @@ ${companyName} Team`
                               )}
                             </label>
                             <div className="p-4 bg-white border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                              <div data-document-preview="order_confirmation">
                               <OrderConfirmationTemplate
                                 order={{
                                   id: confirmationOrder.id,
@@ -1500,8 +1648,8 @@ ${companyName} Team`
                                     closing: template.email.closing
                                   } : undefined
                                 })()}
-                                language="en"
                               />
+                              </div>
                             </div>
                           </div>
                         )
@@ -2024,8 +2172,16 @@ ${companyName} Team`
                             items={invoiceData.items}
                             totals={invoiceData.totals}
                             discounts={invoiceData.discounts}
-                            shipping={invoiceData.shipping}
-                            paymentFee={invoiceData.paymentFee}
+                            shipping={
+                              invoiceData.items.some((i) => lineLooksLikeShipping(i.description))
+                                ? undefined
+                                : invoiceData.shipping
+                            }
+                            paymentFee={
+                              invoiceData.items.some((i) => lineLooksLikePaymentFee(i.description))
+                                ? undefined
+                                : invoiceData.paymentFee
+                            }
                             payment={invoiceData.payment}
                             notes={invoiceData.notes}
                           />
@@ -2240,47 +2396,39 @@ ${companyName} Team`
                       </div>
                     </div>
 
-                    {/* 합계 자동 계산 및 표시 */}
+                    {/* 합계 표시 (invoiceTotals.ts와 동일 로직으로 useEffect에서 동기화됨) */}
                     {(() => {
-                      const subtotal = invoiceData.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
-                      const tax = invoiceData.items.reduce(
-                        (sum, item) => sum + (item.taxRate ? item.unitPrice * item.qty * item.taxRate : 0),
-                        0
-                      )
-                      const total = subtotal + tax + (invoiceData.shipping || 0) + (invoiceData.paymentFee || 0) - (invoiceData.discounts?.totalDiscount || 0)
-                      
-                      // 합계 업데이트
-                      if (invoiceData.totals.subtotal !== subtotal || invoiceData.totals.tax !== tax || invoiceData.totals.total !== total) {
-                        setTimeout(() => {
-                          setInvoiceData(prev => prev ? {
-                            ...prev,
-                            totals: { ...prev.totals, subtotal, tax, total }
-                          } : null)
-                        }, 0)
-                      }
-                      
+                      const subtotal = invoiceData.totals.subtotal
+                      const tax = invoiceData.totals.tax ?? 0
+                      const total = invoiceData.totals.total
+                      const showShippingRow =
+                        (invoiceData.shipping ?? 0) > 0 &&
+                        !invoiceData.items.some((i) => lineLooksLikeShipping(i.description))
+                      const showPaymentFeeRow =
+                        (invoiceData.paymentFee ?? 0) > 0 &&
+                        !invoiceData.items.some((i) => lineLooksLikePaymentFee(i.description))
                       return (
                         <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
                           <h5 className="text-xs font-semibold text-gray-700 mb-2">Summary</h5>
                           <div className="space-y-1 text-xs">
                             <div className="flex justify-between">
-                              <span>Subtotal:</span>
+                              <span>Subtotal (excl. GST, goods):</span>
                               <span>${subtotal.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Tax (GST):</span>
                               <span>${tax.toFixed(2)}</span>
                             </div>
-                            {invoiceData.shipping !== undefined && invoiceData.shipping > 0 && (
+                            {showShippingRow && (
                               <div className="flex justify-between">
                                 <span>Shipping:</span>
-                                <span>${invoiceData.shipping.toFixed(2)}</span>
+                                <span>${(invoiceData.shipping ?? 0).toFixed(2)}</span>
                               </div>
                             )}
-                            {invoiceData.paymentFee !== undefined && invoiceData.paymentFee > 0 && (
+                            {showPaymentFeeRow && (
                               <div className="flex justify-between">
                                 <span>Payment Fee:</span>
-                                <span>${invoiceData.paymentFee.toFixed(2)}</span>
+                                <span>${(invoiceData.paymentFee ?? 0).toFixed(2)}</span>
                               </div>
                             )}
                             {invoiceData.discounts?.totalDiscount && invoiceData.discounts.totalDiscount > 0 && (
@@ -3490,8 +3638,10 @@ ${companyName} Team`
                             const docNumber = createDocumentType === 'invoice' 
                               ? createInvoiceData.invoiceMeta.invoiceNumber 
                               : createQuoteData.quoteMeta.quoteNumber
-                            const docTypeLabel = createDocumentType === 'invoice' ? 'invoice' : 'quote'
                             const companyName = defaultTemplate?.company.name || COMPANY_LEGAL.companyName
+                            const brandName = getCompanyBrandName(companyName)
+                            const isInvoice = createDocumentType === 'invoice'
+                            const docLabel = isInvoice ? 'tax invoice' : 'quote'
                             
                             const recipientDisplayName =
                               (currentData.billing.companyName || '').trim() ||
@@ -3501,11 +3651,21 @@ ${companyName} Team`
                             await emailService.sendResponse({
                               customerEmail: emailToSend,
                               customerName: recipientDisplayName,
-                              subject: `${docTypeLabel.charAt(0).toUpperCase() + docTypeLabel.slice(1)} ${docNumber} from ${companyName}`,
-                              message: `Dear ${recipientDisplayName},\n\nPlease find attached your ${docTypeLabel} ${docNumber}.\n\nThank you for your business!\n\n${companyName} Team`,
-                              adminName: adminUser?.username || 'SELPIC Admin'
+                              subject: isInvoice
+                                ? `Tax Invoice ${docNumber} from ${brandName}`
+                                : `Quote ${docNumber} from ${brandName}`,
+                              message:
+                                `Dear ${recipientDisplayName},\n\n` +
+                                `We appreciate your business with ${brandName}.\n\n` +
+                                `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
+                                `Payment Instructions:\n` +
+                                `For bank transfers, please ensure the ${isInvoice ? 'Invoice Number' : 'Quote Number'} is included as your payment reference to help us identify your payment.\n\n` +
+                                `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
+                                `Kind regards,\n` +
+                                `${brandName} Team`,
+                              adminName: adminUser?.username || 'SELPIC Admin',
+                              attachments: pdfFile ? [pdfFile] : []
                             })
-                            void pdfFile
 
                             if (createDocumentType === 'invoice') {
                               addGeneratedInvoice({
@@ -3529,7 +3689,7 @@ ${companyName} Team`
                               })
                             }
 
-                            setMessage(`Success! ${docTypeLabel.charAt(0).toUpperCase() + docTypeLabel.slice(1)} sent to ${emailToSend}`)
+                            setMessage(`Success! ${isInvoice ? 'Invoice' : 'Quote'} sent to ${emailToSend}`)
                             setCreateRecipientEmail('')
                             setTimeout(() => setMessage(''), 5000)
                           } catch (error) {

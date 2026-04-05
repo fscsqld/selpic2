@@ -21,6 +21,7 @@ import { useAdminAuth } from '@/lib/adminAuth'
 import AdminRoute from '@/components/AdminRoute'
 import PermissionManager from '@/components/PermissionManager'
 import { useTranslation } from '@/lib/useTranslation'
+import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
 export default function AdminManagementPage() {
   const router = useRouter()
@@ -43,6 +44,7 @@ export default function AdminManagementPage() {
 
   // Form states
   const [newAdminData, setNewAdminData] = useState({
+    email: '',
     username: '',
     password: '',
     role: 'admin' as 'admin' | 'super_admin',
@@ -52,11 +54,15 @@ export default function AdminManagementPage() {
     username: '',
     newPassword: ''
   })
-  const [permissionsData, setPermissionsData] = useState({
-    username: '',
-    permissions: [] as string[]
-  })
-  const [adminToDelete, setAdminToDelete] = useState('')
+  const [permissionsModal, setPermissionsModal] = useState<{
+    kind: 'registry' | 'legacy'
+    key: string
+    label: string
+    permissions: string[]
+  } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'registry' | 'legacy'; key: string; label: string } | null>(
+    null
+  )
 
   // UI states
   const [isLoading, setIsLoading] = useState(false)
@@ -90,6 +96,8 @@ export default function AdminManagementPage() {
 
   // Check if current user is super admin
   const isSuperAdmin = adminUser?.role === 'super_admin'
+  const registry = useAdminEmailRegistry(isSuperAdmin)
+  const useSupabaseRegistry = hasPublicSupabaseEnv()
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -106,6 +114,32 @@ export default function AdminManagementPage() {
     setMessage('')
 
     try {
+      if (useSupabaseRegistry) {
+        const email = newAdminData.email.trim()
+        if (!email.includes('@')) {
+          setMessage('Enter a valid admin email (Supabase sign-in).')
+          setIsLoading(false)
+          return
+        }
+        const result = await registry.createEntry({
+          email,
+          role: newAdminData.role,
+          permissions: newAdminData.permissions,
+        })
+        if (result.ok) {
+          setMessage(
+            'Admin saved by email. When they sign in with Supabase, these permissions apply automatically.'
+          )
+          setIsCreateModalOpen(false)
+          setNewAdminData({ email: '', username: '', password: '', role: 'admin', permissions: [] })
+          setTimeout(() => setMessage(''), 5000)
+        } else {
+          setMessage(result.error || t('admin.common.accessDenied'))
+        }
+        setIsLoading(false)
+        return
+      }
+
       const success = await createAdmin(
         newAdminData.username,
         newAdminData.password,
@@ -116,7 +150,7 @@ export default function AdminManagementPage() {
       if (success) {
         setMessage(t('admin.common.adminCreated'))
         setIsCreateModalOpen(false)
-        setNewAdminData({ username: '', password: '', role: 'admin', permissions: [] })
+        setNewAdminData({ email: '', username: '', password: '', role: 'admin', permissions: [] })
         setTimeout(() => setMessage(''), 3000)
       } else {
         setMessage(t('admin.common.accessDenied'))
@@ -156,24 +190,63 @@ export default function AdminManagementPage() {
 
   const handleUpdatePermissions = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!permissionsModal) return
     setIsLoading(true)
     setMessage('')
 
     try {
-      const success = await updateAdminPermissions(
-        permissionsData.username,
-        permissionsData.permissions
-      )
-
-      if (success) {
-        setMessage(t('admin.common.adminUpdated'))
-        setIsPermissionsModalOpen(false)
-        setPermissionsData({ username: '', permissions: [] })
-        setTimeout(() => setMessage(''), 3000)
+      if (permissionsModal.kind === 'registry') {
+        const result = await registry.patchEntry(permissionsModal.key, {
+          permissions: permissionsModal.permissions,
+        })
+        if (result.ok) {
+          setMessage(t('admin.common.adminUpdated'))
+          setIsPermissionsModalOpen(false)
+          setPermissionsModal(null)
+          setTimeout(() => setMessage(''), 3000)
+        } else {
+          setMessage(result.error || t('admin.common.accessDenied'))
+        }
       } else {
-        setMessage(t('admin.common.accessDenied'))
+        const success = await updateAdminPermissions(
+          permissionsModal.key,
+          permissionsModal.permissions
+        )
+
+        if (success) {
+          setMessage(t('admin.common.adminUpdated'))
+          setIsPermissionsModalOpen(false)
+          setPermissionsModal(null)
+          setTimeout(() => setMessage(''), 3000)
+        } else {
+          setMessage(t('admin.common.accessDenied'))
+        }
       }
     } catch (error) {
+      setMessage(t('admin.common.adminUpdated'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleToggleRegistryStatus = async (email: string, isActive: boolean) => {
+    if (email === adminUser?.email?.trim().toLowerCase()) {
+      setMessage(t('admin.common.cannotModifySelf'))
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+
+    setIsLoading(true)
+    setMessage('')
+    try {
+      const result = await registry.patchEntry(email, { is_active: !isActive })
+      if (result.ok) {
+        setMessage(t('admin.common.adminUpdated'))
+        setTimeout(() => setMessage(''), 3000)
+      } else {
+        setMessage(result.error || t('admin.common.accessDenied'))
+      }
+    } catch {
       setMessage(t('admin.common.adminUpdated'))
     } finally {
       setIsLoading(false)
@@ -206,7 +279,14 @@ export default function AdminManagementPage() {
   }
 
   const handleDeleteAdmin = async () => {
-    if (adminToDelete === adminUser?.username) {
+    if (!deleteTarget) return
+
+    if (deleteTarget.kind === 'legacy' && deleteTarget.key === adminUser?.username) {
+      setMessage(t('admin.common.cannotModifySelf'))
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+    if (deleteTarget.kind === 'registry' && deleteTarget.key === adminUser?.email?.trim().toLowerCase()) {
       setMessage(t('admin.common.cannotModifySelf'))
       setTimeout(() => setMessage(''), 3000)
       return
@@ -216,14 +296,26 @@ export default function AdminManagementPage() {
     setMessage('')
 
     try {
-      const success = await deleteAdmin(adminToDelete)
-      if (success) {
-        setMessage(t('admin.common.adminDeleted'))
-        setIsDeleteModalOpen(false)
-        setAdminToDelete('')
-        setTimeout(() => setMessage(''), 3000)
+      if (deleteTarget.kind === 'registry') {
+        const result = await registry.deleteEntry(deleteTarget.key)
+        if (result.ok) {
+          setMessage(t('admin.common.adminDeleted'))
+          setIsDeleteModalOpen(false)
+          setDeleteTarget(null)
+          setTimeout(() => setMessage(''), 3000)
+        } else {
+          setMessage(result.error || t('admin.common.accessDenied'))
+        }
       } else {
-        setMessage(t('admin.common.accessDenied'))
+        const success = await deleteAdmin(deleteTarget.key)
+        if (success) {
+          setMessage(t('admin.common.adminDeleted'))
+          setIsDeleteModalOpen(false)
+          setDeleteTarget(null)
+          setTimeout(() => setMessage(''), 3000)
+        } else {
+          setMessage(t('admin.common.accessDenied'))
+        }
       }
     } catch (error) {
       setMessage(t('admin.common.adminDeleted'))
@@ -240,13 +332,33 @@ export default function AdminManagementPage() {
   const openPermissionsModal = (username: string) => {
     const admin = adminUsers.find(u => u.username === username)
     if (admin) {
-      setPermissionsData({ username, permissions: [...admin.permissions] })
+      setPermissionsModal({
+        kind: 'legacy',
+        key: username,
+        label: username,
+        permissions: [...admin.permissions],
+      })
       setIsPermissionsModalOpen(true)
     }
   }
 
+  const openRegistryPermissionsModal = (email: string, permissions: string[]) => {
+    setPermissionsModal({
+      kind: 'registry',
+      key: email,
+      label: email,
+      permissions: [...permissions],
+    })
+    setIsPermissionsModalOpen(true)
+  }
+
   const openDeleteModal = (username: string) => {
-    setAdminToDelete(username)
+    setDeleteTarget({ kind: 'legacy', key: username, label: username })
+    setIsDeleteModalOpen(true)
+  }
+
+  const openRegistryDeleteModal = (email: string) => {
+    setDeleteTarget({ kind: 'registry', key: email, label: email })
     setIsDeleteModalOpen(true)
   }
 
@@ -305,12 +417,151 @@ export default function AdminManagementPage() {
             </div>
           )}
 
-          {/* Admin Users Table */}
+          {useSupabaseRegistry && registry.error && (
+            <div className="mb-6 p-4 rounded-md bg-amber-50 text-amber-900 text-sm">
+              {registry.error} Apply <code className="text-xs">supabase/migrations/002_admin_email_registry.sql</code> in
+              the Supabase SQL editor if the table is missing.
+            </div>
+          )}
+
+          {/* Supabase admins (email registry — synced to JWT on sign-in) */}
+          {useSupabaseRegistry && (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md mb-8">
+              <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    Supabase admins (by email)
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Permissions are stored in the database and written to each user&apos;s JWT when they sign in.
+                  </p>
+                </div>
+                {registry.loading && (
+                  <span className="text-sm text-gray-400">Loading…</span>
+                )}
+              </div>
+              <div className="border-t border-gray-200 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.common.role')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.common.status')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.common.permissions')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Updated
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {registry.entries.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500 text-sm">
+                          No email-based admins yet. Create one to assign permissions before the user signs in with
+                          Supabase.
+                        </td>
+                      </tr>
+                    ) : (
+                      registry.entries.map((row) => (
+                        <tr key={row.email}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                row.role === 'super_admin'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {row.role === 'super_admin'
+                                ? t('admin.common.superAdminRole')
+                                : t('admin.common.adminRole')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                row.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {row.is_active ? t('admin.common.active') : t('admin.common.inactive')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{row.permissions.length} permissions</div>
+                            <div className="text-xs text-gray-500">
+                              {row.permissions.slice(0, 3).join(', ')}
+                              {row.permissions.length > 3 && '...'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(row.updated_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => openRegistryPermissionsModal(row.email, row.permissions)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title={t('admin.common.updatePermissions')}
+                              >
+                                <Shield className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRegistryStatus(row.email, row.is_active)}
+                                className={
+                                  row.is_active
+                                    ? 'text-yellow-600 hover:text-yellow-900'
+                                    : 'text-green-600 hover:text-green-900'
+                                }
+                                title={t('admin.common.toggleStatus')}
+                              >
+                                {row.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                              {row.email !== adminUser?.email?.trim().toLowerCase() && (
+                                <button
+                                  type="button"
+                                  onClick={() => openRegistryDeleteModal(row.email)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title={t('admin.common.deleteAdmin')}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Legacy local admin users (username + password in browser) */}
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Admin Users ({adminUsers.length})
+                {useSupabaseRegistry ? 'Legacy local admins' : 'Admin users'} ({adminUsers.length})
               </h3>
+              {useSupabaseRegistry && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Demo accounts stored in this browser only. Prefer Supabase admins above for production.
+                </p>
+              )}
             </div>
             <div className="border-t border-gray-200">
               <table className="min-w-full divide-y divide-gray-200">
@@ -449,41 +700,62 @@ export default function AdminManagementPage() {
               </div>
 
               <form onSubmit={handleCreateAdmin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.common.adminUsername')}
-                  </label>
-                  <input
-                    type="text"
-                    value={newAdminData.username}
-                    onChange={(e) => setNewAdminData({ ...newAdminData, username: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.common.adminNewPassword')}
-                  </label>
-                  <div className="relative">
+                {useSupabaseRegistry ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Admin email (Supabase)</label>
                     <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={newAdminData.password}
-                      onChange={(e) => setNewAdminData({ ...newAdminData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                      type="email"
+                      autoComplete="email"
+                      value={newAdminData.email}
+                      onChange={(e) => setNewAdminData({ ...newAdminData, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="name@company.com"
                       required
-                      minLength={6}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
-                    </button>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Same email they use for Supabase Auth. Password is not set here; they use normal sign-up / forgot
+                      password.
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('admin.common.adminUsername')}
+                      </label>
+                      <input
+                        type="text"
+                        value={newAdminData.username}
+                        onChange={(e) => setNewAdminData({ ...newAdminData, username: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('admin.common.adminNewPassword')}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={newAdminData.password}
+                          onChange={(e) => setNewAdminData({ ...newAdminData, password: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                          required
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -509,7 +781,7 @@ export default function AdminManagementPage() {
                     onPermissionsChange={(permissions) => {
                       setNewAdminData({
                         ...newAdminData,
-                        permissions
+                        permissions,
                       })
                     }}
                   />
@@ -627,7 +899,10 @@ export default function AdminManagementPage() {
                   {t('admin.common.updatePermissions')}
                 </h3>
                 <button
-                  onClick={() => setIsPermissionsModalOpen(false)}
+                  onClick={() => {
+                    setIsPermissionsModalOpen(false)
+                    setPermissionsModal(null)
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-6 w-6" />
@@ -637,7 +912,7 @@ export default function AdminManagementPage() {
               <form onSubmit={handleUpdatePermissions} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Admin: <span className="font-semibold text-indigo-600">{permissionsData.username}</span>
+                    Admin: <span className="font-semibold text-indigo-600">{permissionsModal?.label}</span>
                   </label>
                 </div>
 
@@ -646,22 +921,24 @@ export default function AdminManagementPage() {
                     {t('admin.common.permissions')}
                   </label>
                   <PermissionManager
-                    selectedPermissions={permissionsData.permissions}
+                    selectedPermissions={permissionsModal?.permissions ?? []}
                     availablePermissions={availablePermissions}
                     onPermissionsChange={(permissions) => {
-                      setPermissionsData({
-                        ...permissionsData,
-                        permissions
-                      })
+                      setPermissionsModal((prev) =>
+                        prev ? { ...prev, permissions } : prev
+                      )
                     }}
-                    username={permissionsData.username}
+                    username={permissionsModal?.label ?? ''}
                   />
                 </div>
 
                 <div className="flex space-x-3 pt-2 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => setIsPermissionsModalOpen(false)}
+                    onClick={() => {
+                      setIsPermissionsModalOpen(false)
+                      setPermissionsModal(null)
+                    }}
                     className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
                   >
                     {t('admin.common.close')}
@@ -695,7 +972,10 @@ export default function AdminManagementPage() {
                   {t('admin.common.deleteAdmin')}
                 </h3>
                 <button
-                  onClick={() => setIsDeleteModalOpen(false)}
+                  onClick={() => {
+                    setIsDeleteModalOpen(false)
+                    setDeleteTarget(null)
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-6 w-6" />
@@ -704,13 +984,17 @@ export default function AdminManagementPage() {
 
               <div className="mb-6">
                 <p className="text-sm text-gray-600">
-                  Are you sure you want to delete admin <strong>{adminToDelete}</strong>? This action cannot be undone.
+                  Are you sure you want to remove admin <strong>{deleteTarget?.label}</strong>? This action cannot be
+                  undone.
                 </p>
               </div>
 
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setIsDeleteModalOpen(false)}
+                  onClick={() => {
+                    setIsDeleteModalOpen(false)
+                    setDeleteTarget(null)
+                  }}
                   className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Cancel

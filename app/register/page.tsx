@@ -8,6 +8,35 @@ import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 
+function mapSupabaseSignUpError(message: string): string {
+  const m = (message || '').toLowerCase()
+  if (
+    m.includes('already registered') ||
+    m.includes('already been registered') ||
+    m.includes('user already') ||
+    m.includes('email address is already') ||
+    m.includes('already exists')
+  ) {
+    return 'This email address is already in use. Try signing in or use a different email.'
+  }
+  if (
+    (m.includes('password') && (m.includes('least') || m.includes('short') || m.includes('6') || m.includes('long'))) ||
+    m.includes('password should be')
+  ) {
+    return 'Password must be at least 6 characters.'
+  }
+  if (m.includes('invalid email') || m.includes('unable to validate email')) {
+    return 'Please enter a valid email address.'
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Too many attempts. Please wait a moment and try again.'
+  }
+  if (m.includes('signup') && m.includes('disabled')) {
+    return 'New registrations are temporarily unavailable. Please try again later.'
+  }
+  return (message || '').trim() || 'Something went wrong. Please try again.'
+}
+
 export default function RegisterPage() {
   const router = useRouter()
   const { register } = useUserAuth()
@@ -49,67 +78,119 @@ export default function RegisterPage() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    
-    // 필수 동의 확인
+
     if (!agreements.termsOfService || !agreements.privacyPolicy || !agreements.dataCollection || !agreements.ageConsent) {
-      setError(t('register.allRequiredAgreement'))
+      setError('Please accept all required agreements before continuing.')
       setIsLoading(false)
       return
     }
-    
-    // 비밀번호 확인
+
     if (formData.password !== formData.confirmPassword) {
-      setError(t('register.passwordMismatch'))
+      setError('Passwords do not match.')
       setIsLoading(false)
       return
     }
-    
-    // 비밀번호 길이 확인
+
     if (formData.password.length < 6) {
-      setError(t('register.passwordLength'))
+      setError('Password must be at least 6 characters.')
       setIsLoading(false)
       return
     }
-    
+
+    const addressParts = [
+      addressData.streetAddress,
+      addressData.suburb,
+      addressData.state && addressData.postcode ? `${addressData.state} ${addressData.postcode}` : addressData.state || addressData.postcode,
+      addressData.country,
+    ].filter((part) => part && part.trim() !== '')
+
+    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : ''
+
+    const hasSupabase =
+      Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+      Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+
     try {
-      console.log('Starting registration process...')
-      console.log('Form data:', { ...formData, password: '***' })
-      console.log('Address data:', addressData)
-      
-      // 주소 문자열 생성 (빈 값 제외)
-      const addressParts = [
-        addressData.streetAddress,
-        addressData.suburb,
-        addressData.state && addressData.postcode ? `${addressData.state} ${addressData.postcode}` : addressData.state || addressData.postcode,
-        addressData.country
-      ].filter(part => part && part.trim() !== '')
-      
-      const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : ''
-      console.log('Generated address:', fullAddress)
+      if (hasSupabase) {
+        const email = formData.email.trim().toLowerCase()
+
+        const registerRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password: formData.password,
+            name: formData.name,
+            phone: formData.phone,
+            address: fullAddress,
+            marketingConsent: agreements.marketingConsent,
+          }),
+        })
+        const regJson = (await registerRes.json().catch(() => ({}))) as { error?: string; ok?: boolean }
+
+        if (!registerRes.ok) {
+          const msg = typeof regJson.error === 'string' ? regJson.error : ''
+          setError(msg || 'Registration could not be completed. Please try again.')
+          return
+        }
+
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+        const { postSupabasePasswordSignInBridge } = await import('@/lib/supabase/postSupabasePasswordSignInBridge')
+        const supabase = createSupabaseBrowserClient()
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password: formData.password,
+        })
+
+        if (!signInErr && signInData.session && signInData.user) {
+          const bridge = await postSupabasePasswordSignInBridge(supabase, signInData.session, 'storefront')
+          if (bridge.outcome === 'admin') {
+            router.replace('/admin/dashboard')
+            return
+          }
+          if (bridge.outcome === 'roster_blocked' || bridge.outcome === 'not_admin_gate') {
+            setError(bridge.error)
+            return
+          }
+          useUserAuth.getState().establishSessionFromSupabaseUser(bridge.user)
+          try {
+            const { useStore } = await import('@/lib/store')
+            useStore.getState().clearCart(true)
+          } catch {
+            /* non-fatal */
+          }
+          router.replace('/')
+          return
+        }
+
+        if (signInErr) {
+          setError(
+            `Your account was created. Go to Log in and sign in with the same email and password. (${signInErr.message})`
+          )
+          return
+        }
+
+        router.replace('/register/thank-you')
+        return
+      }
 
       const result = await register({
         email: formData.email,
         password: formData.password,
         name: formData.name,
         phone: formData.phone,
-        address: fullAddress
+        address: fullAddress,
       })
-      
-      console.log('Registration result:', result)
-      
+
       if (result.success) {
-        router.push('/')
+        router.push('/login?registered=1')
+      } else if (result.error === 'emailExists') {
+        setError('This email address is already in use. Try signing in or use a different email.')
       } else {
-        // 구체적인 에러 메시지 표시
-        if (result.error === 'emailExists') {
-          setError(t('register.emailExists'))
-        } else {
-          setError(t('register.error'))
-        }
+        setError('Registration could not be completed. Please try again.')
       }
-    } catch (err) {
-      console.error('Registration error:', err)
-      setError(t('register.error'))
+    } catch {
+      setError('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -152,8 +233,6 @@ export default function RegisterPage() {
     })
   }
 
-  const allRequiredAgreed = agreements.termsOfService && agreements.privacyPolicy && agreements.dataCollection && agreements.ageConsent
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -162,7 +241,7 @@ export default function RegisterPage() {
           <div className="flex items-center justify-between mb-6">
             <Link href="/" className="inline-flex items-center text-slate-600 hover:text-purple-700 transition-colors duration-300 group">
               <Home size={20} className="mr-2 group-hover:scale-110 transition-transform duration-300" />
-              <span className="font-medium">{t('register.backToHome')}</span>
+              <span className="font-medium">Back to home</span>
             </Link>
           </div>
           
@@ -172,8 +251,8 @@ export default function RegisterPage() {
             </div>
           </div>
           
-          <h1 className="text-3xl font-light text-slate-900 mb-2 tracking-wide">{t('register.title')}</h1>
-          <p className="text-slate-600">{t('register.subtitle')}</p>
+          <h1 className="text-3xl font-light text-slate-900 mb-2 tracking-wide">Create your SELPIC account</h1>
+          <p className="text-slate-600">Register to save your details and track orders.</p>
         </div>
 
         {/* 회원가입 폼 */}
@@ -183,7 +262,7 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
                 <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                  {t('register.name')} *
+                  Full name *
                 </label>
                 <div className="relative">
                   <input
@@ -193,7 +272,7 @@ export default function RegisterPage() {
                     value={formData.name}
                     onChange={handleInputChange}
                     className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                    placeholder={t('register.namePlaceholder')}
+                    placeholder="Your name"
                     required
                   />
                   <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -202,7 +281,7 @@ export default function RegisterPage() {
 
               <div className="group">
                 <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                  {t('register.email')} *
+                  Email address *
                 </label>
                 <div className="relative">
                   <input
@@ -211,8 +290,9 @@ export default function RegisterPage() {
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
+                    autoComplete="email"
                     className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                    placeholder={t('register.emailPlaceholder')}
+                    placeholder="name@example.com"
                     required
                   />
                   <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -223,7 +303,7 @@ export default function RegisterPage() {
             {/* 전화번호 */}
             <div className="group">
               <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                {t('register.phone')}
+                Phone number
               </label>
               <div className="relative">
                 <input
@@ -254,7 +334,7 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
                 <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                  {t('register.password')} *
+                  Password *
                 </label>
                 <div className="relative">
                   <input
@@ -263,8 +343,9 @@ export default function RegisterPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
+                    autoComplete="new-password"
                     className="w-full px-5 py-4 pl-12 pr-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                    placeholder={t('register.passwordPlaceholder')}
+                    placeholder="At least 6 characters"
                     required
                   />
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -280,7 +361,7 @@ export default function RegisterPage() {
 
               <div className="group">
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                  {t('register.confirmPassword')} *
+                  Confirm password *
                 </label>
                 <div className="relative">
                   <input
@@ -289,8 +370,9 @@ export default function RegisterPage() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
+                    autoComplete="new-password"
                     className="w-full px-5 py-4 pl-12 pr-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                    placeholder={t('register.confirmPasswordPlaceholder')}
+                    placeholder="Re-enter your password"
                     required
                   />
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -465,28 +547,27 @@ export default function RegisterPage() {
             {/* 회원가입 버튼 */}
             <button
               type="submit"
-              disabled={isLoading || !allRequiredAgreed}
+              disabled={isLoading}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-medium py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center space-x-2"
             >
               {isLoading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>{t('register.registering')}</span>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating your account…</span>
                 </>
               ) : (
                 <>
                   <UserIcon size={20} />
-                  <span>{t('register.registerButton')}</span>
+                  <span>Create account</span>
                 </>
               )}
             </button>
 
-            {/* 로그인 링크 */}
             <div className="text-center pt-6">
               <p className="text-slate-600">
-                {t('register.loginLink')}{' '}
+                Already have an account?{' '}
                 <Link href="/login" className="text-purple-600 hover:text-purple-700 font-medium transition-colors duration-300">
-                  {t('register.loginButton')}
+                  Sign in
                 </Link>
               </p>
             </div>

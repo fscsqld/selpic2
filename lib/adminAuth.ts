@@ -5,7 +5,7 @@ import { useAdminSession } from './adminSession'
 import { useAdminIPControl } from './adminIPControl'
 import { useAdminPasswordPolicy } from './adminPasswordPolicy'
 
-interface AdminUser {
+export interface AdminUser {
   username: string
   role: 'admin' | 'super_admin'
   permissions: string[]
@@ -57,7 +57,12 @@ export const useAdminAuth = create<AdminAuthState>()(
             'analytics:read',
             'orders:read',
             'messages:read',
-            'community:read'
+            'community:read',
+            'images:read',
+            'images:write',
+            'invoices:read',
+            'invoices:write',
+            'system:admin',
           ],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
@@ -74,8 +79,19 @@ export const useAdminAuth = create<AdminAuthState>()(
             'users:read',
             'users:write',
             'analytics:read',
+            'orders:read',
+            'orders:write',
+            'messages:read',
+            'messages:write',
+            'community:read',
+            'community:write',
+            'community:moderate',
+            'images:read',
+            'images:write',
+            'invoices:read',
+            'invoices:write',
             'system:admin',
-            'admin:manage'
+            'admin:manage',
           ],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
@@ -355,28 +371,42 @@ export const useAdminAuth = create<AdminAuthState>()(
 
       logout: () => {
         const { adminUser } = get()
-        
+
+        if (typeof window !== 'undefined') {
+          try {
+            const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+            const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+            if (url && anon) {
+              import('@/lib/supabase/browser').then(({ createSupabaseBrowserClient }) => {
+                createSupabaseBrowserClient().auth.signOut().catch(() => {})
+              })
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+
         // End session and log activity
         if (adminUser && typeof window !== 'undefined') {
           const { currentSessionId, endSession } = useAdminSession.getState()
           if (currentSessionId) {
             endSession(currentSessionId)
           }
-          
+
           const { addLog, getClientIP, getUserAgent } = useAdminActivityLog.getState()
-          getClientIP().then(ip => {
+          getClientIP().then((ip) => {
             addLog({
               action: 'logout',
               performedBy: adminUser.username,
               ipAddress: ip,
-              userAgent: getUserAgent()
+              userAgent: getUserAgent(),
             })
           })
         }
-        
+
         set({
           isLoggedIn: false,
-          adminUser: null
+          adminUser: null,
         })
       },
 
@@ -834,19 +864,88 @@ export const useAdminAuth = create<AdminAuthState>()(
           return false
         }
 
+        const trimmed = newUsername.trim()
+
         // Check if new username already exists
-        if (adminUsers.find(u => u.username === newUsername)) {
-          console.log(`Username ${newUsername} already exists`)
+        if (adminUsers.find(u => u.username === trimmed)) {
+          console.log(`Username ${trimmed} already exists`)
           return false
         }
 
         // Validate username (basic validation)
-        if (!newUsername || newUsername.trim().length < 3) {
+        if (!trimmed || trimmed.length < 3) {
           console.log('Username must be at least 3 characters')
           return false
         }
 
         const oldUsername = adminUser.username
+
+        // Supabase admin: persist display name on the auth user (re-login reads user_metadata in mapSupabaseUserToAdminUser).
+        // Login is still email + password; this field is not the sign-in identifier.
+        if (typeof window !== 'undefined') {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+          const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+          if (supabaseUrl && supabaseAnon) {
+            try {
+              const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+              const supabase = createSupabaseBrowserClient()
+              const { data: { session } } = await supabase.auth.getSession()
+              if (session?.user) {
+                const { error } = await supabase.auth.updateUser({
+                  data: {
+                    display_name: trimmed,
+                    username: trimmed,
+                  },
+                })
+                if (error) {
+                  console.error('[updateMyUsername] Supabase updateUser failed', error)
+                  return false
+                }
+
+                const updatedAdminUser = {
+                  ...adminUser,
+                  username: trimmed,
+                  lastModified: new Date().toISOString(),
+                }
+                const updatedAdminUsers = adminUsers.map(u =>
+                  u.username === oldUsername
+                    ? { ...u, username: trimmed, lastModified: new Date().toISOString() }
+                    : u
+                )
+
+                set({
+                  adminUser: updatedAdminUser,
+                  adminUsers: updatedAdminUsers,
+                })
+
+                window.dispatchEvent(new Event('admin-auth-updated'))
+                const { addLog, getClientIP, getUserAgent } = useAdminActivityLog.getState()
+                getClientIP().then(ip => {
+                  addLog({
+                    action: 'username_changed',
+                    performedBy: oldUsername,
+                    targetAdmin: trimmed,
+                    ipAddress: ip,
+                    userAgent: getUserAgent(),
+                    details: {
+                      field: 'username',
+                      oldValue: oldUsername,
+                      newValue: trimmed,
+                      description: `Username changed from ${oldUsername} to ${trimmed} (Supabase user_metadata)`,
+                    },
+                  })
+                })
+
+                console.log(`Username changed (Supabase): ${oldUsername} → ${trimmed}`)
+                return true
+              }
+            } catch (e) {
+              console.error('[updateMyUsername] Supabase error', e)
+              return false
+            }
+          }
+        }
+
         const oldPassword = localStorage.getItem(`admin-password-${oldUsername}`)
         
         // Determine the password to use for the new username
@@ -864,21 +963,21 @@ export const useAdminAuth = create<AdminAuthState>()(
         // Update username in adminUsers array
         const updatedAdminUsers = adminUsers.map(u => 
           u.username === oldUsername 
-            ? { ...u, username: newUsername, lastModified: new Date().toISOString() }
+            ? { ...u, username: trimmed, lastModified: new Date().toISOString() }
             : u
         )
 
         // Update current adminUser
         const updatedAdminUser = {
           ...adminUser,
-          username: newUsername,
+          username: trimmed,
           lastModified: new Date().toISOString()
         }
 
         // Update password key in localStorage with the determined password
         if (passwordToStore) {
-          localStorage.setItem(`admin-password-${newUsername}`, passwordToStore)
-          console.log(`Password stored for new username: ${newUsername}`)
+          localStorage.setItem(`admin-password-${trimmed}`, passwordToStore)
+          console.log(`Password stored for new username: ${trimmed}`)
           // Remove old password key if it existed
           if (oldPassword) {
             localStorage.removeItem(`admin-password-${oldUsername}`)
@@ -887,7 +986,7 @@ export const useAdminAuth = create<AdminAuthState>()(
             console.log(`No old password key to remove (was using default password)`)
           }
         } else {
-          console.warn(`Warning: No password to store for new username ${newUsername}`)
+          console.warn(`Warning: No password to store for new username ${trimmed}`)
         }
 
         set({
@@ -905,22 +1004,22 @@ export const useAdminAuth = create<AdminAuthState>()(
             addLog({
               action: 'username_changed',
               performedBy: oldUsername,
-              targetAdmin: newUsername,
+              targetAdmin: trimmed,
               ipAddress: ip,
               userAgent: getUserAgent(),
               details: {
                 field: 'username',
                 oldValue: oldUsername,
-                newValue: newUsername,
-                description: `Username changed from ${oldUsername} to ${newUsername}`
+                newValue: trimmed,
+                description: `Username changed from ${oldUsername} to ${trimmed}`
               }
             })
           })
         }
 
-        console.log(`Username changed from ${oldUsername} to ${newUsername}`)
-        console.log(`Password migrated to new username key: admin-password-${newUsername}`)
-        console.log(`You can now login with: ${newUsername} / ${passwordToStore ? 'your password' : 'default password'}`)
+        console.log(`Username changed from ${oldUsername} to ${trimmed}`)
+        console.log(`Password migrated to new username key: admin-password-${trimmed}`)
+        console.log(`Local admin login uses username + password: ${trimmed}`)
         return true
       },
 

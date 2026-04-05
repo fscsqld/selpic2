@@ -32,6 +32,7 @@ import {
   ShieldCheck
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
+import SupabaseAuthUsersPanel from '@/components/admin/SupabaseAuthUsersPanel'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useUserAuth } from '@/lib/userAuth'
 import { useStore } from '@/lib/store'
@@ -42,6 +43,7 @@ import { calculateNextGradeAmount } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
 import { User as UserType } from '@/lib/userAuth'
+import { isUuid } from '@/lib/isUuid'
 
 interface User extends UserType {
   // UserType from lib/userAuth already includes all VIP grade fields
@@ -117,7 +119,8 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
-  
+  const [usersMainTab, setUsersMainTab] = useState<'vip' | 'supabase'>('vip')
+
   // 권한 관리 상태
   const [permissionFormData, setPermissionFormData] = useState({
     canPost: true,
@@ -356,15 +359,37 @@ export default function UserManagementPage() {
     if (!selectedUser) return
 
     setIsLoading(true)
-    
+
     try {
-      // 사용자 정보 업데이트
+      const pwd = formData.password.trim()
+      const hasPublicSupabase =
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+
+      if (hasPublicSupabase && isUuid(selectedUser.id) && pwd) {
+        const res = await fetch('/api/admin/supabase-users', {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: selectedUser.id,
+            action: 'setPassword',
+            newPassword: pwd,
+          }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          alert(typeof j.error === 'string' ? j.error : t('admin.users.messages.userUpdateFailed'))
+          return
+        }
+      }
+
       updateUser(selectedUser.id, {
         name: formData.name,
         email: formData.email,
-        phone: formData.phone
+        phone: formData.phone,
       })
-      
+
       setIsEditModalOpen(false)
       setSelectedUser(null)
       setFormData({ name: '', email: '', phone: '', password: '' })
@@ -377,11 +402,34 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm(t('admin.users.messages.confirmDelete'))) {
-      deleteUser(userId)
-      alert(t('admin.users.messages.userDeleted'))
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm(t('admin.users.messages.confirmDelete'))) return
+
+    const hasPublicSupabase =
+      Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+      Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+
+    if (hasPublicSupabase && isUuid(userId)) {
+      setIsLoading(true)
+      try {
+        const res = await fetch('/api/admin/supabase-users', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          alert(typeof j.error === 'string' ? j.error : 'Delete failed')
+          return
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    deleteUser(userId)
+    alert(t('admin.users.messages.userDeleted'))
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -539,6 +587,36 @@ export default function UserManagementPage() {
         />
 
         <div className="flex-1 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-0 w-full">
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              type="button"
+              onClick={() => setUsersMainTab('vip')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                usersMainTab === 'vip'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Shop profiles &amp; VIP
+            </button>
+            <button
+              type="button"
+              onClick={() => setUsersMainTab('supabase')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                usersMainTab === 'supabase'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              Supabase Auth accounts
+            </button>
+          </div>
+
+          <div className={usersMainTab === 'supabase' ? 'mb-10' : 'hidden'}>
+            <SupabaseAuthUsersPanel canWrite={canWrite} />
+          </div>
+
+          <div className={usersMainTab === 'vip' ? '' : 'hidden'}>
           {/* VIP 등급 모니터링 링크 */}
           <div className="mb-6 flex-shrink-0">
             <a
@@ -1066,6 +1144,7 @@ export default function UserManagementPage() {
             </div>
           </div>
         </div>
+          </div>
 
         {/* 사용자 추가 모달 */}
         {isAddModalOpen && (

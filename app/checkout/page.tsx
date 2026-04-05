@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { CreditCard, Building2, DollarSign, ArrowLeft, ArrowRight, Check, ChevronDown, Wallet, HelpCircle } from 'lucide-react'
+import { CreditCard, Building2, DollarSign, ArrowLeft, ArrowRight, Check, ChevronDown, Wallet, HelpCircle, BadgeCheck, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { useStore } from '@/lib/store'
@@ -13,6 +13,8 @@ import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { updateUserGrade } from '@/lib/userGradeUtils'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import OrderNotification from '@/components/OrderNotification'
+import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -21,7 +23,6 @@ export default function CheckoutPage() {
   const { 
     getActiveShippingOptions, 
     getDefaultShippingOption,
-    getFreeShippingSettings,
     getPaymentOptionByType,
     getActivePaymentOptions,
     getDefaultPaymentOption,
@@ -32,6 +33,8 @@ export default function CheckoutPage() {
     getVIPGradeBenefitForCheckout,
     _hasHydrated
   } = useContentStore()
+  // Subscribe so threshold/message updates from admin always drive shipping math
+  const freeShippingSettings = useContentStore((s) => s.freeShippingSettings)
   // 강제 리렌더 트리거: 관리자가 VIP 설정 또는 Promo Code를 변경해도 즉시 반영되도록 store 구독
   const [storeVersion, setStoreVersion] = useState(0)
   useEffect(() => {
@@ -47,18 +50,33 @@ export default function CheckoutPage() {
     if (typeof window !== 'undefined') {
       window.addEventListener('content-store-updated', handleContentStoreUpdate)
     }
+
+    // Other tabs: persist does not push in-memory updates; rehydrate from localStorage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'content-store' && e.newValue) {
+        ;(useContentStore as any).persist?.rehydrate?.()
+      }
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', onStorage)
+    }
     
     return () => {
       if (unsubscribe) unsubscribe()
       if (typeof window !== 'undefined') {
         window.removeEventListener('content-store-updated', handleContentStoreUpdate)
+        window.removeEventListener('storage', onStorage)
       }
     }
   }, [])
   
   // Get payment options from Content Store
-  const paymentOptions = getActivePaymentOptions()
-  const defaultPaymentOption = getDefaultPaymentOption() || paymentOptions[0]
+  const allActivePaymentOptions = getActivePaymentOptions()
+  const paymentOptions = allActivePaymentOptions
+  const defaultPaymentOption =
+    getDefaultPaymentOption() ||
+    paymentOptions[0] ||
+    allActivePaymentOptions[0]
   
   // 디버깅: Promo Codes 로드 확인
   useEffect(() => {
@@ -106,10 +124,13 @@ export default function CheckoutPage() {
   
   // Initialize payment method with default option
   useEffect(() => {
-    if (!paymentMethod && defaultPaymentOption) {
+    if (!defaultPaymentOption) return
+
+    const isCurrentMethodActive = paymentOptions.some((o) => o.type === paymentMethod)
+    if (!paymentMethod || !isCurrentMethodActive) {
       setPaymentMethod(defaultPaymentOption.type)
     }
-  }, [defaultPaymentOption, paymentMethod])
+  }, [defaultPaymentOption, paymentMethod, paymentOptions])
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null)
   
   // Initialize selectedShipping with default option
@@ -170,71 +191,6 @@ export default function CheckoutPage() {
 
   // DEFINE ALL HELPER FUNCTIONS FIRST, IN DEPENDENCY ORDER
   
-  // Mansfield 지역 확인 함수
-  const isMansfieldArea = (addressData: AddressData) => {
-    const mansfieldKeywords = ['mansfield', 'manfield', 'mansfild', 'mansfeild']
-    const fullAddress = `${addressData.streetAddress} ${addressData.suburb} ${addressData.state}`.toLowerCase()
-    const isMansfield = mansfieldKeywords.some(keyword => 
-      fullAddress.includes(keyword)
-    )
-    const isQueensland = addressData.state.toLowerCase() === 'queensland' || 
-                         addressData.state.toLowerCase() === 'qld' ||
-                         addressData.state.toLowerCase() === 'queensland'
-    
-    console.log('🔍 Mansfield 지역 확인:', {
-      address: fullAddress,
-      isMansfield,
-      state: addressData.state,
-      isQueensland,
-      result: isMansfield && isQueensland
-    })
-    
-    return isMansfield && isQueensland
-  }
-
-  // 2줄 옵션 등 커스텀 추가 요금 파싱 (장바구니와 동일: "+$2.00" 형태)
-  const parseSurchargeFromValue = (value: string): number => {
-    if (typeof value !== 'string') return 0
-    const match = value.match(/\+\s*\$\s*([\d.]+)/)
-    if (!match) return 0
-    const n = parseFloat(match[1])
-    return !isNaN(n) && isFinite(n) ? n : 0
-  }
-
-  const TWO_LINE_SURCHARGE_DEFAULT = 2
-  const TWO_LINE_SIZE_VALUES = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
-
-  // 2줄 옵션 등 커스텀 추가 요금: twoLineSurchargeAmount 우선 → twoLineOption 파싱 → 텍스트 줄바꿈+size로 추론
-  const getSurchargePerUnit = (
-    customizations: Record<string, string> | undefined,
-    product?: { size?: string }
-  ): number => {
-    if (!customizations || typeof customizations !== 'object') return 0
-    const explicit = customizations.twoLineSurchargeAmount
-    if (explicit != null && String(explicit).trim() !== '') {
-      const n = parseFloat(String(explicit).trim())
-      if (!isNaN(n) && isFinite(n) && n >= 0) return n
-    }
-    const twoLineOpt = customizations.twoLineOption
-    if (typeof twoLineOpt === 'string' && twoLineOpt.trim()) {
-      const m = twoLineOpt.match(/\+\s*\$?\s*([\d.]+)/)
-      if (m) {
-        const n = parseFloat(m[1])
-        if (!isNaN(n) && isFinite(n) && n >= 0) return n
-      }
-    }
-    const fromEntries = Object.entries(customizations)
-      .filter(([key]) => !key.toLowerCase().includes('customizedimage'))
-      .reduce((sum, [, value]) => sum + parseSurchargeFromValue(value), 0)
-    if (fromEntries > 0) return fromEntries
-    const text = customizations.text
-    const hasTwoLineText = typeof text === 'string' && text.includes('\n')
-    const sizeNorm = product?.size ? String(product.size).trim().toLowerCase() : ''
-    const sizeSupportsTwo = TWO_LINE_SIZE_VALUES.includes(sizeNorm)
-    if (hasTwoLineText && sizeSupportsTwo) return TWO_LINE_SURCHARGE_DEFAULT
-    return 0
-  }
-
   const calculateSubtotal = (): number => {
     if (!cart || cart.length === 0) {
       return 0
@@ -250,7 +206,7 @@ export default function CheckoutPage() {
         : 0
       
       const itemTotal = price * quantity
-      const surchargePerUnit = getSurchargePerUnit(item.customizations, item.product)
+      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, item.product)
       const additionalCost = surchargePerUnit * quantity
       
       return total + itemTotal + additionalCost
@@ -294,7 +250,7 @@ export default function CheckoutPage() {
       const safePrice = !isNaN(priceNum) && isFinite(priceNum) ? priceNum : 0
       const safeQty = !isNaN(quantityNum) && isFinite(quantityNum) && quantityNum > 0 ? quantityNum : 0
       const itemTotal = safePrice * safeQty
-      const surchargePerUnit = getSurchargePerUnit(item.customizations, item.product)
+      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, item.product)
       const customizationCost = surchargePerUnit * safeQty
       const categoryRaw =
         (item.product as any)?.category ||
@@ -313,7 +269,6 @@ export default function CheckoutPage() {
   const getShippingPrice = (option: ShippingOption | null) => {
     if (!option) return 0
     const subtotal = calculateSubtotal()
-    const freeShippingSettings = getFreeShippingSettings()
     
     // VIP 등급 무료 배송 확인
     if (currentUser && currentUser.currentGrade !== undefined) {
@@ -352,7 +307,7 @@ export default function CheckoutPage() {
     const cartItemsForDiscount = buildCartItemsForDiscount()
     // 스토어가 아직 하이드레이션되지 않았다면 할인 계산을 건너뛰고 이후 리렌더에서 반영
     if (_hasHydrated === false) {
-      const paymentOption = getPaymentOptionByType(paymentMethod as 'card' | 'paypal' | 'bank' | 'cash')
+      const paymentOption = getPaymentOptionByType(paymentMethod as 'card' | 'paypal' | 'bank' | 'cash' | 'stripe')
       return subtotal + shipping + (getPaymentFee(paymentOption, subtotal) || 0)
     }
     
@@ -724,6 +679,188 @@ export default function CheckoutPage() {
     setAddressData(newAddressData)
   }
 
+  const buildOrderPayload = (mode: 'default' | 'stripe'): Omit<OrderRecord, 'id' | 'createdAtIso'> => {
+    if (!selectedShipping) {
+      throw new Error('Please select a shipping option.')
+    }
+
+    const effectivePaymentType = mode === 'stripe' ? 'stripe' : paymentMethod
+
+    const items = cart.map(item => {
+      const storeProduct = products.find(p => p.id === item.product.id)
+      const sourceProduct = storeProduct ?? item.product
+      const stockQuantity =
+        typeof (storeProduct as any)?.stockQuantity === 'number'
+          ? Math.max(0, (storeProduct as any).stockQuantity)
+          : undefined
+      const safetyStock =
+        typeof (storeProduct as any)?.safetyStock === 'number'
+          ? Math.max(0, (storeProduct as any).safetyStock)
+          : undefined
+      const incomingStock =
+        typeof (storeProduct as any)?.incomingStock === 'number'
+          ? Math.max(0, (storeProduct as any).incomingStock)
+          : undefined
+      const remainingStock =
+        typeof stockQuantity === 'number'
+          ? Math.max(0, stockQuantity - item.quantity)
+          : undefined
+
+      const basePrice =
+        typeof sourceProduct.price === 'number' && !isNaN(sourceProduct.price)
+          ? sourceProduct.price
+          : 0
+      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, sourceProduct)
+      const unitPriceInclOptions = Number((basePrice + surchargePerUnit).toFixed(2))
+
+      return {
+        productId: sourceProduct.id,
+        name: sourceProduct.name,
+        price: unitPriceInclOptions,
+        baseUnitPrice: Number(basePrice.toFixed(2)),
+        customizationSurchargePerUnit: Number(surchargePerUnit.toFixed(2)),
+        image: sourceProduct.image,
+        quantity: item.quantity,
+        customizations: item.customizations,
+        category: (sourceProduct as any).category,
+        subcategory: (sourceProduct as any).subcategory,
+        brand: (sourceProduct as any).brand,
+        size: (sourceProduct as any).size,
+        color: (sourceProduct as any).color,
+        type: (sourceProduct as any).type,
+        spfLevel: (sourceProduct as any).spfLevel,
+        isNew: (sourceProduct as any).isNew,
+        isBestSeller: (sourceProduct as any).isBestSeller,
+        isPopular: (sourceProduct as any).isPopular,
+        inStock: (sourceProduct as any).inStock,
+        features: (sourceProduct as any).features,
+        bundleItems: Array.isArray((sourceProduct as any).bundleItems)
+          ? (sourceProduct as any).bundleItems.map((bundleItem: any) => ({ ...bundleItem }))
+          : undefined,
+        isBundle: Boolean((sourceProduct as any).isBundle),
+        stockQuantityAtOrder: stockQuantity,
+        remainingStock,
+        safetyStock,
+        incomingStock
+      }
+    })
+
+    const subtotalNow = calculateSubtotal()
+    const shippingNow = getShippingPrice(selectedShipping)
+
+    const selectedPaymentOptionForStatus = paymentOptions.find(opt => opt.type === effectivePaymentType)
+    // Bank transfer is never "paid" at checkout — admin must confirm the deposit first.
+    // (Do not tie this to `requiresAuth`; admins sometimes enable that flag for bank, which wrongly stored orders as paid.)
+    const paymentStatus: 'paid' | 'pending' =
+      mode === 'stripe'
+        ? 'paid'
+        : effectivePaymentType === 'bank'
+          ? 'pending'
+          : selectedPaymentOptionForStatus?.requiresAuth
+            ? 'paid'
+            : 'pending'
+
+    const getShippingOptionName = (id: string) => {
+      const option = shippingOptions.find(opt => opt.id === id)
+      return option ? option.name : id
+    }
+
+    let vipDiscount = 0
+    let vipGradeCode: number | undefined = undefined
+    let vipGradeName: string | undefined = undefined
+    if (currentUser && currentUser.currentGrade !== undefined) {
+      vipGradeCode = currentUser.currentGrade
+      const cartItemsForDiscount = buildCartItemsForDiscount()
+      const vipBenefit = getVIPGradeBenefitForCheckout(vipGradeCode, subtotalNow, cartItemsForDiscount)
+
+      const gradeNames = ['Basic', 'Silver', 'Gold', 'Black', 'VVIP']
+      const gradeName = gradeNames[vipGradeCode] || `Grade ${vipGradeCode}`
+
+      if (vipBenefit && vipBenefit.discount > 0) {
+        vipDiscount = vipBenefit.discount
+        const gradeInfo = getGradeInfo(vipGradeCode)
+        vipGradeName = gradeInfo?.nameEn || gradeName
+
+        console.log(`📦 주문 생성 - ${gradeName} 등급 할인 적용:`, {
+          gradeCode: vipGradeCode,
+          gradeName: vipGradeName,
+          subtotal: `$${subtotalNow.toFixed(2)}`,
+          discount: `$${vipDiscount.toFixed(2)}`,
+          freeShipping: vipBenefit.freeShipping
+        })
+      } else {
+        console.log(`ℹ️ 주문 생성 - ${gradeName} 등급 할인 없음:`, {
+          gradeCode: vipGradeCode,
+          gradeName,
+          subtotal: `$${subtotalNow.toFixed(2)}`,
+          reason: !vipBenefit ? '혜택을 찾을 수 없음' : '할인 금액이 0'
+        })
+      }
+    }
+
+    const promoDiscount = appliedPromoCode ? appliedPromoCode.discount : 0
+
+    let totalDiscount = 0
+    if (vipDiscount > 0 && promoDiscount > 0) {
+      const vipBenefit = vipGradeCode !== undefined
+        ? getVIPGradeBenefitForCheckout(vipGradeCode, subtotalNow, buildCartItemsForDiscount())
+        : null
+
+      const promoCodeInfo = appliedPromoCode
+        ? useContentStore.getState().promoCodes.find((pc: any) => pc.code === appliedPromoCode.code)
+        : null
+
+      const vipAllowsStacking = vipBenefit?.benefit?.allowPromoCodeStacking !== false
+      const promoAllowsStacking = promoCodeInfo?.allowVIPStacking !== false
+
+      if (vipAllowsStacking && promoAllowsStacking) {
+        totalDiscount = Math.min(vipDiscount + promoDiscount, subtotalNow)
+      } else {
+        totalDiscount = Math.max(vipDiscount, promoDiscount)
+      }
+    } else {
+      totalDiscount = Math.min(vipDiscount + promoDiscount, subtotalNow)
+    }
+
+    const selectedPaymentOptionResolved = paymentOptions.find(opt => opt.type === effectivePaymentType)
+    const paymentFee = selectedPaymentOptionResolved ? getPaymentFee(selectedPaymentOptionResolved, subtotalNow) : 0
+    const finalTotal = Math.max(0, subtotalNow + shippingNow - totalDiscount + paymentFee)
+
+    return {
+      items,
+      subtotal: Number(subtotalNow.toFixed(2)),
+      shippingPrice: Number(shippingNow.toFixed(2)),
+      paymentFee: Number(paymentFee.toFixed(2)),
+      discount: Number(totalDiscount.toFixed(2)),
+      vipDiscount: vipDiscount > 0 ? Number(vipDiscount.toFixed(2)) : undefined,
+      vipGradeCode: vipGradeCode,
+      vipGradeName: vipGradeName,
+      promoCode: appliedPromoCode ? appliedPromoCode.code : undefined,
+      promoDiscount: promoDiscount > 0 ? Number(promoDiscount.toFixed(2)) : undefined,
+      total: Number(finalTotal.toFixed(2)),
+      shippingOptionId: selectedShipping.id,
+      shippingOptionName: getShippingOptionName(selectedShipping.id),
+      paymentMethod: effectivePaymentType as OrderRecord['paymentMethod'],
+      paymentMethodName: selectedPaymentOptionResolved ? selectedPaymentOptionResolved.name : effectivePaymentType,
+      status: paymentStatus,
+      customer: {
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+      },
+      address: {
+        streetAddress: addressData.streetAddress,
+        suburb: addressData.suburb,
+        state: addressData.state,
+        postcode: addressData.postcode,
+        country: addressData.country,
+        asSingleLine: [addressData.streetAddress, [addressData.suburb, addressData.state, addressData.postcode, addressData.country].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+      },
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsProcessing(true)
@@ -750,6 +887,8 @@ export default function CheckoutPage() {
           }
         } else if (paymentMethod === 'paypal') {
           // PayPal은 별도 인증 필요 없음 (외부 리다이렉트)
+        } else if (paymentMethod === 'stripe') {
+          // Card / wallet collected on Stripe-hosted Checkout
         }
       } else {
         if (paymentMethod === 'bank') {
@@ -777,7 +916,47 @@ export default function CheckoutPage() {
       const latestStockIssues = cart.filter(item => item.quantity > getAvailableStock(item.product.id))
       if (latestStockIssues.length > 0) {
         alert('Some items are no longer available in the requested quantity. Please adjust your cart before checking out.')
+        setIsProcessing(false)
         router.push('/cart')
+        return
+      }
+
+      if (paymentMethod === 'stripe') {
+        let orderData: Omit<OrderRecord, 'id' | 'createdAtIso'>
+        try {
+          orderData = buildOrderPayload('stripe')
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Could not prepare checkout.'
+          alert(msg)
+          setIsProcessing(false)
+          return
+        }
+        const res = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderDraft: orderData }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          alert(typeof data.error === 'string' ? data.error : 'Could not start Stripe checkout.')
+          setIsProcessing(false)
+          return
+        }
+        if (data.url) {
+          window.location.href = data.url as string
+          return
+        }
+        alert('No checkout URL returned.')
+        setIsProcessing(false)
+        return
+      }
+
+      // Legacy "card" form is a demo simulator — do not mark paid when Stripe Checkout is configured.
+      if (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && paymentMethod === 'card') {
+        alert(
+          'Card payments are processed through Stripe Checkout. Please select the Stripe payment option and complete payment on the Stripe page.'
+        )
+        setIsProcessing(false)
         return
       }
 
@@ -796,185 +975,12 @@ export default function CheckoutPage() {
         console.log('🛒 Creating order with cart:', cart)
         console.log('📝 Form data:', formData)
         console.log('📍 Address data:', addressData)
-        
-        const items = cart.map(item => {
-          const storeProduct = products.find(p => p.id === item.product.id)
-          const sourceProduct = storeProduct ?? item.product
-          const stockQuantity =
-            typeof (storeProduct as any)?.stockQuantity === 'number'
-              ? Math.max(0, (storeProduct as any).stockQuantity)
-              : undefined
-          const safetyStock =
-            typeof (storeProduct as any)?.safetyStock === 'number'
-              ? Math.max(0, (storeProduct as any).safetyStock)
-              : undefined
-          const incomingStock =
-            typeof (storeProduct as any)?.incomingStock === 'number'
-              ? Math.max(0, (storeProduct as any).incomingStock)
-              : undefined
-          const remainingStock =
-            typeof stockQuantity === 'number'
-              ? Math.max(0, stockQuantity - item.quantity)
-              : undefined
 
-          return {
-            productId: sourceProduct.id,
-            name: sourceProduct.name,
-            price: sourceProduct.price,
-            image: sourceProduct.image,
-            quantity: item.quantity,
-            customizations: item.customizations,
-            category: (sourceProduct as any).category,
-            subcategory: (sourceProduct as any).subcategory,
-            brand: (sourceProduct as any).brand,
-            size: (sourceProduct as any).size,
-            color: (sourceProduct as any).color,
-            type: (sourceProduct as any).type,
-            spfLevel: (sourceProduct as any).spfLevel,
-            isNew: (sourceProduct as any).isNew,
-            isBestSeller: (sourceProduct as any).isBestSeller,
-            isPopular: (sourceProduct as any).isPopular,
-            inStock: (sourceProduct as any).inStock,
-            features: (sourceProduct as any).features,
-            bundleItems: Array.isArray((sourceProduct as any).bundleItems)
-              ? (sourceProduct as any).bundleItems.map((bundleItem: any) => ({ ...bundleItem }))
-              : undefined,
-            isBundle: Boolean((sourceProduct as any).isBundle),
-            stockQuantityAtOrder: stockQuantity,
-            remainingStock,
-            safetyStock,
-            incomingStock
-          }
-        })
-
-        if (!selectedShipping) {
-          alert('Please select a shipping option.')
-          setIsProcessing(false)
-          return
-        }
-
-        const subtotalNow = calculateSubtotal()
-        const shippingNow = getShippingPrice(selectedShipping)
-        const totalNow = subtotalNow + shippingNow
-
-        console.log('💰 Order totals:', { subtotalNow, shippingNow, totalNow })
-
-        const selectedPaymentOptionForStatus = paymentOptions.find(opt => opt.type === paymentMethod)
-        const paymentStatus: 'paid' | 'pending' = selectedPaymentOptionForStatus?.requiresAuth ? 'paid' : 'pending'
-
-        // Shipping option 이름을 올바르게 매핑
-        const getShippingOptionName = (id: string) => {
-          const option = shippingOptions.find(opt => opt.id === id)
-          return option ? option.name : id
-        }
-
-        // VIP 등급 할인 계산
-        let vipDiscount = 0
-        let vipGradeCode: number | undefined = undefined
-        let vipGradeName: string | undefined = undefined
-         if (currentUser && currentUser.currentGrade !== undefined) {
-          vipGradeCode = currentUser.currentGrade
-           const cartItemsForDiscount = buildCartItemsForDiscount()
-           const vipBenefit = getVIPGradeBenefitForCheckout(vipGradeCode, subtotalNow, cartItemsForDiscount)
-          
-          // 디버깅: 주문 생성 시 VIP 할인 확인
-          const gradeNames = ['Basic', 'Silver', 'Gold', 'Black', 'VVIP']
-          const gradeName = gradeNames[vipGradeCode] || `Grade ${vipGradeCode}`
-          
-          if (vipBenefit && vipBenefit.discount > 0) {
-            vipDiscount = vipBenefit.discount
-            const gradeInfo = getGradeInfo(vipGradeCode)
-            vipGradeName = gradeInfo?.nameEn || gradeName
-            
-            console.log(`📦 주문 생성 - ${gradeName} 등급 할인 적용:`, {
-              gradeCode: vipGradeCode,
-              gradeName: vipGradeName,
-              subtotal: `$${subtotalNow.toFixed(2)}`,
-              discount: `$${vipDiscount.toFixed(2)}`,
-              freeShipping: vipBenefit.freeShipping
-            })
-          } else {
-            console.log(`ℹ️ 주문 생성 - ${gradeName} 등급 할인 없음:`, {
-              gradeCode: vipGradeCode,
-              gradeName,
-              subtotal: `$${subtotalNow.toFixed(2)}`,
-              reason: !vipBenefit ? '혜택을 찾을 수 없음' : '할인 금액이 0'
-            })
-          }
-        }
-        
-        // 프로모션 코드 할인 적용
-        const promoDiscount = appliedPromoCode ? appliedPromoCode.discount : 0
-        
-        // 총 할인 (VIP 할인 + 프로모션 할인)
-        // 중복 할인 허용 여부 확인
-        let totalDiscount = 0
-        if (vipDiscount > 0 && promoDiscount > 0) {
-          // VIP 혜택과 프로모션 코드의 중복 허용 여부 확인
-      const vipBenefit = vipGradeCode !== undefined
-        ? getVIPGradeBenefitForCheckout(vipGradeCode, subtotalNow, buildCartItemsForDiscount())
-        : null
-          
-      // 프로모션 코드 정보 가져오기
-      const promoCodeInfo = appliedPromoCode 
-        ? useContentStore.getState().promoCodes.find((pc: any) => pc.code === appliedPromoCode.code)
-        : null
-          
-          // 둘 다 중복 허용이 true일 때만 합산, 아니면 더 큰 할인만 적용
-          const vipAllowsStacking = vipBenefit?.benefit?.allowPromoCodeStacking !== false // 기본값: true
-          const promoAllowsStacking = promoCodeInfo?.allowVIPStacking !== false // 기본값: true
-          
-          if (vipAllowsStacking && promoAllowsStacking) {
-            // 중복 허용: 두 할인 합산
-            totalDiscount = Math.min(vipDiscount + promoDiscount, subtotalNow)
-          } else {
-            // 중복 비허용: 더 큰 할인만 적용
-            totalDiscount = Math.max(vipDiscount, promoDiscount)
-          }
-        } else {
-          // 하나만 적용되는 경우
-          totalDiscount = Math.min(vipDiscount + promoDiscount, subtotalNow)
-        }
-        
-        const selectedPaymentOption = paymentOptions.find(opt => opt.type === paymentMethod)
-        const paymentFee = selectedPaymentOption ? getPaymentFee(selectedPaymentOption, subtotalNow) : 0
-        const finalTotal = Math.max(0, subtotalNow + shippingNow - totalDiscount + paymentFee)
-
-        const orderData = {
-          items,
-          subtotal: Number(subtotalNow.toFixed(2)),
-          shippingPrice: Number(shippingNow.toFixed(2)),
-          paymentFee: Number(paymentFee.toFixed(2)),
-          discount: Number(totalDiscount.toFixed(2)), // 총 할인 (VIP + 프로모션)
-          vipDiscount: vipDiscount > 0 ? Number(vipDiscount.toFixed(2)) : undefined, // VIP 할인 (별도 저장)
-          vipGradeCode: vipGradeCode, // VIP 등급 코드
-          vipGradeName: vipGradeName, // VIP 등급명
-          promoCode: appliedPromoCode ? appliedPromoCode.code : undefined,
-          promoDiscount: promoDiscount > 0 ? Number(promoDiscount.toFixed(2)) : undefined, // 프로모션 할인 (별도 저장)
-          total: Number(finalTotal.toFixed(2)),
-          shippingOptionId: selectedShipping.id,
-          shippingOptionName: getShippingOptionName(selectedShipping.id),
-          paymentMethod: paymentMethod as 'card' | 'paypal' | 'bank' | 'cash',
-          paymentMethodName: selectedPaymentOption ? selectedPaymentOption.name : paymentMethod,
-          status: paymentStatus,
-          customer: {
-            name: `${formData.firstName} ${formData.lastName}`.trim(),
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-            phone: formData.phone,
-          },
-          address: {
-            streetAddress: addressData.streetAddress,
-            suburb: addressData.suburb,
-            state: addressData.state,
-            postcode: addressData.postcode,
-            country: addressData.country,
-            asSingleLine: [addressData.streetAddress, [addressData.suburb, addressData.state, addressData.postcode, addressData.country].filter(Boolean).join(' ')].filter(Boolean).join(', '),
-          },
-        }
+        const orderData = buildOrderPayload('default')
 
         console.log('📋 Order data being sent:', orderData)
+
+        const items = orderData.items
 
         const newOrderId = createOrder(orderData)
         
@@ -984,7 +990,7 @@ export default function CheckoutPage() {
             productId: item.productId,
             category: item.category
           }))
-          const promoCode = validatePromoCode(appliedPromoCode.code, subtotalNow, cartItemsForValidation, user?.id, orders, user?.email, user?.phone)
+          const promoCode = validatePromoCode(appliedPromoCode.code, orderData.subtotal, cartItemsForValidation, user?.id, orders, user?.email, user?.phone)
           if (promoCode.valid && promoCode.promoCode) {
             incrementPromoCodeUsage(promoCode.promoCode.id)
           }
@@ -1033,6 +1039,18 @@ export default function CheckoutPage() {
             console.log('📧 Sending automatic order confirmation email...')
             await sendOrderConfirmationEmail(newOrderId)
             console.log('✅ Order confirmation email sent successfully')
+            // Bank transfer: receipt PDF is sent manually from admin after deposit is confirmed
+            if (orderData.paymentMethod !== 'bank') {
+              try {
+                console.log('🧾 Sending automatic receipt email...')
+                await useStore.getState().sendReceiptEmail(newOrderId)
+                console.log('✅ Receipt email sent successfully')
+              } catch (receiptError) {
+                console.error('❌ Failed to send receipt email:', receiptError)
+              }
+            } else {
+              console.log('🧾 Receipt email skipped (bank transfer — admin sends after deposit confirmation)')
+            }
           } catch (emailError) {
             console.error('❌ Failed to send order confirmation email:', emailError)
             // 이메일 발송 실패는 주문 완료를 막지 않음
@@ -1241,17 +1259,8 @@ export default function CheckoutPage() {
                 )}
 
                 {showShippingOptions && shippingOptions.map((option) => {
-                  const isCashOnDelivery = option.id === 'cash-on-delivery'
                   const isClickAndCollect =
                     option.id === 'local-pickup' || option.id === 'click-collect-mansfield'
-                  const canShowCash = isCashOnDelivery &&
-                    calculateSubtotal() >= 50 &&
-                    isMansfieldArea(addressData) &&
-                    paymentMethod === 'cash'
-
-                  if (isCashOnDelivery && !canShowCash) {
-                    return null
-                  }
 
                   const isSelected = selectedShipping?.id === option.id
 
@@ -1315,7 +1324,7 @@ export default function CheckoutPage() {
                 </div>
                 <h2 className="text-2xl font-light text-slate-800 tracking-wide">{t('checkout.paymentMethod')}</h2>
               </div>
-              
+
               <div className="grid md:grid-cols-2 gap-4">
                 {paymentOptions.map((option) => {
                   const subtotal = calculateSubtotal()
@@ -1328,7 +1337,8 @@ export default function CheckoutPage() {
                   
                   // Get icon component
                   let IconComponent = CreditCard
-                  if (option.type === 'paypal') IconComponent = Wallet
+                  if (option.type === 'stripe') IconComponent = BadgeCheck
+                  else if (option.type === 'paypal') IconComponent = Wallet
                   else if (option.type === 'bank') IconComponent = Building2
                   else if (option.type === 'cash') IconComponent = DollarSign
                   
@@ -1367,6 +1377,14 @@ export default function CheckoutPage() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                        {option.type === 'stripe' && (
+                          <div className="mt-3">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                              Secure payment via <span className="font-semibold">Stripe</span>
+                            </span>
+                          </div>
+                        )}
                         {isDisabled && option.minOrderAmount && (
                           <p className="text-xs text-red-500 mt-1">
                             Minimum order: ${option.minOrderAmount}
@@ -1952,11 +1970,68 @@ export default function CheckoutPage() {
                   </>
                 ) : (
                   <>
-                                              <span>{t('checkout.placeOrder')}</span>
+                                              <span>{paymentMethod === 'stripe' ? 'Pay Now' : t('checkout.placeOrder')}</span>
                     <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform duration-300" />
                   </>
                 )}
               </button>
+
+              {paymentMethod === 'stripe' && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="inline-flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-xs font-medium text-slate-700">Secure payment</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                        <span className="text-xs text-slate-500">Powered by</span>
+                        <span className="text-xs font-semibold tracking-wide text-slate-800">Stripe</span>
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 shadow-sm" aria-label="Visa">
+                        <svg width="34" height="14" viewBox="0 0 34 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <rect x="0.5" y="0.5" width="33" height="13" rx="3" stroke="#E2E8F0" />
+                          <path d="M12.2 4.1 10.6 9.9H9.2L8.2 6.1c-.06-.23-.11-.32-.29-.42-.3-.16-.8-.31-1.23-.4l.03-.12h2.25c.29 0 .55.2.62.52l.52 2.8 1.3-3.32h1.1ZM18.2 9.9h-1.05l-.82-5.8h1.01l.86 5.8ZM22.1 4.24c.62 0 1.08.13 1.43.29l-.18.86c-.25-.1-.63-.21-1.1-.21-.47 0-.78.19-.78.45 0 .24.3.38.79.61.7.33 1.01.67 1.01 1.2 0 .9-.78 1.5-2.06 1.5-.68 0-1.3-.14-1.7-.32l.19-.88c.42.18 1.02.33 1.55.33.45 0 .86-.16.86-.5 0-.23-.2-.4-.73-.65-.62-.3-1.07-.66-1.07-1.17 0-.83.78-1.38 1.79-1.38ZM27.4 9.9h-1.04l-.41-1.12h-1.45l-.23 1.12h-1.02l1.47-5.8h1.1l1.58 5.8Zm-2.7-1.95h1l-.41-1.14c-.09-.26-.18-.62-.25-.9-.06.28-.13.64-.22.9l-.12.33Z" fill="#0F172A" opacity="0.8"/>
+                        </svg>
+                      </span>
+
+                      <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 shadow-sm" aria-label="Mastercard">
+                        <svg width="34" height="14" viewBox="0 0 34 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <rect x="0.5" y="0.5" width="33" height="13" rx="3" stroke="#E2E8F0" />
+                          <circle cx="14" cy="7" r="3.8" fill="#EF4444" opacity="0.9"/>
+                          <circle cx="20" cy="7" r="3.8" fill="#F59E0B" opacity="0.9"/>
+                          <path d="M17 3.6c1 0 1.9.4 2.5 1.1-.6.7-1.5 1.1-2.5 1.1s-1.9-.4-2.5-1.1c.6-.7 1.5-1.1 2.5-1.1Zm0 4.8c1 0 1.9.4 2.5 1.1-.6.7-1.5 1.1-2.5 1.1s-1.9-.4-2.5-1.1c.6-.7 1.5-1.1 2.5-1.1Z" fill="#0F172A" opacity="0.12"/>
+                        </svg>
+                      </span>
+
+                      <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 shadow-sm" aria-label="Apple Pay">
+                        <svg width="44" height="14" viewBox="0 0 44 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <rect x="0.5" y="0.5" width="43" height="13" rx="3" stroke="#E2E8F0" />
+                          <path d="M12.2 4.2c.5-.6.9-1.4.8-2.2-.7 0-1.6.5-2.1 1.1-.5.6-.9 1.4-.8 2.1.8.1 1.6-.4 2.1-1Z" fill="#0F172A" opacity="0.85"/>
+                          <path d="M13 6.1c-.9-.1-1.6.5-2 .5-.4 0-1-.5-1.7-.5-.9 0-1.7.5-2.1 1.3-.9 1.6-.2 4 0 4.5.2.5.7 1.3 1.3 1.3.6 0 .8-.4 1.5-.4.7 0 .9.4 1.6.4.7 0 1.1-.7 1.3-1.2.2-.4.3-.7.3-.7s-1.2-.5-1.2-1.9c0-1.2 1-1.8 1-1.8-.5-.7-1.3-.8-1.6-.8Z" fill="#0F172A" opacity="0.85"/>
+                          <path d="M18.7 10.9V6.1h1.4c1.2 0 2 .7 2 1.8 0 1.1-.8 1.8-2 1.8h-.6v1.2h-.8Zm.8-1.9h.6c.7 0 1.2-.4 1.2-1.1 0-.7-.4-1.1-1.2-1.1h-.6v2.2ZM23.2 10.9h-.8l1.7-4.8h.9l1.7 4.8h-.8l-.4-1.2h-1.8l-.4 1.2Zm1-3.1-.5 1.5h1.4l-.5-1.5c-.1-.3-.2-.6-.2-.8 0 .2-.1.5-.2.8ZM28.6 12.6h-.8l.7-1.8-1.7-4.7h.9l1 3.1c.1.3.2.7.2.9 0-.2.1-.6.2-.9l1-3.1h.9l-2.4 6.5ZM31.1 10.9V6.1h.8v4.8h-.8Z" fill="#0F172A" opacity="0.8"/>
+                        </svg>
+                      </span>
+
+                      <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 shadow-sm" aria-label="Google Pay">
+                        <svg width="52" height="14" viewBox="0 0 52 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <rect x="0.5" y="0.5" width="51" height="13" rx="3" stroke="#E2E8F0" />
+                          <path d="M17.8 7.2c0 2-1.4 3.4-3.4 3.4s-3.4-1.4-3.4-3.4 1.4-3.4 3.4-3.4c1 0 1.8.4 2.4 1l-.7.7c-.4-.4-1-.7-1.7-.7-1.4 0-2.5 1.2-2.5 2.6s1.1 2.6 2.5 2.6c1.6 0 2.2-1.1 2.3-1.7h-2.3v-1h3.3c.1.2.1.5.1.9Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M22 10.6c-1.2 0-2.2-.9-2.2-2.2S20.8 6.2 22 6.2s2.2.9 2.2 2.2-.9 2.2-2.2 2.2Zm0-3.5c-.7 0-1.3.6-1.3 1.3s.6 1.3 1.3 1.3 1.3-.6 1.3-1.3-.6-1.3-1.3-1.3Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M26.7 10.6c-1.2 0-2.2-.9-2.2-2.2s.9-2.2 2.2-2.2 2.2.9 2.2 2.2-.9 2.2-2.2 2.2Zm0-3.5c-.7 0-1.3.6-1.3 1.3s.6 1.3 1.3 1.3 1.3-.6 1.3-1.3-.6-1.3-1.3-1.3Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M31.9 6.3h.8v4c0 1.7-1 2.4-2.3 2.4-.8 0-1.5-.3-1.9-.9l.7-.5c.3.4.6.6 1.2.6.8 0 1.3-.5 1.3-1.4v-.4h0c-.2.3-.7.5-1.2.5-1.2 0-2.2-1-2.2-2.2s1-2.2 2.2-2.2c.5 0 1 .2 1.2.5h0v-.4Zm-1.1 3.5c.7 0 1.3-.6 1.3-1.3s-.6-1.3-1.3-1.3-1.3.6-1.3 1.3.6 1.3 1.3 1.3Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M34.4 10.4V4.1h.9v6.3h-.9Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M38.2 10.6c-1.2 0-2.1-.9-2.1-2.2 0-1.4.9-2.2 2-2.2 1.2 0 1.8.9 1.8 2.2v.1h-3c.1.8.6 1.2 1.3 1.2.6 0 .9-.3 1.2-.6l.7.5c-.4.6-1 1-1.9 1Zm-1.2-2.8h2c-.1-.5-.4-.8-1-.8-.5 0-.9.3-1 .8Z" fill="#0F172A" opacity="0.8"/>
+                          <path d="M43.2 10.9V6.1h1.7c1.1 0 1.8.7 1.8 1.8 0 1.1-.7 1.8-1.8 1.8h-.8v1.2h-.9Zm.9-1.9h.7c.6 0 1-.4 1-1.1 0-.7-.4-1.1-1-1.1h-.7v2.2Z" fill="#0F172A" opacity="0.8"/>
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </form>

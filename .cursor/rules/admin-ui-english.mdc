@@ -1,0 +1,11 @@
+---
+description: Admin dashboard UI copy is English only; do not follow storefront locale for /admin routes.
+globs: app/admin/**
+alwaysApply: false
+---
+
+# Admin UI language
+
+- All user-visible strings under `app/admin/**` (labels, buttons, alerts, banners, table headers, empty states) must be **English**.
+- Do **not** branch on storefront `language`, `isKo`, or `useTranslation` / store `language` for admin copy unless the user explicitly asks for localized admin UI.
+- Storefront (`app/` outside admin) may stay i18n-capable per project rules; admin stays English for operators.

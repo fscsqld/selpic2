@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
+import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 
 type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'approved' | 'rejected'
 
@@ -52,6 +53,11 @@ async function writeRecords(records: BespokeStickerRequestRecord[]) {
 }
 
 export async function GET() {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
   const records = await readRecords()
   // Newest first
   records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

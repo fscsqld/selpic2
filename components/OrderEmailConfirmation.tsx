@@ -309,7 +309,6 @@ export default function OrderEmailConfirmation({
                   },
                   createdAtIso: order.createdAtIso
                 }}
-                language={t('language') === 'ko' ? 'ko' : 'en'}
               />
             </div>
           </div>

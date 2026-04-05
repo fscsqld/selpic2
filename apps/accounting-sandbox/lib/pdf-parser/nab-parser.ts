@@ -211,8 +211,8 @@ export class NABParser implements PDFParser {
             const mergedTransaction = this.mergeTransactionFee(transaction, pendingFee)
             if (mergedTransaction) {
               transactions.push(mergedTransaction)
-              transactionCount++
-              console.log(`[NAB-PARSER] ✅ Extracted transaction ${transactionCount}:`, {
+            transactionCount++
+            console.log(`[NAB-PARSER] ✅ Extracted transaction ${transactionCount}:`, {
                 date: mergedTransaction.date,
                 description: mergedTransaction.description.substring(0, 50),
                 debit: mergedTransaction.debit,
@@ -221,7 +221,7 @@ export class NABParser implements PDFParser {
                 hasFee: !!pendingFee
               })
               pendingFee = null // Clear pending fee after merge
-            } else {
+        } else {
               transactions.push(transaction)
               transactionCount++
             }
@@ -258,15 +258,15 @@ export class NABParser implements PDFParser {
     // Process last transaction
     if (currentLine && lastDate) {
       const transaction = this.parseTransactionLine(currentLine, lastDate)
-      if (transaction) {
+          if (transaction) {
         const mergedTransaction = this.mergeTransactionFee(transaction, pendingFee)
         if (mergedTransaction) {
           transactions.push(mergedTransaction)
           transactionCount++
           pendingFee = null
         } else {
-          transactions.push(transaction)
-          transactionCount++
+            transactions.push(transaction)
+            transactionCount++
         }
       }
     }
@@ -621,8 +621,8 @@ export class NABParser implements PDFParser {
     if (upperDesc.includes('ONLINE')) {
       if (upperDesc.includes('TRNS') || upperDesc.includes('TRANSFER')) {
         console.log('[NAB-PARSER] ONLINE + TRNS/TRANSFER pattern → DEBIT (account transfer)')
-        return true
-      }
+      return true
+    }
       // ONLINE만 있고 TRNS/TRANSFER가 없으면 일반 지출로 처리 (debitKeywords 체크 계속)
     }
     

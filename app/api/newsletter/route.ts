@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
+import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBranding'
 
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
 const RATE_LIMIT_MAX = 5
@@ -76,11 +77,14 @@ export async function POST(req: Request) {
     // Send welcome/confirmation email via Resend (skips if not configured)
     if (resendClient) {
       try {
+        const welcomeHtml = appendTransactionalEmailBrandingHtml(
+          `<p>Thanks for subscribing! We'll keep you posted with the latest updates.</p>`
+        )
         await resendClient.emails.send({
           from: resendFrom,
           to: normalizedEmail,
           subject: 'Thanks for subscribing to SELPIC updates',
-          html: `<p>Thanks for subscribing! We'll keep you posted with the latest updates.</p>`
+          html: welcomeHtml
         })
       } catch (emailError) {
         console.error('Resend send error:', emailError)

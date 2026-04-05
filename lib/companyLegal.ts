@@ -15,8 +15,12 @@ export const COMPANY_LEGAL = {
 /** 푸터/소개용: 저작권 표기 (표시 시 white-space-pre-line 사용 가능) */
 export const COMPANY_LEGAL_LINE = '© 2026 SELPIC. All rights reserved.'
 
-/** 회사 로고 URL (인보이스·견적서·영수증 등 발송 서류 상단 표시용, public 폴더 기준 경로) */
-export const COMPANY_LOGO_URL = '/selpic-logo.svg.png'
+/** Company logo path (emails, invoices, footer — real PNG/SVG in /public, not a stub) */
+export const COMPANY_LOGO_URL = '/logo.png'
+
+/** Shown at the bottom of transactional emails and the website footer */
+export const EMAIL_CONFIDENTIALITY_NOTICE =
+  'Confidentiality Notice: This email and any files transmitted with it are confidential and intended solely for the use of the individual or entity to whom they are addressed. If you have received this email in error, please notify the sender and delete this email from your system. Any unauthorized use, disclosure, or distribution is prohibited.'
 
 /** 회사 연락처 (문서·인보이스 기본값, COMPANY_LEGAL과 함께 사용) */
 export const COMPANY_CONTACT = {
@@ -34,5 +38,11 @@ export const COMPANY_BANK = {
   bsb: '084-034',
   accountNumber: '924878593',
   accountName: COMPANY_LEGAL.companyName,
-  paymentNote: 'Please use the invoice number as the payment reference.'
+  paymentNote: 'Please use Invoice Number as the payment reference.'
 } as const
+
+export function getCompanyBrandName(companyName: string = COMPANY_LEGAL.companyName): string {
+  const raw = String(companyName || '').trim()
+  if (!raw) return 'SELPIC'
+  return raw.replace(/\s+PTY\s+LTD\b/i, '').trim()
+}

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { dedupeHeaderLogoImageItems } from '@/lib/pickLogoImageItem'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
@@ -246,7 +247,7 @@ export interface BankAccount {
 export interface PaymentOption {
   id: string
   name: string                    // 결제 방법 이름 (예: "Credit Card", "PayPal")
-  type: 'card' | 'paypal' | 'bank' | 'cash'  // 결제 타입
+  type: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'  // 결제 타입
   description: string             // 결제 방법 설명
   fee: number                     // 결제 수수료 (고정 금액)
   feeType?: 'fixed' | 'percentage'  // 수수료 타입 (기본: fixed)
@@ -424,7 +425,7 @@ interface ContentStore {
   getDefaultPaymentOption: () => PaymentOption | undefined
   getActivePaymentOptions: () => PaymentOption[]
   getPaymentOption: (id: string) => PaymentOption | undefined
-  getPaymentOptionByType: (type: 'card' | 'paypal' | 'bank' | 'cash') => PaymentOption | undefined
+  getPaymentOptionByType: (type: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe') => PaymentOption | undefined
   // 프로모션 코드 관리 함수들
   addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>) => void
   updatePromoCode: (id: string, updates: Partial<PromoCode>) => void
@@ -483,7 +484,7 @@ const defaultContent: ContentItem[] = [
     mediaUrl: '',
     linkUrl: '/',
     order: 0.5,
-    isActive: false,
+    isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
   },
@@ -1707,7 +1708,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'privacy',
     title: 'How We Collect Information Description 2',
-    content: '',
+    content: 'We may also collect limited technical information automatically (such as device type, browser version, and approximate location based on IP) to secure our website and improve performance.',
     order: 23.7,
     isActive: true,
     createdAt: new Date(),
@@ -1817,7 +1818,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'privacy',
     title: 'Disclosure to Third Parties Description 2',
-    content: '',
+    content: 'We do not sell your personal information. Disclosures are limited to what is reasonably necessary to operate SELPIC and meet our legal obligations.',
     order: 29.5,
     isActive: true,
     createdAt: new Date(),
@@ -1830,6 +1831,30 @@ const defaultContent: ContentItem[] = [
     title: 'Access and Correction Title',
     content: '8. Access and Correction (APPs 12 & 13)',
     order: 30,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'privacy-30ac',
+    type: 'text',
+    section: 'privacy',
+    title: 'Access and Correction Description',
+    content:
+      'You may request access to the personal information we hold about you and request correction if it is inaccurate, incomplete, or out of date. We will respond within a reasonable period (usually within 30 days) and may charge a reasonable fee where permitted by law for complex requests.',
+    order: 30.15,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'privacy-30ad',
+    type: 'text',
+    section: 'privacy',
+    title: 'Access and Correction List',
+    content:
+      'Request access to your personal information, Request correction of inaccurate or incomplete information, Request reasons if we refuse access or correction (where required), Escalate a complaint to the Office of the Australian Information Commissioner (OAIC) if you are not satisfied',
+    order: 30.25,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -1961,7 +1986,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Prohibited Uses Content',
-    content: '',
+    content:
+      'You must not misuse our website or services, including by attempting to interfere with security, scrape content without permission, or use SELPIC for unlawful, defamatory, or infringing purposes.',
     order: 8.5,
     isActive: true,
     createdAt: new Date(),
@@ -2027,7 +2053,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Payment Terms List',
-    content: 'Payment is required at the time of order, We accept major credit cards and PayPal, All prices are in USD and include applicable taxes, Refunds processed within 5-10 business days',
+    content: 'Payment is required at the time of order, We accept major credit cards and other methods shown at checkout (e.g. PayPal where available), All prices are in AUD unless otherwise stated and include GST where applicable, Refunds are processed in line with our Refund Policy and your rights under the ACL',
     order: 14,
     isActive: true,
     createdAt: new Date(),
@@ -2125,8 +2151,9 @@ const defaultContent: ContentItem[] = [
     id: 'terms-22a',
     type: 'text',
     section: 'terms',
-    title: 'Limitation of Liability 내용2',
-    content: '',
+    title: 'Limitation of Liability Content 2',
+    content:
+      'Nothing in these terms excludes, restricts, or modifies any consumer guarantee or other right under the Australian Consumer Law that cannot lawfully be excluded.',
     order: 22.5,
     isActive: true,
     createdAt: new Date(),
@@ -2137,7 +2164,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Limitation of Liability List 2',
-    content: '',
+    content:
+      'Where liability cannot be excluded, our liability is limited to the remedies required under the ACL or, where permitted, the fees paid for the relevant order',
     order: 22.7,
     isActive: true,
     createdAt: new Date(),
@@ -2170,7 +2198,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Return Policy List',
-    content: '30-day return window from delivery date, Items must be in original condition, Custom products are non-returnable, Return shipping costs are customer\'s responsibility',
+    content:
+      'Where the ACL allows a non-faulty return for your order type, contact us within 14 days of delivery before sending anything back | Since our stickers are personalised/customised, we do not accept returns for change of mind | If the product is faulty or incorrect, please notify us within 7 days of delivery with photos | Eligible returns must be in original condition unless we agree otherwise for inspection | Return shipping costs may apply as advised when you contact us',
     order: 25,
     isActive: true,
     createdAt: new Date(),
@@ -2236,7 +2265,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Governing Law Content',
-    content: '',
+    content:
+      'These Terms are governed by the laws of Queensland, Australia. You agree to submit to the non-exclusive jurisdiction of the courts of Queensland and the Commonwealth of Australia.',
     order: 30.5,
     isActive: true,
     createdAt: new Date(),
@@ -2247,7 +2277,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Governing Law List',
-    content: '',
+    content:
+      'Australian Consumer Law applies to goods and services we supply to consumers in Australia, Disputes should first be raised with our customer service team using the contact details below',
     order: 30.7,
     isActive: true,
     createdAt: new Date(),
@@ -2265,7 +2296,7 @@ const defaultContent: ContentItem[] = [
     updatedAt: new Date()
   },
   {
-    id: 'terms-31',
+    id: 'terms-31b',
     type: 'text',
     section: 'terms',
     title: 'Contact Information Description',
@@ -2280,7 +2311,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Contact Email',
-    content: 'legal@selpic.com',
+    content: 'info@selpic.com.au',
     order: 32,
     isActive: true,
     createdAt: new Date(),
@@ -2291,7 +2322,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Contact Phone',
-    content: '+1 (555) 123-4567',
+    content: '+61 466 894 279',
     order: 33,
     isActive: true,
     createdAt: new Date(),
@@ -2302,7 +2333,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'terms',
     title: 'Contact Address',
-    content: '123 Sticker Street, Design City, DC 12345',
+    content: '7 harvest st, Mansfield QLD 4122',
     order: 34,
     isActive: true,
     createdAt: new Date(),
@@ -2533,7 +2564,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 1 Title',
-    content: '1. Change of Mind Returns (Non-Faulty Items)',
+    content: '1. Change of Mind, Personalised Products & Timeframes',
     order: 3,
     isActive: true,
     createdAt: new Date(),
@@ -2544,7 +2575,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 1 Content',
-    content: 'If you wish to return an item due to a change of mind, please follow the process below.',
+    content:
+      'SELPIC complies with the Australian Consumer Law (ACL). Our stickers are typically personalised or customised to your order. Since our stickers are personalised/customised, we do not accept returns for change of mind. Where the ACL gives you a right to return a non-faulty product and that right applies to your specific order, you must contact us within 14 days of delivery before returning anything. Do not send items back without our prior approval.',
     order: 3.5,
     isActive: true,
     createdAt: new Date(),
@@ -2555,7 +2587,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 1 List',
-    content: 'Contact us first with your reason for return within 10 days from delivery (based on the tracking record). Returns sent without prior contact will not be accepted., We will provide return instructions (labels/address). We aren\'t responsible for loss/delay if items are returned without our instructions., Refunds are processed to the original payment method; your payment provider (card/PayPal/bank) may require additional processing time.',
+    content:
+      'Contact us first with your order ID and reason; where a non-faulty return is eligible under the ACL, do so within 14 days of delivery (based on tracking). Returns sent without prior contact or approval may not be accepted | We will provide return instructions (labels/address). We are not responsible for loss or delay if items are returned without following our instructions | Refunds are processed to the original payment method where applicable; your bank or card issuer may take additional time',
     order: 4,
     isActive: true,
     createdAt: new Date(),
@@ -2577,7 +2610,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 2 Content',
-    content: 'If your order is faulty, damaged, or incorrect, contact us promptly with photos and your order ID. We will arrange a repair/replacement/reshipment or refund in line with the ACL.',
+    content:
+      'If the product is faulty or incorrect, please notify us within 7 days of delivery with photos and your order ID. We will arrange a repair, replacement, reshipment, or refund in line with the Australian Consumer Law (ACL).',
     order: 7.5,
     isActive: true,
     createdAt: new Date(),
@@ -2588,7 +2622,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 2 List',
-    content: '',
+    content:
+      'Notify us within 7 days of delivery with clear photos of the fault or incorrect item and your order ID | Keep the item and packaging where reasonable until we advise next steps | We may offer a repair, replacement, reshipment, or refund as appropriate under the ACL | If we ask you to return the item, follow the return instructions we provide',
     order: 8,
     isActive: true,
     createdAt: new Date(),
@@ -2610,7 +2645,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 3 Content',
-    content: 'If your order is faulty, damaged, or incorrect, contact us promptly with photos and your order ID. We will arrange a repair/replacement/reshipment or refund in line with the ACL.',
+    content:
+      'Returns must follow this policy and any instructions we give you. Personalised or customised stickers are not accepted for change of mind; faulty or incorrect items are handled under Section 2 and the ACL.',
     order: 14.5,
     isActive: true,
     createdAt: new Date(),
@@ -2621,7 +2657,8 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'refund',
     title: 'Section 3 List',
-    content: '',
+    content:
+      'Do not return items without our approval and instructions, Items should be in original condition where applicable (except where inspection of a fault is required), Refunds are processed to the original payment method after we receive and inspect the return (where a return is required), Timeframes may vary depending on your bank or card issuer',
     order: 15,
     isActive: true,
     createdAt: new Date(),
@@ -3004,69 +3041,69 @@ const defaultPickupLocations: PickupLocation[] = [
   }
 ]
 
-// 기본 배송 옵션 데이터
+// 기본 배송 옵션 — 맞춤 스티커(레터) + 굿즈(소포 1종) + 픽업
 const defaultShippingOptions: ShippingOption[] = [
   {
-    id: 'auspost-letter',
-    name: 'Australia Post Large Letter (No Tracking)',
-    description: 'Small/Light mail (2-8 business days, no tracking)',
-    price: 2.40,
-    deliveryTime: '2-8 business days',
+    id: 'standard-letter',
+    name: 'Standard Letter',
+    description: 'Best for name stickers and flat custom sheets (2–8 business days, no tracking)',
+    price: 2.4,
+    deliveryTime: '2–8 business days',
     tracking: false,
     insurance: false,
     type: 'delivery',
     isDefault: true,
     order: 1,
     isActive: true,
-    freeShippingWhenThresholdMet: true, // 기준 금액 달성 시 무료
+    freeShippingWhenThresholdMet: true,
     createdAt: new Date(),
     updatedAt: new Date()
   },
   {
-    id: 'auspost-regular',
-    name: 'Australia Post Parcel Post',
-    description: 'Standard parcel delivery with tracking',
-    price: 9.70,
-    deliveryTime: '5-10 business days',
+    id: 'tracked-letter',
+    name: 'Tracked Letter',
+    description: 'Tracked letter service — delivery with tracking (peace of mind)',
+    price: 5.5,
+    deliveryTime: '2–8 business days',
     tracking: true,
     insurance: false,
     type: 'delivery',
     isDefault: false,
     order: 2,
     isActive: true,
-    discountWhenThresholdMet: 2.40, // 기준 금액 달성 시 $2.40 할인
+    discountWhenThresholdMet: 2.4,
     createdAt: new Date(),
     updatedAt: new Date()
   },
   {
-    id: 'auspost-tracked',
-    name: 'Australia Post Parcel Post (Signature)',
-    description: 'Tracked delivery with signature required',
-    price: 12.65,
-    deliveryTime: '5-10 business days',
-    tracking: true,
-    insurance: false,
-    type: 'delivery',
-    isDefault: false,
-    order: 3,
-    isActive: true,
-    discountWhenThresholdMet: 2.40, // 기준 금액 달성 시 $2.40 할인
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: 'auspost-express',
-    name: 'Australia Post Express Post',
-    description: 'Express delivery with tracking and insurance',
-    price: 13.70,
-    deliveryTime: '1-3 business days',
+    id: 'express-post',
+    name: 'Express Post',
+    description: 'Fastest service where available (1–3 business days, tracking)',
+    price: 14.5,
+    deliveryTime: '1–3 business days',
     tracking: true,
     insurance: true,
     type: 'delivery',
     isDefault: false,
+    order: 3,
+    isActive: true,
+    discountWhenThresholdMet: 2.4,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'parcel-post',
+    name: 'Parcel Post (Goods)',
+    description: 'Australia Post parcel for merchandise and heavier goods (tracking)',
+    price: 10.9,
+    deliveryTime: '3–10 business days',
+    tracking: true,
+    insurance: false,
+    type: 'delivery',
+    isDefault: false,
     order: 4,
     isActive: true,
-    discountWhenThresholdMet: 2.40, // 기준 금액 달성 시 $2.40 할인
+    discountWhenThresholdMet: 2.4,
     createdAt: new Date(),
     updatedAt: new Date()
   },
@@ -3075,7 +3112,7 @@ const defaultShippingOptions: ShippingOption[] = [
     name: 'Click & Collect (Mansfield)',
     description: 'Order online and collect from our Mansfield store. We will notify you when it is ready.',
     price: 0.0,
-    deliveryTime: 'pickup during business hours',
+    deliveryTime: 'During store business hours',
     tracking: false,
     insurance: false,
     type: 'pickup',
@@ -3083,22 +3120,6 @@ const defaultShippingOptions: ShippingOption[] = [
     isDefault: false,
     order: 5,
     isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: 'cash-on-delivery',
-    name: 'Cash on Delivery',
-    description: 'Pay with cash when your order is delivered',
-    price: 0.0,
-    deliveryTime: '5-10 business days',
-    tracking: false,
-    insurance: false,
-    type: 'cash-on-delivery',
-    isDefault: false,
-    order: 6,
-    isActive: true,
-    alwaysFree: true, // 항상 무료
     createdAt: new Date(),
     updatedAt: new Date()
   }
@@ -3114,16 +3135,33 @@ const defaultFreeShippingSettings: FreeShippingSettings = {
 // 기본 결제 옵션 데이터
 const defaultPaymentOptions: PaymentOption[] = [
   {
-    id: 'payment-card',
+    id: 'payment-stripe',
     name: 'Credit/Debit Card',
-    type: 'card',
-    description: 'Pay securely with your credit or debit card',
+    type: 'stripe',
+    description: 'Pay securely with your credit or debit card (Apple Pay & Google Pay supported).',
     fee: 0,
     feeType: 'fixed',
     requiresAuth: true,
-    isDefault: true,
-    order: 1,
+    // Bank Transfer를 Default로 만들기 위해 Stripe는 default 해제
+    isDefault: false,
+    order: 0,
     isActive: true,
+    icon: 'CreditCard',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'payment-card',
+    name: 'Credit/Debit Card',
+    type: 'card',
+    description: 'Pay securely with your credit or debit card (demo)',
+    fee: 0,
+    feeType: 'fixed',
+    requiresAuth: true,
+    isDefault: false,
+    order: 1,
+    // Deactivated by default to avoid showing a duplicate next to functional Stripe Checkout.
+    isActive: false,
     icon: 'CreditCard',
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3151,7 +3189,8 @@ const defaultPaymentOptions: PaymentOption[] = [
     fee: 0,
     feeType: 'fixed',
     requiresAuth: false,
-    isDefault: false,
+    // Bank Transfer를 Default로 설정
+    isDefault: true,
     order: 3,
     isActive: true,
     icon: 'Building2',
@@ -3189,6 +3228,22 @@ const defaultPaymentOptions: PaymentOption[] = [
     updatedAt: new Date()
   }
 ]
+
+/** Older persisted stores had no `stripe` option — users stayed on demo "card" and never hit Stripe Checkout. */
+function mergeStripePaymentOptionIfMissing(options: PaymentOption[]): PaymentOption[] {
+  if (!Array.isArray(options) || options.length === 0) return defaultPaymentOptions
+  // Do NOT override admin-managed active flags; only ensure Stripe option exists.
+  if (options.some((o) => o.type === 'stripe')) return options
+  const stripeTemplate = defaultPaymentOptions.find((o) => o.type === 'stripe')
+  if (!stripeTemplate) return options
+  const others = options
+  const stripe: PaymentOption = {
+    ...stripeTemplate,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+  return [stripe, ...others]
+}
 
 // 기본 프로모션 코드 데이터
 
@@ -3544,7 +3599,7 @@ export const useContentStore = create<ContentStore>()(
           updatedAt: new Date()
         }
         set((state: ContentStore) => ({
-          contentItems: [...state.contentItems, newContent]
+          contentItems: dedupeHeaderLogoImageItems([...state.contentItems, newContent])
         }))
       },
 
@@ -3556,15 +3611,16 @@ export const useContentStore = create<ContentStore>()(
               ? { ...item, ...updates, updatedAt: new Date() }
               : item
           )
-          console.log('업데이트된 아이템들:', updatedItems.length)
-          const updatedItem = updatedItems.find(item => item.id === id)
+          const mergedItems = dedupeHeaderLogoImageItems(updatedItems)
+          console.log('업데이트된 아이템들:', mergedItems.length)
+          const updatedItem = mergedItems.find(item => item.id === id)
           console.log('업데이트된 특정 아이템:', updatedItem)
           
           // Direct localStorage save to resolve persist issues
           try {
             localStorage.setItem('content-store', JSON.stringify({
               state: {
-                contentItems: updatedItems,
+                contentItems: mergedItems,
                 sidebarMenuItems: state.sidebarMenuItems,
                 heroSlides: state.heroSlides
               },
@@ -3576,7 +3632,7 @@ export const useContentStore = create<ContentStore>()(
           }
           
           return {
-            contentItems: updatedItems
+            contentItems: mergedItems
           }
         })
         console.log('콘텐츠 스토어 업데이트 완료')
@@ -4873,9 +4929,20 @@ export const useContentStore = create<ContentStore>()(
 
       getActiveShippingOptions: () => {
         const state = get()
-        return state.shippingOptions
+        const sorted = state.shippingOptions
           .filter((opt: ShippingOption) => opt.isActive)
           .sort((a: ShippingOption, b: ShippingOption) => a.order - b.order)
+        // Parcel Post (Goods) always directly under Express Post (ids: express-post → parcel-post)
+        const iExpress = sorted.findIndex((o: ShippingOption) => o.id === 'express-post')
+        const iParcel = sorted.findIndex((o: ShippingOption) => o.id === 'parcel-post')
+        if (iExpress !== -1 && iParcel !== -1 && iParcel !== iExpress + 1) {
+          const next = [...sorted]
+          const [parcel] = next.splice(iParcel, 1)
+          const expressIdx = next.findIndex((o: ShippingOption) => o.id === 'express-post')
+          next.splice(expressIdx + 1, 0, parcel)
+          return next
+        }
+        return sorted
       },
 
       getShippingOption: (id: string) => {
@@ -4891,6 +4958,14 @@ export const useContentStore = create<ContentStore>()(
             ...settings
           } as FreeShippingSettings
         }))
+        // Same-tab + listeners: keep cart/checkout in sync with admin (parity with payment options)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('content-store-updated', {
+              detail: { type: 'freeShippingSettings' }
+            })
+          )
+        }
       },
 
       getFreeShippingSettings: () => {
@@ -4909,6 +4984,15 @@ export const useContentStore = create<ContentStore>()(
         set((state: ContentStore) => ({
           paymentOptions: [...state.paymentOptions, newOption]
         }))
+
+        // admin 변경사항을 즉시 고객 화면에 반영하기 위한 이벤트
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('content-store-updated', {
+              detail: { type: 'paymentOptions', action: 'add', paymentOptionId: newOption.id }
+            })
+          )
+        }
       },
 
       updatePaymentOption: (id: string, updates: Partial<PaymentOption>) => {
@@ -4919,12 +5003,28 @@ export const useContentStore = create<ContentStore>()(
               : opt
           )
         }))
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('content-store-updated', {
+              detail: { type: 'paymentOptions', action: 'update', paymentOptionId: id }
+            })
+          )
+        }
       },
 
       deletePaymentOption: (id: string) => {
         set((state: ContentStore) => ({
           paymentOptions: state.paymentOptions.filter((opt: PaymentOption) => opt.id !== id)
         }))
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('content-store-updated', {
+              detail: { type: 'paymentOptions', action: 'delete', paymentOptionId: id }
+            })
+          )
+        }
       },
 
       togglePaymentOptionActive: (id: string) => {
@@ -4933,6 +5033,14 @@ export const useContentStore = create<ContentStore>()(
             opt.id === id ? { ...opt, isActive: !opt.isActive, updatedAt: new Date() } : opt
           )
         }))
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('content-store-updated', {
+              detail: { type: 'paymentOptions', action: 'toggleActive', paymentOptionId: id }
+            })
+          )
+        }
       },
 
       getDefaultPaymentOption: () => {
@@ -4952,7 +5060,7 @@ export const useContentStore = create<ContentStore>()(
         return state.paymentOptions.find((opt: PaymentOption) => opt.id === id)
       },
 
-      getPaymentOptionByType: (type: 'card' | 'paypal' | 'bank' | 'cash') => {
+      getPaymentOptionByType: (type: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe') => {
         const state = get()
         return state.paymentOptions.find((opt: PaymentOption) => opt.type === type && opt.isActive)
       },
@@ -5734,7 +5842,9 @@ export const useContentStore = create<ContentStore>()(
         const merged: any = {
           ...currentState,
           // localStorage에 저장된 데이터가 있으면 우선 사용
-          contentItems: persistedState?.contentItems || currentState.contentItems,
+          contentItems: dedupeHeaderLogoImageItems(
+            persistedState?.contentItems || currentState.contentItems
+          ),
           sidebarMenuItems: persistedState?.sidebarMenuItems || currentState.sidebarMenuItems,
           heroSlides: persistedState?.heroSlides || currentState.heroSlides,
           // heroSliderSettings: localStorage에 저장된 데이터가 있으면 사용, 없으면 기본값
@@ -5769,16 +5879,45 @@ export const useContentStore = create<ContentStore>()(
           promoCodes: hasPersistedPromoCodes
             ? persistedState.promoCodes
             : currentState.promoCodes,
-          // paymentOptions: localStorage에 저장된 데이터가 있으면 사용
-          paymentOptions: (persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0)
-            ? persistedState.paymentOptions
-            : currentState.paymentOptions,
+          // paymentOptions: localStorage에 저장된 데이터가 있으면 사용 (+ Stripe 옵션 마이그레이션)
+          paymentOptions: (() => {
+            const merged = mergeStripePaymentOptionIfMissing(
+              (persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0)
+                ? persistedState.paymentOptions
+                : currentState.paymentOptions
+            )
+
+            // Admin 변경을 기다리는 동안에도(기존 localStorage가 남아있는 경우에도) Bank Transfer를 Default로 유지
+            const opts = Array.isArray(merged) ? merged : currentState.paymentOptions
+            opts.forEach((o: any) => {
+              o.isDefault = false
+            })
+
+            const bankDefault = opts.find((o: any) => o.type === 'bank' && o.isActive)
+            if (bankDefault) {
+              bankDefault.isDefault = true
+            } else {
+              const fallback =
+                opts.find((o: any) => o.type === 'stripe' && o.isActive) ||
+                opts.find((o: any) => o.isActive)
+              if (fallback) fallback.isDefault = true
+            }
+
+            return opts
+          })(),
           // shippingOptions: localStorage에 저장된 데이터가 있으면 사용
           shippingOptions: (persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0)
             ? persistedState.shippingOptions
             : currentState.shippingOptions,
-          // freeShippingSettings: localStorage에 저장된 데이터가 있으면 사용
-          freeShippingSettings: persistedState?.freeShippingSettings || currentState.freeShippingSettings,
+          // freeShippingSettings: merge defaults + persisted (avoid stale partial objects; threshold must win)
+          freeShippingSettings: {
+            ...defaultFreeShippingSettings,
+            ...(currentState.freeShippingSettings || {}),
+            ...(persistedState?.freeShippingSettings &&
+            typeof persistedState.freeShippingSettings === 'object'
+              ? persistedState.freeShippingSettings
+              : {})
+          },
           // pickupLocations: localStorage에 저장된 데이터가 있으면 사용
           pickupLocations: (persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0)
             ? persistedState.pickupLocations
@@ -5804,11 +5943,13 @@ export const useContentStore = create<ContentStore>()(
         if (state) {
           // Date 문자열을 Date 객체로 변환
           if (state.contentItems) {
-            state.contentItems = state.contentItems.map(item => ({
-              ...item,
-              createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-              updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-            }))
+            state.contentItems = dedupeHeaderLogoImageItems(
+              state.contentItems.map(item => ({
+                ...item,
+                createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+                updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+              }))
+            )
           }
           if (state.sidebarMenuItems) {
             state.sidebarMenuItems = state.sidebarMenuItems.map(item => ({
@@ -5907,18 +6048,20 @@ export const useContentStore = create<ContentStore>()(
               }))
             })
           }
-          // paymentOptions의 Date 객체 변환
+          // paymentOptions의 Date 객체 변환 + Stripe 옵션 누락 시 보강(예전 스토어 대비)
           if (state.paymentOptions) {
-            state.paymentOptions = state.paymentOptions.map((option: any) => ({
-              ...option,
-              createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
-              updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt,
-              bankAccounts: option.bankAccounts ? option.bankAccounts.map((acc: any) => ({
-                ...acc,
-                createdAt: typeof acc.createdAt === 'string' ? new Date(acc.createdAt) : acc.createdAt,
-                updatedAt: typeof acc.updatedAt === 'string' ? new Date(acc.updatedAt) : acc.updatedAt
-              })) : undefined
-            }))
+            state.paymentOptions = mergeStripePaymentOptionIfMissing(
+              state.paymentOptions.map((option: any) => ({
+                ...option,
+                createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
+                updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt,
+                bankAccounts: option.bankAccounts ? option.bankAccounts.map((acc: any) => ({
+                  ...acc,
+                  createdAt: typeof acc.createdAt === 'string' ? new Date(acc.createdAt) : acc.createdAt,
+                  updatedAt: typeof acc.updatedAt === 'string' ? new Date(acc.updatedAt) : acc.updatedAt
+                })) : undefined
+              }))
+            )
           }
           // shippingOptions의 Date 객체 변환
           if (state.shippingOptions) {

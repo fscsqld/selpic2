@@ -9,8 +9,10 @@ import { useStore } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { getColorName } from '@/lib/colorUtils'
+import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
+import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import { useContentStore } from '@/lib/contentStore'
-import { ArrowLeft, Package, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X } from 'lucide-react'
+import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X } from 'lucide-react'
 import Link from 'next/link'
 // ✅ 회계 장부 자동 기록 통합 (재시도 로직 포함)
 import { recordOrderToAccountingAsyncWithRetry } from '@/apps/accounting-sandbox/src/features/transactions/order-approval-integration-retry'
@@ -26,21 +28,63 @@ export default function AdminOrderDetailPage() {
     addTrackingNumber,
     updateDeliveryStatus,
     sendOrderConfirmationEmail: sendOrderConfirmationEmailFromStore,
-    resendOrderConfirmationEmail: resendOrderConfirmationEmailFromStore
+    resendOrderConfirmationEmail: resendOrderConfirmationEmailFromStore,
+    sendReceiptEmail: sendReceiptEmailFromStore,
+    refreshOrdersFromStorage,
+    mergeOrdersFromServer,
   } = useStore()
   const performedBy = adminUser?.username || 'admin'
   const { getDefaultPickupLocation } = useContentStore()
   const [isLoading, setIsLoading] = useState(false)
   const [showCustomerMessage, setShowCustomerMessage] = useState(false)
+  const [isSendingReceipt, setIsSendingReceipt] = useState(false)
+  const [ledgerReady, setLedgerReady] = useState(false)
+  const [statusSaving, setStatusSaving] = useState(false)
 
   const orderId = Array.isArray(params?.orderId) ? params.orderId[0] : params?.orderId
   const order = orders.find(o => o.id === orderId)
 
   useEffect(() => {
+    if (!orderId) return
+    let cancelled = false
+    ;(async () => {
+      refreshOrdersFromStorage()
+      try {
+        const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.orders) && data.orders.length > 0) {
+            mergeOrdersFromServer(data.orders)
+          }
+        }
+        const hasLocal = useStore.getState().orders.some((o) => o.id === orderId)
+        if (!hasLocal) {
+          const r2 = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          })
+          if (r2.ok) {
+            const d = await r2.json()
+            if (d.order) mergeOrdersFromServer([d.order])
+          }
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLedgerReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [orderId, mergeOrdersFromServer, refreshOrdersFromStorage])
+
+  useEffect(() => {
+    if (!ledgerReady) return
     if (!order) {
       router.push('/admin/orders')
     }
-  }, [order, router])
+  }, [order, router, ledgerReady])
 
   const handleAddTrackingNumber = (trackingNumber: string, provider: string) => {
     if (order) {
@@ -127,7 +171,19 @@ export default function AdminOrderDetailPage() {
   const formatShippingOption = (optionId: string) => {
     if (!optionId) return '-'
     if (optionId === 'mansfield-same-day') return 'mansfield-free delivery'
-    return optionId
+    const labels: Record<string, string> = {
+      'standard-letter': 'Standard Letter',
+      'tracked-letter': 'Tracked Letter',
+      'express-post': 'Express Post',
+      'parcel-post': 'Parcel Post (Goods)',
+      'local-pickup': 'Click & Collect (Mansfield)',
+      'auspost-letter': 'Standard Letter (legacy)',
+      'auspost-regular': 'Parcel Post (legacy)',
+      'auspost-tracked': 'Parcel + Signature (legacy)',
+      'auspost-express': 'Express Post (legacy)',
+      'cash-on-delivery': 'Cash on Delivery (legacy)',
+    }
+    return labels[optionId] || optionId
   }
 
   const getBundleCategoryLabel = (category?: string) => {
@@ -145,7 +201,20 @@ export default function AdminOrderDetailPage() {
     }
   }
 
-  if (!order) {
+  if (!order && !ledgerReady) {
+    return (
+      <AdminRoute>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center text-gray-600">
+            <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p>Loading order…</p>
+          </div>
+        </div>
+      </AdminRoute>
+    )
+  }
+
+  if (!order && ledgerReady) {
     return (
       <AdminRoute>
         <div className="min-h-screen bg-gray-50">
@@ -163,6 +232,10 @@ export default function AdminOrderDetailPage() {
         </div>
       </AdminRoute>
     )
+  }
+
+  if (!order) {
+    return null
   }
 
   const isClickAndCollect =
@@ -254,6 +327,30 @@ SELPIC Team`
     window.location.href = smsLink
   }
 
+  const patchLedgerStatusOnly = async (next: 'processing' | 'shipped') => {
+    if (!order) return
+    setStatusSaving(true)
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next, performedBy }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Update failed')
+      }
+      if (data.order) {
+        mergeOrdersFromServer([data.order])
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update status')
+    } finally {
+      setStatusSaving(false)
+    }
+  }
+
   const handlePrintMessage = () => {
     const message = generateCustomerMessage()
     const printWindow = window.open('', '_blank')
@@ -343,7 +440,7 @@ SELPIC Team`
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end gap-2">
               <span className={`px-3 py-1 text-sm font-medium rounded-full ${
                 order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                 order.status === 'paid' ? 'bg-blue-100 text-blue-800' :
@@ -353,6 +450,34 @@ SELPIC Team`
               }`}>
                 {order.status.toUpperCase()}
               </span>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={
+                    statusSaving ||
+                    order.status === 'processing' ||
+                    order.status === 'shipped' ||
+                    order.status === 'cancelled'
+                  }
+                  onClick={() => patchLedgerStatusOnly('processing')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-900 hover:bg-purple-100 disabled:opacity-50"
+                >
+                  <Package className="w-4 h-4" />
+                  Ready (processing)
+                </button>
+                <button
+                  type="button"
+                  disabled={statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
+                  onClick={() => patchLedgerStatusOnly('shipped')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:opacity-50"
+                >
+                  <Truck className="w-4 h-4" />
+                  Shipped
+                </button>
+              </div>
+              <p className="max-w-xs text-right text-xs text-gray-500">
+                Updates Supabase only. Does not resend customer emails (confirmation and receipt were sent at checkout).
+              </p>
             </div>
           </div>
 
@@ -375,7 +500,27 @@ SELPIC Team`
                             <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                            {(() => {
+                              const { baseUnit, surchargeUnit, lineTotal } = getOrderItemLineMoney(item)
+                              const qty = item.quantity
+                              const baseTotal = baseUnit * qty
+                              const optionsTotal = surchargeUnit * qty
+                              const label =
+                                optionsTotal > 0.001
+                                  ? getCustomizationSurchargeLabel(item.customizations, { size: item.size })
+                                  : ''
+
+                              return (
+                                <div>
+                                  <p className="font-semibold">${baseTotal.toFixed(2)}</p>
+                                  {optionsTotal > 0.001 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      + {label} +${optionsTotal.toFixed(2)}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       {item.bundleItems && item.bundleItems.length > 0 && (
@@ -604,6 +749,41 @@ SELPIC Team`
                 onSendEmail={() => sendOrderConfirmationEmail(order.id)}
                 onResendEmail={() => resendOrderConfirmationEmail(order.id)}
               />
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  Receipt email (PDF)
+                </h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  {order.paymentMethod === 'bank'
+                    ? 'Bank transfer: send the receipt PDF after you confirm the customer deposit.'
+                    : 'Sends the order receipt as a PDF attachment (same as checkout for card payments).'}
+                </p>
+                {order.receiptEmail?.sent ? (
+                  <p className="text-sm text-green-700 mb-3">
+                    Sent{order.receiptEmail.sentAt ? ` on ${new Date(order.receiptEmail.sentAt).toLocaleString()}` : ''}.
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-800 mb-3">Not sent yet.</p>
+                )}
+                <button
+                  type="button"
+                  disabled={isSendingReceipt}
+                  onClick={async () => {
+                    if (!order) return
+                    setIsSendingReceipt(true)
+                    try {
+                      const ok = await sendReceiptEmailFromStore(order.id)
+                      alert(ok ? 'Receipt email sent.' : 'Failed to send receipt email.')
+                    } finally {
+                      setIsSendingReceipt(false)
+                    }
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
+                >
+                  {isSendingReceipt ? 'Sending…' : order.receiptEmail?.sent ? 'Send receipt again' : 'Send receipt email'}
+                </button>
+              </div>
             </div>
 
             {/* Sidebar */}

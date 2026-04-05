@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useMessageStore } from '@/lib/messageStore'
 import { 
   BarChart3, 
@@ -25,7 +26,8 @@ import {
   X,
   Calculator,
   Receipt,
-  BookOpen
+  BookOpen,
+  Building2
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
@@ -42,7 +44,7 @@ export default function AdminDashboard() {
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
   
   const { adminUser, logout } = useAdminAuth()
-  const { products, orders, language, setLanguage, currency, autoRefreshInterval, _hasHydrated, refreshProducts, refreshOrdersFromStorage } = useStore()
+  const { products, orders, currency, autoRefreshInterval, _hasHydrated, refreshProducts, refreshOrdersFromStorage } = useStore()
   const { users } = useUserAuth()
   const { unreadCount } = useMessageStore()
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
@@ -79,13 +81,18 @@ export default function AdminDashboard() {
         refreshOrdersFromStorage()
       }
     }
+    const handleOrdersUpdated = () => {
+      refreshOrdersFromStorage()
+    }
     window.addEventListener('products-store-updated', handleProductsUpdate)
     window.addEventListener('storage', handleStorage)
+    window.addEventListener('selpic-store-orders-updated', handleOrdersUpdated)
     return () => {
       window.removeEventListener('products-store-updated', handleProductsUpdate)
       window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('selpic-store-orders-updated', handleOrdersUpdated)
     }
-  }, [refreshProducts])
+  }, [refreshProducts, refreshOrdersFromStorage])
 
   // 자동 새로고침 기능
   useEffect(() => {
@@ -129,6 +136,15 @@ export default function AdminDashboard() {
       totalRevenue
     }
   }, [users, orders])
+
+  const pendingBankOrders = useMemo(
+    () =>
+      orders
+        .filter((o) => o.paymentMethod === 'bank' && o.status === 'pending')
+        .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
+        .slice(0, 8),
+    [orders]
+  )
 
   // 시간대별 인사말
   const getGreeting = () => {
@@ -301,16 +317,16 @@ export default function AdminDashboard() {
       requiredPermission: 'users:read'
     },
     {
-      title: 'Document Sender',
-      description: 'Send various documents to customers',
+      title: 'Invoice & document sender',
+      description: 'Tax invoices, quotes, receipts — email/PDF to customers',
       icon: FileCheck,
       href: '/admin/documents',
       color: 'bg-teal-500',
       requiredPermission: 'users:read'
     },
     {
-      title: 'Create Invoice',
-      description: 'Create and send invoices directly',
+      title: 'Invoice preview',
+      description: 'Build and preview tax invoices before sending',
       icon: FileText,
       href: '/admin/invoices/preview',
       color: 'bg-orange-500',
@@ -344,9 +360,13 @@ export default function AdminDashboard() {
   ].filter(action => {
     // Filter actions based on permissions
     if (!action.requiredPermission) return true
-    // SELPIC A: 슈퍼 관리자, 회계 관리자, 또는 급여 접근 권한이 있는 관리자만 표시
+    // SELPIC A: super / accounting / payroll / site-level system admin
     if (action.title === 'SELPIC A') {
-      return isAccountingManager() || hasPayrollAccessOnly()
+      return (
+        isAccountingManager() ||
+        hasPayrollAccessOnly() ||
+        adminUser?.permissions.includes('system:admin')
+      )
     }
     return hasPermission(action.requiredPermission)
   }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, unreadCount])
@@ -520,6 +540,69 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Bank transfer orders need explicit visibility (status stays pending until admin marks paid) */}
+          <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-6 mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-amber-700" aria-hidden />
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Bank transfer — awaiting payment
+                </h3>
+                <span className="text-sm font-medium text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                  {pendingBankOrders.length}
+                </span>
+              </div>
+              <Link
+                href="/admin/orders"
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+              >
+                View all orders →
+              </Link>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Bank transfer orders stay «pending» until you confirm payment. Open an order to mark it paid or send the receipt.
+            </p>
+            {pendingBankOrders.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No bank transfer orders awaiting payment.
+              </p>
+            ) : (
+              <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-gray-600">
+                      <th className="px-3 py-2 font-medium">ID</th>
+                      <th className="px-3 py-2 font-medium">Customer</th>
+                      <th className="px-3 py-2 font-medium">Total</th>
+                      <th className="px-3 py-2 font-medium">Date</th>
+                      <th className="px-3 py-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingBankOrders.map((o) => (
+                      <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50/80">
+                        <td className="px-3 py-2 font-mono text-xs">{o.id}</td>
+                        <td className="px-3 py-2">{o.customer?.name || '—'}</td>
+                        <td className="px-3 py-2">{formatCurrency(o.total || 0, currency)}</td>
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                          {new Date(o.createdAtIso).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Link
+                            href={`/admin/orders/${o.id}`}
+                            className="text-indigo-600 hover:text-indigo-800 font-medium"
+                          >
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* 빠른 액션 */}

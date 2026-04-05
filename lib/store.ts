@@ -1,8 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useDocumentTemplateStore, DocumentType } from './documentTemplateStore'
-import { COMPANY_LEGAL } from './companyLegal'
+import { COMPANY_LEGAL, getCompanyBrandName } from './companyLegal'
 import { scheduleCatalogSyncToServer } from './catalogSyncScheduler'
+import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
+import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
+import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
+import {
+  buildOrderConfirmationEmailPlainText,
+  buildOrderConfirmationEmailSubject,
+  buildOrderConfirmationEmailHtml
+} from '@/lib/orderConfirmationEmail'
 
 export interface Product {
   id: string
@@ -88,7 +96,12 @@ export type OrderStatus =
 export interface OrderItemSnapshot {
   productId: string
   name: string
+  /** Unit price GST-inclusive: base catalogue price + customization surcharges per unit */
   price: number
+  /** Catalogue unit price (GST-inclusive) before option surcharges */
+  baseUnitPrice?: number
+  /** Per-unit add-on from customization options (GST-inclusive), e.g. 2-line labels */
+  customizationSurchargePerUnit?: number
   image: string
   quantity: number
   customizations: Record<string, string>
@@ -130,7 +143,7 @@ export interface OrderRecord {
   total: number
   shippingOptionId: string
   shippingOptionName?: string
-  paymentMethod: 'card' | 'paypal' | 'bank' | 'cash'
+  paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'
   paymentMethodName?: string
   status: OrderStatus
   customer: {
@@ -148,6 +161,8 @@ export interface OrderRecord {
     country: string
     asSingleLine: string
   }
+  /** Set when order was paid via Stripe Checkout (dedupe / ledger). */
+  stripeCheckoutSessionId?: string
   // 배송 추적 정보 추가
   tracking?: {
     number: string
@@ -173,6 +188,11 @@ export interface OrderRecord {
     attempts: number
     lastAttempt?: string
     errorMessage?: string
+  }
+  /** Receipt email (PDF) — bank transfer: usually sent manually after admin confirms deposit */
+  receiptEmail?: {
+    sent: boolean
+    sentAt?: string
   }
   // 주문 이력 및 감사 로그
   auditLog?: Array<{
@@ -355,6 +375,8 @@ interface Store {
   // 주문 관련
   orders: OrderRecord[]
   createOrder: (order: Omit<OrderRecord, 'id' | 'createdAtIso'>) => string
+  /** Merge server-backed orders (e.g. Supabase) with local orders; does not adjust stock. */
+  mergeOrdersFromServer: (incoming: OrderRecord[]) => void
   updateOrderStatus: (orderId: string, status: OrderStatus, performedBy?: string) => void
   deleteOrder: (orderId: string, performedBy?: string) => void
   /** 다른 탭/창에서 고객이 주문했을 때 localStorage에서 주문 목록을 다시 읽어와 관리자 화면에 반영 */
@@ -387,6 +409,7 @@ interface Store {
   sendOrderConfirmationEmail: (orderId: string) => Promise<boolean>
   resendOrderConfirmationEmail: (orderId: string) => Promise<boolean>
   sendShippingNotificationEmail: (orderId: string) => Promise<boolean>
+  sendReceiptEmail: (orderId: string) => Promise<boolean>
   updateEmailConfirmationStatus: (orderId: string, status: 'pending' | 'sent' | 'failed' | 'delivered', errorMessage?: string) => void
   
   // 커스터마이징 관련
@@ -623,6 +646,32 @@ export const useStore = create<Store>()(
         const updatedOrders = [sanitizedInput, ...sanitizedExistingOrders].slice(0, MAX_STORED_ORDERS)
         set({ orders: updatedOrders, cart: [] })
 
+        // Keep other tabs + admin views in sync (persist may write async; storage event only fires in *other* tabs)
+        if (typeof window !== 'undefined') {
+          queueMicrotask(() => {
+            try {
+              const raw = localStorage.getItem('selpic-store')
+              if (raw) {
+                const parsed = JSON.parse(raw) as { state?: { orders?: OrderRecord[] }; orders?: OrderRecord[] }
+                const ord = get().orders
+                if (parsed && typeof parsed === 'object') {
+                  if (parsed.state && typeof parsed.state === 'object') {
+                    ;(parsed.state as { orders: OrderRecord[] }).orders = ord
+                  } else {
+                    ;(parsed as { orders: OrderRecord[] }).orders = ord
+                  }
+                  localStorage.setItem('selpic-store', JSON.stringify(parsed))
+                }
+              }
+            } catch (e) {
+              console.warn('[Store] createOrder: localStorage orders sync failed:', e)
+            }
+            window.dispatchEvent(
+              new CustomEvent('selpic-store-orders-updated', { detail: { orderId: id } })
+            )
+          })
+        }
+
         if (orderInput.items && orderInput.items.length > 0) {
           orderInput.items.forEach(item => {
             if (item?.productId && item.quantity) {
@@ -655,6 +704,60 @@ export const useStore = create<Store>()(
         }
         
         return id
+      },
+
+      mergeOrdersFromServer: (incoming) => {
+        if (!incoming?.length) return
+        const { orders: prev } = get()
+        const byId = new Map<string, OrderRecord>()
+        const byStripeSession = new Map<string, OrderRecord>()
+
+        for (const o of incoming) {
+          const sanitized = sanitizeOrder(o)
+          byId.set(sanitized.id, sanitized)
+          if (sanitized.stripeCheckoutSessionId) {
+            byStripeSession.set(sanitized.stripeCheckoutSessionId, sanitized)
+          }
+        }
+
+        for (const o of prev) {
+          const sanitized = sanitizeOrder(o)
+          if (sanitized.stripeCheckoutSessionId && byStripeSession.has(sanitized.stripeCheckoutSessionId)) {
+            continue
+          }
+          if (!byId.has(sanitized.id)) {
+            byId.set(sanitized.id, sanitized)
+          }
+        }
+
+        const merged = Array.from(byId.values())
+          .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
+          .slice(0, MAX_STORED_ORDERS)
+
+        set({ orders: merged })
+
+        if (typeof window !== 'undefined') {
+          queueMicrotask(() => {
+            try {
+              const raw = localStorage.getItem('selpic-store')
+              if (raw) {
+                const parsed = JSON.parse(raw) as { state?: { orders?: OrderRecord[] }; orders?: OrderRecord[] }
+                const ord = get().orders
+                if (parsed && typeof parsed === 'object') {
+                  if (parsed.state && typeof parsed.state === 'object') {
+                    ;(parsed.state as { orders: OrderRecord[] }).orders = ord
+                  } else {
+                    ;(parsed as { orders: OrderRecord[] }).orders = ord
+                  }
+                  localStorage.setItem('selpic-store', JSON.stringify(parsed))
+                }
+              }
+            } catch (e) {
+              console.warn('[Store] mergeOrdersFromServer: localStorage sync failed:', e)
+            }
+            window.dispatchEvent(new CustomEvent('selpic-store-orders-updated', { detail: { source: 'server' } }))
+          })
+        }
       },
 
       updateOrderStatus: (orderId, status, performedBy = 'system') => {
@@ -749,18 +852,46 @@ export const useStore = create<Store>()(
           }
         }
         
-        // Automatically send confirmation email when order is marked as paid
+        // When marked paid: notify customer; receipt PDF is skipped for bank transfer (admin sends after deposit)
         if (status === 'paid') {
-          // Add a small delay to ensure the order status is updated first
           setTimeout(() => {
             get().sendOrderConfirmationEmail(orderId)
+            const after = get().orders.find((o) => o.id === orderId)
+            if (
+              after &&
+              after.paymentMethod !== 'bank' &&
+              !after.receiptEmail?.sent
+            ) {
+              get().sendReceiptEmail(orderId)
+            }
           }, 100)
         }
       },
 
       deleteOrder: (orderId, performedBy = 'system') => {
         const { orders } = get()
-        set({ orders: orders.filter(o => o.id !== orderId) })
+        const updatedOrders = orders.filter(o => o.id !== orderId)
+        set({ orders: updatedOrders })
+
+        // Ensure localStorage is updated immediately (some UIs manually re-sync from storage).
+        if (typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem('selpic-store')
+            if (raw) {
+              const parsed = JSON.parse(raw) as any
+              if (parsed && typeof parsed === 'object') {
+                if (parsed.state && typeof parsed.state === 'object') {
+                  parsed.state.orders = updatedOrders
+                } else {
+                  parsed.orders = updatedOrders
+                }
+                localStorage.setItem('selpic-store', JSON.stringify(parsed))
+              }
+            }
+          } catch (e) {
+            console.warn('[Store] Failed to persist deleted order to localStorage:', e)
+          }
+        }
       },
 
       refreshOrdersFromStorage: () => {
@@ -1138,10 +1269,16 @@ export const useStore = create<Store>()(
 
       // 이메일 본문 생성 함수 (템플릿 + 주문 데이터)
       generateEmailContent: (template: any, order: OrderRecord, companyName: string): string => {
+        if (template?.type === 'order_confirmation') {
+          return buildOrderConfirmationEmailPlainText(order)
+        }
+
+        const brandName = getCompanyBrandName(companyName)
         const variables = {
           orderId: order.id,
           customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-          companyName: companyName,
+          companyName: brandName,
+          companyNameLegal: companyName,
           orderDate: new Date(order.createdAtIso).toLocaleDateString('en-AU', { 
             day: 'numeric', 
             month: 'short', 
@@ -1167,28 +1304,6 @@ export const useStore = create<Store>()(
         }
 
         // Template-specific content
-        if (template.type === 'order_confirmation') {
-          if (template.content.showOrderDetails) {
-            content += `Order Details:\n`
-            content += `Order ID: ${order.id}\n`
-            content += `Order Date: ${variables.orderDate}\n`
-            content += `Total: ${variables.orderTotal}\n`
-            content += `Status: ${order.status}\n\n`
-          }
-
-          if (template.content.showItems) {
-            content += `Order Items:\n`
-            order.items.forEach((item, index) => {
-              content += `${index + 1}. ${item.name} x ${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`
-            })
-            content += '\n'
-          }
-
-          if (template.content.customMessage) {
-            content += get().replaceTemplatePlaceholders(template.content.customMessage, variables) + '\n\n'
-          }
-        }
-
         // Closing
         if (template.email.closing) {
           content += get().replaceTemplatePlaceholders(template.email.closing, variables) + '\n'
@@ -1242,6 +1357,65 @@ export const useStore = create<Store>()(
           return false
         }
 
+        const isAdminSession =
+          typeof window !== 'undefined' &&
+          (await import('./adminAuth')).useAdminAuth.getState().isLoggedIn
+
+        /** Customer / guest: server actions (no open Resend API). */
+        if (!isAdminSession) {
+          try {
+            let ok = false
+            if (order.stripeCheckoutSessionId) {
+              const { sendStripeCheckoutEmailsAction } = await import('@/app/actions/emails')
+              const r = await sendStripeCheckoutEmailsAction(order.stripeCheckoutSessionId)
+              ok = r.ok
+            } else {
+              const { sendGuestCheckoutEmailsAction } = await import('@/app/actions/emails')
+              const r = await sendGuestCheckoutEmailsAction(JSON.stringify(order))
+              ok = r.ok
+            }
+            if (ok) {
+              set({
+                orders: get().orders.map((o) =>
+                  o.id === orderId
+                    ? {
+                        ...o,
+                        emailConfirmation: {
+                          sent: true,
+                          sentAt: new Date().toISOString(),
+                          status: 'sent',
+                          attempts: 1,
+                          lastAttempt: new Date().toISOString(),
+                        },
+                      }
+                    : o
+                ),
+              })
+              return true
+            }
+            throw new Error('Send failed')
+          } catch (error) {
+            console.error('Failed to send order confirmation email:', error)
+            set({
+              orders: get().orders.map((o) =>
+                o.id === orderId
+                  ? {
+                      ...o,
+                      emailConfirmation: {
+                        sent: false,
+                        status: 'failed',
+                        attempts: 1,
+                        lastAttempt: new Date().toISOString(),
+                        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                      },
+                    }
+                  : o
+              ),
+            })
+            return false
+          }
+        }
+
         try {
           // 템플릿 스토어에서 Order Confirmation 템플릿 가져오기
           const templateStore = useDocumentTemplateStore.getState()
@@ -1255,26 +1429,74 @@ export const useStore = create<Store>()(
           // Company 정보 가져오기 (Invoice Store에서)
           const { defaultTemplate } = await import('./invoiceStore').then(m => m.useInvoiceStore.getState())
           const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
+          const brandName = getCompanyBrandName(companyName)
 
-          // 이메일 본문 생성
-          const emailContent = get().generateEmailContent(template, order, companyName)
-          
-          // Subject 생성
-          const subjectVariables = {
-            orderId: order.id,
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            companyName: companyName
-          }
-          const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
+          // Order confirmation: fixed English subject + HTML body (see lib/orderConfirmationEmail.ts)
+          const emailContent = buildOrderConfirmationEmailPlainText(order)
+          const emailHtml = buildOrderConfirmationEmailHtml(order)
+          const emailSubject = buildOrderConfirmationEmailSubject(order.id)
 
           // 이메일 발송
           const { emailService } = await import('./emailService')
+          const attachments: File[] = []
+
+          try {
+            const OrderConfirmationTemplate = (await import('@/components/OrderConfirmationTemplate')).default
+            const company = defaultTemplate?.company
+            const React = (await import('react')).default
+
+            const pdfOrder = {
+              id: order.id,
+              customer: {
+                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+                firstName: (order.customer as any).firstName,
+                lastName: (order.customer as any).lastName,
+                email: order.customer.email || '',
+                phone: order.customer.phone || ''
+              },
+              items: order.items.map((it: any) => ({
+                product: {
+                  name: it.name,
+                  price: it.price,
+                  image: it.image || '/placeholder-product.jpg'
+                },
+                quantity: it.quantity,
+                customizations: it.customizations || {}
+              })),
+              subtotal: order.subtotal,
+              shipping: order.shippingPrice,
+              total: order.total,
+              discount: order.discount || 0,
+              createdAtIso: order.createdAtIso,
+              paymentMethod: order.paymentMethod
+            }
+
+            const templateProps = {
+              greeting: template.email.greeting,
+              customMessage: template.content?.customMessage,
+              closing: template.email.closing
+            }
+
+            const pdfFile = await renderReactPreviewToPdfFile({
+              reactElement: React.createElement(OrderConfirmationTemplate as any, {
+                order: pdfOrder,
+                company,
+                template: templateProps
+              }),
+              filename: `Order-Confirmation-${order.id}.pdf`
+            })
+            if (pdfFile) attachments.push(pdfFile)
+          } catch (e) {
+            console.warn('Failed to generate Order Confirmation PDF attachment:', e)
+          }
           const result = await emailService.sendResponse({
             customerEmail: order.customer.email || '',
             customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
-            adminName: companyName
+            html: emailHtml,
+            adminName: brandName,
+            attachments
           })
 
           if (result.success) {
@@ -1340,16 +1562,9 @@ export const useStore = create<Store>()(
           const { defaultTemplate } = await import('./invoiceStore').then(m => m.useInvoiceStore.getState())
           const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
 
-          // 이메일 본문 생성
-          const emailContent = get().generateEmailContent(template, order, companyName)
-          
-          // Subject 생성
-          const subjectVariables = {
-            orderId: order.id,
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            companyName: companyName
-          }
-          const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
+          const emailContent = buildOrderConfirmationEmailPlainText(order)
+          const emailHtml = buildOrderConfirmationEmailHtml(order)
+          const emailSubject = buildOrderConfirmationEmailSubject(order.id)
 
           // 이메일 발송
           const { emailService } = await import('./emailService')
@@ -1358,6 +1573,7 @@ export const useStore = create<Store>()(
             customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
+            html: emailHtml,
             adminName: companyName
           })
 
@@ -1431,6 +1647,7 @@ export const useStore = create<Store>()(
           // Company 정보 가져오기 (Invoice Store에서)
           const { defaultTemplate } = await import('./invoiceStore').then(m => m.useInvoiceStore.getState())
           const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
+          const brandName = getCompanyBrandName(companyName)
 
           // 이메일 본문 생성
           const emailContent = get().generateEmailContent(template, order, companyName)
@@ -1439,18 +1656,71 @@ export const useStore = create<Store>()(
           const subjectVariables = {
             orderId: order.id,
             customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            companyName: companyName
+            companyName: brandName,
+            companyNameLegal: companyName
           }
           const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
 
           // 이메일 발송
           const { emailService } = await import('./emailService')
+          const attachments: File[] = []
+
+          try {
+            const ShippingNotificationTemplate = (await import('@/components/ShippingNotificationTemplate')).default
+            const company = defaultTemplate?.company
+            const React = (await import('react')).default
+
+            const pdfOrder = {
+              id: order.id,
+              customer: {
+                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+                firstName: (order.customer as any).firstName,
+                lastName: (order.customer as any).lastName,
+                email: order.customer.email || '',
+                phone: order.customer.phone || ''
+              },
+              address: {
+                streetAddress: order.address.streetAddress,
+                suburb: order.address.suburb,
+                state: order.address.state,
+                postcode: order.address.postcode,
+                country: order.address.country
+              },
+              items: order.items.map((it: any) => ({
+                product: {
+                  name: it.name,
+                  price: it.price,
+                  image: it.image || '/placeholder-product.jpg'
+                },
+                quantity: it.quantity,
+                customizations: it.customizations || {}
+              })),
+              shippingOption: {
+                name: order.shippingOptionName || order.shippingOptionId || 'Shipping',
+                price: order.shippingPrice
+              },
+              tracking: order.tracking,
+              createdAtIso: order.createdAtIso
+            }
+
+            const pdfFile = await renderReactPreviewToPdfFile({
+              reactElement: React.createElement(ShippingNotificationTemplate as any, {
+                order: pdfOrder,
+                company
+              }),
+              filename: `Shipping-Notification-${order.id}.pdf`
+            })
+            if (pdfFile) attachments.push(pdfFile)
+          } catch (e) {
+            console.warn('Failed to generate Shipping Notification PDF attachment:', e)
+          }
           const result = await emailService.sendResponse({
             customerEmail: order.customer.email || '',
             customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
             subject: emailSubject,
             message: emailContent,
-            adminName: companyName
+            adminName: brandName,
+            attachments
           })
 
           if (result.success) {
@@ -1461,6 +1731,154 @@ export const useStore = create<Store>()(
           }
         } catch (error) {
           console.error('❌ Failed to send shipping notification email:', error)
+          return false
+        }
+      },
+
+      sendReceiptEmail: async (orderId) => {
+        const { orders } = get()
+        const order = orders.find((o) => o.id === orderId)
+        if (!order) {
+          console.error('Order not found for receipt email:', orderId)
+          return false
+        }
+
+        const isAdminSession =
+          typeof window !== 'undefined' &&
+          (await import('./adminAuth')).useAdminAuth.getState().isLoggedIn
+
+        if (!isAdminSession) {
+          try {
+            const { sendCustomerReceiptEmailAction } = await import('@/app/actions/emails')
+            const r = await sendCustomerReceiptEmailAction(JSON.stringify(order))
+            if (r.ok) {
+              const sentAt = new Date().toISOString()
+              set((state) => ({
+                orders: state.orders.map((o) =>
+                  o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
+                ),
+              }))
+              return true
+            }
+            console.warn('[sendReceiptEmail] server receipt failed', r.error)
+          } catch (e) {
+            console.error('[sendReceiptEmail] customer server path', e)
+          }
+          return false
+        }
+
+        try {
+          const templateStore = useDocumentTemplateStore.getState()
+          const template = templateStore.getTemplate('receipt')
+          if (!template) {
+            console.error('Receipt template not found')
+            return false
+          }
+
+          const { defaultTemplate } = await import('./invoiceStore').then((m) => m.useInvoiceStore.getState())
+          const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
+          const brandName = getCompanyBrandName(companyName)
+
+          const emailContent = get().generateEmailContent(template, order, companyName)
+
+          const subjectVariables = {
+            orderId: order.id,
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+            companyName: brandName,
+            companyNameLegal: companyName
+          }
+          const subjectTemplate = (template.email.subject || '').trim()
+          const emailSubject = get().replaceTemplatePlaceholders(
+            subjectTemplate || 'Receipt {orderId} from {companyName}',
+            subjectVariables
+          )
+
+          const { emailService } = await import('./emailService')
+          const attachments: File[] = []
+
+          try {
+            const OrderReceipt = (await import('@/components/OrderReceipt')).default
+            const company = defaultTemplate?.company
+            const React = (await import('react')).default
+
+            const pdfOrder = {
+              id: order.id,
+              customer: {
+                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+                firstName: (order.customer as any).firstName,
+                lastName: (order.customer as any).lastName,
+                email: order.customer.email || '',
+                phone: order.customer.phone || ''
+              },
+              address: {
+                streetAddress: order.address.streetAddress,
+                suburb: order.address.suburb,
+                state: order.address.state,
+                postcode: order.address.postcode,
+                country: order.address.country
+              },
+              items: order.items.map((it: any) => ({
+                product: {
+                  name: it.name,
+                  price: it.price,
+                  image: it.image || '/placeholder-product.jpg'
+                },
+                quantity: it.quantity,
+                customizations: it.customizations || {}
+              })),
+              subtotal: order.subtotal,
+              shipping: order.shippingPrice,
+              total: order.total,
+              vipDiscount: (order as any).vipDiscount,
+              promoDiscount: (order as any).promoDiscount,
+              discount: order.discount,
+              vipGradeName: (order as any).vipGradeName,
+              vipGradeCode: (order as any).vipGradeCode,
+              promoCode: (order as any).promoCode,
+              paymentMethod: order.paymentMethod || 'N/A',
+              shippingOption: {
+                name: order.shippingOptionName || order.shippingOptionId || 'Shipping',
+                price: order.shippingPrice
+              },
+              createdAtIso: order.createdAtIso
+            }
+
+            // OrderReceipt doesn't accept company props today; it reads COMPANY_LEGAL/CONTACT directly.
+            void company
+
+            const pdfFile = await renderReactPreviewToPdfFile({
+              reactElement: React.createElement(OrderReceipt as any, {
+                order: pdfOrder
+              }),
+              filename: `Receipt-${order.id}.pdf`
+            })
+            if (pdfFile) attachments.push(pdfFile)
+          } catch (e) {
+            console.warn('Failed to generate Receipt PDF attachment:', e)
+          }
+
+          const result = await emailService.sendResponse({
+            customerEmail: order.customer.email || '',
+            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+            subject: emailSubject,
+            message: emailContent,
+            adminName: brandName,
+            attachments
+          })
+
+          if (result.success) {
+            const sentAt = new Date().toISOString()
+            set((state) => ({
+              orders: state.orders.map((o) =>
+                o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
+              )
+            }))
+            console.log('✅ Receipt email sent successfully:', orderId)
+            return true
+          }
+          throw new Error(result.message || 'Failed to send receipt email')
+        } catch (error) {
+          console.error('❌ Failed to send receipt email:', error)
           return false
         }
       },
@@ -1498,18 +1916,15 @@ export const useStore = create<Store>()(
         set({ isCustomizationModalOpen: open })
       },
 
-      // 언어 설정 메서드
-      setLanguage: (language) => {
-        console.log('🏪 Store setLanguage called with:', language)
-        console.log('🏪 Previous language:', get().language)
-        set({ language })
-        console.log('🏪 New language set to:', get().language)
+      // English-only storefront: keep signature for compatibility but always use English
+      setLanguage: (_language) => {
+        set({ language: 'en' })
       },
 
-      // 포맷 설정 초기값
-      currency: 'USD' as Currency,
-      dateFormat: 'YYYY-MM-DD' as DateFormat,
-      timezone: 'UTC' as Timezone,
+      // 포맷 설정 초기값 (AU 기본값)
+      currency: 'AUD' as Currency,
+      dateFormat: 'DD/MM/YYYY' as DateFormat,
+      timezone: 'Australia/Brisbane' as Timezone,
 
       // 포맷 설정 메서드
       setCurrency: (currency) => {
@@ -2000,35 +2415,25 @@ export const useStore = create<Store>()(
             `
           }
           
-          // 각 수신자별로 개별 이메일 발송 (개인화된 구독 취소 링크 포함)
+          // Server action: requires Supabase admin session (no open /api/newsletter/send relay).
+          const { sendAdminComposeEmailAction } = await import('@/app/actions/emails')
           let successCount = 0
           let failedCount = 0
           const errors: string[] = []
-          
-          // Resend는 한 번에 여러 수신자에게 보낼 수 있지만, 개인화된 링크를 위해 개별 발송
+
           for (const recipientEmail of recipientEmails) {
             try {
               const htmlContent = generatePersonalizedEmail(recipientEmail)
-              
-              const sendResponse = await fetch('/api/newsletter/send', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  to: recipientEmail,
-                  subject: campaign.subject,
-                  html: htmlContent
-                })
+              const sendResult = await sendAdminComposeEmailAction({
+                to: recipientEmail,
+                subject: campaign.subject,
+                html: htmlContent,
               })
-              
-              const sendResult = await sendResponse.json()
-              
-              if (sendResponse.ok && sendResult.success) {
+              if (sendResult.ok) {
                 successCount++
               } else {
                 failedCount++
-                errors.push(`${recipientEmail}: ${sendResult.message || 'Unknown error'}`)
+                errors.push(`${recipientEmail}: ${sendResult.error || 'Send failed'}`)
               }
             } catch (error: any) {
               failedCount++
@@ -2264,9 +2669,9 @@ SELPIC Team`,
         cart: state.cart,
         customizations: state.customizations,
         language: state.language || 'en', // Ensure language defaults to 'en'
-        currency: state.currency || 'USD',
-        dateFormat: state.dateFormat || 'YYYY-MM-DD',
-        timezone: state.timezone || 'UTC',
+        currency: state.currency || 'AUD',
+        dateFormat: state.dateFormat || 'DD/MM/YYYY',
+        timezone: state.timezone || 'Australia/Brisbane',
         defaultPageSize: state.defaultPageSize || 25,
         theme: state.theme || 'light',
         autoRefreshInterval: state.autoRefreshInterval || 0,
@@ -2287,10 +2692,11 @@ SELPIC Team`,
           products: data.products && Array.isArray(data.products) ? data.products : currentState.products,
           cart: data.cart ?? currentState.cart,
           customizations: data.customizations ?? currentState.customizations,
-          language: data.language || currentState.language || 'en',
-          currency: data.currency || currentState.currency || 'USD',
-          dateFormat: data.dateFormat || currentState.dateFormat || 'YYYY-MM-DD',
-          timezone: data.timezone || currentState.timezone || 'UTC',
+          // English-only storefront: ignore persisted non-English preference
+          language: 'en',
+          currency: data.currency || currentState.currency || 'AUD',
+          dateFormat: data.dateFormat || currentState.dateFormat || 'DD/MM/YYYY',
+          timezone: data.timezone || currentState.timezone || 'Australia/Brisbane',
           defaultPageSize: data.defaultPageSize ?? currentState.defaultPageSize ?? 25,
           theme: data.theme ?? currentState.theme ?? 'light',
           autoRefreshInterval: data.autoRefreshInterval ?? currentState.autoRefreshInterval ?? 0,
@@ -2304,10 +2710,7 @@ SELPIC Team`,
       onRehydrateStorage: () => (state) => {
         if (state) {
           state._hasHydrated = true
-          // Ensure language defaults to 'en' if not set or invalid
-          if (!state.language || (state.language !== 'ko' && state.language !== 'en')) {
-            state.language = 'en'
-          }
+          state.language = 'en'
           
           // 🔧 최종 확인: products가 localStorage에서 제대로 복원되었는지 확인
           console.log('🏪 [Store] Rehydration complete:', {

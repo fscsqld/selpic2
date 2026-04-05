@@ -2,6 +2,7 @@
 
 import { CheckCircle, Calendar, User, Package } from 'lucide-react'
 import { COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { getOrderConfirmationPaymentNotice } from '@/lib/orderConfirmationPaymentNotice'
 
 interface OrderConfirmationTemplateProps {
   order: {
@@ -27,6 +28,7 @@ interface OrderConfirmationTemplateProps {
     total: number
     discount?: number
     createdAtIso: string
+    paymentMethod?: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'
   }
   company?: {
     name?: string
@@ -41,46 +43,41 @@ interface OrderConfirmationTemplateProps {
     customMessage?: string
     closing?: string
   }
-  language?: 'ko' | 'en'
 }
 
 export default function OrderConfirmationTemplate({
   order,
   company,
-  template,
-  language = 'en'
+  template
 }: OrderConfirmationTemplateProps) {
-  const isKo = language === 'ko'
-  
   const T = {
-    confirmation: isKo ? '주문 확인' : 'Order Confirmation',
-    orderNumber: isKo ? '주문번호' : 'Order Number',
-    orderDate: isKo ? '주문일' : 'Order Date',
-    customerInfo: isKo ? '고객 정보' : 'Customer Information',
-    orderItems: isKo ? '주문 상품' : 'Order Items',
-    subtotal: isKo ? '소계' : 'Subtotal',
-    shipping: isKo ? '배송비' : 'Shipping',
-    total: isKo ? '총계' : 'Total',
-    thankYou: isKo ? '주문해 주셔서 감사합니다!' : 'Thank you for your order!',
-    name: isKo ? '이름' : 'Name',
-    email: isKo ? '이메일' : 'Email',
-    phone: isKo ? '전화번호' : 'Phone',
-    quantity: isKo ? '수량' : 'Quantity',
-    price: isKo ? '가격' : 'Price',
+    confirmation: 'Order Confirmation',
+    orderNumber: 'Order Number',
+    orderDate: 'Order Date',
+    customerInfo: 'Customer Information',
+    orderItems: 'Order Items',
+    subtotal: 'Subtotal',
+    shipping: 'Shipping',
+    total: 'Total',
+    thankYou: 'Thank you for your order!',
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    quantity: 'Quantity',
     companyName: company?.name || COMPANY_LEGAL.companyName,
     companyLegal: (company?.abn && company?.acn)
       ? `ABN: ${company.abn}\nACN: ${company.acn}`
       : COMPANY_LEGAL_LINE,
-    companyEmail: company?.email || (isKo ? '이메일: info@selpic.com.au' : 'Email: info@selpic.com.au'),
-    confirmed: isKo ? '주문이 확인되었습니다.' : 'Your order has been confirmed and is being processed.',
-    shippingNotification: isKo ? '배송 알림을 받으시면 배송이 시작된 것을 알 수 있습니다.' : 'You will receive a shipping notification once your order has been dispatched.',
-    contactUs: isKo ? '문의사항이 있으시면 연락주세요.' : 'If you have any questions, please contact us.'
+    companyEmail: company?.email || 'Email: info@selpic.com.au',
+    confirmed: 'Your order has been confirmed and is being processed.',
+    shippingNotification: 'You will receive a shipping notification once your order has been dispatched.',
+    contactUs: 'If you have any questions, please contact us.'
   }
 
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString(isKo ? 'ko-KR' : 'en-US', {
+      return date.toLocaleDateString('en-AU', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
@@ -91,26 +88,25 @@ export default function OrderConfirmationTemplate({
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(isKo ? 'ko-KR' : 'en-US', {
+    return new Intl.NumberFormat('en-AU', {
       style: 'decimal',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(amount).replace(/^/, '$')
   }
 
-  // 간단한 커스터마이징 텍스트 추출 (복잡한 Bundle/SET 제외)
+  const paymentNotice = getOrderConfirmationPaymentNotice(order.paymentMethod)
+
   const getSimpleCustomizationText = (customizations?: Record<string, string>): string | null => {
     if (!customizations) return null
-    
-    // Bundle이나 SET 타입은 제외
+
     if (customizations.bundleType === 'bundle' || customizations.setType === 'set') {
       return null
     }
-    
-    // 간단한 텍스트 커스터마이징만 추출
+
     const simpleKeys = ['text', 'font', 'color']
     const customTexts: string[] = []
-    
+
     simpleKeys.forEach(key => {
       if (customizations[key]) {
         const value = customizations[key]
@@ -121,31 +117,27 @@ export default function OrderConfirmationTemplate({
         }
       }
     })
-    
+
     return customTexts.length > 0 ? customTexts.join(', ') : null
   }
 
   return (
     <div className="max-w-4xl mx-auto bg-white p-8 border border-gray-200 rounded-lg shadow-sm">
-      {/* Header - Australian document format: legal name + ABN/ACN */}
       <div className="text-center border-b border-gray-200 pb-6 mb-6">
         <div className="mb-6 text-left">
           <h2 className="text-2xl font-black text-gray-900 tracking-tight">{T.companyName}</h2>
           <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">{T.companyLegal}</p>
         </div>
-        {/* Confirmation Title */}
         <div className="flex items-center justify-center mb-4">
           <CheckCircle className="h-12 w-12 text-green-600 mr-3" />
           <h1 className="text-3xl font-bold text-gray-900">{T.confirmation}</h1>
         </div>
-        
-        {/* Thank You Message */}
+
         <div className="text-gray-600">
           <p className="text-lg font-medium">{T.thankYou}</p>
         </div>
       </div>
 
-      {/* Order Information */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center space-x-3">
           <Calendar className="h-5 w-5 text-gray-500" />
@@ -154,7 +146,7 @@ export default function OrderConfirmationTemplate({
             <p className="text-lg font-semibold text-gray-900">{order.id}</p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <Calendar className="h-5 w-5 text-gray-500" />
           <div>
@@ -164,7 +156,6 @@ export default function OrderConfirmationTemplate({
         </div>
       </div>
 
-      {/* Customer Information */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <User className="h-5 w-5 mr-2" />
@@ -199,7 +190,6 @@ export default function OrderConfirmationTemplate({
         </div>
       </div>
 
-      {/* Order Items */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Package className="h-5 w-5 mr-2" />
@@ -211,8 +201,8 @@ export default function OrderConfirmationTemplate({
             return (
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center space-x-4">
-                  <img 
-                    src={item.product.image} 
+                  <img
+                    src={item.product.image}
                     alt={item.product.name}
                     className="w-16 h-16 object-cover rounded-lg"
                   />
@@ -234,7 +224,6 @@ export default function OrderConfirmationTemplate({
         </div>
       </div>
 
-      {/* Order Summary */}
       <div className="mb-6">
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="space-y-2">
@@ -262,16 +251,18 @@ export default function OrderConfirmationTemplate({
         </div>
       </div>
 
-      {/* Custom Message */}
-      <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
-        <p className="text-gray-700 mb-2">{T.confirmed}</p>
-        <p className="text-gray-700">{T.shippingNotification}</p>
+      <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg space-y-3">
+        {paymentNotice ? (
+          <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-line">{paymentNotice}</p>
+        ) : (
+          <p className="text-gray-700">{T.confirmed}</p>
+        )}
+        <p className="text-gray-700 text-sm">{T.shippingNotification}</p>
         {template?.customMessage && (
-          <p className="text-gray-700 mt-2">{template.customMessage}</p>
+          <p className="text-gray-700 mt-2 text-sm">{template.customMessage}</p>
         )}
       </div>
 
-      {/* Footer */}
       <div className="mt-8 border-t border-gray-200 pt-6">
         <div className="text-center text-gray-500 text-sm space-y-2">
           <p>{T.contactUs}</p>
@@ -283,4 +274,3 @@ export default function OrderConfirmationTemplate({
     </div>
   )
 }
-

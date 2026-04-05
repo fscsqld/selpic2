@@ -1,3 +1,4 @@
+/** Legacy static list — checkout uses `contentStore` shipping options. Keep ids aligned with `defaultShippingOptions`. */
 export interface ShippingOption {
   id: string
   name: string
@@ -8,59 +9,49 @@ export interface ShippingOption {
   insurance: boolean
 }
 
-// Factory to build localized shipping options; UI can choose name/description from translations
 export const shippingOptions: ShippingOption[] = [
   {
-    id: 'auspost-letter',
-    name: 'Australia Post Large Letter (No Tracking)',
-    description: '',
-    price: 2.40,
-    deliveryTime: '',
+    id: 'standard-letter',
+    name: 'Standard Letter',
+    description: 'Best for name stickers and flat custom sheets',
+    price: 2.4,
+    deliveryTime: '2–8 business days',
     tracking: false,
     insurance: false
   },
   {
-    id: 'auspost-regular',
-    name: 'Australia Post Parcel Post',
-    description: '',
-    price: 9.70,
-    deliveryTime: '',
+    id: 'tracked-letter',
+    name: 'Tracked Letter',
+    description: 'Tracked letter service',
+    price: 5.5,
+    deliveryTime: '2–8 business days',
     tracking: true,
     insurance: false
   },
   {
-    id: 'auspost-tracked',
-    name: 'Australia Post Parcel Post (Signature)',
-    description: '',
-    price: 12.65,
-    deliveryTime: '',
-    tracking: true,
-    insurance: false
-  },
-  {
-    id: 'auspost-express',
-    name: 'Australia Post Express Post',
-    description: '',
-    price: 13.70,
-    deliveryTime: '',
+    id: 'express-post',
+    name: 'Express Post',
+    description: 'Fastest service where available',
+    price: 14.5,
+    deliveryTime: '1–3 business days',
     tracking: true,
     insurance: true
   },
   {
-    id: 'local-pickup',
-    name: 'Click & Collect (Mansfield)',
-    description: '',
-    price: 0.0,
-    deliveryTime: '',
-    tracking: false,
+    id: 'parcel-post',
+    name: 'Parcel Post (Goods)',
+    description: 'Parcel for merchandise and heavier goods',
+    price: 10.9,
+    deliveryTime: '3–10 business days',
+    tracking: true,
     insurance: false
   },
   {
-    id: 'cash-on-delivery',
-    name: 'Cash on Delivery',
-    description: '',
+    id: 'local-pickup',
+    name: 'Click & Collect (Mansfield)',
+    description: 'Collect from Mansfield store',
     price: 0.0,
-    deliveryTime: '',
+    deliveryTime: 'Store hours',
     tracking: false,
     insurance: false
   }
@@ -71,5 +62,5 @@ export const getShippingOption = (id: string): ShippingOption | undefined => {
 }
 
 export const getDefaultShippingOption = (): ShippingOption => {
-  return shippingOptions[0] // Regular as default
-} 
+  return shippingOptions[0]
+}

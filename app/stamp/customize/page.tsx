@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useStore, Product } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
-import { Type, Palette, Package, ShoppingCart, ArrowRight, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Type, Palette, Package, ShoppingCart, ArrowRight, X, ChevronDown, ChevronUp, Minus, Plus } from 'lucide-react'
 import Header from '@/components/Header'
 import { getStampFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
 
@@ -30,6 +30,7 @@ function StampCustomizeContent() {
   const [selectedFont, setSelectedFont] = useState('k-stamp-antique') // 기본값을 한글 지원 폰트로 설정
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [orderQuantity, setOrderQuantity] = useState(1)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isFontGuideOpen, setIsFontGuideOpen] = useState(false)
   
@@ -345,7 +346,7 @@ function StampCustomizeContent() {
         // SET 상품의 원래 가격 유지
         const cartItem = {
           product: selectedProduct, // SET 상품 자체를 사용 (원래 가격 유지)
-          quantity: 1,
+          quantity: orderQuantity,
           customizations
         }
 
@@ -364,7 +365,7 @@ function StampCustomizeContent() {
       // 일반 상품인 경우 (기존 로직)
       const cartItem = {
         product: storeProduct, // 최신 제품 정보 사용
-        quantity: 1,
+        quantity: orderQuantity,
         customizations: {
           text: customText,
           font: selectedFont,
@@ -462,7 +463,7 @@ function StampCustomizeContent() {
         // SET 상품의 원래 가격 유지
         const cartItem = {
           product: selectedProduct, // SET 상품 자체를 사용 (원래 가격 유지)
-          quantity: 1,
+          quantity: orderQuantity,
           customizations
         }
 
@@ -480,7 +481,7 @@ function StampCustomizeContent() {
       // 일반 상품인 경우 (기존 로직)
       const cartItem = {
         product: storeProduct, // 최신 제품 정보 사용
-        quantity: 1,
+        quantity: orderQuantity,
         customizations: {
           text: customText,
           font: selectedFont,
@@ -764,6 +765,30 @@ function StampCustomizeContent() {
                 
                 {/* Action Buttons for SET Customization */}
                 <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <span className="text-sm text-gray-600 font-medium">Quantity</span>
+                    <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50">
+                      <button
+                        type="button"
+                        aria-label="Decrease quantity"
+                        disabled={orderQuantity <= 1}
+                        onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                        className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-10 text-center font-semibold tabular-nums">{orderQuantity}</span>
+                      <button
+                        type="button"
+                        aria-label="Increase quantity"
+                        disabled={orderQuantity >= 999}
+                        onClick={() => setOrderQuantity((q) => Math.min(999, q + 1))}
+                        className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={handleAddToCartAndCheckout}
@@ -856,6 +881,31 @@ function StampCustomizeContent() {
                     className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${designStats.completion}%` }}
                   />
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 bg-slate-800/90 rounded-lg p-2.5 border border-slate-600">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wider">Quantity</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Decrease quantity"
+                      disabled={orderQuantity <= 1}
+                      onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                      className="p-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-10 text-center font-semibold text-white tabular-nums">{orderQuantity}</span>
+                    <button
+                      type="button"
+                      aria-label="Increase quantity"
+                      disabled={orderQuantity >= 999}
+                      onClick={() => setOrderQuantity((q) => Math.min(999, q + 1))}
+                      className="p-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Action Buttons */}

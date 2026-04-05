@@ -86,7 +86,7 @@ function AdminBespokeRequestsContent() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/bespoke-requests/stickers/custom')
+      const res = await fetch('/api/bespoke-requests/stickers/custom', { credentials: 'same-origin' })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.message || 'Failed to fetch')
       setRecords(data.records || [])
@@ -106,6 +106,7 @@ function AdminBespokeRequestsContent() {
     try {
       const res = await fetch(`/api/bespoke-requests/stickers/custom/${id}`, {
         method: 'PATCH',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       })
@@ -125,7 +126,8 @@ function AdminBespokeRequestsContent() {
     setDeletingId(id)
     try {
       const res = await fetch(`/api/bespoke-requests/stickers/custom/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'same-origin',
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

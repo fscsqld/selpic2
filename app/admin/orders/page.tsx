@@ -4,9 +4,10 @@ import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useStore } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2 } from 'lucide-react'
+import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -17,14 +18,78 @@ const statusColors: Record<string, string> = {
 }
 
 export default function AdminOrdersPage() {
-  const { orders, updateOrderStatus, deleteOrder, language, updateOrderCustomer, updateOrderAddress, updateOrderItems, updateOrderDiscounts, updateOrderShipping, recalculateOrderTotal, addOrderNote, updateOrderNote, deleteOrderNote, defaultPageSize, refreshOrdersFromStorage } = useStore()
+  const { orders, updateOrderStatus, deleteOrder, updateOrderCustomer, updateOrderAddress, updateOrderItems, updateOrderDiscounts, updateOrderShipping, recalculateOrderTotal, addOrderNote, updateOrderNote, deleteOrderNote, defaultPageSize, refreshOrdersFromStorage, mergeOrdersFromServer, autoRefreshInterval } = useStore()
   const { adminUser } = useAdminAuth()
 
-  // 페이지 진입 시 한 번만 localStorage에서 주문 목록 동기화 (의존성으로 재실행되지 않도록 해서 삭제 직후 덮어쓰기 방지)
+  const [ledgerSynced, setLedgerSynced] = useState(false)
+  const [chimeUnlocked, setChimeUnlocked] = useState(false)
+
+  const syncOrdersFromSupabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        mergeOrdersFromServer(data.orders)
+      }
+    } catch {
+      /* Supabase 미설정 또는 네트워크 오류 — 로컬 주문만 표시 */
+    } finally {
+      setLedgerSynced(true)
+    }
+  }, [mergeOrdersFromServer])
+
+  // localStorage + Supabase ledger; poll so new Stripe orders appear without manual refresh
   useEffect(() => {
     refreshOrdersFromStorage()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only sync
+    syncOrdersFromSupabase()
+    const pollMs = autoRefreshInterval > 0 ? autoRefreshInterval : 15000
+    const id = window.setInterval(() => {
+      syncOrdersFromSupabase()
+    }, pollMs)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshOrdersFromStorage()
+        syncOrdersFromSupabase()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [refreshOrdersFromStorage, syncOrdersFromSupabase, autoRefreshInterval])
+
+  // Browser autoplay policy: unlock Web Audio after first user gesture (click/tap).
+  useEffect(() => {
+    const onFirstClick = () => {
+      unlockNewOrderChime().then((ok) => {
+        if (ok) setChimeUnlocked(true)
+      })
+      window.removeEventListener('click', onFirstClick, true)
+    }
+    window.addEventListener('click', onFirstClick, true)
+    return () => window.removeEventListener('click', onFirstClick, true)
   }, [])
+
+  const baselineReadyRef = useRef(false)
+  const knownOrderIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!ledgerSynced) return
+    if (!baselineReadyRef.current) {
+      knownOrderIdsRef.current = new Set(orders.map((o) => o.id))
+      baselineReadyRef.current = true
+      return
+    }
+    for (const o of orders) {
+      if (knownOrderIdsRef.current.has(o.id)) continue
+      knownOrderIdsRef.current.add(o.id)
+      if (o.status === 'paid' && chimeUnlocked) {
+        playNewOrderChime()
+      }
+    }
+  }, [orders, ledgerSynced, chimeUnlocked])
 
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
@@ -32,8 +97,13 @@ export default function AdminOrdersPage() {
         refreshOrdersFromStorage()
       }
     }
+    const handleOrdersUpdated = () => refreshOrdersFromStorage()
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    window.addEventListener('selpic-store-orders-updated', handleOrdersUpdated)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('selpic-store-orders-updated', handleOrdersUpdated)
+    }
   }, [refreshOrdersFromStorage])
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -65,7 +135,8 @@ export default function AdminOrdersPage() {
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const performedBy = adminUser?.username || 'admin'
 
-  const isKo = language === 'ko'
+  /** Admin orders UI is English-only; storefront `language` does not apply here. */
+  const isKo = false
   const T = isKo
     ? {
         title: '주문 관리',
@@ -91,11 +162,11 @@ export default function AdminOrdersPage() {
         oldest: '(오래된순)',
         allShipping: '전체 배송',
         freeDelivery: '무료 배송',
-        auspostLetter: 'AusPost 대형 우편',
-        auspostRegular: 'AusPost 일반 소포',
-        auspostTracked: 'AusPost 소포 + 서명',
-        auspostExpress: 'AusPost 익스프레스',
-        localPickup: '매장 픽업',
+        standardLetter: 'Standard Letter',
+        trackedLetter: 'Tracked Letter',
+        expressPost: 'Express Post',
+        parcelPost: 'Parcel Post (Goods)',
+        localPickup: 'Click & Collect',
         allPayments: '전체 결제',
         card: '신용카드',
         paypal: '페이팔',
@@ -159,11 +230,11 @@ export default function AdminOrdersPage() {
         oldest: '(Oldest)',
         allShipping: 'All Shipping',
         freeDelivery: 'Free Delivery',
-        auspostLetter: 'AusPost Large Letter',
-        auspostRegular: 'AusPost Parcel Post',
-        auspostTracked: 'AusPost Parcel + Signature',
-        auspostExpress: 'AusPost Express',
-        localPickup: 'Local Pickup',
+        standardLetter: 'Standard Letter',
+        trackedLetter: 'Tracked Letter',
+        expressPost: 'Express Post',
+        parcelPost: 'Parcel Post (Goods)',
+        localPickup: 'Click & Collect',
         allPayments: 'All Payments',
         card: 'Credit Card',
         paypal: 'PayPal',
@@ -667,6 +738,26 @@ export default function AdminOrdersPage() {
           showHomepageLink={false}
           showLanguageSelector={false}
         />
+
+        {!chimeUnlocked && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <span className="flex items-center gap-2">
+                <Volume2 className="w-4 h-4 shrink-0" />
+                {isKo
+                  ? '새 결제 완료(paid) 주문이 들어오면 짧은 알림음이 납니다. 브라우저 정책상 페이지를 한 번 클릭하거나 아래 버튼으로 재생을 허용해 주세요.'
+                  : 'A short chime plays when a new paid order appears. Browsers require a click (or the button below) before audio can play.'}
+              </span>
+              <button
+                type="button"
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-700"
+                onClick={() => unlockNewOrderChime().then((ok) => ok && setChimeUnlocked(true))}
+              >
+                {isKo ? '알림음 허용' : 'Enable chime'}
+              </button>
+            </div>
+          </div>
+        )}
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Filters */}
@@ -710,9 +801,12 @@ export default function AdminOrdersPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => refreshOrdersFromStorage()}
+                  onClick={() => {
+                    refreshOrdersFromStorage()
+                    syncOrdersFromSupabase()
+                  }}
                   className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  title={isKo ? '다른 탭에서 들어온 주문 반영' : 'Sync orders from other tabs'}
+                  title={isKo ? '로컬 + Supabase 주문 동기화' : 'Sync local storage + Supabase orders'}
                 >
                   <RefreshCcw size={16} />
                   {T.refresh}
@@ -858,10 +952,10 @@ export default function AdminOrdersPage() {
                   >
                     <option value="">{T.allShipping}</option>
                     <option value="free-delivery">{T.freeDelivery}</option>
-                    <option value="auspost-letter">{T.auspostLetter}</option>
-                    <option value="auspost-regular">{T.auspostRegular}</option>
-                    <option value="auspost-tracked">{T.auspostTracked}</option>
-                    <option value="auspost-express">{T.auspostExpress}</option>
+                    <option value="standard-letter">{T.standardLetter}</option>
+                    <option value="tracked-letter">{T.trackedLetter}</option>
+                    <option value="express-post">{T.expressPost}</option>
+                    <option value="parcel-post">{T.parcelPost}</option>
                     <option value="local-pickup">{T.localPickup}</option>
                   </select>
                 </div>

@@ -8,6 +8,9 @@ import {
   getCriticalWarnings as readStoredCriticalWarnings,
 } from '@/lib/invoice-validation'
 import { COMPANY_LEGAL, COMPANY_BANK, COMPANY_CONTACT, COMPANY_LOGO_URL } from '@/lib/companyLegal'
+import { computeAustralianInvoiceTotals } from '@/lib/invoiceTotals'
+import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
+import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 
 // 인보이스 템플릿 기본 데이터 타입
 export interface InvoiceTemplateData {
@@ -228,15 +231,24 @@ export const convertOrderToInvoice = (
   const invoiceNumber = `SP-${year}-${lastThreeChars.padStart(3, '0')}`
   
   // 주문 아이템을 인보이스 품목으로 변환
-  // 상품 가격은 이미 GST 포함이므로, GST 제외 가격으로 역산
-  const items: InvoiceLineItem[] = order.items.map(item => {
-    // GST 포함 가격에서 GST 제외 가격 계산: price / 1.1
-    const priceExclGST = item.price / 1.1
+  // - 상품 unit price는 GST-inclusive 기준(기본가 + 커스텀 옵션 할증)으로 정의
+  // - GST 표시를 위해 unitPrice(ex-GST) = unitPrice(incl GST) / 1.1 로 역산
+  const items: InvoiceLineItem[] = order.items.map((item) => {
+    const { baseUnit, surchargeUnit } = getOrderItemLineMoney(item)
+    const unitPriceInclOptions = baseUnit + surchargeUnit
+    const unitPriceExclGST = unitPriceInclOptions / 1.1
+
+    const optionsLabel = surchargeUnit > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
+    const description =
+      surchargeUnit > 0.001
+        ? `${item.name}\n${optionsLabel} (+$${surchargeUnit.toFixed(2)} each)`
+        : item.name
+
     return {
-      description: item.name,
+      description,
       qty: item.quantity,
-      unitPrice: priceExclGST, // GST 제외 가격
-      taxRate: 0.1 // GST 10%
+      unitPrice: unitPriceExclGST,
+      taxRate: 0.1,
     }
   })
   
@@ -271,11 +283,8 @@ export const convertOrderToInvoice = (
   // 주문의 subtotal은 이미 GST 포함 가격
   // 주문 계산식: total = subtotal + shippingPrice + paymentFee - discount
   
-  // 주문 데이터에서 직접 가져오기
-  const orderSubtotal = order.subtotal // GST 포함
   const orderShipping = order.shippingPrice
   const orderPaymentFee = order.paymentFee || 0
-  const orderDiscount = order.discount || 0
   const orderTotal = order.total // 최종 결제 금액
   
   // 인보이스 계산 (주문 상세와 동일한 결과를 보장)
@@ -287,29 +296,20 @@ export const convertOrderToInvoice = (
   // 할인은 GST 포함 금액 기준이므로, GST 제외 금액 기준으로 변환 필요
   
   // 방법 1: 할인 후 금액에서 GST 역산 (더 정확)
-  // 할인 후 subtotal (GST 포함) = orderSubtotal - orderDiscount
-  const subtotalAfterDiscountInclGST = orderSubtotal - orderDiscount
-  
-  // 할인 후 subtotal (GST 제외) = (orderSubtotal - orderDiscount) / 1.1
-  const subtotalAfterDiscountExclGST = subtotalAfterDiscountInclGST / 1.1
-  
-  // 할인 후 GST = 할인 후 subtotal (GST 제외) * 0.1
-  const gstAfterDiscount = subtotalAfterDiscountExclGST * 0.1
-  
-  // 인보이스 표시용: 할인 전 subtotal (GST 제외)
-  const subtotalExclGST = orderSubtotal / 1.1
-  
   // 인보이스의 최종 합계는 주문의 total과 동일해야 함
-  // 검증: subtotalAfterDiscountExclGST + gstAfterDiscount + shipping + paymentFee
-  // = (orderSubtotal - orderDiscount) / 1.1 + ((orderSubtotal - orderDiscount) / 1.1) * 0.1 + shipping + paymentFee
-  // = (orderSubtotal - orderDiscount) / 1.1 * 1.1 + shipping + paymentFee
-  // = orderSubtotal - orderDiscount + shipping + paymentFee = total ✓
   const total = orderTotal
   
   // 날짜 계산
   const issueDate = new Date().toISOString().split('T')[0]
   const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  
+
+  const computed = computeAustralianInvoiceTotals({
+    items,
+    shipping: orderShipping,
+    paymentFee: orderPaymentFee,
+    discounts: totalDiscount > 0 ? { totalDiscount } : undefined
+  })
+
   return {
     company: template.company,
     billing: {
@@ -329,11 +329,10 @@ export const convertOrderToInvoice = (
     },
     items,
     totals: {
-      // 인보이스의 Subtotal은 상품만 (GST 제외, 할인 전)
-      // Shipping과 Payment Fee는 별도 항목으로 표시되므로 subtotal에 포함하지 않음
-      subtotal: subtotalExclGST, // 상품만 (GST 제외, 할인 전)
-      tax: Math.max(0, gstAfterDiscount), // 할인 후 GST (상품만)
-      total, // 주문의 최종 금액 (고객이 결제한 금액과 동일)
+      // Subtotal: taxable goods ex-GST (before discount); GST: after discount (AU: (inc−D)/11)
+      subtotal: computed.subtotalExclGSTGoods,
+      tax: computed.gstAmount,
+      total, // 주문 total (source of truth; matches computed.total within rounding)
       currency: 'AUD'
     },
     discounts: totalDiscount > 0 ? {

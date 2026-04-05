@@ -7,7 +7,13 @@ import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, C
 import { emailService } from '@/lib/emailService'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { COMPANY_LEGAL, COMPANY_BANK, COMPANY_CONTACT, COMPANY_LOGO_URL } from '@/lib/companyLegal'
+import {
+  COMPANY_LEGAL,
+  COMPANY_BANK,
+  COMPANY_CONTACT,
+  COMPANY_LOGO_URL,
+  getCompanyBrandName
+} from '@/lib/companyLegal'
 
 // 마운트 시점에 최신 COMPANY_LEGAL·COMPANY_CONTACT·COMPANY_BANK 반영 (Preview 화면에 올바른 값 표시)
 function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'> & {
@@ -24,6 +30,9 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
   shipping?: number
   paymentFee?: number
 } {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
   return {
     company: {
       name: COMPANY_LEGAL.companyName,
@@ -47,7 +56,8 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
       address: ''
     },
     invoiceMeta: {
-      invoiceNumber: 'SP-2025-001',
+      // Placeholder: actual sequence is allocated only when download/send is triggered.
+      invoiceNumber: `SP-${year}-${month}-000`,
       issueDate: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       reference: ''
@@ -138,11 +148,15 @@ function InvoicePreviewPageContent() {
     shipping?: number
     paymentFee?: number
   }>(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
     const base = getDefaultInvoiceData()
     return {
       ...base,
       quoteMeta: {
-        quoteNumber: 'QT-2025-001',
+        // Placeholder: actual sequence is allocated only when download/send is triggered.
+        quoteNumber: `QT-${year}-${month}-000`,
         issueDate: new Date().toISOString().split('T')[0],
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         reference: ''
@@ -151,6 +165,54 @@ function InvoicePreviewPageContent() {
   })
   const [recipientEmail, setRecipientEmail] = useState('')
   const [message, setMessage] = useState('')
+
+  // Invoice/Quote reference number allocation:
+  // - Default placeholders are `SP-YYYY-MM-000` / `QT-YYYY-MM-000`
+  // - Real sequential numbers are allocated only when you download/send
+  //   (and only if the current number is still the placeholder/legacy default).
+  const ensureMonthlySequentialRefNumber = (
+    prefix: 'SP' | 'QT',
+    current: string,
+    setRef: (next: string) => void
+  ): string => {
+    if (typeof window === 'undefined') return current
+
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const placeholder = `${prefix}-${year}-${month}-000`
+    const legacyDefault = prefix === 'SP' ? 'SP-2025-001' : 'QT-2025-001'
+
+    const shouldAllocate = current === placeholder || current === legacyDefault
+    if (!shouldAllocate) return current
+
+    try {
+      const key = `selpic_${prefix.toLowerCase()}_seq_${year}_${month}`
+      const currentValue = Number(window.localStorage.getItem(key) || '0')
+      const nextValue = currentValue + 1
+      window.localStorage.setItem(key, String(nextValue))
+      const nextRef = `${prefix}-${year}-${month}-${String(nextValue).padStart(3, '0')}`
+      setRef(nextRef)
+      return nextRef
+    } catch {
+      // If localStorage is blocked, keep the current value to avoid breaking the flow.
+      return current
+    }
+  }
+
+  const ensureInvoiceRefNumber = (): string => {
+    const current = invoiceData.invoiceMeta.invoiceNumber
+    return ensureMonthlySequentialRefNumber('SP', current, (next) => {
+      setInvoiceData((prev) => ({ ...prev, invoiceMeta: { ...prev.invoiceMeta, invoiceNumber: next } }))
+    })
+  }
+
+  const ensureQuoteRefNumber = (): string => {
+    const current = quoteData.quoteMeta.quoteNumber
+    return ensureMonthlySequentialRefNumber('QT', current, (next) => {
+      setQuoteData((prev) => ({ ...prev, quoteMeta: { ...prev.quoteMeta, quoteNumber: next } }))
+    })
+  }
   /** Step 1–5: 필요 시에만 펼쳐서 볼 수 있도록 접기/펼치기 (Create & Send Document와 동일) */
   const [showStep1CompanyInfo, setShowStep1CompanyInfo] = useState(false)
   const [showStep2BillingInfo, setShowStep2BillingInfo] = useState(false)
@@ -254,9 +316,9 @@ function InvoicePreviewPageContent() {
       await new Promise(resolve => setTimeout(resolve, 100))
       
       const currentData = documentType === 'invoice' ? invoiceData : quoteData
-      const docNumber = documentType === 'invoice' 
-        ? invoiceData.invoiceMeta.invoiceNumber 
-        : quoteData.quoteMeta.quoteNumber
+      const docNumber = documentType === 'invoice'
+        ? ensureInvoiceRefNumber()
+        : ensureQuoteRefNumber()
       const opt = {
         margin: [10, 10, 10, 10] as [number, number, number, number],
         filename: `${documentType}-${docNumber}-${new Date().toISOString().split('T')[0]}.pdf`,
@@ -356,6 +418,9 @@ function InvoicePreviewPageContent() {
     try {
       // PDF 생성
       let pdfFile: File | null = null
+      const docNumber = documentType === 'invoice'
+        ? ensureInvoiceRefNumber()
+        : ensureQuoteRefNumber()
       if (invoiceRef.current) {
         const html2pdf = (await import('html2pdf.js')).default
         const element = invoiceRef.current
@@ -366,10 +431,6 @@ function InvoicePreviewPageContent() {
         
         const totalHeight = element.scrollHeight
         const totalWidth = element.scrollWidth
-        
-        const docNumber = documentType === 'invoice' 
-          ? invoiceData.invoiceMeta.invoiceNumber 
-          : quoteData.quoteMeta.quoteNumber
         
         const opt = {
           margin: [10, 10, 10, 10] as [number, number, number, number],
@@ -427,21 +488,33 @@ function InvoicePreviewPageContent() {
 
       // 이메일 발송
       const emailToSend = recipientEmail || currentData.billing.email || ''
-      const docNumber = documentType === 'invoice' 
-        ? invoiceData.invoiceMeta.invoiceNumber 
-        : quoteData.quoteMeta.quoteNumber
-      const docTypeLabel = documentType === 'invoice' ? 'invoice' : 'quote'
-      const emailContent = message || `Dear ${currentData.billing.name},\n\nPlease find attached your ${docTypeLabel} ${docNumber}.\n\nThank you for your business!\n\nSELPIC Team`
+      const companyName = COMPANY_LEGAL.companyName
+      const brandName = getCompanyBrandName(companyName)
+      const isInvoice = documentType === 'invoice'
+      const docLabel = isInvoice ? 'tax invoice' : 'quote'
+      const emailContent =
+        message ||
+        `Dear ${currentData.billing.name},\n\n` +
+        `We appreciate your business with ${brandName}.\n\n` +
+        `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
+        `Payment Instructions:\n` +
+        `For bank transfers, please ensure the ${isInvoice ? 'Invoice Number' : 'Quote Number'} is included as your payment reference to help us identify your payment.\n\n` +
+        `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
+        `Kind regards,\n` +
+        `${brandName} Team`
       
       await emailService.sendResponse({
         customerEmail: emailToSend,
         customerName: currentData.billing.name,
-        subject: `${docTypeLabel.charAt(0).toUpperCase() + docTypeLabel.slice(1)} ${docNumber} from SELPIC`,
+        subject: isInvoice
+          ? `Tax Invoice ${docNumber} from ${brandName}`
+          : `Quote ${docNumber} from ${brandName}`,
         message: emailContent,
-        adminName: 'SELPIC Admin'
+        adminName: 'SELPIC Admin',
+        attachments: pdfFile ? [pdfFile] : []
       })
 
-      alert(`${docTypeLabel.charAt(0).toUpperCase() + docTypeLabel.slice(1)} sent successfully to ${emailToSend}!`)
+      alert(`${isInvoice ? 'Invoice' : 'Quote'} sent successfully to ${emailToSend}!`)
       setRecipientEmail('')
       setMessage('')
     } catch (error) {
@@ -1551,8 +1624,13 @@ function InvoicePreviewPageContent() {
                     )}
                   </button>
                 </div>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div ref={invoiceRef} data-invoice-root style={{ overflow: 'visible' }}>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-auto">
+                  <div
+                    ref={invoiceRef}
+                    data-invoice-root
+                    style={{ overflow: 'visible' }}
+                    className="min-w-[768px]"
+                  >
                     {documentType === 'invoice' ? (
                       <InvoiceTemplate
                         company={invoiceData.company}

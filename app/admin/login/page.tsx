@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Lock, User, AlertCircle, Home } from 'lucide-react'
+import { Eye, EyeOff, Lock, User, AlertCircle, Home, Shield } from 'lucide-react'
 import { useAdminAuth } from '@/lib/adminAuth'
-import { useTranslation } from '@/lib/useTranslation'
+import { useUserAuth } from '@/lib/userAuth'
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('')
@@ -12,10 +13,59 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  
+
   const { login } = useAdminAuth()
   const router = useRouter()
-  const { t } = useTranslation()
+
+  /**
+   * Staff already signed in → dashboard.
+   * Supabase session without admin JWT → customer; send home (must not use staff console).
+   * Local customer session only → home.
+   */
+  useEffect(() => {
+    let cancelled = false
+
+    const enforceAccess = async () => {
+      if (useAdminAuth.getState().isLoggedIn) {
+        router.replace('/admin/dashboard')
+        return
+      }
+
+      const hasSupabase =
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+
+      if (hasSupabase) {
+        try {
+          const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+          const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
+          const supabase = createSupabaseBrowserClient()
+          const { data } = await supabase.auth.getSession()
+          if (cancelled) return
+          if (data.session?.user) {
+            if (userHasAdminAccess(data.session.user)) {
+              router.replace('/admin/dashboard')
+            } else {
+              router.replace('/')
+            }
+            return
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (cancelled) return
+      if (useUserAuth.getState().isLoggedIn) {
+        router.replace('/')
+      }
+    }
+
+    void enforceAccess()
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,140 +73,172 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
+      const hasPublicSupabase =
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      const allowLegacy = process.env.NEXT_PUBLIC_ALLOW_LEGACY_ADMIN_LOGIN === 'true'
+
+      if (hasPublicSupabase) {
+        try {
+          const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+          const supabase = createSupabaseBrowserClient()
+          const { data, error: sbError } = await supabase.auth.signInWithPassword({
+            email: username.trim(),
+            password: password.trim(),
+          })
+
+          if (!sbError && data.session && data.user) {
+            const { postSupabasePasswordSignInBridge } = await import('@/lib/supabase/postSupabasePasswordSignInBridge')
+            const bridge = await postSupabasePasswordSignInBridge(supabase, data.session, 'admin_portal')
+            if (bridge.outcome === 'admin') {
+              router.replace('/admin/dashboard')
+              return
+            }
+            if (bridge.outcome === 'not_admin_gate' || bridge.outcome === 'roster_blocked') {
+              setError(bridge.error)
+              return
+            }
+          }
+
+          if (!allowLegacy) {
+            setError(sbError?.message || 'Invalid email or password.')
+            return
+          }
+        } catch {
+          if (!allowLegacy) {
+            setError('Sign-in failed. Check your email and password, or contact a super admin if your access was revoked.')
+            return
+          }
+        }
+      }
+
       const success = await login(username, password)
       if (success) {
-        router.push('/admin/dashboard')
+        router.replace('/admin/dashboard')
       } else {
-        setError(t('admin.login.loginError'))
+        setError('Invalid credentials.')
       }
-    } catch (err) {
-              setError(t('admin.login.systemError'))
+    } catch {
+      setError('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 flex items-center justify-center p-4">
-      {/* 홈으로 가기 버튼 */}
-      <div className="absolute top-6 left-6">
-        <button
-          onClick={() => router.push('/')}
-          className="flex items-center space-x-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 text-white hover:bg-white/20 transition-all duration-200"
-        >
-          <Home size={20} />
-          <span>{t('admin.login.home')}</span>
-        </button>
-      </div>
-      
-      <div className="w-full max-w-md">
-        {/* 로고 및 제목 */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-8 h-8 text-white" />
+    <div className="relative min-h-screen flex flex-col lg:flex-row bg-zinc-950 text-zinc-100">
+      <aside className="relative lg:w-[42%] min-h-[140px] lg:min-h-screen border-b lg:border-b-0 lg:border-r border-violet-900/40 bg-gradient-to-br from-violet-950 via-zinc-950 to-black flex flex-col justify-between p-8 lg:p-12">
+        <div>
+          <div className="flex items-center gap-2 text-violet-300/90 font-mono text-xs uppercase tracking-[0.25em]">
+            <Shield className="h-4 w-4 shrink-0" aria-hidden />
+            Internal
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">{t('admin.login.title')}</h1>
-          <p className="text-gray-300">{t('admin.login.subtitle')}</p>
-        </div>
-
-        {/* 로그인 폼 */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* 사용자명 입력 */}
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-white mb-2">
-                {t('admin.login.username')}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-white/90 backdrop-blur-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('admin.login.usernamePlaceholder')}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* 비밀번호 입력 */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
-                {t('admin.login.password')}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg bg-white/90 backdrop-blur-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('admin.login.passwordPlaceholder')}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* 에러 메시지 */}
-            {error && (
-              <div className="flex items-center space-x-2 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <span className="text-red-400 text-sm">{error}</span>
-              </div>
-            )}
-
-            {/* 로그인 버튼 */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            >
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>{t('admin.login.loggingIn')}</span>
-                </div>
-              ) : (
-                t('admin.login.login')
-              )}
-            </button>
-          </form>
-
-          {/* 테스트 계정 정보 */}
-          <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-300 mb-2">{t('admin.login.testAccount')}</h3>
-            <div className="text-xs text-blue-200 space-y-1">
-              <p><strong>{t('admin.login.regularAdmin')}:</strong> admin / selpic2024</p>
-              <p><strong>{t('admin.login.superAdmin')}:</strong> superadmin / selpic2024super</p>
-            </div>
-          </div>
-        </div>
-
-        {/* 푸터 */}
-        <div className="text-center mt-8">
-          <p className="text-gray-400 text-sm">
-            {t('admin.login.copyright')}
+          <h1 className="mt-6 text-2xl sm:text-3xl font-bold text-zinc-100 leading-tight tracking-tight">
+            Staff Console
+          </h1>
+          <p className="mt-2 text-sm font-normal text-zinc-400">(Authorized Personnel Only)</p>
+          <p className="mt-5 text-sm text-zinc-500 max-w-sm leading-relaxed">
+            This entry is not the customer storefront. Sessions here are for admin tools only. Access is assigned by a
+            super admin—not via public registration.
           </p>
+        </div>
+        <p className="hidden lg:block font-mono text-[10px] text-zinc-600 uppercase tracking-widest">
+          SELPIC internal
+        </p>
+      </aside>
+
+      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-md">
+          <Link
+            href="/"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 rounded"
+          >
+            <Home size={18} aria-hidden />
+            Back to store
+          </Link>
+
+          <div className="rounded-2xl border border-violet-900/40 bg-zinc-900/80 p-8 shadow-2xl shadow-black/50">
+            <div className="mb-8 text-center sm:text-left">
+              <h2 className="text-xl font-semibold text-zinc-100">Administrator Sign-in</h2>
+              <p className="mt-3 mx-auto sm:mx-0 max-w-[280px] sm:max-w-xs text-sm text-zinc-400 leading-relaxed text-balance">
+                <span className="block">Sign in with your staff email</span>
+                <span className="block">to manage SELPIC operations.</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5" autoComplete="on">
+              <div>
+                <label
+                  htmlFor="admin-email"
+                  className="block font-mono text-xs uppercase tracking-wider text-violet-400/90 mb-2"
+                >
+                  Staff email
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500" aria-hidden />
+                  <input
+                    id="admin-email"
+                    type="email"
+                    name="staff-console-email"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-black/40 py-3 pl-11 pr-3 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                    placeholder="you@company.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="admin-password"
+                  className="block font-mono text-xs uppercase tracking-wider text-violet-400/90 mb-2"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500" aria-hidden />
+                  <input
+                    id="admin-password"
+                    type={showPassword ? 'text' : 'password'}
+                    name="staff-console-password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-black/40 py-3 pl-11 pr-11 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500/60 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-900/50 bg-red-950/40 p-3">
+                  <AlertCircle className="h-5 w-5 shrink-0 text-red-400" aria-hidden />
+                  <span className="text-sm text-red-200">{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full rounded-lg bg-gradient-to-r from-violet-700 to-indigo-900 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-950/40 hover:from-violet-600 hover:to-indigo-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-mono uppercase tracking-wide"
+              >
+                {isLoading ? 'Signing in…' : 'Enter dashboard'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
   )
-} 
+}

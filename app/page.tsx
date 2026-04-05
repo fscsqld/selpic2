@@ -10,7 +10,7 @@ import 'swiper/css/pagination'
 import 'swiper/css/autoplay'
 import { Package, Palette, Sparkles, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import Header from '@/components/Header'
+import Header, { HeaderLogoImage } from '@/components/Header'
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
 
@@ -378,6 +378,7 @@ import 'swiper/css/pagination'
 import { useStore, useStore as useStoreDirect } from '@/lib/store'
 import { translations } from '@/lib/translations'
 import { useContentStore } from '@/lib/contentStore'
+import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import '@/lib/store-debug' // 디버깅 유틸리티 로드
 
@@ -701,6 +702,12 @@ export default function HomePage() {
   const heroContent = contentItems.filter(item => item.section === 'hero' && item.isActive).sort((a, b) => a.order - b.order)
   const howItWorksContent = contentItems.filter(item => item.section === 'how-it-works' && item.isActive).sort((a, b) => a.order - b.order)
   const footerContent = contentItems.filter(item => item.section === 'footer' && item.isActive).sort((a, b) => a.order - b.order)
+
+  /** Same canonical logo as the header (header → Logo Image). Footer used to print footer "Company Name" text only, so indexeddb logos never appeared. */
+  const headerLogoItem = useMemo(() => pickLogoImageItem(contentItems), [contentItems])
+  const showFooterLogo = !!(headerLogoItem?.isActive && headerLogoItem?.mediaUrl?.trim())
+  const footerLogoSrc = headerLogoItem?.mediaUrl?.trim() || ''
+  const footerLogoHref = headerLogoItem?.linkUrl?.trim() || '/'
 
   // Footer 링크를 CMS에서 안전하게 읽기 위한 헬퍼
   const getFooterLink = useCallback((
@@ -1682,17 +1689,35 @@ export default function HomePage() {
       <footer className="bg-gray-900 text-gray-300 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-12">
           <div>
-            <h3 className="text-white text-2xl font-bold mb-4">
-              {footerContent.find(item => item.title === 'Company Name')?.content || 'SELPIC'}
-            </h3>
+            {showFooterLogo ? (
+              <Link
+                href={footerLogoHref}
+                className="inline-block mb-4 max-w-full"
+                aria-label="Home"
+              >
+                <HeaderLogoImage
+                  key={footerLogoSrc}
+                  src={footerLogoSrc}
+                  alt=""
+                  className="h-10 max-w-[220px] w-auto object-contain object-left"
+                />
+              </Link>
+            ) : (
+              <h3 className="text-white text-2xl font-bold mb-4">
+                {footerContent.find(item => item.title === 'Company Name')?.content || 'SELPIC'}
+              </h3>
+            )}
             <p className="text-gray-400">
               {footerContent.find(item => item.title === 'Company Description')?.content || 'Your digital sticker journey starts here. Customize and print your own stickers with ease.'}
             </p>
             <p className="text-gray-500 text-[11px] mt-2 whitespace-pre-line">
               {`ABN: ${COMPANY_LEGAL.abn}\nACN: ${COMPANY_LEGAL.acn}`}
             </p>
-            <p className="text-gray-500 text-[11px] mt-2 whitespace-pre-line">
-              {`Address: ${COMPANY_CONTACT.address}\nEmail: ${COMPANY_CONTACT.email}`}
+            <p className="text-gray-500 text-[11px] mt-2 whitespace-nowrap">
+              {String(COMPANY_CONTACT.address || '').replace(/Address:\s*/i, '')}
+            </p>
+            <p className="text-gray-500 text-[11px] whitespace-nowrap">
+              Email: {COMPANY_CONTACT.email}
             </p>
           </div>
           <div>

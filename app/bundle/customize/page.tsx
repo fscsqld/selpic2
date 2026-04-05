@@ -6,7 +6,7 @@ import { useStore, Product, BundleItem } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { getStickerFonts, getEffectiveFont } from '@/lib/fontList'
-import { Type, Palette, Package, ShoppingCart, ArrowRight } from 'lucide-react'
+import { Type, Palette, Package, ShoppingCart, ArrowRight, Minus, Plus } from 'lucide-react'
 import Header from '@/components/Header'
 
 // Suspense wrapper for useSearchParams
@@ -28,6 +28,7 @@ function BundleCustomizeContent() {
   const [isMounted, setIsMounted] = useState(false)
   const [bundleProduct, setBundleProduct] = useState<Product | null>(null)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [orderQuantity, setOrderQuantity] = useState(1)
   
   // 각 카테고리별 커스터마이징 상태
   const [stickerItems, setStickerItems] = useState<Array<{
@@ -254,7 +255,7 @@ function BundleCustomizeContent() {
       
       const cartItem = {
         product: bundleProduct,
-        quantity: 1,
+        quantity: orderQuantity,
         customizations
       }
 
@@ -337,7 +338,7 @@ function BundleCustomizeContent() {
       
       const cartItem = {
         product: bundleProduct,
-        quantity: 1,
+        quantity: orderQuantity,
         customizations
       }
 
@@ -791,6 +792,30 @@ function BundleCustomizeContent() {
 
           {/* 액션 버튼 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-center gap-3 mb-4 max-w-2xl mx-auto">
+              <span className="text-sm text-gray-600 font-medium">Quantity</span>
+              <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  disabled={orderQuantity <= 1}
+                  onClick={() => setOrderQuantity((q) => Math.max(1, q - 1))}
+                  className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="w-10 text-center font-semibold tabular-nums">{orderQuantity}</span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  disabled={orderQuantity >= 999}
+                  onClick={() => setOrderQuantity((q) => Math.min(999, q + 1))}
+                  className="p-1.5 rounded-md bg-white border border-gray-200 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
               <button
                 onClick={handleAddToCartAndCheckout}

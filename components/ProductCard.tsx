@@ -134,7 +134,7 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, onCustomize }: ProductCardProps) {
-  const { addToCart, language } = useStore()
+  const { addToCart } = useStore()
   const { t } = useTranslation()
   const { isLoggedIn } = useUserAuth()
   
@@ -204,13 +204,6 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
       }
     }
     
-    const productType = product.category.toLowerCase()
-    if (language === 'ko') {
-      return {
-        name: t(`products.${productType}.name`) || product.name,
-        description: t(`products.${productType}.description`) || product.description
-      }
-    }
     return {
       name: product.name,
       description: product.description

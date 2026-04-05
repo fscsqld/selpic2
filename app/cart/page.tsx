@@ -19,8 +19,8 @@ export default function CartPage() {
   const { 
     getVIPGradeBenefitForCheckout,
     getActiveShippingOptions,
-    getFreeShippingSettings
   } = useContentStore()
+  const freeShippingSettings = useContentStore((s) => s.freeShippingSettings)
   
   const shippingOptions = getActiveShippingOptions()
 
@@ -119,6 +119,17 @@ export default function CartPage() {
     }
   }, [isLoggedIn])
 
+  // Admin tab updates localStorage; other tabs need rehydrate (persist does not sync across tabs)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'content-store' && e.newValue) {
+        ;(useContentStore as any).persist?.rehydrate?.()
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   // Parse surcharge from customization value (e.g. "2 lines (Name & Phone) +$2.00" -> 2)
   const parseSurchargeFromValue = (value: string): number => {
     if (typeof value !== 'string') return 0
@@ -185,7 +196,6 @@ export default function CartPage() {
   }
 
   const subtotal = calculateSubtotal()
-  const freeShippingSettings = getFreeShippingSettings()
   
   // VIP 할인 예상 금액 계산
   const buildCartItemsForDiscount = () => {

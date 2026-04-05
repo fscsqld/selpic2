@@ -181,7 +181,7 @@ const getDefaultEmailSettings = (type: DocumentType, companyName: string = COMPA
   const baseSettings: EmailSettings = {
     subject: '',
     greeting: 'Dear {customerName},',
-    closing: 'Best regards,',
+    closing: 'Kind regards,',
     customMessage: ''
   }
   
@@ -189,43 +189,75 @@ const getDefaultEmailSettings = (type: DocumentType, companyName: string = COMPA
     case 'order_confirmation':
       return {
         ...baseSettings,
-        subject: '[SELPIC] Order confirmed - #{orderId}',
+        subject: '[SELPIC] Order Confirmed: {orderId} | Thank you for your business!',
         customMessage:
-          'Thanks for your order.\n\nWe have received your payment and started processing your items.\n\nFor quick support, reply directly to this email with your order number.'
+          'Automated order confirmation emails use the fixed template in lib/orderConfirmationEmail.ts (subject + HTML). ' +
+          'Edit that file to change customer-facing copy.'
       }
     case 'receipt':
       return {
         ...baseSettings,
-        subject: 'Receipt - Order #{orderId}',
-        customMessage: 'Please find your receipt below. Thank you for your purchase!'
+        subject: 'Receipt {orderId} from {companyName}',
+        customMessage:
+          'We appreciate your business with {companyName}.\n\n' +
+          'Please find your receipt details below for your records.\n\n' +
+          'If you have any questions, please reply to this email and include your Order ID ({orderId}).'
       }
     case 'invoice':
       return {
         ...baseSettings,
-        subject: 'Invoice - Order #{orderId}',
-        customMessage: 'Please find your invoice attached. Payment is due within 7 days of the invoice date.'
+        subject: 'Tax Invoice {invoiceNumber} from {companyName}',
+        customMessage:
+          'We appreciate your business with {companyName}.\n\n' +
+          'Please find the attached tax invoice ({invoiceNumber}) for your recent order/service.\n\n' +
+          'Payment Instructions:\n' +
+          'For bank transfers, please ensure the Invoice Number is included as your payment reference to help us identify your payment.\n\n' +
+          'Thank you for choosing us. If you have any questions, please feel free to reply to this email.'
       }
     case 'shipping_notification':
       return {
         ...baseSettings,
-        subject: '[SELPIC] Shipping update - Order #{orderId}',
+        subject: 'Shipping Update {orderId} from {companyName}',
         customMessage:
-          'Good news - your order is on the way.\n\nTracking details are included below.\n\nIf your delivery details need correction, reply to this email as soon as possible.'
+          'We appreciate your business with {companyName}.\n\n' +
+          'Good news — your order has been dispatched.\n\n' +
+          'Tracking details are included below.\n\n' +
+          'If any delivery details need to be corrected, please reply to this email as soon as possible and include your Order ID ({orderId}).'
       }
     case 'contract':
       return {
         ...baseSettings,
-        subject: 'Contract Document - {companyName}',
-        customMessage: 'Please find the contract document attached. This contract outlines the terms and conditions of our agreement.'
+        subject: 'Contract Document from {companyName}',
+        customMessage:
+          'We appreciate your business with {companyName}.\n\n' +
+          'Please find the attached contract document.\n\n' +
+          'If you have any questions or require clarification, please reply to this email.'
       }
     default:
       return {
         ...baseSettings,
         subject: 'Document from {companyName}',
-        customMessage: 'Please find the requested document attached.'
+        customMessage:
+          'We appreciate your business with {companyName}.\n\n' +
+          'Please find the requested document attached.\n\n' +
+          'If you have any questions, please reply to this email.'
       }
   }
 }
+
+// Previous defaults (used to migrate older saved templates without overwriting custom edits)
+const PREV_DEFAULT_ORDER_SUBJECT = '[SELPIC] Order confirmed - #{orderId}'
+const PREV_DEFAULT_ORDER_MESSAGE =
+  'Thanks for your order.\n\nWe have received your payment and started processing your items.\n\nFor quick support, reply directly to this email with your order number.'
+const PREV_DEFAULT_RECEIPT_SUBJECT = 'Receipt - Order #{orderId}'
+const PREV_DEFAULT_RECEIPT_MESSAGE = 'Please find your receipt below. Thank you for your purchase!'
+const PREV_DEFAULT_SHIPPING_SUBJECT = '[SELPIC] Shipping update - Order #{orderId}'
+const PREV_DEFAULT_SHIPPING_MESSAGE =
+  'Good news - your order is on the way.\n\nTracking details are included below.\n\nIf your delivery details need correction, reply to this email as soon as possible.'
+const PREV_DEFAULT_CONTRACT_SUBJECT = 'Contract Document - {companyName}'
+const PREV_DEFAULT_CONTRACT_MESSAGE =
+  'Please find the contract document attached. This contract outlines the terms and conditions of our agreement.'
+const PREV_DEFAULT_OTHER_MESSAGE = 'Please find the requested document attached.'
 
 const LEGACY_ORDER_SUBJECT = 'Order Confirmation - Order #{orderId}'
 const LEGACY_ORDER_MESSAGE =
@@ -240,12 +272,21 @@ function migrateEmailDeliverabilityTemplates(
   const defaultCompanyName = COMPANY_LEGAL.companyName
   const newOrder = getDefaultEmailSettings('order_confirmation', defaultCompanyName)
   const newShipping = getDefaultEmailSettings('shipping_notification', defaultCompanyName)
+  const newReceipt = getDefaultEmailSettings('receipt', defaultCompanyName)
+  const newContract = getDefaultEmailSettings('contract', defaultCompanyName)
+  const newOther = getDefaultEmailSettings('other', defaultCompanyName)
 
   const orderTemplate = next.order_confirmation
   if (orderTemplate && orderTemplate.type === 'order_confirmation') {
     const current = orderTemplate.email
-    const shouldUpgradeSubject = !current.subject || current.subject === LEGACY_ORDER_SUBJECT
-    const shouldUpgradeMessage = !current.customMessage || current.customMessage === LEGACY_ORDER_MESSAGE
+    const shouldUpgradeSubject =
+      !current.subject ||
+      current.subject === LEGACY_ORDER_SUBJECT ||
+      current.subject === PREV_DEFAULT_ORDER_SUBJECT
+    const shouldUpgradeMessage =
+      !current.customMessage ||
+      current.customMessage === LEGACY_ORDER_MESSAGE ||
+      current.customMessage === PREV_DEFAULT_ORDER_MESSAGE
     if (shouldUpgradeSubject || shouldUpgradeMessage) {
       next.order_confirmation = {
         ...orderTemplate,
@@ -258,11 +299,38 @@ function migrateEmailDeliverabilityTemplates(
     }
   }
 
+  const receiptTemplate = next.receipt
+  if (receiptTemplate && receiptTemplate.type === 'receipt') {
+    const current = receiptTemplate.email
+    const shouldUpgradeSubject =
+      !current.subject ||
+      current.subject === PREV_DEFAULT_RECEIPT_SUBJECT
+    const shouldUpgradeMessage =
+      !current.customMessage ||
+      current.customMessage === PREV_DEFAULT_RECEIPT_MESSAGE
+    if (shouldUpgradeSubject || shouldUpgradeMessage) {
+      next.receipt = {
+        ...receiptTemplate,
+        email: {
+          ...current,
+          subject: shouldUpgradeSubject ? newReceipt.subject : current.subject,
+          customMessage: shouldUpgradeMessage ? newReceipt.customMessage : current.customMessage
+        }
+      }
+    }
+  }
+
   const shippingTemplate = next.shipping_notification
   if (shippingTemplate && shippingTemplate.type === 'shipping_notification') {
     const current = shippingTemplate.email
-    const shouldUpgradeSubject = !current.subject || current.subject === LEGACY_SHIPPING_SUBJECT
-    const shouldUpgradeMessage = !current.customMessage || current.customMessage === LEGACY_SHIPPING_MESSAGE
+    const shouldUpgradeSubject =
+      !current.subject ||
+      current.subject === LEGACY_SHIPPING_SUBJECT ||
+      current.subject === PREV_DEFAULT_SHIPPING_SUBJECT
+    const shouldUpgradeMessage =
+      !current.customMessage ||
+      current.customMessage === LEGACY_SHIPPING_MESSAGE ||
+      current.customMessage === PREV_DEFAULT_SHIPPING_MESSAGE
     if (shouldUpgradeSubject || shouldUpgradeMessage) {
       next.shipping_notification = {
         ...shippingTemplate,
@@ -270,6 +338,44 @@ function migrateEmailDeliverabilityTemplates(
           ...current,
           subject: shouldUpgradeSubject ? newShipping.subject : current.subject,
           customMessage: shouldUpgradeMessage ? newShipping.customMessage : current.customMessage
+        }
+      }
+    }
+  }
+
+  const contractTemplate = next.contract
+  if (contractTemplate && contractTemplate.type === 'contract') {
+    const current = contractTemplate.email
+    const shouldUpgradeSubject =
+      !current.subject ||
+      current.subject === PREV_DEFAULT_CONTRACT_SUBJECT
+    const shouldUpgradeMessage =
+      !current.customMessage ||
+      current.customMessage === PREV_DEFAULT_CONTRACT_MESSAGE
+    if (shouldUpgradeSubject || shouldUpgradeMessage) {
+      next.contract = {
+        ...contractTemplate,
+        email: {
+          ...current,
+          subject: shouldUpgradeSubject ? newContract.subject : current.subject,
+          customMessage: shouldUpgradeMessage ? newContract.customMessage : current.customMessage
+        }
+      }
+    }
+  }
+
+  const otherTemplate = next.other
+  if (otherTemplate && otherTemplate.type === 'other') {
+    const current = otherTemplate.email
+    const shouldUpgradeMessage =
+      !current.customMessage ||
+      current.customMessage === PREV_DEFAULT_OTHER_MESSAGE
+    if (shouldUpgradeMessage) {
+      next.other = {
+        ...otherTemplate,
+        email: {
+          ...current,
+          customMessage: newOther.customMessage
         }
       }
     }
@@ -293,7 +399,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         content: {
           showOrderDetails: true,
           showItems: true,
-          customMessage: 'If you have any questions, please don\'t hesitate to contact us.'
+          customMessage: 'If you have any questions, please reply to this email and include your Order ID.'
         },
         lastModified: now,
         version: 1
@@ -307,7 +413,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         content: {
           showPaymentMethod: true,
           showItems: true,
-          customMessage: 'Thank you for your purchase!'
+          customMessage: 'If you have any questions, please reply to this email and include your Order ID.'
         },
         lastModified: now,
         version: 1
@@ -333,7 +439,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         content: {
           showTrackingInfo: true,
           showEstimatedDelivery: true,
-          customMessage: 'Thank you for your purchase!'
+          customMessage: 'If you have any questions about delivery, please reply to this email and include your Order ID.'
         },
         lastModified: now,
         version: 1
@@ -345,7 +451,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         email,
         content: {
           contractText: 'This contract outlines the terms and conditions of our agreement.',
-          customMessage: 'If you have any questions or need clarification on any terms, please don\'t hesitate to contact us.'
+          customMessage: 'If you have any questions or require clarification, please reply to this email.'
         },
         lastModified: now,
         version: 1
@@ -357,7 +463,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         email,
         content: {
           documentText: 'Please find the requested document attached.',
-          customMessage: 'If you have any questions, please contact us.'
+          customMessage: 'If you have any questions, please reply to this email.'
         },
         lastModified: now,
         version: 1

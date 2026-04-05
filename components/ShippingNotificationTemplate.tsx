@@ -59,49 +59,45 @@ interface ShippingNotificationProps {
     email?: string
     address?: string
   }
-  language?: 'ko' | 'en'
 }
 
-export default function ShippingNotificationTemplate({ 
-  order, 
-  company,
-  language = 'en' 
+export default function ShippingNotificationTemplate({
+  order,
+  company
 }: ShippingNotificationProps) {
-  const isKo = language === 'ko'
-  
   const T = {
-    shippingNotification: isKo ? '배송 알림' : 'Shipping Notification',
-    orderNumber: isKo ? '주문번호' : 'Order Number',
-    orderDate: isKo ? '주문일' : 'Order Date',
-    customerInfo: isKo ? '고객 정보' : 'Customer Information',
-    shippingAddress: isKo ? '배송 주소' : 'Shipping Address',
-    shippingMethod: isKo ? '배송 방법' : 'Shipping Method',
-    trackingNumber: isKo ? '추적 번호' : 'Tracking Number',
-    trackingProvider: isKo ? '배송 업체' : 'Shipping Provider',
-    estimatedDelivery: isKo ? '예상 배송일' : 'Estimated Delivery',
-    currentLocation: isKo ? '현재 위치' : 'Current Location',
-    deliveryStatus: isKo ? '배송 상태' : 'Delivery Status',
-    trackingHistory: isKo ? '배송 이력' : 'Tracking History',
-    orderItems: isKo ? '주문 상품' : 'Order Items',
-    thankYou: isKo ? '주문해 주셔서 감사합니다!' : 'Your order has been shipped!',
-    contactInfo: isKo ? '문의사항이 있으시면 연락주세요.' : 'Please contact us if you have any questions.',
-    name: isKo ? '이름' : 'Name',
-    email: isKo ? '이메일' : 'Email',
-    phone: isKo ? '전화번호' : 'Phone',
-    quantity: isKo ? '수량' : 'Quantity',
+    shippingNotification: 'Shipping Notification',
+    orderNumber: 'Order Number',
+    orderDate: 'Order Date',
+    customerInfo: 'Customer Information',
+    shippingAddress: 'Shipping Address',
+    shippingMethod: 'Shipping Method',
+    trackingNumber: 'Tracking Number',
+    trackingProvider: 'Shipping Provider',
+    estimatedDelivery: 'Estimated Delivery',
+    currentLocation: 'Current Location',
+    deliveryStatus: 'Delivery Status',
+    trackingHistory: 'Tracking History',
+    orderItems: 'Order Items',
+    thankYou: 'Your order has been shipped!',
+    contactInfo: 'Please contact us if you have any questions.',
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    quantity: 'Quantity',
     companyName: company?.name || COMPANY_LEGAL.companyName,
     companyLegal: (company?.abn && company?.acn)
       ? `ABN: ${company.abn}\nACN: ${company.acn}`
       : COMPANY_LEGAL_LINE,
     companyEmail: company?.email || 'Email: info@selpic.com.au',
     companyAddress: company?.address || 'Mansfield QLD 4122',
-    trackYourOrder: isKo ? '주문 추적하기' : 'Track Your Order',
-    onTheWay: isKo ? '배송 중입니다' : 'Your order is on its way to you!',
-    youCanTrack: isKo ? '위 추적 번호를 사용하여 배송을 추적할 수 있습니다.' : 'You can track your shipment using the tracking number above.'
+    trackYourOrder: 'Track Your Order',
+    onTheWay: 'Your order is on its way to you!',
+    youCanTrack: 'You can track your shipment using the tracking number above.'
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(isKo ? 'ko-KR' : 'en-US', {
+    return new Date(dateString).toLocaleDateString('en-AU', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -142,20 +138,20 @@ export default function ShippingNotificationTemplate({
   }
 
   const getStatusText = (status?: string) => {
-    if (!status) return isKo ? '대기 중' : 'Pending'
+    if (!status) return 'Pending'
     switch (status) {
       case 'delivered':
-        return isKo ? '배송 완료' : 'Delivered'
+        return 'Delivered'
       case 'out_for_delivery':
-        return isKo ? '배송 중' : 'Out for Delivery'
+        return 'Out for Delivery'
       case 'in_transit':
-        return isKo ? '운송 중' : 'In Transit'
+        return 'In Transit'
       case 'pending':
-        return isKo ? '대기 중' : 'Pending'
+        return 'Pending'
       case 'failed':
-        return isKo ? '배송 실패' : 'Failed'
+        return 'Failed'
       case 'returned':
-        return isKo ? '반송됨' : 'Returned'
+        return 'Returned'
       default:
         return status
     }

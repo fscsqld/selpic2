@@ -130,7 +130,7 @@ export default function AdminProductsPage() {
 function AdminProductsPageContent() {
   const { products, addProduct, updateProduct, deleteProduct, refreshProducts, adjustProductStock, defaultPageSize } = useStore()
   const { subcategoryItems } = useContentStore()
-  const { t, language } = useTranslation()
+  const { t } = useTranslation()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -1132,14 +1132,12 @@ function AdminProductsPageContent() {
         {filteredProducts.length > 0 && (
           <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="text-sm text-gray-600">
-              {language === 'ko'
-                ? `총 ${filteredProducts.length}개 상품`
-                : `Total ${filteredProducts.length} items`}
+              {`Total ${filteredProducts.length} items`}
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">
-                  {language === 'ko' ? '페이지당' : 'Rows'}
+                  Rows
                 </span>
                 <select
                   value={pageSize}

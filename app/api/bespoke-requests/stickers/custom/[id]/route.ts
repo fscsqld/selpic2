@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
 import fs from 'fs/promises'
+import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 
 type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'approved' | 'rejected'
 
@@ -37,6 +38,11 @@ async function writeRecords(records: BespokeStickerRequestRecord[]) {
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id: requestId } = await params
   const body = await req.json().catch(() => null)
 
@@ -77,6 +83,11 @@ async function unlinkIfExists(filePath: string) {
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id: requestId } = await params
 
   const records = await readRecords()

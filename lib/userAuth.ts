@@ -46,6 +46,12 @@ interface UserAuthState {
   setKeepLoggedIn: (keepLoggedIn: boolean) => void
   changePassword: (userId: string, currentPassword: string, newPassword: string) => Promise<boolean> // 비밀번호 변경 함수 추가
   initializeDemoUser: () => void // 데모 사용자 초기화 함수 추가
+  /** After Supabase Auth sign-in: mirror session into local profile for checkout / VIP features. */
+  establishSessionFromSupabaseUser: (sbUser: {
+    id: string
+    email?: string | null
+    user_metadata?: Record<string, unknown>
+  }) => void
 }
 
 // 기본 데모 사용자 데이터
@@ -275,6 +281,15 @@ export const useUserAuth = create<UserAuthState>()(
       },
 
       logout: () => {
+        if (typeof window !== 'undefined') {
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+          const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+          if (url && anon) {
+            void import('@/lib/supabase/browser').then(({ createSupabaseBrowserClient }) => {
+              createSupabaseBrowserClient().auth.signOut().catch(() => {})
+            })
+          }
+        }
         set({
           isLoggedIn: false,
           isDemo: false, // Reset demo state on logout
@@ -381,7 +396,51 @@ export const useUserAuth = create<UserAuthState>()(
 
       setKeepLoggedIn: (keepLoggedIn: boolean) => {
         set({ keepLoggedIn })
-      }
+      },
+
+      establishSessionFromSupabaseUser: (sbUser) => {
+        const id = (sbUser.id || '').trim()
+        if (!id) return
+        const emailRaw = (sbUser.email || '').trim()
+        const email = emailRaw
+          ? emailRaw.toLowerCase()
+          : `user_${id.replace(/-/g, '').slice(0, 20)}@session.local`
+        get().initializeDemoUser()
+        const { users } = get()
+        let local = users.find((u) => (u.email || '').trim().toLowerCase() === email)
+        const metaName =
+          (typeof sbUser.user_metadata?.name === 'string' && sbUser.user_metadata.name) ||
+          (typeof sbUser.user_metadata?.full_name === 'string' && sbUser.user_metadata.full_name) ||
+          email.split('@')[0] ||
+          'Customer'
+        if (!local) {
+          const newLocal: User = {
+            id: sbUser.id,
+            email,
+            name: metaName,
+            phone: '',
+            createdAt: new Date().toISOString(),
+            canPost: true,
+            isBanned: false,
+          }
+          set({
+            users: [...users, newLocal],
+            isLoggedIn: true,
+            isDemo: false,
+            user: { ...newLocal },
+            keepLoggedIn: true,
+            lastActivity: Date.now(),
+          })
+          return
+        }
+        set({
+          isLoggedIn: true,
+          isDemo: false,
+          user: { ...local, password: undefined, name: local.name || metaName },
+          keepLoggedIn: true,
+          lastActivity: Date.now(),
+        })
+      },
     }),
     {
       name: 'user-auth-store',

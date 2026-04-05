@@ -73,11 +73,15 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
       return
     }
 
-    // 권한 확인
+    // 권한 확인 (super_admin / admin:manage = full app access; avoids hidden menus + route redirects)
     if (requiredPermissions.length > 0 && adminUser) {
-      const hasPermission = requiredPermissions.every(permission =>
-        adminUser.permissions.includes(permission)
-      )
+      const fullAccess =
+        adminUser.role === 'super_admin' ||
+        adminUser.permissions.includes('admin:manage')
+
+      const hasPermission =
+        fullAccess ||
+        requiredPermissions.every((permission) => adminUser.permissions.includes(permission))
 
       if (!hasPermission) {
         console.log('Permission denied, redirecting to dashboard...')
@@ -115,6 +119,46 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
   useEffect(() => {
     checkPermissions()
   }, [checkPermissions])
+
+  // Keep JWT app_metadata in sync with admin_email_registry (permissions / role updates).
+  useEffect(() => {
+    if (!hasHydrated || !isLoggedIn) return
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+        const { mapSupabaseUserToAdminUser } = await import('@/lib/supabase/mapSupabaseAdminUser')
+        const { syncAdminRegistryWithSession } = await import('@/lib/supabase/syncAdminRegistryClient')
+        const supabase = createSupabaseBrowserClient()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (!session?.access_token || cancelled) return
+
+        await syncAdminRegistryWithSession(supabase, session.access_token)
+        if (cancelled) return
+
+        const {
+          data: { session: s2 },
+        } = await supabase.auth.getSession()
+        if (!s2?.user || cancelled) return
+
+        const mapped = mapSupabaseUserToAdminUser(s2.user)
+        useAdminAuth.setState({ adminUser: mapped })
+        window.dispatchEvent(new Event('admin-auth-updated'))
+      } catch (e) {
+        console.warn('[AdminRoute] admin registry sync', e)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasHydrated, isLoggedIn])
 
   // Listen for permission changes
   useEffect(() => {

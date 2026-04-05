@@ -2,7 +2,7 @@
 
 import { Receipt, CreditCard, Building2, DollarSign, Truck, Calendar, User, MapPin } from 'lucide-react'
 import { getColorName } from '@/lib/colorUtils'
-import { COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { COMPANY_LEGAL, COMPANY_CONTACT } from '@/lib/companyLegal'
 
 interface OrderReceiptProps {
   order: {
@@ -47,38 +47,34 @@ interface OrderReceiptProps {
     }
     createdAtIso: string
   }
-  language?: 'ko' | 'en'
 }
 
-export default function OrderReceipt({ order, language = 'ko' }: OrderReceiptProps) {
-  const isKo = language === 'ko'
-  
+export default function OrderReceipt({ order }: OrderReceiptProps) {
   const T = {
-    receipt: isKo ? '주문 영수증' : 'Order Receipt',
-    orderNumber: isKo ? '주문번호' : 'Order Number',
-    orderDate: isKo ? '주문일' : 'Order Date',
-    customerInfo: isKo ? '고객 정보' : 'Customer Information',
-    shippingAddress: isKo ? '배송 주소' : 'Shipping Address',
-    paymentMethod: isKo ? '결제 방법' : 'Payment Method',
-    shippingMethod: isKo ? '배송 방법' : 'Shipping Method',
-    orderItems: isKo ? '주문 상품' : 'Order Items',
-    subtotal: isKo ? '소계' : 'Subtotal',
-    shipping: isKo ? '배송비' : 'Shipping',
-    total: isKo ? '총계' : 'Total',
-    thankYou: isKo ? '주문해 주셔서 감사합니다!' : 'Thank you for your order!',
-    contactInfo: isKo ? '문의사항이 있으시면 연락주세요.' : 'Please contact us if you have any questions.',
-    name: isKo ? '이름' : 'Name',
-    email: isKo ? '이메일' : 'Email',
-    phone: isKo ? '전화번호' : 'Phone',
-    quantity: isKo ? '수량' : 'Quantity',
-    price: isKo ? '가격' : 'Price',
-    customizations: isKo ? '커스터마이징' : 'Customizations',
+    receipt: 'Order Receipt',
+    orderNumber: 'Order Number',
+    orderDate: 'Order Date',
+    customerInfo: 'Customer Information',
+    shippingAddress: 'Shipping Address',
+    paymentMethod: 'Payment Method',
+    shippingMethod: 'Shipping Method',
+    orderItems: 'Order Items',
+    subtotal: 'Subtotal',
+    shipping: 'Shipping',
+    total: 'Total',
+    thankYou: 'Thank you for your order!',
+    contactInfo: 'Please contact us if you have any questions.',
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    quantity: 'Quantity',
+    price: 'Price',
+    customizations: 'Customizations',
     companyName: COMPANY_LEGAL.companyName,
-    companyLegal: COMPANY_LEGAL_LINE,
-    companyPhone: isKo ? '전화: (61) 0466-894-279' : 'Phone: (61) 0466-894-279',
-    companyEmail: isKo ? '이메일: info@selpic.com.au' : 'Email: info@selpic.com.au',
-    companyWebsite: isKo ? `웹사이트: ${COMPANY_LEGAL.domain}` : `Website: ${COMPANY_LEGAL.domain}`,
-    free: isKo ? '무료' : 'Free'
+    companyLegal: `ABN: ${COMPANY_LEGAL.abn}\nACN: ${COMPANY_LEGAL.acn}`,
+    companyAddress: COMPANY_CONTACT.address,
+    companyEmail: `Email: ${COMPANY_CONTACT.email}`,
+    free: 'Free'
   }
 
   // Normalize shipping option name to the desired label regardless of saved text/id
@@ -96,7 +92,7 @@ export default function OrderReceipt({ order, language = 'ko' }: OrderReceiptPro
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(isKo ? 'ko-KR' : 'en-US', {
+    return new Date(dateString).toLocaleDateString('en-AU', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -106,7 +102,7 @@ export default function OrderReceipt({ order, language = 'ko' }: OrderReceiptPro
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(isKo ? 'ko-KR' : 'en-US', {
+    return new Intl.NumberFormat('en-AU', {
       style: 'decimal',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
@@ -476,12 +472,11 @@ export default function OrderReceipt({ order, language = 'ko' }: OrderReceiptPro
 
       {/* Footer */}
       <div className="mt-8 border-t border-gray-200 pt-6">
-        <div className="text-center text-gray-500 text-sm space-y-2">
-          <p>© 2026 {T.companyName}. All rights reserved.</p>
-          <div className="flex flex-wrap justify-center gap-4 text-xs">
-            <span>{T.companyEmail}</span>
-            <span>{T.companyWebsite}</span>
-          </div>
+        <div className="text-center text-gray-600">
+          <p className="font-semibold mb-2">{T.companyName}</p>
+          <p className="text-sm">{T.companyAddress}</p>
+          <p className="text-sm">{T.companyEmail}</p>
+          <p className="text-xs text-gray-500 mt-4">{T.contactInfo}</p>
         </div>
       </div>
     </div>

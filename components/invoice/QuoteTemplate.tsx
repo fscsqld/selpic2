@@ -123,15 +123,22 @@ export default function QuoteTemplate({
       {/* 헤더 섹션 */}
       <div className="p-8 border-b border-gray-100 flex justify-between items-start">
         <div>
-          {company.logoUrl && (
-            <div className="mb-4">
-              <img
-                src={company.logoUrl}
-                alt={company.name}
-                className="h-20 w-auto object-contain max-w-[360px]"
-              />
-            </div>
-          )}
+          <div className="mb-4">
+            <img
+              src={company.logoUrl || '/logo.png'}
+              alt={company.name}
+              className="h-20 w-auto object-contain max-w-[360px]"
+              onError={(e) => {
+                const el = e.currentTarget
+                if (el.dataset.fallback === '1') {
+                  el.style.display = 'none'
+                  return
+                }
+                el.dataset.fallback = '1'
+                el.src = '/images/logo.png'
+              }}
+            />
+          </div>
           <h1 className="text-3xl font-black text-blue-900 tracking-tighter">{company.name}</h1>
           {/* Australian format: ABN then ACN */}
           <div className="text-xs text-gray-600 mt-1 space-y-0.5">

@@ -8,6 +8,8 @@ import { useStore } from '@/lib/store'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { useTranslation } from '@/lib/useTranslation'
 import { getColorName } from '@/lib/colorUtils'
+import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
+import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 
 export default function OrderDetailPage() {
   const params = useParams<{ orderId: string }>()
@@ -91,7 +93,27 @@ export default function OrderDetailPage() {
                           <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+                          {(() => {
+                            const { baseUnit, surchargeUnit, lineTotal } = getOrderItemLineMoney(item)
+                            const qty = item.quantity
+                            const baseTotal = baseUnit * qty
+                            const optionsTotal = surchargeUnit * qty
+                            const label =
+                              optionsTotal > 0.001
+                                ? getCustomizationSurchargeLabel(item.customizations, { size: item.size })
+                                : ''
+
+                            return (
+                              <div>
+                                <p className="font-semibold">${baseTotal.toFixed(2)}</p>
+                                {optionsTotal > 0.001 && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    + {label} +${optionsTotal.toFixed(2)}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-600">

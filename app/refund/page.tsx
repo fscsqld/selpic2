@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
 import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { createPolicyContentGetter, REFUND_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function RefundPage() {
 	const { getActiveContentBySection, _hasHydrated } = useContentStore()
@@ -16,9 +17,15 @@ export default function RefundPage() {
 	// Refund Policy 섹션의 콘텐츠 가져오기
 	const refundContent = getActiveContentBySection('refund')
 	
-	// 각 콘텐츠 항목을 쉽게 접근할 수 있도록 함수 생성
-	const getContent = (title: string) => {
-		return refundContent.find(item => item.title === title)?.content || ''
+	const getContent = createPolicyContentGetter(refundContent, REFUND_TITLE_ALIASES)
+
+	/** CMS lists may use ` | ` between items so commas inside sentences are allowed */
+	function splitPolicyList(raw: string): string[] {
+		const t = raw.trim()
+		if (!t) return []
+		if (t.includes('\n')) return t.split('\n').map((s) => s.trim()).filter(Boolean)
+		if (t.includes('|')) return t.split(/\s*\|\s*/).map((s) => s.trim()).filter(Boolean)
+		return t.split(/,\s*(?=\S)/).map((s) => s.trim()).filter(Boolean)
 	}
 
 	const title = getContent('Refund Policy Title') || 'Refund Policy'
@@ -45,17 +52,14 @@ export default function RefundPage() {
 				<p className="text-slate-600 mb-6">{intro}</p>
 				<section className="space-y-6 text-slate-700 mb-8">
 					<div>
-						<h2 className="text-xl font-semibold text-slate-900 mb-2">{getContent('Section 1 Title') || '1. Change of Mind Returns (Non-Faulty Items)'}</h2>
+						<h2 className="text-xl font-semibold text-slate-900 mb-2">{getContent('Section 1 Title') || '1. Change of Mind, Personalised Products & Timeframes'}</h2>
 						{getContent('Section 1 내용') && (
 							<p className="text-slate-700 mb-3">{getContent('Section 1 내용')}</p>
 						)}
 						{getContent('Section 1 목록') && (
 							<ul className="list-disc pl-6 space-y-1">
-								{(getContent('Section 1 목록').includes('\n') 
-									? getContent('Section 1 목록').split('\n')
-									: getContent('Section 1 목록').split(/,\s*(?=\S)/)
-								).filter(item => item.trim()).map((item, index) => (
-									<li key={index}>{item.trim()}</li>
+								{splitPolicyList(getContent('Section 1 목록')).map((item, index) => (
+									<li key={index}>{item}</li>
 								))}
 							</ul>
 						)}
@@ -68,11 +72,8 @@ export default function RefundPage() {
 						)}
 						{getContent('Section 2 목록') && (
 							<ul className="list-disc pl-6 space-y-1">
-								{(getContent('Section 2 목록').includes('\n') 
-									? getContent('Section 2 목록').split('\n')
-									: getContent('Section 2 목록').split(/,\s*(?=\S)/)
-								).filter(item => item.trim()).map((item, index) => (
-									<li key={index}>{item.trim()}</li>
+								{splitPolicyList(getContent('Section 2 목록')).map((item, index) => (
+									<li key={index}>{item}</li>
 								))}
 							</ul>
 						)}
@@ -85,11 +86,8 @@ export default function RefundPage() {
 						)}
 						{getContent('Section 3 목록') && (
 							<ul className="list-disc pl-6 space-y-1">
-								{(getContent('Section 3 목록').includes('\n') 
-									? getContent('Section 3 목록').split('\n')
-									: getContent('Section 3 목록').split(/,\s*(?=\S)/)
-								).filter(item => item.trim()).map((item, index) => (
-									<li key={index}>{item.trim()}</li>
+								{splitPolicyList(getContent('Section 3 목록')).map((item, index) => (
+									<li key={index}>{item}</li>
 								))}
 							</ul>
 						)}

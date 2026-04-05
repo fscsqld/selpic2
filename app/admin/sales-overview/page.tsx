@@ -19,9 +19,10 @@ export default function SalesOverviewPage() {
 }
 
 function SalesOverviewPageContent() {
-  const { orders, products, language } = useStore()
+  const { orders, products } = useStore()
   const router = useRouter()
-  const [isKo] = useState(language === 'ko')
+  /** Admin UI: English only (see .cursor/rules/admin-ui-english.mdc). */
+  const [isKo] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly')
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'>('monthly')

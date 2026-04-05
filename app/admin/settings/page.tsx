@@ -35,6 +35,7 @@ import {
 } from '@/lib/formatUtils'
 import PermissionManager from '@/components/PermissionManager'
 import { useWatermarkStore, WatermarkPosition } from '@/lib/watermarkStore'
+import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
 export default function AdminSettingsPage() {
   const { t } = useTranslation()
@@ -50,8 +51,6 @@ export default function AdminSettingsPage() {
     notifications, addNotification, markNotificationAsRead, getUnreadCount
   } = useSalesGoals()
   const { 
-    language, 
-    setLanguage, 
     orders,
     products,
     currency,
@@ -193,7 +192,11 @@ export default function AdminSettingsPage() {
 
   // Form states
   const [newAdminData, setNewAdminData] = useState({
-    username: '', password: '', role: 'admin' as 'admin' | 'super_admin', permissions: [] as string[]
+    email: '',
+    username: '',
+    password: '',
+    role: 'admin' as 'admin' | 'super_admin',
+    permissions: [] as string[],
   })
   const [passwordChangeData, setPasswordChangeData] = useState({ username: '', newPassword: '', confirmPassword: '' })
   const [myPasswordData, setMyPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
@@ -601,7 +604,9 @@ export default function AdminSettingsPage() {
   }
 
   const isSuperAdmin = adminUser?.role === 'super_admin'
-  
+  const useSupabaseRegistry = hasPublicSupabaseEnv()
+  const registry = useAdminEmailRegistry(Boolean(isSuperAdmin))
+
   // System Actions Handlers
   const handleClearCache = () => {
     try {
@@ -823,22 +828,49 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
     e.preventDefault()
     setIsLoading(true)
     try {
-      const success = await createAdmin(
-        newAdminData.username, newAdminData.password, 
-        newAdminData.role, newAdminData.permissions
-      )
-              if (success) {
-          setMessage(t('admin.settings.messages.adminCreated'))
-          setIsCreateModalOpen(false)
-          setNewAdminData({ username: '', password: '', role: 'admin', permissions: [] })
-        } else {
-          setMessage(t('admin.settings.messages.accessDenied'))
+      if (useSupabaseRegistry) {
+        const email = newAdminData.email.trim()
+        if (!email.includes('@')) {
+          setMessage('Enter a valid admin email for Supabase sign-in.')
+          setIsLoading(false)
+          return
         }
-      } catch (error) {
-        setMessage(t('admin.settings.messages.errorCreating'))
-      } finally {
+        const result = await registry.createEntry({
+          email,
+          role: newAdminData.role,
+          permissions: newAdminData.permissions,
+        })
+        if (result.ok) {
+          setMessage(
+            'Admin saved by email. Permissions apply when they sign in with Supabase. See Admin Management for the full email list.'
+          )
+          setIsCreateModalOpen(false)
+          setNewAdminData({ email: '', username: '', password: '', role: 'admin', permissions: [] })
+        } else {
+          setMessage(result.error || t('admin.settings.messages.accessDenied'))
+        }
         setIsLoading(false)
+        return
       }
+
+      const success = await createAdmin(
+        newAdminData.username,
+        newAdminData.password,
+        newAdminData.role,
+        newAdminData.permissions
+      )
+      if (success) {
+        setMessage(t('admin.settings.messages.adminCreated'))
+        setIsCreateModalOpen(false)
+        setNewAdminData({ email: '', username: '', password: '', role: 'admin', permissions: [] })
+      } else {
+        setMessage(t('admin.settings.messages.accessDenied'))
+      }
+    } catch (error) {
+      setMessage(t('admin.settings.messages.errorCreating'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -1604,14 +1636,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.general.language')}</label>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value as 'ko' | 'en')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="ko">{t('admin.settings.general.languageOptions.ko')}</option>
-                      <option value="en">{t('admin.settings.general.languageOptions.en')}</option>
-                    </select>
+                    <p className="text-sm text-gray-600 py-2">English (site default). The storefront and admin UI use English only.</p>
                   </div>
 
                   {/* Currency Settings */}
@@ -1818,6 +1843,23 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                     </button>
                   </div>
                 </div>
+
+                {useSupabaseRegistry && (
+                  <div className="mb-4 p-3 rounded-md bg-blue-50 text-blue-900 text-sm border border-blue-100">
+                    Supabase admins are registered <strong>by email</strong> and synced to each user&apos;s JWT when they
+                    sign in. Open{' '}
+                    <a href="/admin/management" className="underline font-medium">
+                      Admin Management
+                    </a>{' '}
+                    to view or edit the full email registry.
+                    {registry.error && (
+                      <span className="block mt-2 text-amber-800">
+                        {registry.error} Apply <code className="text-xs">002_admin_email_registry.sql</code> if the table
+                        is missing.
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Admin Users Table */}
                 <div className="overflow-x-auto border border-gray-200 rounded-lg">
@@ -3567,37 +3609,57 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
               </div>
 
               <form onSubmit={handleCreateAdmin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.modals.createAdmin.username')}</label>
-                  <input
-                    type="text"
-                    value={newAdminData.username}
-                    onChange={(e) => setNewAdminData({ ...newAdminData, username: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.modals.createAdmin.password')}</label>
-                  <div className="relative">
+                {useSupabaseRegistry ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Admin email (Supabase)</label>
                     <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={newAdminData.password}
-                      onChange={(e) => setNewAdminData({ ...newAdminData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                      type="email"
+                      autoComplete="email"
+                      value={newAdminData.email}
+                      onChange={(e) => setNewAdminData({ ...newAdminData, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="name@company.com"
                       required
-                      minLength={6}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
-                    </button>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Permissions sync when they sign in. Manage the email list under Admin Management.
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.modals.createAdmin.username')}</label>
+                      <input
+                        type="text"
+                        value={newAdminData.username}
+                        onChange={(e) => setNewAdminData({ ...newAdminData, username: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.modals.createAdmin.password')}</label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={newAdminData.password}
+                          onChange={(e) => setNewAdminData({ ...newAdminData, password: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                          required
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">{t('admin.settings.modals.createAdmin.role')}</label>

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
 import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { createPolicyContentGetter, PRIVACY_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function PrivacyPolicy() {
   const { getActiveContentBySection, _hasHydrated } = useContentStore()
@@ -17,10 +18,7 @@ export default function PrivacyPolicy() {
   // Privacy Policy 섹션의 콘텐츠 가져오기
   const privacyContent = getActiveContentBySection('privacy')
 
-  // 각 콘텐츠 항목을 쉽게 접근할 수 있도록 함수 생성
-  const getContent = (title: string) => {
-    return privacyContent.find(item => item.title === title)?.content || ''
-  }
+  const getContent = createPolicyContentGetter(privacyContent, PRIVACY_TITLE_ALIASES)
 
   // 하이드레이션 완료 전에는 기본값 표시
   if (!mounted || !_hasHydrated) {

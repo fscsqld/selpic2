@@ -9,12 +9,15 @@ alwaysApply: true
 ## Rule
 - **Default language for this project is English.** Do not assume Korean or any other language unless the user explicitly asks for it.
 - Write all of the following in English by default:
-  - UI labels, buttons, placeholders, and messages
+  - UI labels, buttons, placeholders, and messages (including **admin** routes under `/admin` and all storefront pages)
   - Default content and copy (e.g. in contentStore, templates, seed data)
   - Code comments and documentation in the codebase
   - Agent responses and explanations to the user
 - If the user writes in Korean (or another language) but does not ask for Korean output, **still respond in English** and produce English content/copy.
 - Only use Korean (or another language) when the user **explicitly requests** it (e.g. "한글로 답해줘", "한국어로 작성해줘").
+
+## Admin dashboard
+For routes under `app/admin/**`, also follow [.cursor/rules/admin-ui-english.mdc](mdc:.cursor/rules/admin-ui-english.mdc): admin copy stays English and does not follow the storefront locale.
 
 ## Summary
 English is the default. No need to ask again—always use English unless the user specifically requests another language.
