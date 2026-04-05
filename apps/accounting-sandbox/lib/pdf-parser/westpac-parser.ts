@@ -97,7 +97,7 @@ export class WestpacParser implements PDFParser {
     let pdfData
     try {
       console.log('[WESTPAC-PARSER] Extracting text from PDF...')
-      pdfData = await pdfParse.default(pdfBuffer)
+      pdfData = await pdfParse(pdfBuffer)
       console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters')
       console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages)
     } catch (error: any) {
