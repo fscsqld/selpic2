@@ -231,7 +231,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6" autoComplete="on">
+          <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
             {formError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
                 {formError}
@@ -253,9 +253,9 @@ export default function LoginPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                  placeholder="name@example.com"
+                  placeholder="Enter your email address"
                 />
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
               </div>
