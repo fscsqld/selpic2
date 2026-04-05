@@ -5,7 +5,7 @@
  */
 
 import { PDFParser, ParsedStatement, BankTransaction } from './types'
-import pdfParse from 'pdf-parse'
+import * as pdfParse from 'pdf-parse'
 
 export class WestpacParser implements PDFParser {
   /**
@@ -97,7 +97,7 @@ export class WestpacParser implements PDFParser {
     let pdfData
     try {
       console.log('[WESTPAC-PARSER] Extracting text from PDF...')
-      pdfData = await pdfParse(pdfBuffer)
+      pdfData = await pdfParse.default(pdfBuffer)
       console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters')
       console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages)
     } catch (error: any) {
