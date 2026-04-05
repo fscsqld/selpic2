@@ -1,6 +1,12 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname),
+    }
     if (!isServer && config.output) {
       // Dev/slow disks: avoid spurious ChunkLoadError on large layout chunks
       config.output.chunkLoadTimeout = 180000

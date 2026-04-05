@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import Header from '@/components/Header'
+import Header from '../../components/Header'
 import { useContentStore } from '@/lib/contentStore'
 import { Package, Star, Heart, Users, Award, Globe, ArrowRight, Zap, Target, Shield } from 'lucide-react'
 import Link from 'next/link'
