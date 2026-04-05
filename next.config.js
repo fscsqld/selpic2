@@ -1,31 +1,37 @@
 const path = require('path')
 
 /**
- * Supabase URL/anon must be available to the browser bundle and middleware for Storage + Auth.
- * Vercel/Supabase docs sometimes use SUPABASE_URL / SUPABASE_ANON_KEY only; map them so fetch
- * does not target undefined hosts when NEXT_PUBLIC_* was omitted.
+ * Force-inject Supabase public env into the JS bundle (server + client + middleware).
+ * Vercel build must have at least one of NEXT_PUBLIC_* or SUPABASE_* per line below.
  */
-function resolvePublicSupabaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    ''
-  ).trim()
-}
+const NEXT_PUBLIC_SUPABASE_URL = (
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  ''
+).trim()
 
-function resolvePublicSupabaseAnonKey() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    ''
-  ).trim()
+const NEXT_PUBLIC_SUPABASE_ANON_KEY = (
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  ''
+).trim()
+
+if (process.env.VERCEL === '1' && !NEXT_PUBLIC_SUPABASE_URL) {
+  console.warn(
+    '[next.config.js] Production build on Vercel: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_URL are both empty. Set either in Project → Settings → Environment Variables, then redeploy.'
+  )
+}
+if (process.env.VERCEL === '1' && NEXT_PUBLIC_SUPABASE_URL && !NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  console.warn(
+    '[next.config.js] NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_ANON_KEY missing at build time.'
+  )
 }
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
-    NEXT_PUBLIC_SUPABASE_URL: resolvePublicSupabaseUrl(),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: resolvePublicSupabaseAnonKey(),
+    NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {

@@ -20,6 +20,7 @@ export function createSupabaseBrowserClient() {
       'font-size: 22px; font-weight: 900; color: #fff; background: #b91c1c; padding: 10px 14px; border-radius: 6px; line-height: 2;',
       '\nNEXT_PUBLIC_SUPABASE_URL is empty in this browser bundle (Vercel: set env + redeploy so NEXT_PUBLIC_* is inlined at build).'
     )
+    alert('환경변수 누락: ' + process.env.NEXT_PUBLIC_SUPABASE_URL)
   }
 
   if (!url || !anon) {
@@ -33,13 +34,8 @@ export function createSupabaseBrowserClient() {
     }
     console.error(LOG_PREFIX, 'Missing Supabase env in browser bundle', detail)
 
-    if (typeof window !== 'undefined') {
-      const missingParts: string[] = []
-      if (!url) missingParts.push('NEXT_PUBLIC_SUPABASE_URL (주소)')
-      if (!anon) missingParts.push('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-      window.alert(
-        `Supabase 주소가 비어있습니다!\n\n누락: ${missingParts.join(', ')}\n\nVercel 환경 변수(NEXT_PUBLIC_*) 주입과 재배포를 확인하세요.`
-      )
+    if (typeof window !== 'undefined' && url && !anon) {
+      alert('환경변수 누락(anon): ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     }
 
     throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required.')
