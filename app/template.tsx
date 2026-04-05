@@ -12,10 +12,11 @@ export default function RootTemplate({
 }: {
   children: React.ReactNode
 }) {
+  // Single DOM parent avoids React treating multiple roots as an unkeyed list (OuterLayoutRouter warning).
   return (
-    <>
+    <div className="contents">
       <GamePromoCodeSyncLazy />
       {children}
-    </>
+    </div>
   )
 }

@@ -1400,13 +1400,11 @@ export default function HomePage() {
             const hasLink = slide.linkUrl && slide.linkUrl.trim() !== ''
             const isEventBanner = slide.isEventBanner && slide.linkUrl
             
-            // ✅ Key 로직 단순화: slide.id 기반으로 고정 (srcHash, updatedAt 제거하여 실시간 변동 값 제외)
-            // 슬라이드 전환 시 잔상이 남지 않도록 SwiperSlide와 내부 미디어 컴포넌트의 key를 slide.id 기반으로 고정
-            const uniqueKey = `slide-${slide.id}`
-            const mediaKey = `${slide.type || 'image'}-${slide.id}`
+            // ✅ Stable unique key per list position (duplicate slide.id + React list reconciliation)
+            const uniqueKey = `hero-slide-${slide.id}-${index}`
+            const mediaKey = `${slide.type || 'image'}-${slide.id}-${index}`
             
-            // ✅ SwiperSlide 내부에 직접 Link를 배치하여 key 중복 방지
-            const slideContent = (
+            return (
               <SwiperSlide key={uniqueKey} className={`relative ${hasLink ? 'cursor-pointer' : ''}`}>
                 {/* Background Content */}
                 <div className="absolute inset-0 w-full h-full">
@@ -1471,8 +1469,6 @@ export default function HomePage() {
                 </div>
               </SwiperSlide>
             )
-            
-            return slideContent
           }).filter(Boolean) : null}
         </Swiper>
         
@@ -1489,7 +1485,7 @@ export default function HomePage() {
             <div className="swiper-pagination flex space-x-4">
               {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => (
                 <div
-                  key={`pagination-${slide.id || index}`}
+                  key={`pagination-${slide?.id ?? 'slide'}-${index}`}
                   className={`w-4 h-4 rounded-full transition-all duration-300 cursor-pointer border-2 border-white/40 ${
                     currentSlide === index 
                       ? 'bg-white scale-125 shadow-lg shadow-white/50' 
@@ -1596,7 +1592,7 @@ export default function HomePage() {
                       <div className="flex flex-wrap gap-2">
                         {category.tags.map((tag, index) => (
                           <span 
-                            key={index} 
+                            key={`${category.id}-tag-${index}-${String(tag)}`} 
                             className={`px-3 py-1 rounded-full text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
                               category.title === 'SELPIC N' 
                                 ? 'bg-white/30 backdrop-blur-sm border border-white/40' 
@@ -1725,8 +1721,8 @@ export default function HomePage() {
               {footerContent.find(item => item.title === 'Quick Links Title')?.content || 'Quick Links'}
             </h3>
             <ul className="space-y-2">
-              {quickLinks.map((link, idx) => (
-                <li key={`quick-link-${idx}`}>
+              {quickLinks.map((link) => (
+                <li key={`quick-link-${link.url}`}>
                   <Link href={link.url} className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
                     {link.label}
                   </Link>
@@ -1739,8 +1735,8 @@ export default function HomePage() {
               {footerContent.find(item => item.title === 'Help/Useful Links Title')?.content || 'Help/Useful Links'}
             </h3>
             <ul className="space-y-2">
-              {helpLinks.map((link, idx) => (
-                <li key={`help-link-${idx}`}>
+              {helpLinks.map((link) => (
+                <li key={`help-link-${link.url}`}>
                   <Link
                     href={link.url}
                     className="text-gray-400 hover:text-white transition-colors duration-300 text-sm whitespace-nowrap"

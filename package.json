@@ -1,8 +1,8 @@
 {
   "name": "selpic-sticker-shop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
-  "description": "SELPIC storefront — bump when forcing fresh Vercel/CDN behavior (2026-04-05)",
+  "description": "SELPIC storefront — bump when forcing fresh Vercel/CDN behavior (2026-04-05 react keys)",
   "scripts": {
     "dev": "next dev --port 3000",
     "dev:all": "next dev --port 3000 --hostname 0.0.0.0",

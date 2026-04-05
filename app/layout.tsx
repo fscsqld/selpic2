@@ -64,8 +64,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* ✅ Google Fonts CDN 로드 */}
-        {googleFontsUrls.map((url, index) => (
-          <link key={index} rel="stylesheet" href={url} />
+        {googleFontsUrls.map((url) => (
+          <link key={url} rel="stylesheet" href={url} />
         ))}
         {/* ✅ 한글 폰트 추가 로드 (Google Fonts에 있는 실제 한글 폰트들) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
