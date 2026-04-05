@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2020",
-    "lib": ["dom", "dom.iterable", "es2020"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2020"
+    ],
     "downlevelIteration": true,
     "allowJs": true,
     "skipLibCheck": true,
@@ -12,7 +17,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -20,35 +25,93 @@
       }
     ],
     "paths": {
-      "@/src/*": ["./apps/accounting-sandbox/src/*"],
-      "@/lib/sso-handler": ["./apps/accounting-sandbox/lib/sso-handler"],
-      "@/lib/ai-classifier": ["./apps/accounting-sandbox/lib/ai-classifier"],
-      "@/lib/ai-classifier/*": ["./apps/accounting-sandbox/lib/ai-classifier/*"],
-      "@/lib/auth/*": ["./apps/accounting-sandbox/lib/auth/*"],
-      "@/lib/compliance-reporting/*": ["./apps/accounting-sandbox/lib/compliance-reporting/*"],
-      "@/lib/csv-parser/*": ["./apps/accounting-sandbox/lib/csv-parser/*"],
-      "@/lib/department-classifier/*": ["./apps/accounting-sandbox/lib/department-classifier/*"],
-      "@/lib/entity-tracker/*": ["./apps/accounting-sandbox/lib/entity-tracker/*"],
-      "@/lib/excel-export": ["./apps/accounting-sandbox/lib/excel-export"],
-      "@/lib/excel-export/*": ["./apps/accounting-sandbox/lib/excel-export/*"],
-      "@/lib/fbt-monitoring/*": ["./apps/accounting-sandbox/lib/fbt-monitoring/*"],
-      "@/lib/gst-settlement": ["./apps/accounting-sandbox/lib/gst-settlement"],
-      "@/lib/gst-settlement/*": ["./apps/accounting-sandbox/lib/gst-settlement/*"],
-      "@/lib/i18n/*": ["./apps/accounting-sandbox/lib/i18n/*"],
-      "@/lib/payg-withholding": ["./apps/accounting-sandbox/lib/payg-withholding"],
-      "@/lib/payg-withholding/*": ["./apps/accounting-sandbox/lib/payg-withholding/*"],
-      "@/lib/pdf-parser": ["./apps/accounting-sandbox/lib/pdf-parser"],
-      "@/lib/pdf-parser/*": ["./apps/accounting-sandbox/lib/pdf-parser/*"],
-      "@/lib/period-management/*": ["./apps/accounting-sandbox/lib/period-management/*"],
-      "@/lib/pre-trading-expenses/*": ["./apps/accounting-sandbox/lib/pre-trading-expenses/*"],
-      "@/lib/storage/*": ["./apps/accounting-sandbox/lib/storage/*"],
-      "@/lib/tax-dashboard/*": ["./apps/accounting-sandbox/lib/tax-dashboard/*"],
-      "@/lib/tax-deadlines/*": ["./apps/accounting-sandbox/lib/tax-deadlines/*"],
-      "@/lib/utils/*": ["./apps/accounting-sandbox/lib/utils/*"],
-      "@/*": ["./*"]
+      "@/src/*": [
+        "./apps/accounting-sandbox/src/*"
+      ],
+      "@/lib/sso-handler": [
+        "./apps/accounting-sandbox/lib/sso-handler"
+      ],
+      "@/lib/ai-classifier": [
+        "./apps/accounting-sandbox/lib/ai-classifier"
+      ],
+      "@/lib/ai-classifier/*": [
+        "./apps/accounting-sandbox/lib/ai-classifier/*"
+      ],
+      "@/lib/auth/*": [
+        "./apps/accounting-sandbox/lib/auth/*"
+      ],
+      "@/lib/compliance-reporting/*": [
+        "./apps/accounting-sandbox/lib/compliance-reporting/*"
+      ],
+      "@/lib/csv-parser/*": [
+        "./apps/accounting-sandbox/lib/csv-parser/*"
+      ],
+      "@/lib/department-classifier/*": [
+        "./apps/accounting-sandbox/lib/department-classifier/*"
+      ],
+      "@/lib/entity-tracker/*": [
+        "./apps/accounting-sandbox/lib/entity-tracker/*"
+      ],
+      "@/lib/excel-export": [
+        "./apps/accounting-sandbox/lib/excel-export"
+      ],
+      "@/lib/excel-export/*": [
+        "./apps/accounting-sandbox/lib/excel-export/*"
+      ],
+      "@/lib/fbt-monitoring/*": [
+        "./apps/accounting-sandbox/lib/fbt-monitoring/*"
+      ],
+      "@/lib/gst-settlement": [
+        "./apps/accounting-sandbox/lib/gst-settlement"
+      ],
+      "@/lib/gst-settlement/*": [
+        "./apps/accounting-sandbox/lib/gst-settlement/*"
+      ],
+      "@/lib/i18n/*": [
+        "./apps/accounting-sandbox/lib/i18n/*"
+      ],
+      "@/lib/payg-withholding": [
+        "./apps/accounting-sandbox/lib/payg-withholding"
+      ],
+      "@/lib/payg-withholding/*": [
+        "./apps/accounting-sandbox/lib/payg-withholding/*"
+      ],
+      "@/lib/pdf-parser": [
+        "./apps/accounting-sandbox/lib/pdf-parser"
+      ],
+      "@/lib/pdf-parser/*": [
+        "./apps/accounting-sandbox/lib/pdf-parser/*"
+      ],
+      "@/lib/period-management/*": [
+        "./apps/accounting-sandbox/lib/period-management/*"
+      ],
+      "@/lib/pre-trading-expenses/*": [
+        "./apps/accounting-sandbox/lib/pre-trading-expenses/*"
+      ],
+      "@/lib/storage/*": [
+        "./apps/accounting-sandbox/lib/storage/*"
+      ],
+      "@/lib/tax-dashboard/*": [
+        "./apps/accounting-sandbox/lib/tax-dashboard/*"
+      ],
+      "@/lib/tax-deadlines/*": [
+        "./apps/accounting-sandbox/lib/tax-deadlines/*"
+      ],
+      "@/lib/utils/*": [
+        "./apps/accounting-sandbox/lib/utils/*"
+      ],
+      "@/*": [
+        "./*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "apps/accounting-sandbox/app",
@@ -56,4 +119,4 @@
     "apps/accounting-sandbox/lib",
     "apps/accounting-sandbox/tests"
   ]
-} 
+}
