@@ -4,41 +4,48 @@
  * `@/lib/supabase/server` there instead.
  */
 import { createBrowserClient } from '@supabase/ssr'
+import {
+  isLikelySupabaseAnonKey,
+  isValidSupabaseHttpUrl,
+  readRawSupabasePublicEnv,
+} from '@/lib/supabase/publicEnv'
 
 const LOG_PREFIX = '[createSupabaseBrowserClient]'
 let loggedOkOnce = false
 
 export function createSupabaseBrowserClient() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const rawAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  const url = rawUrl?.trim() ?? ''
-  const anon = rawAnon?.trim() ?? ''
+  const { url, anon } = readRawSupabasePublicEnv()
 
-  if (typeof window !== 'undefined' && !url) {
+  const urlOk = isValidSupabaseHttpUrl(url)
+  const anonOk = isLikelySupabaseAnonKey(anon)
+
+  if (typeof window !== 'undefined' && !urlOk) {
     console.error(
-      '%c ERROR: URL IS MISSING ',
+      '%c ERROR: URL IS MISSING OR INVALID ',
       'font-size: 22px; font-weight: 900; color: #fff; background: #b91c1c; padding: 10px 14px; border-radius: 6px; line-height: 2;',
-      '\nNEXT_PUBLIC_SUPABASE_URL is empty in this browser bundle (Vercel: set env + redeploy so NEXT_PUBLIC_* is inlined at build).'
+      '\nNEXT_PUBLIC_SUPABASE_URL must be a full https URL (e.g. https://xxxx.supabase.co).',
+      '\nVercel: set for Preview + Production, no extra quotes; redeploy after changing env.'
     )
     alert('환경변수 누락: ' + process.env.NEXT_PUBLIC_SUPABASE_URL)
   }
 
-  if (!url || !anon) {
+  if (!urlOk || !anonOk) {
     const detail = {
-      hasUrl: Boolean(url),
+      urlOk,
+      anonOk,
       urlLength: url.length,
-      hasAnonKey: Boolean(anon),
-      anonKeyLength: anon.length,
-      rawUrlDefined: rawUrl !== undefined,
-      rawAnonDefined: rawAnon !== undefined,
+      anonLength: anon.length,
+      urlPreview: url ? `${url.slice(0, 24)}…` : '(empty)',
     }
-    console.error(LOG_PREFIX, 'Missing Supabase env in browser bundle', detail)
+    console.error(LOG_PREFIX, 'Invalid Supabase public env (would break fetch())', detail)
 
-    if (typeof window !== 'undefined' && url && !anon) {
+    if (typeof window !== 'undefined' && urlOk && !anonOk) {
       alert('환경변수 누락(anon): ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     }
 
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required.')
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be valid (see Vercel env + Preview scope).'
+    )
   }
 
   if (typeof window !== 'undefined' && !loggedOkOnce) {

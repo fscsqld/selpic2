@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, AlertCircle, Home, Shield } from 'lucide-react'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useUserAuth } from '@/lib/userAuth'
+import { hasUsableSupabaseBrowserEnv } from '@/lib/supabase/publicEnv'
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('')
@@ -31,9 +32,7 @@ export default function AdminLoginPage() {
         return
       }
 
-      const hasSupabase =
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      const hasSupabase = hasUsableSupabaseBrowserEnv()
 
       if (hasSupabase) {
         try {
@@ -73,9 +72,7 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
-      const hasPublicSupabase =
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      const hasPublicSupabase = hasUsableSupabaseBrowserEnv()
       const allowLegacy = process.env.NEXT_PUBLIC_ALLOW_LEGACY_ADMIN_LOGIN === 'true'
 
       if (hasPublicSupabase) {
@@ -101,12 +98,28 @@ export default function AdminLoginPage() {
           }
 
           if (!allowLegacy) {
-            setError(sbError?.message || 'Invalid email or password.')
+            const msg = sbError?.message || ''
+            if (/invalid value/i.test(msg) || /failed to fetch/i.test(msg)) {
+              setError(
+                'Supabase 연결에 실패했습니다. Vercel에서 NEXT_PUBLIC_SUPABASE_URL(전체 https 주소)과 ANON 키가 Preview·Production에 설정돼 있는지 확인 후 재배포하세요.'
+              )
+            } else {
+              setError(msg || 'Invalid email or password.')
+            }
             return
           }
-        } catch {
+        } catch (err) {
           if (!allowLegacy) {
-            setError('Sign-in failed. Check your email and password, or contact a super admin if your access was revoked.')
+            const msg = err instanceof Error ? err.message : String(err)
+            if (/invalid value/i.test(msg)) {
+              setError(
+                'Supabase URL이 잘못되었습니다. 환경 변수에 따옴표 없이 https://…supabase.co 형태로 넣었는지, Preview 배포에도 변수가 적용됐는지 확인하세요.'
+              )
+            } else {
+              setError(
+                'Sign-in failed. Check your email and password, or contact a super admin if your access was revoked.'
+              )
+            }
             return
           }
         }
