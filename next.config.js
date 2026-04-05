@@ -7,6 +7,8 @@ const nextConfig = {
     }
     return config
   },
+  // Silence Turbopack vs webpack config warnings when using `next build --webpack`
+  turbopack: {},
   images: {
     unoptimized: true
   },
