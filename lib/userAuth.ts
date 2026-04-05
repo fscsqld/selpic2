@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { isUuid } from '@/lib/isUuid'
 
 export interface User {
   id: string
@@ -325,31 +326,63 @@ export const useUserAuth = create<UserAuthState>()(
       changePassword: async (userId: string, currentPassword: string, newPassword: string) => {
         try {
           const { users } = get()
-          
-          // 사용자 찾기
-          const user = users.find(u => u.id === userId)
+
+          const user = users.find((u) => u.id === userId)
           if (!user) {
             return false
           }
-          
-          // 현재 비밀번호 확인
-          if (user.password !== currentPassword) {
+
+          const email = (user.email || '').trim()
+          if (!email) {
             return false
           }
-          
-          // 새 비밀번호로 업데이트
-          const updatedUsers = users.map(u => 
-            u.id === userId ? { ...u, password: newPassword } : u
-          )
-          
+
+          const cur = String(currentPassword ?? '').trim()
+          const next = String(newPassword ?? '').trim()
+          if (!cur || !next) {
+            return false
+          }
+
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+          const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+          const useSupabaseAuth = Boolean(supabaseUrl && supabaseAnon) && isUuid((userId || '').trim())
+
+          if (useSupabaseAuth) {
+            const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+            const supabase = createSupabaseBrowserClient()
+            const { error: signErr } = await supabase.auth.signInWithPassword({
+              email,
+              password: cur,
+            })
+            if (signErr) {
+              return false
+            }
+            const { error: upErr } = await supabase.auth.updateUser({ password: next })
+            if (upErr) {
+              return false
+            }
+            const updatedUsers = users.map((u) => (u.id === userId ? { ...u, password: undefined } : u))
+            set({ users: updatedUsers })
+            const currentUser = get().user
+            if (currentUser && currentUser.id === userId) {
+              set({ user: { ...currentUser, password: undefined } })
+            }
+            return true
+          }
+
+          const expected = String(user.password ?? '').trim()
+          if (expected !== cur) {
+            return false
+          }
+
+          const updatedUsers = users.map((u) => (u.id === userId ? { ...u, password: next } : u))
           set({ users: updatedUsers })
-          
-          // 현재 로그인된 사용자 정보도 업데이트
+
           const currentUser = get().user
           if (currentUser && currentUser.id === userId) {
-            set({ user: { ...currentUser, password: newPassword } })
+            set({ user: { ...currentUser, password: undefined } })
           }
-          
+
           return true
         } catch (error) {
           console.error('Password change error:', error)
