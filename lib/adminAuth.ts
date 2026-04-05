@@ -432,25 +432,69 @@ export const useAdminAuth = create<AdminAuthState>()(
           throw new Error(`Password does not meet requirements: ${validation.errors.join(', ')}`)
         }
 
-        // Verify current password
-        // Priority: 1) Check stored password in localStorage, 2) Check default passwords
+        const cur = currentPassword.trim()
+        const next = newPassword.trim()
+
+        /**
+         * Staff signed in via Supabase Auth: password lives in Auth, not in `admin-password-*` localStorage.
+         * Match session email to `adminUser.email` (set in mapSupabaseUserToAdminUser) before using this path.
+         */
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+        const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+        const profileEmail = adminUser.email?.trim()
+        if (typeof window !== 'undefined' && supabaseUrl && supabaseAnon && profileEmail) {
+          try {
+            const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+            const supabase = createSupabaseBrowserClient()
+            const {
+              data: { session },
+            } = await supabase.auth.getSession()
+            const sessionEmail = session?.user?.email?.trim().toLowerCase()
+            if (sessionEmail && sessionEmail === profileEmail.toLowerCase()) {
+              const { error: signErr } = await supabase.auth.signInWithPassword({
+                email: profileEmail,
+                password: cur,
+              })
+              if (signErr) {
+                console.log(`[changePassword] Supabase current password check failed: ${signErr.message}`)
+                return false
+              }
+              const { error: upErr } = await supabase.auth.updateUser({ password: next })
+              if (upErr) {
+                console.error('[changePassword] Supabase updateUser failed', upErr.message)
+                return false
+              }
+              localStorage.removeItem(`admin-password-${adminUser.username}`)
+              localStorage.removeItem(`admin-password-changed-${adminUser.username}`)
+              addPasswordToHistory(adminUser.username, next)
+              const { adminUsers: sbAdmins } = get()
+              const updatedFromSb = sbAdmins.map((u) =>
+                u.username === adminUser.username ? { ...u, lastModified: new Date().toISOString() } : u
+              )
+              set({ adminUsers: updatedFromSb })
+              window.dispatchEvent(new Event('admin-auth-updated'))
+              console.log(`Password changed successfully (Supabase Auth) for ${adminUser.username}`)
+              return true
+            }
+          } catch (e) {
+            console.error('[changePassword] Supabase branch error', e)
+          }
+        }
+
+        // Legacy demo / local-only admin: localStorage + default passwords
         let isValidCurrentPassword = false
-        
-        // First, check stored password in localStorage (for changed passwords or renamed accounts)
+
         const storedPassword = localStorage.getItem(`admin-password-${adminUser.username}`)
         console.log(`Stored password exists for ${adminUser.username}: ${!!storedPassword}`)
-        
-        if (storedPassword && storedPassword === currentPassword) {
+
+        if (storedPassword && storedPassword === cur) {
           isValidCurrentPassword = true
           console.log(`Current password verified using stored password`)
         } else {
-          // If no stored password or doesn't match, check default passwords
-          // Note: This only works for original 'admin' and 'superadmin' usernames
-          // For renamed accounts, we rely on stored password only
-          if (adminUser.username === 'admin' && currentPassword === 'selpic2024') {
+          if (adminUser.username === 'admin' && cur === 'selpic2024') {
             isValidCurrentPassword = true
             console.log(`Current password verified using default password for admin`)
-          } else if (adminUser.username === 'superadmin' && currentPassword === 'selpic2024super') {
+          } else if (adminUser.username === 'superadmin' && cur === 'selpic2024super') {
             isValidCurrentPassword = true
             console.log(`Current password verified using default password for superadmin`)
           } else {
@@ -462,45 +506,32 @@ export const useAdminAuth = create<AdminAuthState>()(
           console.log(`Invalid current password for ${adminUser.username}`)
           console.log(`Stored password exists: ${!!storedPassword}`)
           if (storedPassword) {
-            console.log(`Stored password length: ${storedPassword.length}, Input length: ${currentPassword.length}`)
+            console.log(`Stored password length: ${storedPassword.length}, Input length: ${cur.length}`)
           }
           return false
         }
 
-        // In a real application, this would update the password in the database
-        // For demo purposes, we'll just return success
-        // The actual password change would require backend implementation
-        
-        // Store the new password in localStorage for demo purposes
-        // In production, this should be handled by the backend
-        // This works for both original and renamed usernames
-        localStorage.setItem(`admin-password-${adminUser.username}`, newPassword)
+        localStorage.setItem(`admin-password-${adminUser.username}`, next)
         localStorage.setItem(`admin-password-changed-${adminUser.username}`, new Date().toISOString())
         
-        // Add to password history
-        addPasswordToHistory(adminUser.username, newPassword)
-        
-        // Update lastModified timestamp in adminUsers array for consistency
+        addPasswordToHistory(adminUser.username, next)
+
         const { adminUsers } = get()
-        const updatedAdminUsers = adminUsers.map(u => 
-          u.username === adminUser.username 
-            ? { ...u, lastModified: new Date().toISOString() }
-            : u
+        const updatedAdminUsers = adminUsers.map((u) =>
+          u.username === adminUser.username ? { ...u, lastModified: new Date().toISOString() } : u
         )
-        
-        // Update state
+
         set({
-          adminUsers: updatedAdminUsers
+          adminUsers: updatedAdminUsers,
         })
-        
-        // Dispatch custom event to notify other components
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('admin-auth-updated'))
         }
-        
+
         console.log(`Password changed successfully for ${adminUser.username}`)
         console.log(`New password stored in localStorage key: admin-password-${adminUser.username}`)
-        console.log(`You can now login with: ${adminUser.username} / ${newPassword}`)
+        console.log(`You can now login with: ${adminUser.username} / ${next}`)
         
         return true
       },
