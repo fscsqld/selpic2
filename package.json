@@ -8,7 +8,7 @@
     "dev:3001": "next dev --port 3001 --hostname 0.0.0.0",
     "dev:home": "next dev --port 3001 --hostname 0.0.0.0",
     "dev:accounting": "cd apps/accounting-sandbox && npm run dev",
-    "build": "next build",
+    "build": "npm install --legacy-peer-deps && next build",
     "start": "next start --port 3000",
     "start:3001": "next start --port 3001",
     "lint": "next lint",
