@@ -96,9 +96,10 @@ export class WestpacParser implements PDFParser {
     let pdfData
     try {
       console.log('[WESTPAC-PARSER] Extracting text from PDF...');
-      // 동적 임포트로 타입 체크 우회
-      const pdf = (await import('pdf-parse')).default;
-      pdfData = await (pdf as any)(pdfBuffer);
+      // 임포트 결과 전체를 any로 취급하여 타입 체크를 완전히 피함
+      const pdfImport: any = await import('pdf-parse');
+      const pdf = pdfImport.default || pdfImport;
+      pdfData = await pdf(pdfBuffer);
 
       console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters');
       console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages);
