@@ -231,27 +231,6 @@ export default function StickersPage() {
     console.log('📝 Stickers page - slideText:', slideText)
   }, [categoryHeroSlides, slideText])
   
-  // localStorage 변경 감지 (같은 탭에서 수정 시 - zustand persist가 자동으로 처리)
-  useEffect(() => {
-    // zustand persist가 자동으로 localStorage 변경을 감지하므로
-    // 추가적인 처리는 필요 없지만, 디버깅을 위해 로그만 추가
-    const checkStorage = () => {
-      try {
-        const stored = localStorage.getItem('content-store')
-        if (stored) {
-          const data = JSON.parse(stored)
-          const storedSlides = data?.state?.categoryHeroSlides || []
-          console.log('📦 localStorage check - categoryHeroSlides count:', storedSlides.length)
-        }
-      } catch (error) {
-        console.error('❌ localStorage check error:', error)
-      }
-    }
-    
-    // 주기적으로 확인 (실제로는 zustand가 자동으로 처리하지만 디버깅용)
-    const interval = setInterval(checkStorage, 2000)
-    return () => clearInterval(interval)
-  }, [])
 
   // 스티커 상품만 Filtering
   // 재고가 0인 상품도 표시 (Sold Out으로 표시됨)

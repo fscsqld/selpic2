@@ -1,5 +1,7 @@
 'use client'
 
+import '@/lib/contentStoreLocalStorageShim'
+import ContentStoreSupabaseSync from '@/components/ContentStoreSupabaseSync'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
 
 /**
@@ -12,10 +14,13 @@ export default function RootTemplate({
 }: {
   children: React.ReactNode
 }) {
+  // One root node under the layout/template boundary avoids anonymous sibling lists
+  // that trigger React key warnings in Next.js OuterLayoutRouter. `contents` = no layout box.
   return (
-    <>
+    <div className="contents">
+      <ContentStoreSupabaseSync />
       <GamePromoCodeSyncLazy />
       {children}
-    </>
+    </div>
   )
 }

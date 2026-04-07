@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Upload, X, Image as ImageIcon, Video, File as FileIcon, AlertCircle, CheckCircle, FolderOpen } from 'lucide-react'
 import MediaLibraryModal from './MediaLibraryModal'
 import { useMediaStore, type MediaUsage } from '@/lib/mediaStore'
+import { buildSelpicStoragePath, uploadToSelpicContents } from '@/lib/selpicStorageUpload'
 
 interface MediaUploadProps {
   type: 'image' | 'video'
@@ -166,30 +167,43 @@ export default function MediaUpload({
     setUploadSuccess(false)
 
     try {
-      // 파일을 IndexedDB에 영구 저장
+      const hasSupabase =
+        typeof process !== 'undefined' &&
+        !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (hasSupabase && !isFromMediaLibrary) {
+        try {
+          const folder = usage ? `cms/${usage}` : 'cms/general'
+          const fileId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+          const path = buildSelpicStoragePath(folder, fileId, file.name)
+          const publicUrl = await uploadToSelpicContents(path, file, file.type || undefined)
+          console.log('✅ MediaUpload: Supabase public URL:', publicUrl.substring(0, 80) + '…')
+          onUpload(file, publicUrl)
+          setUploadSuccess(true)
+          setTimeout(() => setUploadSuccess(false), 3000)
+          return
+        } catch (supabaseErr) {
+          console.warn('MediaUpload: Supabase upload failed, falling back to IndexedDB:', supabaseErr)
+        }
+      }
+
       console.log('📦 MediaUpload: Saving file to IndexedDB...', { fileName: file.name, fileSize: file.size, fileType: file.type, usage })
-      
-      // MediaStore를 사용하여 파일을 IndexedDB에 저장 (usage 전달)
+
       const mediaFile = await addMediaFileWithData(file, 'content', undefined, undefined, undefined, undefined, usage)
-      
+
       console.log('✅ MediaUpload: File saved to IndexedDB:', {
         id: mediaFile.id,
         url: mediaFile.url?.substring(0, 50) + '...',
         dataUrl: mediaFile.dataUrl ? mediaFile.dataUrl.substring(0, 50) + '...' : 'none',
         storedInIndexedDB: mediaFile.storedInIndexedDB
       })
-      
-      // 파일 ID를 영구 URL로 사용 (indexeddb:// 형식)
-      // 이렇게 하면 새로고침 후에도 파일을 IndexedDB에서 가져올 수 있음
+
       const permanentUrl = `indexeddb://${mediaFile.id}`
-      
       console.log('✅ MediaUpload: Using permanent URL (file ID):', permanentUrl)
-      
-      // 성공 시 콜백 호출 (영구 URL = 파일 ID 전달)
+
       onUpload(file, permanentUrl)
       setUploadSuccess(true)
-      
-      // 3초 후 성공 메시지 제거
       setTimeout(() => setUploadSuccess(false), 3000)
     } catch (error) {
       console.error('❌ Error in handleFileUpload:', error)

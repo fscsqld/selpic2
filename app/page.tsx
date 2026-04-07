@@ -781,7 +781,7 @@ export default function HomePage() {
 
 
   // Hero 슬라이드 데이터 가져오기
-  const { getActiveHeroSlides, getActiveCategoryItems, heroSlides: storeHeroSlides, categoryItems: allCategoryItems, heroSliderSettings } = useContentStore()
+  const { getActiveHeroSlides, heroSlides: storeHeroSlides, categoryItems: allCategoryItems, heroSliderSettings } = useContentStore()
   const heroSlides = getActiveHeroSlides()
   
   // Swiper modules를 useMemo로 메모이제이션 (effect 변경 시에만 재생성)
@@ -945,11 +945,11 @@ export default function HomePage() {
       return []
     }
     const items = allCategoryItems
-      .filter(category => category.isActive)
+      .filter((category) => category.isActive)
       .sort((a, b) => a.order - b.order)
     devLog('🏠 HomePage - CategoryItems filtered:', {
       count: items.length,
-      categories: items.map(cat => ({
+      categories: items.map((cat) => ({
         id: cat.id,
         title: cat.title,
         description: cat.description,
@@ -957,8 +957,8 @@ export default function HomePage() {
         backgroundImage: cat.backgroundImage ? cat.backgroundImage.substring(0, 50) + '...' : 'none',
         gradientFrom: cat.gradientFrom,
         gradientTo: cat.gradientTo,
-        linkUrl: cat.linkUrl
-      }))
+        linkUrl: cat.linkUrl,
+      })),
     })
     return items
   }, [allCategoryItems])
@@ -1025,65 +1025,38 @@ export default function HomePage() {
           action: customEvent.detail?.action,
           slideId: customEvent.detail?.slideId
         })
-        // zustand store를 강제로 새로고침
         try {
-          const stored = localStorage.getItem('content-store')
-          if (stored) {
-            const data = JSON.parse(stored)
-            if (data?.state?.heroSlides) {
-              // Date 문자열을 Date 객체로 변환
-              const heroSlides = data.state.heroSlides.map((slide: any) => ({
-                ...slide,
-                createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
-                updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt,
-                eventStartDate: slide.eventStartDate ? (typeof slide.eventStartDate === 'string' ? new Date(slide.eventStartDate) : slide.eventStartDate) : undefined,
-                eventEndDate: slide.eventEndDate ? (typeof slide.eventEndDate === 'string' ? new Date(slide.eventEndDate) : slide.eventEndDate) : undefined
-              }))
-              // store 상태 업데이트
-              useContentStore.setState({ heroSlides })
-              devLog('✅ HomePage: heroSlides 상태 업데이트 완료', heroSlides.length, '개')
-              // 🆕 강제 리렌더링 및 Swiper 업데이트
-              setForceUpdate(prev => {
-                const newValue = prev + 1
-                devLog('🔄 HomePage: forceUpdate triggered:', newValue)
-                return newValue
-              })
-              
-              // 🆕 Swiper 인스턴스가 있으면 강제로 업데이트
-              const swiperUpdateTimeout = setTimeout(() => {
-                const currentSwiper = swiperInstance
-                if (!currentSwiper) return
-                
-                devLog('🔄 HomePage: Updating Swiper instance...')
-                try {
-                  // 🆕 update 메서드가 존재하는지 확인
-                  if (typeof currentSwiper.update === 'function') {
-                    currentSwiper.update()
-                  }
-                  
-                  // 🆕 updateSlides 메서드가 존재하는지 확인 (Swiper 버전에 따라 없을 수 있음)
-                  if (typeof currentSwiper.updateSlides === 'function') {
-                    currentSwiper.updateSlides()
-                  } else {
-                    devWarn('⚠️ HomePage: updateSlides method not available, using update only')
-                  }
-                  
-                  // 현재 슬라이드가 범위를 벗어나면 첫 번째 슬라이드로 이동
-                  if (typeof currentSwiper.slideTo === 'function' && 
-                      typeof currentSwiper.activeIndex !== 'undefined' &&
-                      currentSwiper.activeIndex >= heroSlides.length) {
-                    currentSwiper.slideTo(0, 0)
-                  }
-                  
-                  devLog('✅ HomePage: Swiper instance updated successfully')
-                } catch (error) {
-                  devError('❌ HomePage: Failed to update Swiper instance:', error)
-                }
-              }, 150)
-              
-              // cleanup은 useEffect의 return에서 처리
+          const heroSlides = useContentStore.getState().heroSlides
+          setForceUpdate(prev => {
+            const newValue = prev + 1
+            devLog('🔄 HomePage: forceUpdate triggered:', newValue)
+            return newValue
+          })
+          setTimeout(() => {
+            const currentSwiper = swiperInstance
+            if (!currentSwiper) return
+            devLog('🔄 HomePage: Updating Swiper instance...')
+            try {
+              if (typeof currentSwiper.update === 'function') {
+                currentSwiper.update()
+              }
+              if (typeof currentSwiper.updateSlides === 'function') {
+                currentSwiper.updateSlides()
+              } else {
+                devWarn('⚠️ HomePage: updateSlides method not available, using update only')
+              }
+              if (
+                typeof currentSwiper.slideTo === 'function' &&
+                typeof currentSwiper.activeIndex !== 'undefined' &&
+                currentSwiper.activeIndex >= heroSlides.length
+              ) {
+                currentSwiper.slideTo(0, 0)
+              }
+              devLog('✅ HomePage: Swiper instance updated successfully')
+            } catch (error) {
+              devError('❌ HomePage: Failed to update Swiper instance:', error)
             }
-          }
+          }, 150)
         } catch (error) {
           devError('❌ HomePage: heroSlides 업데이트 실패:', error)
         }
@@ -1092,24 +1065,16 @@ export default function HomePage() {
       // categoryItems 업데이트 처리
       if (updateType === 'categoryItems') {
         devLog('🔄 HomePage: content-store-updated 이벤트 감지, categoryItems 새로고침')
-        // zustand store를 강제로 새로고침
-        const store = useContentStore.getState()
-        // localStorage에서 최신 데이터 읽기
         try {
-          const stored = localStorage.getItem('content-store')
-          if (stored) {
-            const data = JSON.parse(stored)
-            if (data?.state?.categoryItems) {
-              // Date 문자열을 Date 객체로 변환
-              const categoryItems = data.state.categoryItems.map((item: any) => ({
-                ...item,
-                createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-                updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-              }))
-              // store 상태 업데이트 (zustand의 set 메서드 사용)
-              useContentStore.setState({ categoryItems })
-              devLog('✅ HomePage: categoryItems 상태 업데이트 완료', categoryItems.length, '개')
-            }
+          const raw = customEvent.detail?.data?.state?.categoryItems as unknown
+          if (Array.isArray(raw)) {
+            const categoryItems = raw.map((item: any) => ({
+              ...item,
+              createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+              updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+            }))
+            useContentStore.setState({ categoryItems })
+            devLog('✅ HomePage: categoryItems 상태 업데이트 완료', categoryItems.length, '개')
           }
         } catch (error) {
           devError('❌ HomePage: categoryItems 업데이트 실패:', error)
@@ -1120,20 +1085,15 @@ export default function HomePage() {
       if (updateType === 'heroSliderSettings') {
         devLog('🔄 HomePage: content-store-updated 이벤트 감지, heroSliderSettings 새로고침', customEvent.detail?.settings)
         try {
-          const stored = localStorage.getItem('content-store')
-          if (stored) {
-            const data = JSON.parse(stored)
-            if (data?.state?.heroSliderSettings) {
-              // store 상태 업데이트
-              useContentStore.setState({ heroSliderSettings: data.state.heroSliderSettings })
-              devLog('✅ HomePage: heroSliderSettings 상태 업데이트 완료', data.state.heroSliderSettings)
-              // 🆕 강제 리렌더링 및 Swiper 업데이트
-              setForceUpdate(prev => {
-                const newValue = prev + 1
-                devLog('🔄 HomePage: forceUpdate triggered for slider settings:', newValue)
-                return newValue
-              })
-            }
+          const settings = customEvent.detail?.settings ?? useContentStore.getState().heroSliderSettings
+          if (settings) {
+            useContentStore.setState({ heroSliderSettings: settings })
+            devLog('✅ HomePage: heroSliderSettings 상태 업데이트 완료', settings)
+            setForceUpdate(prev => {
+              const newValue = prev + 1
+              devLog('🔄 HomePage: forceUpdate triggered for slider settings:', newValue)
+              return newValue
+            })
           }
         } catch (error) {
           devError('❌ HomePage: heroSliderSettings 업데이트 실패:', error)
@@ -1277,7 +1237,7 @@ export default function HomePage() {
       // order가 같으면 id로 정렬하여 고유성 유지
       return a.id.localeCompare(b.id)
     })
-    
+
     devLog('🔄 [HomePage] slidesToUse updated:', {
       heroSlidesCount: heroSlides.length,
       slidesToUseCount: sortedSlides.length,
@@ -1289,8 +1249,8 @@ export default function HomePage() {
         title: s.title,
         order: s.order,
         type: s.type,
-        src: s.src ? s.src.substring(0, 50) + '...' : 'empty'
-      }))
+        src: s.src ? s.src.substring(0, 50) + '...' : 'empty',
+      })),
     })
     return sortedSlides
   }, [heroSlides, forceUpdate]) // 🆕 forceUpdate도 의존성에 추가

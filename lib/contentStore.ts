@@ -132,7 +132,7 @@ export interface SubcategoryItem {
   updatedAt: Date
 }
 
-/** Persisted localStorage may still have pre-rebrand copy; upgrade in merge + rehydrate. */
+/** Persisted payload may still have pre-rebrand copy; upgrade in merge + rehydrate. */
 function migrateLegacyBespokeLabelsSubcategoryItems<T extends SubcategoryItem>(items: T[]): T[] {
   const legacySubtitleNeedle = 'Personalized designs tailored to your unique style and preferences'
   return items.map((item) => {
@@ -3566,6 +3566,326 @@ const defaultSubcategoryItems: SubcategoryItem[] = [
   }
 ]
 
+/** Zustand persist merge + Supabase 원격 payload 병합에 공통 사용 */
+export function mergePersistedSiteConfig(persistedState: any, currentState: ContentStore): any {
+  // slide 효과가 있으면 fade로 변환
+  if (persistedState?.heroSliderSettings?.effect === 'slide') {
+    persistedState.heroSliderSettings.effect = 'fade'
+  }
+
+  const hasPersistedPromoCodes = persistedState?.promoCodes && Array.isArray(persistedState.promoCodes)
+  console.log('🔄 Merging Promo Codes:', {
+    hasPersisted: hasPersistedPromoCodes,
+    persistedCount: persistedState?.promoCodes?.length || 0,
+    persistedCodes: persistedState?.promoCodes?.map((c: any) => c.code) || [],
+    defaultCount: currentState.promoCodes?.length || 0,
+    defaultCodes: currentState.promoCodes?.map((c: any) => c.code) || []
+  })
+
+  const merged: any = {
+    ...currentState,
+    contentItems: dedupeHeaderLogoImageItems(
+      persistedState?.contentItems || currentState.contentItems
+    ),
+    sidebarMenuItems: persistedState?.sidebarMenuItems || currentState.sidebarMenuItems,
+    heroSlides: persistedState?.heroSlides || currentState.heroSlides,
+    heroSliderSettings: (() => {
+      const settings = persistedState?.heroSliderSettings || currentState.heroSliderSettings
+      if (settings?.effect === 'slide') {
+        return { ...settings, effect: 'fade' }
+      }
+      return settings
+    })(),
+    heroSlideTemplates: persistedState?.heroSlideTemplates || currentState.heroSlideTemplates,
+    categoryHeroSlides: (persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0)
+      ? persistedState.categoryHeroSlides
+      : defaultCategoryHeroSlides,
+    categoryItems: (persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0)
+      ? persistedState.categoryItems
+      : currentState.categoryItems,
+    subcategoryItems: migrateLegacyBespokeLabelsSubcategoryItems(
+      persistedState?.subcategoryItems &&
+        Array.isArray(persistedState.subcategoryItems) &&
+        persistedState.subcategoryItems.length >= 0
+        ? persistedState.subcategoryItems
+        : currentState.subcategoryItems
+    ),
+    promoCodes: hasPersistedPromoCodes
+      ? persistedState.promoCodes
+      : currentState.promoCodes,
+    paymentOptions: (() => {
+      const mergedOpts = mergeStripePaymentOptionIfMissing(
+        (persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0)
+          ? persistedState.paymentOptions
+          : currentState.paymentOptions
+      )
+
+      const opts = Array.isArray(mergedOpts) ? mergedOpts : currentState.paymentOptions
+      opts.forEach((o: any) => {
+        o.isDefault = false
+      })
+
+      const bankDefault = opts.find((o: any) => o.type === 'bank' && o.isActive)
+      if (bankDefault) {
+        bankDefault.isDefault = true
+      } else {
+        const fallback =
+          opts.find((o: any) => o.type === 'stripe' && o.isActive) ||
+          opts.find((o: any) => o.isActive)
+        if (fallback) fallback.isDefault = true
+      }
+
+      return opts
+    })(),
+    shippingOptions: (persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0)
+      ? persistedState.shippingOptions
+      : currentState.shippingOptions,
+    freeShippingSettings: {
+      ...defaultFreeShippingSettings,
+      ...(currentState.freeShippingSettings || {}),
+      ...(persistedState?.freeShippingSettings &&
+      typeof persistedState.freeShippingSettings === 'object'
+        ? persistedState.freeShippingSettings
+        : {})
+    },
+    pickupLocations: (persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0)
+      ? persistedState.pickupLocations
+      : currentState.pickupLocations,
+    vipGradeBenefits: (persistedState?.vipGradeBenefits && Array.isArray(persistedState.vipGradeBenefits) && persistedState.vipGradeBenefits.length > 0)
+      ? persistedState.vipGradeBenefits
+      : currentState.vipGradeBenefits,
+    vipGradeConfigs: (persistedState?.vipGradeConfigs && Array.isArray(persistedState.vipGradeConfigs) && persistedState.vipGradeConfigs.length > 0)
+      ? persistedState.vipGradeConfigs
+      : currentState.vipGradeConfigs
+  }
+  console.log('🔄 Merge result:', {
+    hasPersistedCategoryHeroSlides: !!(persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0),
+    hasPersistedCategoryItems: !!(persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0),
+    categoryHeroSlidesCount: merged.categoryHeroSlides?.length || 0,
+    categoryItemsCount: merged.categoryItems?.length || 0
+  })
+  return merged
+}
+
+/** persist 재수화 + Supabase 원격 병합 후 Date/레거시 마이그레이션 (상태 객체를 제자리에서 수정) */
+export function normalizeRehydratedContentStoreState(state: ContentStore | undefined): void {
+  if (!state) return
+  if (state.contentItems) {
+    state.contentItems = dedupeHeaderLogoImageItems(
+      state.contentItems.map(item => ({
+        ...item,
+        createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+        updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+      }))
+    )
+  }
+  if (state.sidebarMenuItems) {
+    state.sidebarMenuItems = state.sidebarMenuItems.map(item => ({
+      ...item,
+      createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+      updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+    }))
+  }
+  if (state.heroSlides) {
+    state.heroSlides = state.heroSlides.map(slide => ({
+      ...slide,
+      createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
+      updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
+    }))
+  }
+  if (!state.categoryHeroSlides || !Array.isArray(state.categoryHeroSlides) || state.categoryHeroSlides.length === 0) {
+    console.log('⚠️ categoryHeroSlides가 비어 있어 기본값으로 설정합니다.')
+    state.categoryHeroSlides = defaultCategoryHeroSlides
+  } else {
+    state.categoryHeroSlides = state.categoryHeroSlides.map(slide => ({
+      ...slide,
+      createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
+      updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
+    }))
+  }
+  if (state.categoryItems) {
+    state.categoryItems = state.categoryItems.map(item => ({
+      ...item,
+      createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+      updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+    }))
+  }
+  if (state.subcategoryItems) {
+    state.subcategoryItems = migrateLegacyBespokeLabelsSubcategoryItems(
+      state.subcategoryItems.map((item: any) => ({
+        ...item,
+        createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+        updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+      }))
+    )
+  }
+  if (state.promoCodes) {
+    console.log('📅 Converting Promo Codes dates:', {
+      count: state.promoCodes.length,
+      codes: state.promoCodes.map((c: any) => ({
+        code: c.code,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        startDateType: typeof c.startDate,
+        endDateType: typeof c.endDate
+      }))
+    })
+    state.promoCodes = state.promoCodes.map((code: any) => ({
+      ...code,
+      startDate: typeof code.startDate === 'string' ? new Date(code.startDate) : code.startDate,
+      endDate: typeof code.endDate === 'string' ? new Date(code.endDate) : code.endDate,
+      createdAt: typeof code.createdAt === 'string' ? new Date(code.createdAt) : code.createdAt,
+      updatedAt: typeof code.updatedAt === 'string' ? new Date(code.updatedAt) : code.updatedAt
+    }))
+    console.log('✅ Promo Codes dates converted:', {
+      count: state.promoCodes.length,
+      codes: state.promoCodes.map((c: any) => ({
+        code: c.code,
+        startDate: c.startDate instanceof Date ? c.startDate.toISOString() : c.startDate,
+        endDate: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate
+      }))
+    })
+  }
+  if (state.paymentOptions) {
+    state.paymentOptions = mergeStripePaymentOptionIfMissing(
+      state.paymentOptions.map((option: any) => ({
+        ...option,
+        createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
+        updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt,
+        bankAccounts: option.bankAccounts ? option.bankAccounts.map((acc: any) => ({
+          ...acc,
+          createdAt: typeof acc.createdAt === 'string' ? new Date(acc.createdAt) : acc.createdAt,
+          updatedAt: typeof acc.updatedAt === 'string' ? new Date(acc.updatedAt) : acc.updatedAt
+        })) : undefined
+      }))
+    )
+  }
+  if (state.shippingOptions) {
+    state.shippingOptions = state.shippingOptions.map((option: any) => ({
+      ...option,
+      createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
+      updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
+    }))
+  }
+  if (state.pickupLocations) {
+    state.pickupLocations = state.pickupLocations.map((location: any) => ({
+      ...location,
+      createdAt: typeof location.createdAt === 'string' ? new Date(location.createdAt) : location.createdAt,
+      updatedAt: typeof location.updatedAt === 'string' ? new Date(location.updatedAt) : location.updatedAt
+    }))
+  }
+  if (state.vipGradeBenefits) {
+    state.vipGradeBenefits = state.vipGradeBenefits.map((benefit: any) => ({
+      ...benefit,
+      createdAt: typeof benefit.createdAt === 'string' ? new Date(benefit.createdAt) : benefit.createdAt,
+      updatedAt: typeof benefit.updatedAt === 'string' ? new Date(benefit.updatedAt) : benefit.updatedAt,
+      eventStartDate: benefit.eventStartDate && typeof benefit.eventStartDate === 'string'
+        ? new Date(benefit.eventStartDate)
+        : benefit.eventStartDate,
+      eventEndDate: benefit.eventEndDate && typeof benefit.eventEndDate === 'string'
+        ? new Date(benefit.eventEndDate)
+        : benefit.eventEndDate
+    }))
+  }
+  if (state.vipGradeConfigs && Array.isArray(state.vipGradeConfigs) && state.vipGradeConfigs.length > 0) {
+    state.vipGradeConfigs = state.vipGradeConfigs.map((config: any) => ({
+      ...config,
+      createdAt: typeof config.createdAt === 'string' ? new Date(config.createdAt) : config.createdAt,
+      updatedAt: typeof config.updatedAt === 'string' ? new Date(config.updatedAt) : config.updatedAt
+    }))
+
+    const existingCodes = state.vipGradeConfigs.map((c: any) => c.code)
+    const requiredCodes = [0, 1, 2, 3, 4]
+    const missingCodes = requiredCodes.filter(code => !existingCodes.includes(code))
+
+    if (missingCodes.length > 0) {
+      const missingConfigs: VIPGradeConfig[] = []
+
+      if (missingCodes.includes(0)) {
+        missingConfigs.push({
+          id: 'grade-config-basic-0',
+          code: 0,
+          name: '일반',
+          nameEn: 'Basic',
+          minAmount: 0,
+          maxAmount: 100,
+          color: 'gray',
+          benefits: ['기본 5% 할인 쿠폰 (자동 할인 없음)'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+      if (missingCodes.includes(1)) {
+        missingConfigs.push({
+          id: 'grade-config-silver-1',
+          code: 1,
+          name: '실버',
+          nameEn: 'Silver',
+          minAmount: 100,
+          maxAmount: 300,
+          color: 'silver',
+          benefits: ['5% 상시 할인', '최대 할인 $10,000', '생일 쿠폰'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+      if (missingCodes.includes(2)) {
+        missingConfigs.push({
+          id: 'grade-config-gold-2',
+          code: 2,
+          name: '골드',
+          nameEn: 'Gold',
+          minAmount: 300,
+          maxAmount: 1000,
+          color: 'gold',
+          benefits: ['10% 상시 할인', '무료 배송', '최대 할인 $20,000'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+      if (missingCodes.includes(3)) {
+        missingConfigs.push({
+          id: 'grade-config-black-3',
+          code: 3,
+          name: '블랙',
+          nameEn: 'Black',
+          minAmount: 1000,
+          maxAmount: 3000,
+          color: 'black',
+          benefits: ['20% 상시 할인', '무료 배송', '최대 할인 $50,000', '전용 고객 센터'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+      if (missingCodes.includes(4)) {
+        missingConfigs.push({
+          id: 'grade-config-vvip-4',
+          code: 4,
+          name: 'VVIP',
+          nameEn: 'VVIP',
+          minAmount: 3000,
+          maxAmount: undefined,
+          color: 'purple',
+          benefits: ['50% 상시 할인', '무료 배송', '최대 할인 $100,000', '특별 선물'],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+
+      state.vipGradeConfigs = [...state.vipGradeConfigs, ...missingConfigs]
+      console.log(`✅ 자동 복구: ${missingCodes.length}개의 누락된 등급 복구됨 (${missingCodes.map(c => ['Basic', 'Silver', 'Gold', 'Black', 'VVIP'][c]).join(', ')})`)
+    }
+  } else {
+    state.vipGradeConfigs = defaultVIPGradeConfigs
+  }
+  state.setHasHydrated(true)
+}
+
 export const useContentStore = create<ContentStore>()(
   persist(
     (set, get) => ({
@@ -3615,22 +3935,7 @@ export const useContentStore = create<ContentStore>()(
           console.log('업데이트된 아이템들:', mergedItems.length)
           const updatedItem = mergedItems.find(item => item.id === id)
           console.log('업데이트된 특정 아이템:', updatedItem)
-          
-          // Direct localStorage save to resolve persist issues
-          try {
-            localStorage.setItem('content-store', JSON.stringify({
-              state: {
-                contentItems: mergedItems,
-                sidebarMenuItems: state.sidebarMenuItems,
-                heroSlides: state.heroSlides
-              },
-              version: 0
-            }))
-            console.log('Direct localStorage save completed')
-          } catch (error) {
-            console.error('localStorage save failed:', error)
-          }
-          
+
           return {
             contentItems: mergedItems
           }
@@ -3791,28 +4096,7 @@ export const useContentStore = create<ContentStore>()(
               newValue: JSON.stringify({ state: { heroSlides: updatedSlides } })
             }))
           }
-          
-          // Force localStorage update
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSlides: updatedSlides
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              console.log('💾 Force saved new hero slide to localStorage:', {
-                slideId: newSlide.id,
-                totalSlides: updatedSlides.length
-              })
-            } catch (error) {
-              console.error('❌ Failed to force save new hero slide:', error)
-            }
-          }, 100)
-          
+
           return { heroSlides: updatedSlides }
         })
       },
@@ -3835,25 +4119,7 @@ export const useContentStore = create<ContentStore>()(
             }))
             console.log('📢 Dispatched content-store-updated event for hero slide update')
           }
-          
-          // Force localStorage update
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSlides: updatedSlides
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              console.log('💾 Force saved hero slides to localStorage')
-            } catch (error) {
-              console.error('❌ Failed to force save hero slides:', error)
-            }
-          }, 100)
-          
+
           return { heroSlides: updatedSlides }
         })
       },
@@ -3872,25 +4138,7 @@ export const useContentStore = create<ContentStore>()(
             }))
             console.log('📢 Dispatched content-store-updated event for hero slide deletion')
           }
-          
-          // Force localStorage update
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSlides: updatedSlides
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              console.log('💾 Force saved hero slide deletion to localStorage')
-            } catch (error) {
-              console.error('❌ Failed to force save hero slide deletion:', error)
-            }
-          }, 100)
-          
+
           return { heroSlides: updatedSlides }
         })
       },
@@ -3913,25 +4161,7 @@ export const useContentStore = create<ContentStore>()(
             }))
             console.log('📢 Dispatched content-store-updated event for hero slide toggle')
           }
-          
-          // Force localStorage update
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSlides: updatedSlides
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              console.log('💾 Force saved hero slide toggle to localStorage')
-            } catch (error) {
-              console.error('❌ Failed to force save hero slide toggle:', error)
-            }
-          }, 100)
-          
+
           return { heroSlides: updatedSlides }
         })
       },
@@ -3959,25 +4189,7 @@ export const useContentStore = create<ContentStore>()(
             }))
             console.log('📢 Dispatched content-store-updated event for hero slide reorder')
           }
-          
-          // Force localStorage update
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSlides: reorderedSlides
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              console.log('💾 Force saved hero slide reorder to localStorage')
-            } catch (error) {
-              console.error('❌ Failed to force save hero slide reorder:', error)
-            }
-          }, 100)
-          
+
           return {
             heroSlides: reorderedSlides
           }
@@ -4105,27 +4317,7 @@ export const useContentStore = create<ContentStore>()(
             }))
             console.log('📢 Dispatched content-store-updated event for hero slider settings update')
           }
-          
-          // Force localStorage update for immediate persistence
-          setTimeout(() => {
-            try {
-              const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-              const newData = {
-                ...currentData,
-                state: {
-                  ...currentData.state,
-                  heroSliderSettings: updatedSettings
-                }
-              }
-              localStorage.setItem('content-store', JSON.stringify(newData))
-              if (process.env.NODE_ENV === 'development') {
-                console.log('💾 Hero Slider Settings saved to localStorage:', updatedSettings)
-              }
-            } catch (error) {
-              console.error('❌ Failed to save hero slider settings to localStorage:', error)
-            }
-          }, 0)
-          
+
           return {
             heroSliderSettings: updatedSettings
           }
@@ -4216,47 +4408,7 @@ export const useContentStore = create<ContentStore>()(
         }
         set((state: ContentStore) => {
           const updatedCategories = [...state.categoryItems, newCategory]
-          
-          // Direct localStorage save for permanent storage - 전체 state 포함
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                categoryItems: updatedCategories.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                contentItems: currentState.contentItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                heroSlides: currentState.heroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                })),
-                categoryHeroSlides: currentState.categoryHeroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('Category item added and saved to localStorage (full state):', newCategory)
-          } catch (error) {
-            console.error('Failed to save new category item to localStorage:', error)
-          }
-          
+          console.log('Category item added:', newCategory)
           return { categoryItems: updatedCategories }
         })
       },
@@ -4286,61 +4438,49 @@ export const useContentStore = create<ContentStore>()(
             } : null,
             totalCategories: updatedCategories.length
           })
-          
-          // Direct localStorage save for permanent storage - 전체 state 포함
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                categoryItems: updatedCategories.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                contentItems: currentState.contentItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                heroSlides: currentState.heroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                })),
-                categoryHeroSlides: currentState.categoryHeroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Category item saved to localStorage (full state)')
-            
-            // 커스텀 이벤트를 트리거하여 같은 탭과 다른 탭 모두에 알림
-            if (typeof window !== 'undefined') {
-              // 같은 탭에서도 작동하는 커스텀 이벤트
-              window.dispatchEvent(new CustomEvent('content-store-updated', {
-                detail: { type: 'categoryItems', data: updatedData }
+
+          const currentState = get()
+          const updatedData = {
+            state: {
+              ...currentState,
+              categoryItems: updatedCategories.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              contentItems: currentState.contentItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              heroSlides: currentState.heroSlides.map(slide => ({
+                ...slide,
+                createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+                updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
+              })),
+              categoryHeroSlides: currentState.categoryHeroSlides.map(slide => ({
+                ...slide,
+                createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+                updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
               }))
-              
-              // 다른 탭을 위한 storage 이벤트 (다른 탭에서만 작동)
-              window.dispatchEvent(new StorageEvent('storage', {
-                key: 'content-store',
-                newValue: JSON.stringify(updatedData)
-              }))
-            }
-          } catch (error) {
-            console.error('❌ Failed to save category item to localStorage:', error)
+            },
+            version: 0
           }
-          
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('content-store-updated', {
+              detail: { type: 'categoryItems', data: updatedData }
+            }))
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'content-store',
+              newValue: JSON.stringify(updatedData)
+            }))
+          }
+
           return { categoryItems: updatedCategories }
         })
       },
@@ -4348,23 +4488,6 @@ export const useContentStore = create<ContentStore>()(
       deleteCategoryItem: (id: string) => {
         set((state: ContentStore) => {
           const updatedCategories = state.categoryItems.filter((item: CategoryItem) => item.id !== id)
-          
-          // Direct localStorage save for permanent storage
-          try {
-            const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-            const updatedData = {
-              ...currentData,
-              state: {
-                ...currentData.state,
-                categoryItems: updatedCategories
-              }
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('Category item deleted and saved to localStorage:', id)
-          } catch (error) {
-            console.error('Failed to save category item deletion to localStorage:', error)
-          }
-          
           return { categoryItems: updatedCategories }
         })
       },
@@ -4376,23 +4499,6 @@ export const useContentStore = create<ContentStore>()(
               ? { ...item, isActive: !item.isActive, updatedAt: new Date() }
               : item
           )
-          
-          // Direct localStorage save for permanent storage
-          try {
-            const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-            const updatedData = {
-              ...currentData,
-              state: {
-                ...currentData.state,
-                categoryItems: updatedCategories
-              }
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('Category item active status toggled and saved to localStorage:', id)
-          } catch (error) {
-            console.error('Failed to save category item toggle to localStorage:', error)
-          }
-          
           return { categoryItems: updatedCategories }
         })
       },
@@ -4409,23 +4515,7 @@ export const useContentStore = create<ContentStore>()(
             order: index + 1,
             updatedAt: new Date()
           }))
-          
-          // Direct localStorage save for permanent storage
-          try {
-            const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-            const updatedData = {
-              ...currentData,
-              state: {
-                ...currentData.state,
-                categoryItems: updatedCategories
-              }
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('Category items reordered and saved to localStorage:', fromIndex, 'to', toIndex)
-          } catch (error) {
-            console.error('Failed to save category items reorder to localStorage:', error)
-          }
-          
+
           return {
             categoryItems: updatedCategories
           }
@@ -4453,27 +4543,6 @@ export const useContentStore = create<ContentStore>()(
         }
         set((state: ContentStore) => {
           const updatedItems = [...state.subcategoryItems, newSubcategory]
-          
-          // Direct localStorage save for immediate persistence
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                subcategoryItems: updatedItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Subcategory added and saved to localStorage')
-          } catch (error) {
-            console.error('❌ Failed to save subcategory to localStorage:', error)
-          }
-          
           return {
             subcategoryItems: updatedItems
           }
@@ -4488,27 +4557,7 @@ export const useContentStore = create<ContentStore>()(
               ? { ...item, ...updates, updatedAt: new Date() }
               : item
           )
-          
-          // Direct localStorage save for immediate persistence
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                subcategoryItems: updatedItems.map((item: SubcategoryItem) => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Subcategory updated and saved to localStorage:', id)
-          } catch (error) {
-            console.error('❌ Failed to save subcategory update to localStorage:', error)
-          }
-          
+
           return {
             subcategoryItems: updatedItems
           }
@@ -4518,27 +4567,6 @@ export const useContentStore = create<ContentStore>()(
       deleteSubcategoryItem: (id: string) => {
         set((state: ContentStore) => {
           const updatedItems = state.subcategoryItems.filter((item: SubcategoryItem) => item.id !== id)
-          
-          // Direct localStorage save for immediate persistence
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                subcategoryItems: updatedItems.map((item: SubcategoryItem) => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Subcategory deleted and saved to localStorage:', id)
-          } catch (error) {
-            console.error('❌ Failed to save subcategory deletion to localStorage:', error)
-          }
-          
           return {
             subcategoryItems: updatedItems
           }
@@ -4552,27 +4580,7 @@ export const useContentStore = create<ContentStore>()(
               ? { ...item, isActive: !item.isActive, updatedAt: new Date() }
               : item
           )
-          
-          // Direct localStorage save for immediate persistence
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                subcategoryItems: updatedItems.map((item: SubcategoryItem) => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Subcategory active status toggled and saved to localStorage:', id)
-          } catch (error) {
-            console.error('❌ Failed to save subcategory toggle to localStorage:', error)
-          }
-          
+
           return {
             subcategoryItems: updatedItems
           }
@@ -4588,27 +4596,7 @@ export const useContentStore = create<ContentStore>()(
             ...item,
             order: index + 1
           }))
-          
-          // Direct localStorage save for immediate persistence
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                subcategoryItems: updatedItems.map((item: SubcategoryItem) => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ Subcategories reordered and saved to localStorage:', fromIndex, 'to', toIndex)
-          } catch (error) {
-            console.error('❌ Failed to save subcategory reorder to localStorage:', error)
-          }
-          
+
           return {
             subcategoryItems: updatedItems
           }
@@ -4636,61 +4624,49 @@ export const useContentStore = create<ContentStore>()(
         set((state) => {
           const updatedSlides = [...state.categoryHeroSlides, newSlide]
           console.log('✅ CategoryHeroSlide added:', newSlide.id, newSlide.category)
-          
-          // Direct localStorage save for permanent storage - 전체 state 포함
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                categoryHeroSlides: updatedSlides.map(s => ({
-                  ...s,
-                  createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
-                  updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt
-                })),
-                contentItems: currentState.contentItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                heroSlides: currentState.heroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                })),
-                categoryItems: currentState.categoryItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ CategoryHeroSlide saved to localStorage (full state)')
-            
-            // 커스텀 이벤트를 트리거하여 같은 탭과 다른 탭 모두에 알림
-            if (typeof window !== 'undefined') {
-              // 같은 탭에서도 작동하는 커스텀 이벤트
-              window.dispatchEvent(new CustomEvent('content-store-updated', {
-                detail: { type: 'categoryHeroSlides', data: updatedData }
+
+          const currentState = get()
+          const updatedData = {
+            state: {
+              ...currentState,
+              categoryHeroSlides: updatedSlides.map(s => ({
+                ...s,
+                createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+                updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt
+              })),
+              contentItems: currentState.contentItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              heroSlides: currentState.heroSlides.map(slide => ({
+                ...slide,
+                createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+                updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
+              })),
+              categoryItems: currentState.categoryItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
               }))
-              
-              // 다른 탭을 위한 storage 이벤트 (다른 탭에서만 작동)
-              window.dispatchEvent(new StorageEvent('storage', {
-                key: 'content-store',
-                newValue: JSON.stringify(updatedData)
-              }))
-            }
-          } catch (error) {
-            console.error('❌ Failed to save CategoryHeroSlide to localStorage:', error)
+            },
+            version: 0
           }
-          
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('content-store-updated', {
+              detail: { type: 'categoryHeroSlides', data: updatedData }
+            }))
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'content-store',
+              newValue: JSON.stringify(updatedData)
+            }))
+          }
+
           return { categoryHeroSlides: updatedSlides }
         })
       },
@@ -4721,61 +4697,49 @@ export const useContentStore = create<ContentStore>()(
             } : null,
             totalSlides: updatedSlides.length
           })
-          
-          // Direct localStorage save for permanent storage - 전체 state 포함
-          try {
-            const currentState = get()
-            const updatedData = {
-              state: {
-                ...currentState,
-                categoryHeroSlides: updatedSlides.map(s => ({
-                  ...s,
-                  createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
-                  updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt
-                })),
-                contentItems: currentState.contentItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                })),
-                heroSlides: currentState.heroSlides.map(slide => ({
-                  ...slide,
-                  createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                  updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                })),
-                categoryItems: currentState.categoryItems.map(item => ({
-                  ...item,
-                  createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-                  updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-                }))
-              },
-              version: 0
-            }
-            localStorage.setItem('content-store', JSON.stringify(updatedData))
-            console.log('✅ CategoryHeroSlide update saved to localStorage (full state)')
-            
-            // 커스텀 이벤트를 트리거하여 같은 탭과 다른 탭 모두에 알림
-            if (typeof window !== 'undefined') {
-              // 같은 탭에서도 작동하는 커스텀 이벤트
-              window.dispatchEvent(new CustomEvent('content-store-updated', {
-                detail: { type: 'categoryHeroSlides', data: updatedData }
+
+          const currentState = get()
+          const updatedData = {
+            state: {
+              ...currentState,
+              categoryHeroSlides: updatedSlides.map(s => ({
+                ...s,
+                createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+                updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt
+              })),
+              contentItems: currentState.contentItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              sidebarMenuItems: currentState.sidebarMenuItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+              })),
+              heroSlides: currentState.heroSlides.map(slide => ({
+                ...slide,
+                createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+                updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
+              })),
+              categoryItems: currentState.categoryItems.map(item => ({
+                ...item,
+                createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+                updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
               }))
-              
-              // 다른 탭을 위한 storage 이벤트 (다른 탭에서만 작동)
-              window.dispatchEvent(new StorageEvent('storage', {
-                key: 'content-store',
-                newValue: JSON.stringify(updatedData)
-              }))
-            }
-          } catch (error) {
-            console.error('❌ Failed to save CategoryHeroSlide update to localStorage:', error)
+            },
+            version: 0
           }
-          
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('content-store-updated', {
+              detail: { type: 'categoryHeroSlides', data: updatedData }
+            }))
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'content-store',
+              newValue: JSON.stringify(updatedData)
+            }))
+          }
+
           return { categoryHeroSlides: updatedSlides }
         })
       },
@@ -5689,18 +5653,7 @@ export const useContentStore = create<ContentStore>()(
           vipGradeBenefits: defaultVIPGradeBenefits,
           _hasHydrated: true
         }
-        
-        // Direct localStorage save for forced update
-        try {
-          localStorage.setItem('content-store', JSON.stringify({
-            state: newState,
-            version: 0
-          }))
-          console.log('✅ Content store reset and saved to localStorage')
-        } catch (error) {
-          console.error('❌ Failed to save reset data to localStorage:', error)
-        }
-        
+
         set(newState)
       },
 
@@ -5718,23 +5671,7 @@ export const useContentStore = create<ContentStore>()(
         // 기본값 배열을 완전히 교체
         defaultSidebarMenuItems.length = 0
         defaultSidebarMenuItems.push(...updatedDefaultSidebarMenu)
-        
-        // localStorage에도 저장하여 영구적으로 반영
-        try {
-          const newState = {
-            ...state,
-            sidebarMenuItems: updatedDefaultSidebarMenu
-          }
-          localStorage.setItem('content-store', JSON.stringify({
-            state: newState,
-            version: 0
-          }))
-          console.log('✅ Default sidebar menu updated and saved to localStorage')
-        } catch (error) {
-          console.error('❌ Failed to save updated sidebar menu to localStorage:', error)
-        }
-        
-        // 상태 업데이트
+
         set({ sidebarMenuItems: updatedDefaultSidebarMenu })
         
         console.log('✅ Default sidebar menu updated with current management data')
@@ -5821,401 +5758,9 @@ export const useContentStore = create<ContentStore>()(
         })),
         freeShippingSettings: state.freeShippingSettings // 전역 무료 배송 설정 저장
       }),
-      merge: (persistedState: any, currentState: any) => {
-        // slide 효과가 있으면 fade로 변환
-        if (persistedState?.heroSliderSettings?.effect === 'slide') {
-          persistedState.heroSliderSettings.effect = 'fade'
-        }
-        
-        // localStorage에 저장된 데이터를 우선적으로 사용 (관리자가 변경한 내용 보존)
-        
-        // 디버깅: Promo Codes 병합 확인
-        const hasPersistedPromoCodes = persistedState?.promoCodes && Array.isArray(persistedState.promoCodes)
-        console.log('🔄 Merging Promo Codes:', {
-          hasPersisted: hasPersistedPromoCodes,
-          persistedCount: persistedState?.promoCodes?.length || 0,
-          persistedCodes: persistedState?.promoCodes?.map((c: any) => c.code) || [],
-          defaultCount: currentState.promoCodes?.length || 0,
-          defaultCodes: currentState.promoCodes?.map((c: any) => c.code) || []
-        })
-        
-        const merged: any = {
-          ...currentState,
-          // localStorage에 저장된 데이터가 있으면 우선 사용
-          contentItems: dedupeHeaderLogoImageItems(
-            persistedState?.contentItems || currentState.contentItems
-          ),
-          sidebarMenuItems: persistedState?.sidebarMenuItems || currentState.sidebarMenuItems,
-          heroSlides: persistedState?.heroSlides || currentState.heroSlides,
-          // heroSliderSettings: localStorage에 저장된 데이터가 있으면 사용, 없으면 기본값
-          heroSliderSettings: (() => {
-            const settings = persistedState?.heroSliderSettings || currentState.heroSliderSettings
-            // slide 효과가 있으면 fade로 변환
-            if (settings?.effect === 'slide') {
-              return { ...settings, effect: 'fade' }
-            }
-            return settings
-          })(),
-          // heroSlideTemplates: localStorage에 저장된 데이터가 있으면 사용, 없으면 기본값
-          heroSlideTemplates: persistedState?.heroSlideTemplates || currentState.heroSlideTemplates,
-          // categoryHeroSlides: localStorage에 저장된 데이터가 있으면 사용, 없거나 비어있으면 기본값
-          categoryHeroSlides: (persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0)
-            ? persistedState.categoryHeroSlides
-            : defaultCategoryHeroSlides,
-          // categoryItems: localStorage에 저장된 데이터가 있으면 사용, 없으면 기본값
-          categoryItems: (persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0)
-            ? persistedState.categoryItems
-            : currentState.categoryItems,
-          // subcategoryItems: localStorage에 저장된 데이터가 있으면 사용, 없으면 기본값 (+ 레거시 비스포크 카피 마이그레이션)
-          subcategoryItems: migrateLegacyBespokeLabelsSubcategoryItems(
-            persistedState?.subcategoryItems &&
-              Array.isArray(persistedState.subcategoryItems) &&
-              persistedState.subcategoryItems.length >= 0
-              ? persistedState.subcategoryItems
-              : currentState.subcategoryItems
-          ),
-          // promoCodes: localStorage에 저장된 데이터가 있으면 사용 (관리자가 추가/수정한 내용 보존)
-          // 빈 배열도 유효한 상태이므로, 배열이 존재하면 무조건 사용
-          promoCodes: hasPersistedPromoCodes
-            ? persistedState.promoCodes
-            : currentState.promoCodes,
-          // paymentOptions: localStorage에 저장된 데이터가 있으면 사용 (+ Stripe 옵션 마이그레이션)
-          paymentOptions: (() => {
-            const merged = mergeStripePaymentOptionIfMissing(
-              (persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0)
-                ? persistedState.paymentOptions
-                : currentState.paymentOptions
-            )
-
-            // Admin 변경을 기다리는 동안에도(기존 localStorage가 남아있는 경우에도) Bank Transfer를 Default로 유지
-            const opts = Array.isArray(merged) ? merged : currentState.paymentOptions
-            opts.forEach((o: any) => {
-              o.isDefault = false
-            })
-
-            const bankDefault = opts.find((o: any) => o.type === 'bank' && o.isActive)
-            if (bankDefault) {
-              bankDefault.isDefault = true
-            } else {
-              const fallback =
-                opts.find((o: any) => o.type === 'stripe' && o.isActive) ||
-                opts.find((o: any) => o.isActive)
-              if (fallback) fallback.isDefault = true
-            }
-
-            return opts
-          })(),
-          // shippingOptions: localStorage에 저장된 데이터가 있으면 사용
-          shippingOptions: (persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0)
-            ? persistedState.shippingOptions
-            : currentState.shippingOptions,
-          // freeShippingSettings: merge defaults + persisted (avoid stale partial objects; threshold must win)
-          freeShippingSettings: {
-            ...defaultFreeShippingSettings,
-            ...(currentState.freeShippingSettings || {}),
-            ...(persistedState?.freeShippingSettings &&
-            typeof persistedState.freeShippingSettings === 'object'
-              ? persistedState.freeShippingSettings
-              : {})
-          },
-          // pickupLocations: localStorage에 저장된 데이터가 있으면 사용
-          pickupLocations: (persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0)
-            ? persistedState.pickupLocations
-            : currentState.pickupLocations,
-          // vipGradeBenefits: localStorage에 저장된 데이터가 있으면 사용 (빈 배열이 아닌 경우만)
-          vipGradeBenefits: (persistedState?.vipGradeBenefits && Array.isArray(persistedState.vipGradeBenefits) && persistedState.vipGradeBenefits.length > 0)
-            ? persistedState.vipGradeBenefits
-            : currentState.vipGradeBenefits,
-          // vipGradeConfigs: localStorage에 저장된 데이터가 있으면 사용 (빈 배열이 아닌 경우만)
-          vipGradeConfigs: (persistedState?.vipGradeConfigs && Array.isArray(persistedState.vipGradeConfigs) && persistedState.vipGradeConfigs.length > 0)
-            ? persistedState.vipGradeConfigs
-            : currentState.vipGradeConfigs
-        }
-        console.log('🔄 Merge result:', {
-          hasPersistedCategoryHeroSlides: !!(persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0),
-          hasPersistedCategoryItems: !!(persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0),
-          categoryHeroSlidesCount: merged.categoryHeroSlides?.length || 0,
-          categoryItemsCount: merged.categoryItems?.length || 0
-        })
-        return merged
-      },
+      merge: mergePersistedSiteConfig,
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          // Date 문자열을 Date 객체로 변환
-          if (state.contentItems) {
-            state.contentItems = dedupeHeaderLogoImageItems(
-              state.contentItems.map(item => ({
-                ...item,
-                createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-                updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-              }))
-            )
-          }
-          if (state.sidebarMenuItems) {
-            state.sidebarMenuItems = state.sidebarMenuItems.map(item => ({
-              ...item,
-              createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-              updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-            }))
-          }
-          if (state.heroSlides) {
-            state.heroSlides = state.heroSlides.map(slide => ({
-              ...slide,
-              createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
-              updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
-            }))
-          }
-          // categoryHeroSlides가 없거나 비어있으면 기본값으로 설정 (최초 로드 시에만)
-          // 단, localStorage에 이미 저장된 데이터가 있는 경우는 기본값으로 덮어쓰지 않음
-          if (!state.categoryHeroSlides || !Array.isArray(state.categoryHeroSlides) || state.categoryHeroSlides.length === 0) {
-            const storedData = typeof window !== 'undefined' ? localStorage.getItem('content-store') : null
-            const hasStoredData = storedData && JSON.parse(storedData)?.state?.categoryHeroSlides?.length > 0
-            
-            if (!hasStoredData) {
-              console.log('⚠️ categoryHeroSlides가 비어있고 저장된 데이터도 없어 기본값으로 설정합니다.')
-            state.categoryHeroSlides = defaultCategoryHeroSlides
-              // localStorage에 즉시 저장
-              if (typeof window !== 'undefined') {
-                try {
-                  localStorage.setItem('content-store', JSON.stringify({
-                    state: {
-                      ...state,
-                      categoryHeroSlides: defaultCategoryHeroSlides.map(slide => ({
-                        ...slide,
-                        createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-                        updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-                      }))
-                    },
-                    version: 0
-                  }))
-                  console.log('✅ categoryHeroSlides 기본값이 localStorage에 저장되었습니다.')
-                } catch (error) {
-                  console.error('❌ categoryHeroSlides 저장 실패:', error)
-                }
-              }
-            } else {
-              console.log('✅ localStorage에 저장된 categoryHeroSlides 데이터를 사용합니다.')
-            }
-          } else {
-            state.categoryHeroSlides = state.categoryHeroSlides.map(slide => ({
-              ...slide,
-              createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
-              updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
-            }))
-          }
-          if (state.categoryItems) {
-            state.categoryItems = state.categoryItems.map(item => ({
-              ...item,
-              createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-              updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-            }))
-          }
-          // subcategoryItems의 Date 객체 변환 + 레거시 /stickers/custom 카피 마이그레이션
-          if (state.subcategoryItems) {
-            state.subcategoryItems = migrateLegacyBespokeLabelsSubcategoryItems(
-              state.subcategoryItems.map((item: any) => ({
-                ...item,
-                createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-                updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-              }))
-            )
-          }
-          // promoCodes의 Date 객체 변환
-          if (state.promoCodes) {
-            console.log('📅 Converting Promo Codes dates:', {
-              count: state.promoCodes.length,
-              codes: state.promoCodes.map((c: any) => ({
-                code: c.code,
-                startDate: c.startDate,
-                endDate: c.endDate,
-                startDateType: typeof c.startDate,
-                endDateType: typeof c.endDate
-              }))
-            })
-            state.promoCodes = state.promoCodes.map((code: any) => ({
-              ...code,
-              startDate: typeof code.startDate === 'string' ? new Date(code.startDate) : code.startDate,
-              endDate: typeof code.endDate === 'string' ? new Date(code.endDate) : code.endDate,
-              createdAt: typeof code.createdAt === 'string' ? new Date(code.createdAt) : code.createdAt,
-              updatedAt: typeof code.updatedAt === 'string' ? new Date(code.updatedAt) : code.updatedAt
-            }))
-            console.log('✅ Promo Codes dates converted:', {
-              count: state.promoCodes.length,
-              codes: state.promoCodes.map((c: any) => ({
-                code: c.code,
-                startDate: c.startDate instanceof Date ? c.startDate.toISOString() : c.startDate,
-                endDate: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate
-              }))
-            })
-          }
-          // paymentOptions의 Date 객체 변환 + Stripe 옵션 누락 시 보강(예전 스토어 대비)
-          if (state.paymentOptions) {
-            state.paymentOptions = mergeStripePaymentOptionIfMissing(
-              state.paymentOptions.map((option: any) => ({
-                ...option,
-                createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
-                updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt,
-                bankAccounts: option.bankAccounts ? option.bankAccounts.map((acc: any) => ({
-                  ...acc,
-                  createdAt: typeof acc.createdAt === 'string' ? new Date(acc.createdAt) : acc.createdAt,
-                  updatedAt: typeof acc.updatedAt === 'string' ? new Date(acc.updatedAt) : acc.updatedAt
-                })) : undefined
-              }))
-            )
-          }
-          // shippingOptions의 Date 객체 변환
-          if (state.shippingOptions) {
-            state.shippingOptions = state.shippingOptions.map((option: any) => ({
-              ...option,
-              createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
-              updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
-            }))
-          }
-          // pickupLocations의 Date 객체 변환
-          if (state.pickupLocations) {
-            state.pickupLocations = state.pickupLocations.map((location: any) => ({
-              ...location,
-              createdAt: typeof location.createdAt === 'string' ? new Date(location.createdAt) : location.createdAt,
-              updatedAt: typeof location.updatedAt === 'string' ? new Date(location.updatedAt) : location.updatedAt
-            }))
-          }
-          // vipGradeBenefits의 Date 객체 변환
-          if (state.vipGradeBenefits) {
-            state.vipGradeBenefits = state.vipGradeBenefits.map((benefit: any) => ({
-              ...benefit,
-              createdAt: typeof benefit.createdAt === 'string' ? new Date(benefit.createdAt) : benefit.createdAt,
-              updatedAt: typeof benefit.updatedAt === 'string' ? new Date(benefit.updatedAt) : benefit.updatedAt,
-              eventStartDate: benefit.eventStartDate && typeof benefit.eventStartDate === 'string' 
-                ? new Date(benefit.eventStartDate) 
-                : benefit.eventStartDate,
-              eventEndDate: benefit.eventEndDate && typeof benefit.eventEndDate === 'string' 
-                ? new Date(benefit.eventEndDate) 
-                : benefit.eventEndDate
-            }))
-          }
-          // vipGradeConfigs의 Date 객체 변환 및 누락된 등급 자동 복구
-          if (state.vipGradeConfigs && Array.isArray(state.vipGradeConfigs) && state.vipGradeConfigs.length > 0) {
-            state.vipGradeConfigs = state.vipGradeConfigs.map((config: any) => ({
-              ...config,
-              createdAt: typeof config.createdAt === 'string' ? new Date(config.createdAt) : config.createdAt,
-              updatedAt: typeof config.updatedAt === 'string' ? new Date(config.updatedAt) : config.updatedAt
-            }))
-            
-            // 누락된 기본 등급 자동 복구 (특히 VVIP)
-            const existingCodes = state.vipGradeConfigs.map((c: any) => c.code)
-            const requiredCodes = [0, 1, 2, 3, 4] // Basic, Silver, Gold, Black, VVIP
-            const missingCodes = requiredCodes.filter(code => !existingCodes.includes(code))
-            
-            if (missingCodes.length > 0) {
-              const missingConfigs: VIPGradeConfig[] = []
-              
-              if (missingCodes.includes(0)) {
-                missingConfigs.push({
-                  id: 'grade-config-basic-0',
-                  code: 0,
-                  name: '일반',
-                  nameEn: 'Basic',
-                  minAmount: 0,
-                  maxAmount: 100,
-                  color: 'gray',
-                  benefits: ['기본 5% 할인 쿠폰 (자동 할인 없음)'],
-                  isActive: true,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                })
-              }
-              if (missingCodes.includes(1)) {
-                missingConfigs.push({
-                  id: 'grade-config-silver-1',
-                  code: 1,
-                  name: '실버',
-                  nameEn: 'Silver',
-                  minAmount: 100,
-                  maxAmount: 300,
-                  color: 'silver',
-                  benefits: ['5% 상시 할인', '최대 할인 $10,000', '생일 쿠폰'],
-                  isActive: true,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                })
-              }
-              if (missingCodes.includes(2)) {
-                missingConfigs.push({
-                  id: 'grade-config-gold-2',
-                  code: 2,
-                  name: '골드',
-                  nameEn: 'Gold',
-                  minAmount: 300,
-                  maxAmount: 1000,
-                  color: 'gold',
-                  benefits: ['10% 상시 할인', '무료 배송', '최대 할인 $20,000'],
-                  isActive: true,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                })
-              }
-              if (missingCodes.includes(3)) {
-                missingConfigs.push({
-                  id: 'grade-config-black-3',
-                  code: 3,
-                  name: '블랙',
-                  nameEn: 'Black',
-                  minAmount: 1000,
-                  maxAmount: 3000,
-                  color: 'black',
-                  benefits: ['20% 상시 할인', '무료 배송', '최대 할인 $50,000', '전용 고객 센터'],
-                  isActive: true,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                })
-              }
-              if (missingCodes.includes(4)) {
-                missingConfigs.push({
-                  id: 'grade-config-vvip-4',
-                  code: 4,
-                  name: 'VVIP',
-                  nameEn: 'VVIP',
-                  minAmount: 3000,
-                  maxAmount: undefined,
-                  color: 'purple',
-                  benefits: ['50% 상시 할인', '무료 배송', '최대 할인 $100,000', '특별 선물'],
-                  isActive: true,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                })
-              }
-              
-              // 누락된 등급 추가
-              state.vipGradeConfigs = [...state.vipGradeConfigs, ...missingConfigs]
-              
-              // localStorage에 즉시 저장
-              if (typeof window !== 'undefined') {
-                try {
-                  const currentData = JSON.parse(localStorage.getItem('content-store') || '{}')
-                  const updatedData = {
-                    ...currentData,
-                    state: {
-                      ...currentData.state,
-                      vipGradeConfigs: state.vipGradeConfigs.map((config: any) => ({
-                        ...config,
-                        createdAt: config.createdAt instanceof Date ? config.createdAt.toISOString() : config.createdAt,
-                        updatedAt: config.updatedAt instanceof Date ? config.updatedAt.toISOString() : config.updatedAt
-                      }))
-                    }
-                  }
-                  localStorage.setItem('content-store', JSON.stringify(updatedData))
-                  console.log(`✅ 자동 복구: ${missingCodes.length}개의 누락된 등급 복구됨 (${missingCodes.map(c => ['Basic', 'Silver', 'Gold', 'Black', 'VVIP'][c]).join(', ')})`)
-                } catch (error) {
-                  console.error('❌ 누락된 등급 복구 후 localStorage 저장 실패:', error)
-                }
-              }
-            }
-          } else {
-            // vipGradeConfigs가 없으면 기본값으로 초기화
-            state.vipGradeConfigs = defaultVIPGradeConfigs
-          }
-          state.setHasHydrated(true)
-        }
+        normalizeRehydratedContentStoreState(state)
       }
     }
   )
