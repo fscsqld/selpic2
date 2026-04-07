@@ -100,22 +100,16 @@ export default function StampPage() {
       const customEvent = event as CustomEvent
       if (customEvent.detail?.type === 'categoryHeroSlides') {
         console.log('🔄 Stamp page: content-store-updated 이벤트 감지, categoryHeroSlides 새로고침')
-        // zustand store를 강제로 새로고침
         try {
-          const stored = localStorage.getItem('content-store')
-          if (stored) {
-            const data = JSON.parse(stored)
-            if (data?.state?.categoryHeroSlides) {
-              // Date 문자열을 Date 객체로 변환
-              const categoryHeroSlides = data.state.categoryHeroSlides.map((slide: any) => ({
-                ...slide,
-                createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
-                updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
-              }))
-              // store 상태 업데이트 (zustand의 setState 메서드 사용)
-              useContentStore.setState({ categoryHeroSlides })
-              console.log('✅ Stamp page: categoryHeroSlides 상태 업데이트 완료', categoryHeroSlides.length, '개')
-            }
+          const raw = customEvent.detail?.data?.state?.categoryHeroSlides as unknown
+          if (Array.isArray(raw)) {
+            const categoryHeroSlides = raw.map((slide: any) => ({
+              ...slide,
+              createdAt: typeof slide.createdAt === 'string' ? new Date(slide.createdAt) : slide.createdAt,
+              updatedAt: typeof slide.updatedAt === 'string' ? new Date(slide.updatedAt) : slide.updatedAt
+            }))
+            useContentStore.setState({ categoryHeroSlides })
+            console.log('✅ Stamp page: categoryHeroSlides 상태 업데이트 완료', categoryHeroSlides.length, '개')
           }
         } catch (error) {
           console.error('❌ Stamp page: categoryHeroSlides 업데이트 실패:', error)

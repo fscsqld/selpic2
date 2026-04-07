@@ -344,8 +344,9 @@ export default function Header() {
         console.log('✅ Content store reset via global function')
       }
       (window as any).clearContentStore = () => {
-        localStorage.removeItem('content-store')
-        console.log('✅ Content store cleared from localStorage')
+        const { resetToDefault } = useContentStore.getState()
+        resetToDefault()
+        console.log('✅ Content store reset to defaults (Supabase persist via Zustand)')
         window.location.reload()
       }
 

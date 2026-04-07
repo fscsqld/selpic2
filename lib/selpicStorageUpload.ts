@@ -1,6 +1,6 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
-/** Must match the public bucket name in Supabase (Storage). */
+/** Must match the public bucket name in Supabase Storage. */
 export const SELPIC_CONTENTS_BUCKET = 'selpic-contents'
 
 export function sanitizeStorageFileName(name: string): string {
@@ -8,19 +8,16 @@ export function sanitizeStorageFileName(name: string): string {
   return base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120)
 }
 
-export function buildSelpicStoragePath(
-  folder: string,
-  fileId: string,
-  fileName: string
-): string {
+export function buildSelpicStoragePath(folder: string, fileId: string, fileName: string): string {
   const safeFolder = folder.replace(/[^a-zA-Z0-9._/-]/g, '_').replace(/^\/+|\/+$/g, '') || 'general'
   const safe = sanitizeStorageFileName(fileName)
   return `${safeFolder}/${fileId}-${safe}`
 }
 
 /**
- * Upload a file from the browser to Supabase Storage (public bucket).
- * Requires an authenticated Supabase session (e.g. admin signed in).
+ * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
+ * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
+ * Requires an authenticated Supabase session if bucket policies require auth.
  */
 export async function uploadToSelpicContents(
   path: string,

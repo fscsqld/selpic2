@@ -8,7 +8,11 @@ import { useStore } from '@/lib/store'
 import { useTranslation } from '@/lib/useTranslation'
 import { useUserAuth } from '@/lib/userAuth'
 import { getColorName } from '@/lib/colorUtils'
-import { useContentStore } from '@/lib/contentStore'
+import {
+  mergePersistedSiteConfig,
+  normalizeRehydratedContentStoreState,
+  useContentStore
+} from '@/lib/contentStore'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 
 export default function CartPage() {
@@ -119,11 +123,21 @@ export default function CartPage() {
     }
   }, [isLoggedIn])
 
-  // Admin tab updates localStorage; other tabs need rehydrate (persist does not sync across tabs)
+  // 다른 탭에서 content-store 동기화 이벤트(합성 storage 등)로 전달된 페이로드 병합
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'content-store' && e.newValue) {
-        ;(useContentStore as any).persist?.rehydrate?.()
+        try {
+          const parsed = JSON.parse(e.newValue) as { state?: Record<string, unknown> }
+          const remote = parsed?.state
+          if (remote && typeof remote === 'object') {
+            const merged = mergePersistedSiteConfig(remote, useContentStore.getState())
+            normalizeRehydratedContentStoreState(merged)
+            useContentStore.setState(merged)
+          }
+        } catch {
+          /* ignore */
+        }
       }
     }
     window.addEventListener('storage', onStorage)

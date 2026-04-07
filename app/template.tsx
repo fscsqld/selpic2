@@ -1,5 +1,7 @@
 'use client'
 
+import '@/lib/contentStoreLocalStorageShim'
+import ContentStoreSupabaseSync from '@/components/ContentStoreSupabaseSync'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
 
 /**
@@ -12,9 +14,9 @@ export default function RootTemplate({
 }: {
   children: React.ReactNode
 }) {
-  // Single DOM parent avoids React treating multiple roots as an unkeyed list (OuterLayoutRouter warning).
   return (
     <div className="contents">
+      <ContentStoreSupabaseSync />
       <GamePromoCodeSyncLazy />
       {children}
     </div>

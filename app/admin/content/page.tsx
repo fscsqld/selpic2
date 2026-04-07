@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useContentStore, ContentItem } from '@/lib/contentStore'
+import { persistSiteConfigPayloadNow } from '@/lib/siteConfigClient'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { useStore, NewsletterSubscriber } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
@@ -239,7 +240,7 @@ export default function ContentManagementPage() {
         throw new Error('Invalid backup file format.')
       }
 
-      localStorage.setItem('content-store', text)
+      await persistSiteConfigPayloadNow(text)
       showNotificationToast('success', 'Content backup imported successfully. The page will reload to apply changes.')
       setImportStatus('success')
       // 다른 탭/컴포넌트에도 변경 사항 알림 (선택적)

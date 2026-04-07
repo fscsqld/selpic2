@@ -7,7 +7,12 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import { useStore } from '@/lib/store'
 import { useTranslation } from '@/lib/useTranslation'
-import { useContentStore, ShippingOption } from '@/lib/contentStore'
+import {
+  mergePersistedSiteConfig,
+  normalizeRehydratedContentStoreState,
+  useContentStore,
+  type ShippingOption
+} from '@/lib/contentStore'
 import { useUserAuth } from '@/lib/userAuth'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { updateUserGrade } from '@/lib/userGradeUtils'
@@ -51,10 +56,19 @@ export default function CheckoutPage() {
       window.addEventListener('content-store-updated', handleContentStoreUpdate)
     }
 
-    // Other tabs: persist does not push in-memory updates; rehydrate from localStorage
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'content-store' && e.newValue) {
-        ;(useContentStore as any).persist?.rehydrate?.()
+        try {
+          const parsed = JSON.parse(e.newValue) as { state?: Record<string, unknown> }
+          const remote = parsed?.state
+          if (remote && typeof remote === 'object') {
+            const merged = mergePersistedSiteConfig(remote, useContentStore.getState())
+            normalizeRehydratedContentStoreState(merged)
+            useContentStore.setState(merged)
+          }
+        } catch {
+          /* ignore */
+        }
       }
     }
     if (typeof window !== 'undefined') {
