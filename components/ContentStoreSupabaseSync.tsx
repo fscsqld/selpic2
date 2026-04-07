@@ -20,13 +20,18 @@ export default function ContentStoreSupabaseSync() {
     ran.current = true
 
     void (async () => {
-      const remote = await fetchSiteConfigValue()
-      if (!remote) return
-
-      const current = useContentStore.getState()
-      const merged = mergePersistedSiteConfig(remote, current)
-      normalizeRehydratedContentStoreState(merged)
-      useContentStore.setState(merged)
+      // 첫 로드에서 캐시/네트워크 타이밍 이슈가 있으면 짧게 재시도
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const remote = await fetchSiteConfigValue()
+        if (remote) {
+          const current = useContentStore.getState()
+          const merged = mergePersistedSiteConfig(remote, current)
+          normalizeRehydratedContentStoreState(merged)
+          useContentStore.setState(merged)
+          return
+        }
+        await new Promise((r) => setTimeout(r, attempt * 800))
+      }
     })()
   }, [])
 
