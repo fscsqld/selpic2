@@ -56,8 +56,8 @@ export default function TermsAndConditions() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="bg-white rounded-2xl shadow-lg p-8"
         >
+          <div className="bg-white rounded-2xl shadow-lg p-8">
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-4xl font-bold text-gray-900">{getContent('Terms and Conditions 제목') || 'Terms and Conditions'}</h1>
@@ -291,6 +291,7 @@ export default function TermsAndConditions() {
               <p><strong>Address:</strong> {getContent('Contact Address') || '123 Sticker Street, Design City, DC 12345'}</p>
               <p className="text-[11px] text-gray-600 pt-2 whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
             </div>
+          </div>
           </div>
         </motion.div>
       </div>

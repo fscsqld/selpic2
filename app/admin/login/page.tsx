@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, AlertCircle, Home, Shield } from 'lucide-react'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useUserAuth } from '@/lib/userAuth'
+import { hasUsableSupabaseBrowserEnv } from '@/lib/supabase/publicEnv'
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('')
@@ -31,9 +32,7 @@ export default function AdminLoginPage() {
         return
       }
 
-      const hasSupabase =
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      const hasSupabase = hasUsableSupabaseBrowserEnv()
 
       if (hasSupabase) {
         try {
@@ -73,9 +72,7 @@ export default function AdminLoginPage() {
     setError('')
 
     try {
-      const hasPublicSupabase =
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
-        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      const hasPublicSupabase = hasUsableSupabaseBrowserEnv()
       const allowLegacy = process.env.NEXT_PUBLIC_ALLOW_LEGACY_ADMIN_LOGIN === 'true'
 
       if (hasPublicSupabase) {
@@ -101,12 +98,38 @@ export default function AdminLoginPage() {
           }
 
           if (!allowLegacy) {
-            setError(sbError?.message || 'Invalid email or password.')
+            const msg = sbError?.message || ''
+            const code = (sbError as { code?: string })?.code
+            // Wrong password / email — not an env issue
+            if (
+              /invalid login credentials/i.test(msg) ||
+              code === 'invalid_credentials' ||
+              /email not confirmed/i.test(msg)
+            ) {
+              setError(msg || 'Invalid email or password.')
+              return
+            }
+            if (/invalid value/i.test(msg) || /failed to fetch/i.test(msg)) {
+              setError(
+                '브라우저에서 Supabase로 연결하지 못했습니다. (1) Vercel 환경 변수·재배포 확인 (2) 광고 차단/프라이버시 확장 끄고 재시도 (3) 프로젝트가 일시 중지됐는지 Supabase 대시보드 확인'
+              )
+            } else {
+              setError(msg || 'Invalid email or password.')
+            }
             return
           }
-        } catch {
+        } catch (err) {
           if (!allowLegacy) {
-            setError('Sign-in failed. Check your email and password, or contact a super admin if your access was revoked.')
+            const msg = err instanceof Error ? err.message : String(err)
+            if (/invalid value/i.test(msg)) {
+              setError(
+                'Supabase URL이 잘못되었습니다. 환경 변수에 따옴표 없이 https://…supabase.co 형태로 넣었는지, Preview 배포에도 변수가 적용됐는지 확인하세요.'
+              )
+            } else {
+              setError(
+                'Sign-in failed. Check your email and password, or contact a super admin if your access was revoked.'
+              )
+            }
             return
           }
         }

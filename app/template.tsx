@@ -14,8 +14,6 @@ export default function RootTemplate({
 }: {
   children: React.ReactNode
 }) {
-  // One root node under the layout/template boundary avoids anonymous sibling lists
-  // that trigger React key warnings in Next.js OuterLayoutRouter. `contents` = no layout box.
   return (
     <div className="contents">
       <ContentStoreSupabaseSync />

@@ -25,39 +25,12 @@ interface SlidingBackgroundProps {
   onSlideChange?: (currentIndex: number) => void // 🆕 현재 슬라이드 인덱스 변경 콜백
 }
 
-// Image Slide Component (indexeddb:// 형식 지원)
 const ImageSlide = ({ src }: { src: string }) => {
-  const [actualSrc, setActualSrc] = useState<string>(src)
-  const [imageError, setImageError] = useState(false)
-  
-  // indexeddb:// 형식의 URL을 IndexedDB에서 파일을 가져와서 실제 URL로 변환
-  useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      if (src && src.startsWith('indexeddb://')) {
-        const fileId = src.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            console.log('✅ ImageSlide: Loaded file from IndexedDB:', fileId)
-            setActualSrc(fileUrl)
-          } else {
-            console.error('❌ ImageSlide: File not found in IndexedDB:', fileId)
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('❌ ImageSlide: Failed to load file from IndexedDB:', error)
-          setImageError(true)
-        }
-      } else {
-        setActualSrc(src)
-      }
-    }
-    
-    loadFromIndexedDB()
-  }, [src])
-  
-  if (imageError || !actualSrc || actualSrc.trim() === '') {
+  const s = (src || '').trim()
+  const imageError = !s || s.startsWith('indexeddb://')
+  const actualSrc = s
+
+  if (imageError) {
     return (
       <div 
         className="w-full h-full bg-cover bg-center bg-no-repeat bg-gray-800"
@@ -78,7 +51,6 @@ const ImageSlide = ({ src }: { src: string }) => {
           backgroundImage: `url('${actualSrc}')`,
           imageRendering: 'auto'
         }}
-        onError={() => setImageError(true)}
       />
     </div>
   )
@@ -101,8 +73,9 @@ const VideoSlide = ({
   const normalizedSrc = (src || '').trim()
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  // indexeddb://는 바로 비디오에 들어가면 알 수 없는 스킴으로 에러가 나므로, 최초에는 비워두고 로드 후 설정
-  const [actualSrc, setActualSrc] = useState<string>(normalizedSrc.startsWith('indexeddb://') ? '' : normalizedSrc)
+  const [actualSrc, setActualSrc] = useState<string>(
+    normalizedSrc && !normalizedSrc.startsWith('indexeddb://') ? normalizedSrc : ''
+  )
   const videoElementRef = useRef<HTMLVideoElement | null>(null)
   
   const safeFallback = fallbackImage && fallbackImage.trim() !== '' ? fallbackImage : '/logo.svg'
@@ -113,66 +86,25 @@ const VideoSlide = ({
       videoRef(videoElementRef.current)
     }
   }, [videoRef, videoElementRef.current])
-  
-  // indexeddb:// 형식의 URL을 IndexedDB에서 파일을 가져와서 실제 URL로 변환
+
   useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      const trimmedSrc = (src || '').trim()
-      if (trimmedSrc.startsWith('indexeddb://')) {
-        // 로딩 중에는 비워서 <video>가 indexeddb:// 스킴을 직접 보지 않도록 함
-        setActualSrc('')
-        setVideoError(false)
-        setVideoLoaded(false)
-        const fileId = trimmedSrc.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✅ VideoSlide: Loaded file from IndexedDB:', fileId)
-            }
-            setActualSrc(fileUrl)
-            // 비디오 로드 명시적 호출
-            setTimeout(() => {
-              if (videoElementRef.current && fileUrl) {
-                try {
-                  videoElementRef.current.load()
-                } catch (error) {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.warn('VideoSlide: Failed to load video after IndexedDB restore:', error)
-                  }
-                }
-              }
-            }, 100)
-          } else {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('⚠️ VideoSlide: File not found in IndexedDB (using fallback image):', fileId)
-            }
-            setVideoError(true)
-            setActualSrc('') // 잘못된 indexeddb://가 비디오에 꽂히지 않도록 비운다
-          }
-        } catch (error) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('⚠️ VideoSlide: Failed to load file from IndexedDB (using fallback image):', error)
-          }
-          setVideoError(true)
-          setActualSrc('') // 실패 시에도 비워둔다
-        }
-      } else if (trimmedSrc) {
-        // 일반 URL인 경우
-        const safeSrc = trimmedSrc.startsWith('data:') || trimmedSrc.startsWith('blob:') || trimmedSrc.startsWith('http://') || trimmedSrc.startsWith('https://')
-          ? trimmedSrc
-          : encodeURI(trimmedSrc)
-        setActualSrc(safeSrc)
-        setVideoError(false)
-        setVideoLoaded(false)
-      } else {
-        setActualSrc('')
-        setVideoError(true)
-      }
+    const trimmedSrc = (src || '').trim()
+    if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) {
+      setActualSrc('')
+      setVideoError(true)
+      setVideoLoaded(false)
+      return
     }
-    
-    loadFromIndexedDB()
+    const safeSrc =
+      trimmedSrc.startsWith('data:') ||
+      trimmedSrc.startsWith('blob:') ||
+      trimmedSrc.startsWith('http://') ||
+      trimmedSrc.startsWith('https://')
+        ? trimmedSrc
+        : encodeURI(trimmedSrc)
+    setActualSrc(safeSrc)
+    setVideoError(false)
+    setVideoLoaded(false)
   }, [src])
   
   useEffect(() => {
@@ -530,7 +462,6 @@ export default function SlidingBackground({ slides, className = '', onSlideChang
               />
             )
           } else {
-            // 이미지의 경우 indexeddb:// 형식 처리
             return (
               <ImageSlide src={slide.src || ''} />
             )

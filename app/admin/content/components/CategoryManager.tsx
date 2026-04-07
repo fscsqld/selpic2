@@ -160,45 +160,17 @@ export default function CategoryManager({
     isActive: true
   })
 
-  // indexeddb:// 배경 이미지를 로컬에서 미리보기 위해 실제 URL로 변환
   const [resolvedBackgrounds, setResolvedBackgrounds] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    let isMounted = true
-
-    const loadBackgroundImages = async () => {
-      const updates: Record<string, string> = {}
-
-      for (const category of categoryItems) {
-        const bg = category.backgroundImage
-        if (!bg) continue
-
-        if (bg.startsWith('indexeddb://')) {
-          const fileId = bg.replace('indexeddb://', '')
-          try {
-            const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-            const fileUrl = await indexedDBStorage.getFile(fileId)
-            if (fileUrl && isMounted) {
-              updates[category.id] = fileUrl
-            }
-          } catch (error) {
-            console.error('Failed to load category background image from IndexedDB:', { categoryId: category.id, error })
-          }
-        } else {
-          updates[category.id] = bg
-        }
-      }
-
-      if (isMounted) {
-        setResolvedBackgrounds(updates)
+    const updates: Record<string, string> = {}
+    for (const category of categoryItems) {
+      const bg = category.backgroundImage?.trim()
+      if (bg && !bg.startsWith('indexeddb://')) {
+        updates[category.id] = bg
       }
     }
-
-    loadBackgroundImages()
-
-    return () => {
-      isMounted = false
-    }
+    setResolvedBackgrounds(updates)
   }, [categoryItems])
 
   // 그라디언트 옵션들

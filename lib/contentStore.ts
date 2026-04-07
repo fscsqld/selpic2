@@ -4212,14 +4212,13 @@ export const useContentStore = create<ContentStore>()(
         const isInvalidVideoSrc = (src: string): boolean => {
           if (!src) return true
           const lower = src.toLowerCase()
-          // 🆕 indexeddb://는 항상 허용 (Media Library에서 선택한 파일)
-          if (lower.startsWith('indexeddb://')) return false
+          if (lower.startsWith('indexeddb://')) return true
           const isBlob = lower.startsWith('blob:')
           // data:video/는 Media Library에서 선택한 동영상이므로 허용
           const isDataImage = lower.startsWith('data:image/')
           const isDataVideo = lower.startsWith('data:video/')
           const looksLikeImage = isLikelyImageUrl(lower)
-          // ✅ blob: URL은 indexeddb://에서 변환된 것이므로 허용 (동영상에 사용 가능)
+          // ✅ blob: URL 허용 (동영상에 사용 가능)
           // ✅ data:video/도 허용
           // ❌ data:image/와 이미지 URL만 무효로 판단
           return isDataImage || looksLikeImage
@@ -4260,17 +4259,15 @@ export const useContentStore = create<ContentStore>()(
               }
             }
             
-            // 🆕 indexeddb:// 형식은 항상 허용 (이미지/동영상 모두)
             if (slide.src.startsWith('indexeddb://')) {
-              console.log('✅ [getActiveHeroSlides] Allowing indexeddb:// slide:', {
+              console.warn('🔍 [getActiveHeroSlides] Filtering out legacy indexeddb:// slide:', {
                 id: slide.id,
                 title: slide.title,
-                type: slide.type,
-                src: slide.src.substring(0, 50) + '...'
+                type: slide.type
               })
-              return true
+              return false
             }
-            
+
             return true
           })
           .sort((a: HeroSlide, b: HeroSlide) => a.order - b.order)

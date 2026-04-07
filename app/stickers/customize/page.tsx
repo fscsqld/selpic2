@@ -43,7 +43,6 @@ function StickerCustomizeContent() {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string>(DEFAULT_BG_IMAGE)
   const [isMounted, setIsMounted] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  // ✅ indexeddb:// URL을 blob URL로 변환한 이미지 URL 저장
   const [resolvedProductImage, setResolvedProductImage] = useState<string | null>(null)
   // Double-line 전용 입력 상태 (Option 1/2 공통: 소속/이름/전화 분리)
   const [twoLineAffiliation, setTwoLineAffiliation] = useState('')
@@ -89,26 +88,15 @@ function StickerCustomizeContent() {
     setIsMounted(true)
   }, [])
 
-  // Custom Design Studio와 동일: 배경 이미지를 Custom Design 카테고리에서 로드 (indexeddb 지원)
   useEffect(() => {
     const categories = getActiveCategoryItems()
     const customDesign = categories.find((c: { title?: string }) => c.title === 'Custom Design')
-    const bg = customDesign?.backgroundImage
-    if (!bg) {
+    const bg = customDesign?.backgroundImage?.trim()
+    if (!bg || bg.startsWith('indexeddb://')) {
       setBackgroundImageUrl(DEFAULT_BG_IMAGE)
       return
     }
-    if (bg.startsWith('indexeddb://')) {
-      const fileId = bg.replace('indexeddb://', '')
-      import('@/lib/indexedDBStorage').then(({ indexedDBStorage }) =>
-        indexedDBStorage.getFile(fileId)
-      ).then((fileUrl) => {
-        if (fileUrl) setBackgroundImageUrl(fileUrl)
-        else setBackgroundImageUrl(DEFAULT_BG_IMAGE)
-      }).catch(() => setBackgroundImageUrl(DEFAULT_BG_IMAGE))
-    } else {
-      setBackgroundImageUrl(bg)
-    }
+    setBackgroundImageUrl(bg)
   }, [categoryItems, getActiveCategoryItems])
 
   // URL ?product= 복원: 새로고침 시 같은 상품 유지. products 미로드 시에는 선택을 지우지 않음(일부만 보이는 현상 방지)
@@ -405,30 +393,13 @@ function StickerCustomizeContent() {
   const paddingTopPx = sheetMarginTopMm * PX_PER_MM
   const paddingBottomPx = sheetMarginBottomMm * PX_PER_MM
 
-  // ✅ indexeddb:// URL을 blob URL로 변환하는 헬퍼 함수
   const resolveImageUrl = useCallback(async (imageUrl: string): Promise<string> => {
     if (!imageUrl || imageUrl.trim() === '' || imageUrl === 'undefined') {
       throw new Error('Invalid image URL')
     }
-
-    // indexeddb:// URL인 경우 blob URL로 변환
     if (imageUrl.startsWith('indexeddb://')) {
-      try {
-        const fileId = imageUrl.replace('indexeddb://', '')
-        const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-        const fileUrl = await indexedDBStorage.getFile(fileId)
-        if (fileUrl) {
-          return fileUrl
-        } else {
-          throw new Error(`File not found in IndexedDB: ${fileId}`)
-        }
-      } catch (error) {
-        console.error('Failed to load image from IndexedDB:', error)
-        throw error
-      }
+      throw new Error('Legacy indexeddb:// product image — re-upload image in Admin.')
     }
-
-    // 일반 URL인 경우 그대로 반환
     return imageUrl
   }, [])
 
@@ -536,23 +507,10 @@ function StickerCustomizeContent() {
 
     return new Promise<string>(async (resolve, reject) => {
       try {
-        // ✅ indexeddb:// URL을 blob URL로 변환
         let imageUrl = displayProduct.image
         if (imageUrl && imageUrl.startsWith('indexeddb://')) {
-          try {
-            const fileId = imageUrl.replace('indexeddb://', '')
-            const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-            const fileUrl = await indexedDBStorage.getFile(fileId)
-            if (fileUrl) {
-              imageUrl = fileUrl
-            } else {
-              reject(new Error(`File not found in IndexedDB: ${fileId}`))
-              return
-            }
-          } catch (error) {
-            reject(new Error(`Failed to load image from IndexedDB: ${error}`))
-            return
-          }
+          reject(new Error('Legacy indexeddb:// product image — re-upload in Admin.'))
+          return
         }
 
         const canvas = document.createElement('canvas')
@@ -781,21 +739,9 @@ function StickerCustomizeContent() {
   }) => {
     if (typeof window === 'undefined' || !designProduct) return null
 
-    // ✅ indexeddb:// URL을 blob URL로 변환 (Promise 생성자 밖에서 처리)
     let imageUrl = designProduct.image
     if (imageUrl && imageUrl.startsWith('indexeddb://')) {
-      try {
-        const fileId = imageUrl.replace('indexeddb://', '')
-        const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-        const fileUrl = await indexedDBStorage.getFile(fileId)
-        if (fileUrl) {
-          imageUrl = fileUrl
-        } else {
-          throw new Error(`File not found in IndexedDB: ${fileId}`)
-        }
-      } catch (error) {
-        throw new Error(`Failed to load image from IndexedDB: ${error}`)
-      }
+      throw new Error('Legacy indexeddb:// product image — re-upload in Admin.')
     }
 
     return new Promise<string>((resolve, reject) => {

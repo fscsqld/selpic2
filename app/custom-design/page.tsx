@@ -49,26 +49,15 @@ function CustomDesignContent() {
   const [twoLineName, setTwoLineName] = useState('Your Name')
   const [twoLinePhone, setTwoLinePhone] = useState('')
 
-  // Custom Design 카테고리 배경 이미지와 동일하게 설정 (콘텐츠 스토어에서 조회, indexeddb 지원)
   useEffect(() => {
     const categories = getActiveCategoryItems()
     const customDesign = categories.find(c => c.title === 'Custom Design')
-    const bg = customDesign?.backgroundImage
-    if (!bg) {
+    const bg = customDesign?.backgroundImage?.trim()
+    if (!bg || bg.startsWith('indexeddb://')) {
       setBackgroundImageUrl(DEFAULT_BG_IMAGE)
       return
     }
-    if (bg.startsWith('indexeddb://')) {
-      const fileId = bg.replace('indexeddb://', '')
-      import('@/lib/indexedDBStorage').then(({ indexedDBStorage }) =>
-        indexedDBStorage.getFile(fileId)
-      ).then((fileUrl) => {
-        if (fileUrl) setBackgroundImageUrl(fileUrl)
-        else setBackgroundImageUrl(DEFAULT_BG_IMAGE)
-      }).catch(() => setBackgroundImageUrl(DEFAULT_BG_IMAGE))
-    } else {
-      setBackgroundImageUrl(bg)
-    }
+    setBackgroundImageUrl(bg)
   }, [categoryItems, getActiveCategoryItems])
 
   // localStorage에서 저장된 이름 불러오기 (클라이언트에서만 실행)

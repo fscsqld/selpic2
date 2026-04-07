@@ -17,10 +17,9 @@ import {
   GripVertical,
   Play // 🆕 재생 아이콘
 } from 'lucide-react'
-import { MediaFile, useMediaStore } from '@/lib/mediaStore'
+import { MediaFile } from '@/lib/mediaStore'
 import { ProductCategory } from '@/app/admin/images/page'
 import { useState, useRef } from 'react'
-import { indexedDBStorage } from '@/lib/indexedDBStorage'
 
 // 🆕 비디오 썸네일 컴포넌트 (재생 아이콘 + 호버 프리뷰)
 function VideoThumbnail({ 
@@ -133,9 +132,6 @@ export default function SortableFileItem({
   activeCategoryInfo,
   formatFileSize
 }: SortableFileItemProps) {
-  const { updateMediaFile } = useMediaStore()
-  const restoringRef = useRef(false) // 🆕 복원 중 플래그 (무한 루프 방지)
-  
   const {
     attributes,
     listeners,
@@ -187,80 +183,25 @@ export default function SortableFileItem({
                   className="w-full h-full object-cover rounded cursor-pointer"
                   onClick={() => handleLinkToProduct(file.id)}
                   title="Link to Product"
-                  onError={async (e) => {
-                    // 🆕 currentTarget이 존재하는지 먼저 확인
+                  onError={(e) => {
                     if (!e.currentTarget || !(e.currentTarget instanceof HTMLImageElement)) {
                       console.warn(`⚠️ [SortableFileItem] currentTarget is null or not an image element for: ${file.name}`)
                       return
                     }
-                    
+
                     const currentSrc = e.currentTarget.src
-                    // 🆕 WebP 로딩 실패 시 원본으로 폴백 (순차적 시도)
                     if (webpUrl && currentSrc === webpUrl) {
-                      // WebP 실패 → dataUrl 시도
                       if (dataUrl && dataUrl !== currentSrc) {
                         e.currentTarget.src = dataUrl
                         return
                       }
-                      // dataUrl 없으면 url 시도
                       if (url && url !== currentSrc) {
                         e.currentTarget.src = url
                         return
                       }
                     }
-                    // dataUrl 실패 시 url 시도
                     if (dataUrl && currentSrc === dataUrl && url && url !== currentSrc) {
                       e.currentTarget.src = url
-                      return
-                    }
-                    
-                    // 🆕 모든 URL 실패 시 IndexedDB에서 능동적 복원 시도
-                    if (file.storedInIndexedDB && !restoringRef.current) {
-                      restoringRef.current = true
-                      console.log(`🔄 [SortableFileItem] All URLs failed, attempting active restoration from IndexedDB for: ${file.name}`)
-                      
-                      try {
-                        // 이미지인 경우 WebP 먼저 시도
-                        if (file.type === 'image' && (file.hasWebp || file.storedInIndexedDB)) {
-                          try {
-                            const webpFileId = file.id + '_webp'
-                            const restoredWebpUrl = await indexedDBStorage.getFile(webpFileId)
-                            if (restoredWebpUrl && restoredWebpUrl.trim()) {
-                              console.log(`✅ [SortableFileItem] Restored WebP URL from IndexedDB for: ${file.name}`)
-                              updateMediaFile(file.id, { 
-                                webpUrl: restoredWebpUrl,
-                                url: restoredWebpUrl,
-                                hasWebp: true
-                              })
-                              // 🆕 currentTarget이 여전히 존재하는지 확인 후 src 설정
-                              if (e.currentTarget && e.currentTarget instanceof HTMLImageElement) {
-                                e.currentTarget.src = restoredWebpUrl
-                              }
-                              restoringRef.current = false
-                              return
-                            }
-                          } catch (webpError) {
-                            console.log(`ℹ️ [SortableFileItem] WebP restore failed, trying original:`, webpError)
-                          }
-                        }
-                        
-                        // 원본 파일 복원 시도
-                        const restoredUrl = await indexedDBStorage.getFile(file.id)
-                        if (restoredUrl && restoredUrl.trim()) {
-                          console.log(`✅ [SortableFileItem] Restored original URL from IndexedDB for: ${file.name}`)
-                          updateMediaFile(file.id, { url: restoredUrl })
-                          // 🆕 currentTarget이 여전히 존재하는지 확인 후 src 설정
-                          if (e.currentTarget && e.currentTarget instanceof HTMLImageElement) {
-                            e.currentTarget.src = restoredUrl
-                          }
-                          restoringRef.current = false
-                          return
-                        }
-                      } catch (restoreError) {
-                        console.error(`❌ [SortableFileItem] Failed to restore from IndexedDB:`, restoreError)
-                      } finally {
-                        restoringRef.current = false
-                      }
                     }
                   }}
                 />
@@ -428,101 +369,39 @@ export default function SortableFileItem({
                 className="w-full h-full object-cover cursor-pointer"
                 onClick={() => handleLinkToProduct(file.id)}
                 title="Link to Product"
-                onError={async (e) => {
-                  // 🆕 currentTarget이 존재하는지 먼저 확인
+                onError={(e) => {
                   if (!e.currentTarget || !(e.currentTarget instanceof HTMLImageElement)) {
                     console.warn(`⚠️ [SortableFileItem] currentTarget is null or not an image element for: ${file.name}`)
                     return
                   }
-                  
+
                   const currentSrc = e.currentTarget.src
                   console.warn(`⚠️ [SortableFileItem] Image load error for ${file.name}:`, {
                     currentSrc: currentSrc.substring(0, 50),
                     hasWebpUrl: !!file.webpUrl,
                     hasDataUrl: !!file.dataUrl,
                     hasUrl: !!file.url,
-                    storedInIndexedDB: file.storedInIndexedDB,
                     hasWebp: file.hasWebp
                   })
-                  
-                  // 🆕 WebP 로딩 실패 시 원본으로 폴백 (순차적 시도)
+
                   if (webpUrl && currentSrc === webpUrl) {
-                    // WebP 실패 → dataUrl 시도
                     if (dataUrl && dataUrl !== currentSrc) {
-                      console.log(`🔄 [SortableFileItem] WebP failed, trying dataUrl for: ${file.name}`)
                       e.currentTarget.src = dataUrl
                       return
                     }
-                    // dataUrl 없으면 url 시도
                     if (url && url !== currentSrc) {
-                      console.log(`🔄 [SortableFileItem] WebP failed, trying url for: ${file.name}`)
                       e.currentTarget.src = url
                       return
                     }
                   }
-                  
-                  // dataUrl 실패 시 url 시도
+
                   if (dataUrl && currentSrc === dataUrl && url && url !== currentSrc) {
-                    console.log(`🔄 [SortableFileItem] dataUrl failed, trying url for: ${file.name}`)
                     e.currentTarget.src = url
                     return
                   }
-                  
-                  // 🆕 모든 URL 실패 시 IndexedDB에서 능동적 복원 시도
-                  if (file.storedInIndexedDB && !restoringRef.current) {
-                    restoringRef.current = true
-                    console.log(`🔄 [SortableFileItem] All URLs failed, attempting active restoration from IndexedDB for: ${file.name}`)
-                    
-                    try {
-                      // 이미지인 경우 WebP 먼저 시도
-                      if (file.type === 'image' && (file.hasWebp || file.storedInIndexedDB)) {
-                        try {
-                          const webpFileId = file.id + '_webp'
-                          const restoredWebpUrl = await indexedDBStorage.getFile(webpFileId)
-                          if (restoredWebpUrl && restoredWebpUrl.trim()) {
-                            console.log(`✅ [SortableFileItem] Restored WebP URL from IndexedDB for: ${file.name}`)
-                            updateMediaFile(file.id, { 
-                              webpUrl: restoredWebpUrl,
-                              url: restoredWebpUrl,
-                              hasWebp: true
-                            })
-                            // 🆕 currentTarget이 존재하는지 확인 후 src 설정
-                            if (e.currentTarget && e.currentTarget instanceof HTMLImageElement) {
-                              e.currentTarget.src = restoredWebpUrl
-                            }
-                            restoringRef.current = false
-                            return
-                          }
-                        } catch (webpError) {
-                          console.log(`ℹ️ [SortableFileItem] WebP restore failed, trying original:`, webpError)
-                        }
-                      }
-                      
-                      // 원본 파일 복원 시도
-                      const restoredUrl = await indexedDBStorage.getFile(file.id)
-                      if (restoredUrl && restoredUrl.trim()) {
-                        console.log(`✅ [SortableFileItem] Restored original URL from IndexedDB for: ${file.name}`)
-                        updateMediaFile(file.id, { url: restoredUrl })
-                        // 🆕 currentTarget이 존재하는지 확인 후 src 설정
-                        if (e.currentTarget && e.currentTarget instanceof HTMLImageElement) {
-                          e.currentTarget.src = restoredUrl
-                        }
-                        restoringRef.current = false
-                        return
-                      }
-                    } catch (restoreError) {
-                      console.error(`❌ [SortableFileItem] Failed to restore from IndexedDB:`, restoreError)
-                    } finally {
-                      restoringRef.current = false
-                    }
-                  }
-                  
-                  // 모든 시도 실패 시 아이콘 표시
+
                   console.error(`❌ [SortableFileItem] All image sources failed for: ${file.name}`)
-                  // 🆕 currentTarget이 존재하는지 확인 후 display 설정
-                  if (e.currentTarget && e.currentTarget instanceof HTMLImageElement) {
-                    e.currentTarget.style.display = 'none'
-                  }
+                  e.currentTarget.style.display = 'none'
                 }}
               />
             ) : (

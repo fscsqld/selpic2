@@ -8,7 +8,6 @@ import { useState, useEffect } from 'react'
 import { useParams, notFound } from 'next/navigation'
 import ProductCard from '@/components/ProductCard'
 
-// 🆕 Product Image Component (indexeddb:// 지원)
 const ProductImage = ({ src, alt, className }: { 
   src: string, 
   alt: string, 
@@ -16,52 +15,21 @@ const ProductImage = ({ src, alt, className }: {
 }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
   const [imageError, setImageError] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const loadImage = async () => {
-      if (!src || src.trim() === '' || src === 'undefined') {
-        setImageError(true)
-        return
-      }
-
-      // indexeddb:// URL인 경우 blob URL로 변환
-      if (src.startsWith('indexeddb://')) {
-        setIsLoading(true)
-        try {
-          const fileId = src.replace('indexeddb://', '')
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            setActualSrc(fileUrl)
-            setImageError(false)
-          } else {
-            console.warn('Product image not found in IndexedDB:', fileId)
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('Failed to load product image from IndexedDB:', error)
-          setImageError(true)
-        } finally {
-          setIsLoading(false)
-        }
-      } else {
-        // 일반 URL인 경우 바로 사용
-        setActualSrc(src)
-        setImageError(false)
-      }
+    if (!src || src.trim() === '' || src === 'undefined') {
+      setActualSrc('')
+      setImageError(true)
+      return
     }
-
-    loadImage()
+    if (src.startsWith('indexeddb://')) {
+      setActualSrc('')
+      setImageError(true)
+      return
+    }
+    setActualSrc(src)
+    setImageError(false)
   }, [src])
-
-  if (isLoading) {
-    return (
-      <div className={`${className || ''} bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center`}>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
-      </div>
-    )
-  }
 
   if (imageError || !actualSrc) {
     return (

@@ -11,35 +11,21 @@ import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
 
-// Subcategory Image Component (indexeddb:// 지원)
 const SubcategoryImageDisplay = ({ src, emoji, alt }: { src: string, emoji?: string, alt: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
   const [imageError, setImageError] = useState(false)
-  
+
   useEffect(() => {
-    const loadFromIndexedDB = async () => {
-      if (src && src.startsWith('indexeddb://')) {
-        const fileId = src.replace('indexeddb://', '')
-        try {
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            setActualSrc(fileUrl)
-          } else {
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('Failed to load subcategory image from IndexedDB:', error)
-          setImageError(true)
-        }
-      } else if (src) {
-        setActualSrc(src)
-      }
+    const s = (src || '').trim()
+    if (!s || s.startsWith('indexeddb://')) {
+      setActualSrc('')
+      setImageError(true)
+      return
     }
-    
-    loadFromIndexedDB()
+    setActualSrc(s)
+    setImageError(false)
   }, [src])
-  
+
   if (imageError || !actualSrc) {
     return <div className="text-4xl">{emoji || '📝'}</div>
   }

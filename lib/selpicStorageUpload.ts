@@ -16,6 +16,7 @@ export function buildSelpicStoragePath(folder: string, fileId: string, fileName:
 
 /**
  * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
+ * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
  * Requires an authenticated Supabase session if bucket policies require auth.
  */
 export async function uploadToSelpicContents(
@@ -25,7 +26,8 @@ export async function uploadToSelpicContents(
 ): Promise<string> {
   const supabase = createSupabaseBrowserClient()
   const ct =
-    contentType || (body instanceof File && body.type ? body.type : 'application/octet-stream')
+    contentType ||
+    (body instanceof File && body.type ? body.type : 'application/octet-stream')
 
   const { error } = await supabase.storage.from(SELPIC_CONTENTS_BUCKET).upload(path, body, {
     contentType: ct,

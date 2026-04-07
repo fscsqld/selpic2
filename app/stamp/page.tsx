@@ -11,56 +11,24 @@ import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
 
-// 🆕 Stamp 상품 이미지 컴포넌트 (indexeddb:// 지원)
 const StampProductImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
   const [imageError, setImageError] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const loadImage = async () => {
-      if (!src || src.trim() === '' || src === 'undefined') {
-        setImageError(true)
-        return
-      }
-
-      // indexeddb:// URL인 경우 IndexedDB에서 blob URL로 변환
-      if (src.startsWith('indexeddb://')) {
-        setIsLoading(true)
-        try {
-          const fileId = src.replace('indexeddb://', '')
-          const { indexedDBStorage } = await import('@/lib/indexedDBStorage')
-          const fileUrl = await indexedDBStorage.getFile(fileId)
-          if (fileUrl) {
-            setActualSrc(fileUrl)
-            setImageError(false)
-          } else {
-            console.warn('StampProductImage: File not found in IndexedDB:', fileId)
-            setImageError(true)
-          }
-        } catch (error) {
-          console.error('StampProductImage: Failed to load image from IndexedDB:', error)
-          setImageError(true)
-        } finally {
-          setIsLoading(false)
-        }
-      } else {
-        // 일반 URL인 경우 바로 사용
-        setActualSrc(src)
-        setImageError(false)
-      }
+    if (!src || src.trim() === '' || src === 'undefined') {
+      setActualSrc('')
+      setImageError(true)
+      return
     }
-
-    loadImage()
+    if (src.startsWith('indexeddb://')) {
+      setActualSrc('')
+      setImageError(true)
+      return
+    }
+    setActualSrc(src)
+    setImageError(false)
   }, [src])
-
-  if (isLoading) {
-    return (
-      <div className={`w-full h-48 flex items-center justify-center bg-gray-100 ${className || ''}`}>
-        <span className="text-xs text-gray-500">Loading...</span>
-      </div>
-    )
-  }
 
   if (imageError || !actualSrc) {
     return (

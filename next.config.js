@@ -1,7 +1,45 @@
 const path = require('path')
+const webpack = require('webpack')
+
+/** Strip BOM / wrapping quotes (common Vercel copy-paste mistakes). */
+function stripSupabaseEnvValue(s) {
+  if (!s || typeof s !== 'string') return ''
+  let t = s.trim().replace(/^\uFEFF/, '')
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    t = t.slice(1, -1).trim()
+  }
+  return t.trim()
+}
+
+/**
+ * Force-inject Supabase public env into the JS bundle (server + client + middleware).
+ * Vercel: set for each environment (Production, Preview, Development) as needed.
+ */
+const NEXT_PUBLIC_SUPABASE_URL = stripSupabaseEnvValue(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
+)
+
+const NEXT_PUBLIC_SUPABASE_ANON_KEY = stripSupabaseEnvValue(
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+)
+
+if (process.env.VERCEL === '1' && !NEXT_PUBLIC_SUPABASE_URL) {
+  console.warn(
+    '[next.config.js] Vercel build: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_URL are both empty. Add to Project → Environment Variables (enable Preview if you use git branch URLs), then redeploy.'
+  )
+}
+if (process.env.VERCEL === '1' && NEXT_PUBLIC_SUPABASE_URL && !NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  console.warn(
+    '[next.config.js] NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_ANON_KEY missing at build time.'
+  )
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -10,6 +48,15 @@ const nextConfig = {
     if (!isServer && config.output) {
       // Dev/slow disks: avoid spurious ChunkLoadError on large layout chunks
       config.output.chunkLoadTimeout = 180000
+    }
+    // Hard-inline public Supabase env into the browser bundle (avoids empty/undefined fetch URL).
+    if (!isServer) {
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(NEXT_PUBLIC_SUPABASE_URL),
+          'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        })
+      )
     }
     return config
   },

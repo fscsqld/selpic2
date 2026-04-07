@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { indexedDBStorage } from './indexedDBStorage'
 import imageCompression from 'browser-image-compression'
+import { buildSelpicStoragePath, uploadToSelpicContents } from '@/lib/selpicStorageUpload'
 
 // 표준 태그 상수 정의
 export const STANDARD_MEDIA_TAGS = {
@@ -136,7 +136,7 @@ export interface MediaFile {
   description?: string
   // Base64 데이터를 저장하여 영구 보존
   dataUrl?: string
-  // IndexedDB에 저장되었는지 표시
+  /** @deprecated Legacy flag; assets now use Supabase Storage public URLs. */
   storedInIndexedDB?: boolean
   // 드래그 앤 드롭 순서 (카테고리별 또는 상품별)
   order?: number
@@ -338,13 +338,6 @@ export const useMediaStore = create<MediaStore>()(
       },
 
       deleteMediaFile: (id) => {
-        const file = get().mediaFiles.find(f => f.id === id)
-        // IndexedDB에서도 삭제 (비동기이지만 에러는 무시)
-        if (file?.storedInIndexedDB) {
-          indexedDBStorage.deleteFile(id).catch(error => {
-            console.error('Failed to delete file from IndexedDB:', error)
-          })
-        }
         set((state) => ({
           mediaFiles: state.mediaFiles.filter(file => file.id !== id)
         }))
@@ -562,316 +555,153 @@ export const useMediaStore = create<MediaStore>()(
           const standardTag = usage ? getStandardTagFromUsage(usage) : STANDARD_MEDIA_TAGS.GENERAL_CONTENT
           const tags = usage ? [standardTag] : []
           
-          // 동영상의 경우 원본 파일을 그대로 저장 (화질 손실 방지)
           if (fileType === 'video') {
             try {
-              console.log('🎥 [SAVE] Processing video file:', file.name)
-              
-              // 🆕 동영상 썸네일 생성
-              console.log('🖼️ [Thumbnail] Generating video thumbnail...')
-              let thumbnailUrl: string | undefined = undefined
+              const folder = category || 'general'
+              let thumbBlobUrl: string | undefined
               try {
-                const thumbnail = await generateVideoThumbnail(file)
-                if (thumbnail) {
-                  thumbnailUrl = thumbnail
-                  console.log('✅ [Thumbnail] Video thumbnail generated successfully')
-                } else {
-                  console.warn('⚠️ [Thumbnail] Failed to generate thumbnail, continuing without thumbnail')
-                }
-              } catch (thumbnailError) {
-                console.error('❌ [Thumbnail] Error generating thumbnail:', thumbnailError)
-                // 썸네일 생성 실패해도 계속 진행
+                thumbBlobUrl = (await generateVideoThumbnail(file)) || undefined
+              } catch {
+                /* non-fatal */
               }
-              
-              // 동영상은 원본 File 객체를 IndexedDB에 저장
-              console.log('📦 [SAVE] Converting file to ArrayBuffer...')
-              const arrayBuffer = await file.arrayBuffer()
-              console.log('✅ [SAVE] ArrayBuffer created:', `${(arrayBuffer.byteLength / (1024 * 1024)).toFixed(2)}MB`)
-              
-              const blob = new Blob([arrayBuffer], { type: file.type })
-              const blobUrl = URL.createObjectURL(blob)
-              console.log('✅ [SAVE] Blob URL created:', blobUrl.substring(0, 50) + '...')
-              
-              // ⚠️ 중요: IndexedDB 저장이 완료될 때까지 명확히 await
-              const dataUrlForMime = `data:${file.type};base64,` // MIME 타입 전달용
-              console.log('💾 [SAVE] Saving to IndexedDB (awaiting completion)...')
-              await indexedDBStorage.saveFile(fileId, dataUrlForMime, arrayBuffer)
-              console.log('✅ [SAVE] Video saved to IndexedDB successfully - IndexedDB storage confirmed')
-              
-              // IndexedDB 저장이 완료된 후에만 상태 업데이트
-              // 🆕 카테고리별 최대 order 값 계산 (Content 파일은 usage로도 필터링)
+
+              const videoPath = buildSelpicStoragePath(folder, fileId, file.name)
+              const publicVideoUrl = await uploadToSelpicContents(
+                videoPath,
+                file,
+                file.type || 'video/mp4'
+              )
+
+              let posterHttps: string | undefined
+              if (thumbBlobUrl) {
+                try {
+                  const blob = await (await fetch(thumbBlobUrl)).blob()
+                  posterHttps = await uploadToSelpicContents(
+                    `${folder}/${fileId}-poster.jpg`,
+                    blob,
+                    'image/jpeg'
+                  )
+                } finally {
+                  URL.revokeObjectURL(thumbBlobUrl)
+                }
+              }
+
               const existingFiles = get().getMediaFilesByCategory(category)
-              // Content 파일인 경우 (usage가 있으면) 같은 usage를 가진 파일만 order 계산
-              const filesForOrder = usage 
+              const filesForOrder = usage
                 ? existingFiles.filter(f => f.usage === usage)
                 : existingFiles
-              const maxOrder = filesForOrder.reduce((max, f) => {
-                const order = f.order ?? 0
-                return Math.max(max, order)
-              }, -1)
-              
+              const maxOrder = filesForOrder.reduce((max, f) => Math.max(max, f.order ?? 0), -1)
+
               const mediaFile: MediaFile = {
                 id: fileId,
                 name: customFileName ? `${customFileName}.${file.name.split('.').pop()}` : file.name,
                 type: 'video',
-                url: blobUrl, // 현재 세션용 blob URL
-                dataUrl: undefined, // 동영상은 dataUrl 사용 안 함
-                storedInIndexedDB: true,
+                url: publicVideoUrl,
+                dataUrl: undefined,
+                storedInIndexedDB: false,
                 size: file.size,
                 uploadedAt: new Date(),
                 category,
                 productId,
                 productName,
-                tags, // 🆕 표준 태그 포함
+                tags,
                 description: '',
-                order: maxOrder + 1, // 기본 순서 설정
+                order: maxOrder + 1,
                 hasWatermark: false,
                 watermarkPosition: 'bottom-right',
-                // 🆕 확장 필드
-                usage, // 미디어 사용 영역
-                mediaType: detectedMediaType, // 자동 감지된 미디어 타입
-                thumbnailUrl // 동영상 썸네일
+                usage,
+                mediaType: detectedMediaType,
+                thumbnailUrl: posterHttps
               }
-              
-              // IndexedDB 저장이 완료된 후에만 스토어에 추가
-              console.log('💾 [SAVE] Adding to Zustand store (localStorage will be updated)...')
               get().addMediaFile(mediaFile)
-              console.log(`✅ [SAVE] Video ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB) added to store`)
-              
-              // localStorage 저장 확인 (즉시 확인)
-              await new Promise(resolve => setTimeout(resolve, 200))
-              const storedData = localStorage.getItem('media-store')
-              if (storedData) {
-                try {
-                  // "[object Object]" 같은 잘못된 문자열 체크
-                  let parsed: any
-                  if (typeof storedData === 'string') {
-                    if (storedData === '[object Object]' || storedData.startsWith('[object')) {
-                      console.warn('⚠️ [SAVE] Invalid data format in localStorage (object stringified incorrectly)')
-                      // store에서 확인했으므로 계속 진행
-                    } else {
-                      parsed = JSON.parse(storedData)
-                    }
-                  } else {
-                    parsed = storedData
-                  }
-                  
-                  if (parsed) {
-                    const exists = parsed?.state?.mediaFiles?.some((f: MediaFile) => f.id === fileId)
-                    if (exists) {
-                      console.log(`✅ [SAVE] Video confirmed in localStorage immediately after save`)
-                      console.log(`📊 [SAVE] Total files in localStorage: ${parsed?.state?.mediaFiles?.length || 0}`)
-                    } else {
-                      console.warn(`⚠️ [SAVE] Video not found in localStorage immediately, but will be checked by addMediaFile`)
-                    }
-                  }
-                } catch (e) {
-                  console.error('❌ [SAVE] Failed to parse localStorage for verification:', e)
-                }
-              } else {
-                console.warn('⚠️ [SAVE] localStorage data not found immediately after save')
-              }
-              
               resolve(mediaFile)
               return
             } catch (error) {
-              console.error('❌ [SAVE] Failed to save video to IndexedDB:', {
-                fileName: file.name,
-                fileId,
-                error,
-                errorName: (error as Error)?.name,
-                errorMessage: (error as Error)?.message,
-                stack: (error as Error)?.stack
-              })
-              // IndexedDB 저장 실패 시 상태 업데이트하지 않고 에러 던지기
-              reject(new Error(`Failed to save video to IndexedDB: ${(error as Error)?.message || 'Unknown error'}`))
+              console.error('❌ [SAVE] Video upload failed:', error)
+              reject(
+                new Error(
+                  (error as Error)?.message ||
+                    'Video upload failed. Sign in and check selpic-contents bucket policies.'
+                )
+              )
               return
             }
           }
-          
-          // 이미지의 경우 WebP 변환 후 저장
+
+          if (fileType !== 'image') {
+            reject(new Error('Only image and video files can be uploaded to the media library.'))
+            return
+          }
+
           try {
-            console.log('🖼️ [SAVE] Processing image file:', file.name)
-            
-            // 원본 형식 저장
+            const folder = category || 'general'
             const originalFormat = file.type.split('/')[1] || 'unknown'
-            
-            // WebP 변환 시도
             let webpFile: File | null = null
-            let webpUrl: string | undefined = undefined
-            let webpSize: number | undefined = undefined
-            
+            let webpSize: number | undefined
             try {
-              console.log('🔄 [WebP] Attempting WebP conversion...')
               webpFile = await get().convertToWebP(file, onWebPProgress)
-              
-              if (webpFile) {
-                // WebP 변환 성공
-                const webpArrayBuffer = await webpFile.arrayBuffer()
-                const webpBlob = new Blob([webpArrayBuffer], { type: 'image/webp' })
-                webpUrl = URL.createObjectURL(webpBlob)
-                webpSize = webpFile.size
-                
-                console.log('✅ [WebP] WebP conversion successful:', {
-                  originalSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
-                  webpSize: `${(webpSize / (1024 * 1024)).toFixed(2)}MB`,
-                  reduction: `${((1 - webpSize / file.size) * 100).toFixed(1)}%`
-                })
-              } else {
-                console.log('ℹ️ [WebP] WebP conversion skipped or failed, using original image')
-              }
+              if (webpFile) webpSize = webpFile.size
             } catch (webpError) {
-              console.error('❌ [WebP] WebP conversion error (using original):', webpError)
-              // WebP 변환 실패 시 원본 사용 (안전장치)
+              console.error('❌ [WebP] conversion error:', webpError)
             }
-            
-            // 원본 이미지는 항상 IndexedDB에 저장 (백업용)
-            console.log('📦 [SAVE] Converting original file to ArrayBuffer...')
-            const arrayBuffer = await file.arrayBuffer()
-            console.log('✅ [SAVE] ArrayBuffer created:', `${(arrayBuffer.byteLength / (1024 * 1024)).toFixed(2)}MB`)
-            
-            const blob = new Blob([arrayBuffer], { type: file.type })
-            const blobUrl = URL.createObjectURL(blob)
-            console.log('✅ [SAVE] Blob URL created:', blobUrl.substring(0, 50) + '...')
-            
-            // ⚠️ 중요: 원본 이미지를 먼저 IndexedDB에 저장
-            const dataUrlForMime = `data:${file.type};base64,` // MIME 타입 전달용
-            console.log('💾 [SAVE] Saving original image to IndexedDB (awaiting completion)...')
-            await indexedDBStorage.saveFile(fileId, dataUrlForMime, arrayBuffer)
-            console.log('✅ [SAVE] Image saved to IndexedDB successfully - IndexedDB storage confirmed')
-            
-            // 🆕 WebP 파일도 IndexedDB에 저장 (있는 경우) - 원본 저장 후에 저장
-            let webpFileId: string | undefined = undefined
-            let webpSaved = false
-            if (webpFile) {
-              try {
-                webpFileId = fileId + '_webp'
-                console.log('💾 [WebP] Saving WebP file to IndexedDB (awaiting completion)...', {
-                  webpFileId: webpFileId,
-                  webpSize: `${(webpFile.size / (1024 * 1024)).toFixed(2)}MB`
-                })
-                const webpArrayBuffer = await webpFile.arrayBuffer()
-                const webpDataUrlForMime = `data:image/webp;base64,`
-                // 🆕 WebP 저장이 완료될 때까지 명확히 await
-                await indexedDBStorage.saveFile(webpFileId, webpDataUrlForMime, webpArrayBuffer)
-                webpSaved = true
-                console.log('✅ [WebP] WebP file saved to IndexedDB successfully - WebP storage confirmed')
-              } catch (webpSaveError) {
-                console.error('❌ [WebP] Failed to save WebP to IndexedDB:', webpSaveError)
-                // WebP 저장 실패해도 원본은 계속 진행
-                webpSaved = false
-              }
-            }
-            
-            // IndexedDB 저장이 완료된 후에만 상태 업데이트
-            // 🆕 카테고리별 최대 order 값 계산 (Content 파일은 usage로도 필터링)
+
+            const uploadBody: File = webpFile ?? file
+            const uploadName =
+              webpFile != null
+                ? customFileName
+                  ? `${customFileName}.webp`
+                  : file.name.replace(/\.[^/.]+$/, '.webp')
+                : customFileName
+                  ? `${customFileName}.${file.name.split('.').pop()}`
+                  : file.name
+
+            const path = buildSelpicStoragePath(folder, fileId, uploadName)
+            const publicUrl = await uploadToSelpicContents(
+              path,
+              uploadBody,
+              webpFile ? 'image/webp' : file.type || 'image/jpeg'
+            )
+
             const existingFiles = get().getMediaFilesByCategory(category)
-            // Content 파일인 경우 (usage가 있으면) 같은 usage를 가진 파일만 order 계산
-            const filesForOrder = usage 
+            const filesForOrder = usage
               ? existingFiles.filter(f => f.usage === usage)
               : existingFiles
-            const maxOrder = filesForOrder.reduce((max, f) => {
-              const order = f.order ?? 0
-              return Math.max(max, order)
-            }, -1)
-            
-            // 파일명 처리 (WebP인 경우 확장자 변경)
-            const finalFileName = customFileName 
-              ? (webpFile ? `${customFileName}.webp` : `${customFileName}.${file.name.split('.').pop()}`)
-              : (webpFile ? file.name.replace(/\.[^/.]+$/, '.webp') : file.name)
-            
+            const maxOrder = filesForOrder.reduce((max, f) => Math.max(max, f.order ?? 0), -1)
+
             const mediaFile: MediaFile = {
               id: fileId,
-              name: finalFileName,
+              name: uploadName,
               type: 'image',
-              url: webpUrl || blobUrl, // WebP가 있으면 WebP 사용, 없으면 원본 사용
-              dataUrl: undefined, // 이미지도 원본 바이너리 저장하므로 dataUrl 사용 안 함
-              storedInIndexedDB: true,
-              size: file.size, // 원본 크기
+              url: publicUrl,
+              dataUrl: undefined,
+              storedInIndexedDB: false,
+              size: file.size,
               uploadedAt: new Date(),
               category,
               productId,
               productName,
-              tags, // 🆕 표준 태그 포함
+              tags,
               description: '',
-              order: maxOrder + 1, // 기본 순서 설정
+              order: maxOrder + 1,
               hasWatermark: false,
               watermarkPosition: 'bottom-right',
-              // WebP 관련 필드
-              webpUrl: webpUrl, // WebP URL (있는 경우)
-              originalFormat: originalFormat, // 원본 형식
-              webpSize: webpSize, // WebP 크기 (있는 경우)
-              hasWebp: webpSaved && !!webpFileId, // 🆕 WebP 파일이 IndexedDB에 저장되었는지 표시 (저장 성공 여부 확인)
-              // 🆕 확장 필드
-              usage, // 미디어 사용 영역
-              mediaType: detectedMediaType // 자동 감지된 미디어 타입
+              webpUrl: webpFile ? publicUrl : undefined,
+              originalFormat,
+              webpSize,
+              hasWebp: !!webpFile,
+              usage,
+              mediaType: detectedMediaType
             }
-            
-            // IndexedDB 저장이 완료된 후에만 스토어에 추가
-            console.log('💾 [SAVE] Adding to Zustand store (localStorage will be updated)...')
             get().addMediaFile(mediaFile)
-            console.log(`✅ [SAVE] Image ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)}MB) added to store`)
-            
-            // localStorage 저장 확인 (즉시 확인)
-            // ⚠️ 중요: createJSONStorage를 사용하므로 storedData는 항상 JSON 문자열
-            await new Promise(resolve => setTimeout(resolve, 200))
-            try {
-              const storedData = localStorage.getItem('media-store')
-              if (storedData) {
-                // createJSONStorage를 사용하므로 항상 유효한 JSON 문자열이어야 함
-                // 하지만 안전을 위해 "[object Object]" 체크 추가
-                let parsed: any = null
-                
-                if (typeof storedData === 'string') {
-                  // "[object Object]" 같은 잘못된 문자열 체크
-                  if (storedData === '[object Object]' || storedData.startsWith('[object')) {
-                    console.error('❌ [SAVE] Invalid data format in localStorage: "[object Object]"')
-                    console.error('❌ [SAVE] This indicates createJSONStorage is not working correctly!')
-                    console.error('❌ [SAVE] Raw storedData type:', typeof storedData)
-                    console.error('❌ [SAVE] Raw storedData (first 200 chars):', storedData.substring(0, 200))
-                    // store에서 확인했으므로 계속 진행
-                  } else {
-                    try {
-                      parsed = JSON.parse(storedData)
-                    } catch (parseError) {
-                      console.error('❌ [SAVE] Failed to parse localStorage:', parseError)
-                      console.error('❌ [SAVE] Raw storedData (first 200 chars):', storedData.substring(0, 200))
-                    }
-                  }
-                } else {
-                  // 이미 객체인 경우 (이것도 createJSONStorage를 사용하면 발생하지 않아야 함)
-                  console.warn('⚠️ [SAVE] storedData is not a string (should not happen with createJSONStorage)')
-                  parsed = storedData
-                }
-                
-                if (parsed) {
-                  const exists = parsed?.state?.mediaFiles?.some((f: MediaFile) => f.id === fileId)
-                  if (exists) {
-                    console.log(`✅ [SAVE] Image confirmed in localStorage immediately after save`)
-                    console.log(`📊 [SAVE] Total files in localStorage: ${parsed?.state?.mediaFiles?.length || 0}`)
-                  } else {
-                    console.warn(`⚠️ [SAVE] Image not found in localStorage immediately, but will be checked by addMediaFile`)
-                  }
-                }
-              } else {
-                console.warn('⚠️ [SAVE] localStorage data not found immediately after save')
-              }
-            } catch (error) {
-              console.error('❌ [SAVE] Error accessing localStorage:', error)
-            }
-            
             resolve(mediaFile)
           } catch (error) {
-            console.error('❌ [SAVE] Failed to save image to IndexedDB:', {
-              fileName: file.name,
-              fileId,
-              error,
-              errorName: (error as Error)?.name,
-              errorMessage: (error as Error)?.message,
-              stack: (error as Error)?.stack
-            })
-            // IndexedDB 저장 실패 시 상태 업데이트하지 않고 에러 던지기
-            reject(new Error(`Failed to save image to IndexedDB: ${(error as Error)?.message || 'Unknown error'}`))
+            console.error('❌ [SAVE] Image upload failed:', error)
+            reject(
+              new Error(
+                (error as Error)?.message ||
+                  'Image upload failed. Sign in and check selpic-contents bucket policies.'
+              )
+            )
           }
         })
       }
@@ -879,8 +709,7 @@ export const useMediaStore = create<MediaStore>()(
     {
       name: 'media-store',
       partialize: (state) => {
-        // 모든 미디어 파일은 IndexedDB에 원본 바이너리로 저장되므로
-        // localStorage에는 메타데이터만 저장 (dataUrl 제외)
+        // Public HTTPS URLs + metadata (omit heavy dataUrl)
         const partialized = {
           mediaFiles: state.mediaFiles.map(file => {
             const serialized = {
@@ -890,7 +719,6 @@ export const useMediaStore = create<MediaStore>()(
                 : file.uploadedAt.toISOString()
             }
             
-            // 모든 파일은 IndexedDB에 저장되므로 dataUrl은 localStorage에 저장하지 않음
             const { dataUrl, ...withoutDataUrl } = serialized
             return withoutDataUrl
           })
@@ -979,11 +807,8 @@ export const useMediaStore = create<MediaStore>()(
               order: order,
               hasWatermark: file.hasWatermark ?? false,
               watermarkPosition: file.watermarkPosition ?? 'bottom-right',
-              // 🆕 새로고침 시 blob URL이 무효화되므로 URL을 빈 문자열로 초기화
-              // 컴포넌트에서 복원하도록 트리거
-              url: file.storedInIndexedDB ? '' : file.url,
-              // 🆕 WebP URL도 초기화 (blob URL이 무효화됨)
-              webpUrl: file.storedInIndexedDB && file.hasWebp ? '' : file.webpUrl
+              url: file.url,
+              webpUrl: file.webpUrl
             }
           })
           
@@ -994,31 +819,6 @@ export const useMediaStore = create<MediaStore>()(
             phonecases: state.mediaFiles.filter(f => f.category === 'phonecases').length,
             hotgoods: state.mediaFiles.filter(f => f.category === 'hotgoods').length,
             general: state.mediaFiles.filter(f => f.category === 'general').length
-          })
-          
-          // IndexedDB 복원은 컴포넌트에서 처리 (onRehydrateStorage는 동기 함수이므로)
-          const filesToRestore = state.mediaFiles.filter(file => file.storedInIndexedDB && !file.url)
-          if (filesToRestore.length > 0) {
-            console.log(`📋 [Rehydration] ${filesToRestore.length} files need URL restoration from IndexedDB (will be restored in component)`)
-          }
-          
-          // IndexedDB에서 직접 파일 목록 확인 (localStorage와 동기화)
-          indexedDBStorage.getAllFileIds().then(ids => {
-            if (ids.length > 0) {
-              console.log(`🔍 [Rehydration] Found ${ids.length} files in IndexedDB, checking for missing files...`)
-              
-              // localStorage에 없는 파일이 IndexedDB에 있으면 복원 시도
-              const missingIds = ids.filter(id => !state.mediaFiles.find(f => f.id === id))
-              if (missingIds.length > 0) {
-                console.log(`⚠️ [Rehydration] Found ${missingIds.length} files in IndexedDB that are not in localStorage`)
-                // 이 경우는 나중에 수동으로 복원하거나 무시
-                // (일반적으로는 localStorage에 메타데이터가 있어야 함)
-              }
-            } else {
-              console.log('ℹ️ [Rehydration] No files found in IndexedDB')
-            }
-          }).catch(error => {
-            console.error('❌ [Rehydration] Failed to get file IDs from IndexedDB:', error)
           })
         } else {
           console.log(`ℹ️ [Rehydration] No files to process (count: ${state.mediaFiles?.length || 0})`)

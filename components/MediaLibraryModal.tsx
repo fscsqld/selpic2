@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { X, Search, Image as ImageIcon, Video, File, Check, Grid3x3, List, Folder, Package, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMediaStore, MediaFile, getStandardTagFromUsage, type MediaUsage } from '@/lib/mediaStore'
-import { indexedDBStorage } from '@/lib/indexedDBStorage'
 
 interface MediaLibraryModalProps {
   isOpen: boolean
@@ -22,15 +21,12 @@ export default function MediaLibraryModal({
   category,
   usage // 🆕 태그 필터링을 위한 usage prop
 }: MediaLibraryModalProps) {
-  const { mediaFiles, searchMediaFiles, updateMediaFile, deleteMediaFile } = useMediaStore()
+  const { mediaFiles, searchMediaFiles } = useMediaStore()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>(category || 'all')
   const [selectedUsageTag, setSelectedUsageTag] = useState<MediaUsage | 'all'>(usage === 'all' || !usage ? 'all' : usage)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
-  const [restoredUrls, setRestoredUrls] = useState<Record<string, string>>({})
-  const isRestoringRef = useRef(false)
-  const restoredFileIdsRef = useRef(new Set<string>())
 
   // 🆕 usage prop 변경 시 selectedUsageTag 업데이트
   useEffect(() => {
@@ -55,29 +51,17 @@ export default function MediaLibraryModal({
     // 1단계: document 타입 제외
     files = files.filter(file => file.type !== 'document')
     
-    // 🆕 1.5단계: 사용 가능한 파일만 필터링 (URL이 있거나 IndexedDB에 저장된 파일만)
     files = files.filter(file => {
-      // URL이 있으면 사용 가능
-      if (file.url && file.url.trim() && file.url !== 'undefined' && !file.url.startsWith('undefined')) {
-        return true
+      const u = (file.url || '').trim()
+      const w = (file.webpUrl || '').trim()
+      const d = (file.dataUrl || '').trim()
+      if (u && u !== 'undefined' && !u.startsWith('undefined')) {
+        if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('blob:') || u.startsWith('data:')) return true
       }
-      // dataUrl이 있으면 사용 가능
-      if (file.dataUrl && file.dataUrl.trim() && file.dataUrl !== 'undefined' && !file.dataUrl.startsWith('undefined')) {
-        return true
+      if (w && w !== 'undefined' && !w.startsWith('undefined')) {
+        if (w.startsWith('http://') || w.startsWith('https://') || w.startsWith('blob:') || w.startsWith('data:')) return true
       }
-      // 🆕 동영상 파일의 경우: IndexedDB에 저장되어 있으면 사용 가능 (dataUrl이 없어도 됨)
-      if (file.type === 'video' && file.storedInIndexedDB) {
-        return true
-      }
-      // IndexedDB에 저장된 파일이면 사용 가능 (나중에 복원 가능)
-      if (file.storedInIndexedDB) {
-        return true
-      }
-      // webpUrl이 있으면 사용 가능
-      if (file.webpUrl && file.webpUrl.trim() && file.webpUrl !== 'undefined' && !file.webpUrl.startsWith('undefined')) {
-        return true
-      }
-      // 모두 없으면 제외
+      if (d && d.startsWith('data:')) return true
       return false
     })
 
@@ -183,334 +167,34 @@ export default function MediaLibraryModal({
     return filteredFiles.slice(start, end)
   }, [filteredFiles, currentPage, itemsPerPage])
 
-  // IndexedDB에서 파일 URL 복원
-  useEffect(() => {
-    if (!isOpen || isRestoringRef.current) return
-    
-    const restoreFiles = async () => {
-      if (isRestoringRef.current) return
-      isRestoringRef.current = true
-      
-      try {
-        // IndexedDB에 저장된 파일 중 URL이 없거나 빈 문자열인 파일만 복원
-        const filesToRestore = mediaFiles.filter(file => {
-          if (!file.storedInIndexedDB) return false
-          // 이미 복원한 파일은 제외
-          if (restoredFileIdsRef.current.has(file.id)) {
-            return false
-          }
-          // URL이 없거나 빈 문자열이거나 blob URL이 아닌 경우만 복원
-          if (!file.url || file.url === '' || !file.url.startsWith('blob:')) {
-            return true
-          }
-          // blob URL이 이미 있으면 복원 완료로 표시
-          restoredFileIdsRef.current.add(file.id)
-          return false
-        })
-        
-        if (filesToRestore.length > 0) {
-          console.log(`📦 [MediaLibraryModal] Restoring ${filesToRestore.length} files from IndexedDB...`)
-          
-          // WebP 파일도 확인 (이미지인 경우)
-          const restorePromises = filesToRestore.map(async (file) => {
-            try {
-              // 이미지인 경우 WebP 파일을 먼저 확인
-              if (file.type === 'image') {
-                // 1. WebP URL이 유효한 blob URL이면 사용
-                if (file.webpUrl && file.webpUrl.startsWith('blob:')) {
-                  restoredFileIdsRef.current.add(file.id)
-                  setRestoredUrls(prev => ({ ...prev, [file.id]: file.webpUrl! }))
-                  console.log(`✅ [MediaLibraryModal] Using existing WebP blob URL for: ${file.name}`)
-                  return
-                }
-                
-                // 2. IndexedDB에서 WebP 파일 복원 시도
-                // 🆕 hasWebp가 true이거나, webpUrl이 있거나, 또는 모든 이미지에 대해 시도 (더 적극적인 복원)
-                const shouldTryWebP = file.hasWebp || file.webpUrl || file.storedInIndexedDB
-                if (shouldTryWebP) {
-                  try {
-                    const webpFileId = file.id + '_webp'
-                    console.log(`🔍 [MediaLibraryModal] Attempting to restore WebP file: ${webpFileId} (hasWebp: ${file.hasWebp}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                    const webpUrl = await indexedDBStorage.getFile(webpFileId)
-                    if (webpUrl && webpUrl.trim()) {
-                      console.log(`✅ [MediaLibraryModal] Restored WebP URL from IndexedDB for: ${file.name} (${file.id})`)
-                      restoredFileIdsRef.current.add(file.id)
-                      setRestoredUrls(prev => ({ ...prev, [file.id]: webpUrl }))
-                      // WebP URL도 업데이트 (hasWebp 플래그 포함)
-                      updateMediaFile(file.id, { 
-                        webpUrl: webpUrl,
-                        url: webpUrl, // WebP를 기본 URL로 사용
-                        hasWebp: true // WebP 파일이 있음을 명시
-                      })
-                      return
-                    } else {
-                      console.log(`ℹ️ [MediaLibraryModal] WebP file ID ${webpFileId} not found in IndexedDB, will try original`)
-                    }
-                  } catch (webpError) {
-                    console.log(`ℹ️ [MediaLibraryModal] WebP restore error for ${file.name}, using original:`, webpError)
-                    // WebP가 없으면 원본으로 계속 진행
-                  }
-                } else {
-                  console.log(`ℹ️ [MediaLibraryModal] File ${file.name} skipping WebP restore (hasWebp: ${file.hasWebp}, webpUrl: ${!!file.webpUrl}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                }
-              }
-              
-              // 3. IndexedDB에서 원본 파일 가져오기
-              const fileUrl = await indexedDBStorage.getFile(file.id)
-              
-              if (fileUrl) {
-                console.log(`✅ [MediaLibraryModal] Restored original URL for file: ${file.name} (${file.id})`)
-                restoredFileIdsRef.current.add(file.id)
-                
-                // 상태 업데이트
-                updateMediaFile(file.id, { url: fileUrl })
-                setRestoredUrls(prev => ({ ...prev, [file.id]: fileUrl }))
-              } else {
-                console.warn(`⚠️ [MediaLibraryModal] File not found in IndexedDB: ${file.name} (${file.id})`)
-              }
-            } catch (error) {
-              console.error(`❌ [MediaLibraryModal] Failed to restore file ${file.name}:`, error)
-            }
-          })
-          
-          await Promise.all(restorePromises)
-          console.log(`✅ [MediaLibraryModal] Completed restoring ${filesToRestore.length} files`)
-        }
-      } catch (error) {
-        console.error('❌ [MediaLibraryModal] Error during file restoration:', error)
-      } finally {
-        isRestoringRef.current = false
-      }
+  const handleSelect = (file: MediaFile) => {
+    const https =
+      (file.webpUrl && /^https?:\/\//i.test(file.webpUrl.trim()) ? file.webpUrl.trim() : '') ||
+      (file.url && /^https?:\/\//i.test(file.url.trim()) ? file.url.trim() : '')
+    const legacy =
+      file.dataUrl?.trim().startsWith('data:') ? file.dataUrl.trim() : ''
+    const blob =
+      file.webpUrl?.startsWith('blob:') || file.url?.startsWith('blob:')
+        ? file.webpUrl?.startsWith('blob:')
+          ? file.webpUrl!
+          : file.url!
+        : ''
+
+    const finalUrl = https || legacy || blob
+    if (!finalUrl) {
+      alert(
+        `No stable URL for "${file.name}". Re-upload this asset in Image Management so it is stored in Supabase Storage.`
+      )
+      return
     }
-    
-    restoreFiles()
-  }, [isOpen, mediaFiles, updateMediaFile])
-
-  const handleSelect = async (file: MediaFile) => {
-    console.log('🎯 [MediaLibraryModal] handleSelect called:', {
-      fileId: file.id,
-      fileName: file.name,
-      fileType: file.type,
-      hasUrl: !!file.url,
-      hasDataUrl: !!file.dataUrl,
-      hasWebpUrl: !!file.webpUrl,
-      storedInIndexedDB: file.storedInIndexedDB
-    })
-
-    // 🆕 Step 1: 기존 URL 확인 (우선순위: 복원된 URL > WebP (blob/data) > dataUrl > url > webpUrl)
-    // 🆕 blob: 또는 data: URL은 indexeddb:// 형식으로 변환하여 사용
-    let selectedUrl = restoredUrls[file.id] || 
-                     (file.webpUrl && (file.webpUrl.startsWith('blob:') || file.webpUrl.startsWith('data:')) ? file.webpUrl : null) ||
-                     file.dataUrl || 
-                     file.url || 
-                     file.webpUrl
-    
-    // 🆕 Step 1-1: blob: 또는 data: URL이면 indexeddb:// 형식으로 변환
-    if (selectedUrl && (selectedUrl.startsWith('blob:') || selectedUrl.startsWith('data:'))) {
-      selectedUrl = `indexeddb://${file.id}`
-      console.log('🔄 [MediaLibraryModal] Converting blob/data URL to indexeddb:// in Step 1:', {
-        originalUrl: restoredUrls[file.id] || file.webpUrl || file.dataUrl || file.url || file.webpUrl,
-        convertedUrl: selectedUrl,
-        fileId: file.id
-      })
+    if (blob && !https) {
+      alert(
+        `This file only has a temporary preview URL. Re-upload "${file.name}" in Image Management to get a permanent public URL.`
+      )
+      return
     }
-
-    // 🆕 Step 2: URL이 없거나 유효하지 않으면 능동적 복원 시도
-    if (!selectedUrl || !selectedUrl.trim() || selectedUrl === 'undefined' || selectedUrl.startsWith('undefined')) {
-      console.log('🔄 [MediaLibraryModal] No valid URL found, starting active restoration...', {
-        fileId: file.id,
-        fileName: file.name,
-        fileType: file.type
-      })
-
-      let restorationSuccess = false
-
-      try {
-        // 🆕 Step 2-1: 이미지인 경우 WebP 파일 먼저 복원 시도 (hasWebp가 true이거나 webpUrl이 있으면 시도)
-        if (file.type === 'image' && (file.hasWebp || file.webpUrl)) {
-          try {
-            const webpFileId = file.id + '_webp'
-            console.log(`🔍 [MediaLibraryModal] Attempting to restore WebP file: ${webpFileId} (hasWebp: ${file.hasWebp})`)
-            const restoredWebpUrl = await indexedDBStorage.getFile(webpFileId)
-            
-            if (restoredWebpUrl && restoredWebpUrl.trim()) {
-              // 🆕 blob: 또는 data: URL이면 indexeddb:// 형식으로 변환
-              let finalWebpUrl = restoredWebpUrl
-              if (restoredWebpUrl.startsWith('blob:') || restoredWebpUrl.startsWith('data:')) {
-                finalWebpUrl = `indexeddb://${file.id}`
-                console.log('🔄 [MediaLibraryModal] Converting restored WebP URL to indexeddb:// format:', {
-                  originalUrl: restoredWebpUrl.substring(0, 50),
-                  convertedUrl: finalWebpUrl
-                })
-              }
-              
-              console.log('✅ [MediaLibraryModal] WebP file restored successfully:', finalWebpUrl)
-              selectedUrl = finalWebpUrl
-              restorationSuccess = true
-              
-              // 🆕 스토어 업데이트 (WebP URL을 webpUrl과 url 모두에 설정, hasWebp 플래그 포함)
-              updateMediaFile(file.id, { 
-                webpUrl: finalWebpUrl, 
-                url: finalWebpUrl,
-                hasWebp: true // WebP 파일이 있음을 명시
-              })
-              setRestoredUrls(prev => ({ ...prev, [file.id]: finalWebpUrl }))
-            } else {
-              console.log('ℹ️ [MediaLibraryModal] WebP file not found in IndexedDB, trying original...')
-            }
-          } catch (webpError) {
-            console.log('ℹ️ [MediaLibraryModal] WebP restore error (will try original):', webpError)
-          }
-        } else if (file.type === 'image') {
-          console.log(`ℹ️ [MediaLibraryModal] File ${file.name} has no WebP (hasWebp: ${file.hasWebp}, webpUrl: ${!!file.webpUrl}), trying original...`)
-        }
-
-        // 🆕 Step 2-2: WebP 복원 실패 또는 이미지가 아닌 경우 원본 파일 복원 시도
-        if (!restorationSuccess) {
-          console.log(`🔍 [MediaLibraryModal] Attempting to restore original file: ${file.id}`)
-          const restoredFileUrl = await indexedDBStorage.getFile(file.id)
-          
-          if (restoredFileUrl && restoredFileUrl.trim()) {
-            // 🆕 blob: 또는 data: URL이면 indexeddb:// 형식으로 변환
-            let finalUrl = restoredFileUrl
-            if (restoredFileUrl.startsWith('blob:') || restoredFileUrl.startsWith('data:')) {
-              finalUrl = `indexeddb://${file.id}`
-              console.log('🔄 [MediaLibraryModal] Converting restored URL to indexeddb:// format:', {
-                originalUrl: restoredFileUrl.substring(0, 50),
-                convertedUrl: finalUrl
-              })
-            }
-            
-            console.log('✅ [MediaLibraryModal] Original file restored successfully:', finalUrl)
-            selectedUrl = finalUrl
-            restorationSuccess = true
-            
-            // 🆕 스토어 업데이트 (indexeddb:// 형식으로 저장)
-            updateMediaFile(file.id, { url: finalUrl })
-            setRestoredUrls(prev => ({ ...prev, [file.id]: finalUrl }))
-          } else {
-            console.warn('⚠️ [MediaLibraryModal] Original file not found in IndexedDB')
-          }
-        }
-      } catch (error) {
-        console.error('❌ [MediaLibraryModal] Failed to restore file from IndexedDB:', error)
-      }
-
-      // 🆕 Step 3: 모든 복원 시도 실패 시 최종 확인 및 에러 처리
-      if (!restorationSuccess && (!selectedUrl || !selectedUrl.trim() || selectedUrl === 'undefined' || selectedUrl.startsWith('undefined'))) {
-        console.warn('⚠️ [MediaLibraryModal] All restoration attempts failed. Checking IndexedDB for file existence...', {
-          fileId: file.id,
-          fileName: file.name,
-          fileType: file.type
-        })
-        
-        try {
-          const allFileIds = await indexedDBStorage.getAllFileIds()
-          const fileExists = allFileIds.includes(file.id) || allFileIds.includes(file.id + '_webp')
-          
-          console.warn('⚠️ [MediaLibraryModal] No URL available after all restoration attempts:', {
-            fileId: file.id,
-            fileName: file.name,
-            fileType: file.type,
-            storedInIndexedDB: file.storedInIndexedDB,
-            fileExistsInIndexedDB: fileExists,
-            totalFilesInIndexedDB: allFileIds.length,
-            availableFileIds: allFileIds.slice(0, 10) // 디버깅을 위해 처음 10개만 표시
-          })
-          
-          // 🆕 파일이 실제로 IndexedDB에 없으면 자동으로 삭제
-          if (!fileExists && !file.storedInIndexedDB) {
-            console.warn(`🗑️ [MediaLibraryModal] Removing unavailable file from store: ${file.name} (${file.id})`)
-            deleteMediaFile(file.id)
-            alert(`The file "${file.name}" is not available and has been removed from the library. Please select another file or re-upload it.`)
-          } else if (fileExists) {
-            // 파일이 IndexedDB에 있지만 복원에 실패한 경우 - 재시도 로직
-            console.warn(`🔄 [MediaLibraryModal] File exists in IndexedDB but restoration failed. Attempting direct blob retrieval...`)
-            try {
-              // 직접 Blob으로 가져와서 URL 생성 시도
-              const blob = await indexedDBStorage.getFileAsBlob(file.id)
-              if (blob) {
-                // 🆕 blob URL을 생성하되, indexeddb:// 형식으로 저장
-                const indexedDbUrl = `indexeddb://${file.id}`
-                selectedUrl = indexedDbUrl
-                restorationSuccess = true
-                updateMediaFile(file.id, { url: indexedDbUrl })
-                setRestoredUrls(prev => ({ ...prev, [file.id]: indexedDbUrl }))
-                console.log('✅ [MediaLibraryModal] Successfully restored file using indexeddb:// format:', indexedDbUrl)
-              } else {
-                // WebP도 시도
-                const webpBlob = await indexedDBStorage.getFileAsBlob(file.id + '_webp')
-                if (webpBlob) {
-                  // 🆕 WebP도 indexeddb:// 형식으로 저장
-                  const indexedDbUrl = `indexeddb://${file.id}`
-                  selectedUrl = indexedDbUrl
-                  restorationSuccess = true
-                  updateMediaFile(file.id, { webpUrl: indexedDbUrl, url: indexedDbUrl, hasWebp: true })
-                  setRestoredUrls(prev => ({ ...prev, [file.id]: indexedDbUrl }))
-                  console.log('✅ [MediaLibraryModal] Successfully restored WebP file using indexeddb:// format:', indexedDbUrl)
-                }
-              }
-            } catch (blobError) {
-              console.error('❌ [MediaLibraryModal] Direct blob retrieval also failed:', blobError)
-            }
-            
-            // 여전히 실패한 경우
-            if (!restorationSuccess) {
-              alert(`Error: Unable to load file "${file.name}". The file exists but cannot be accessed. Please try:\n1. Refreshing the page\n2. Selecting another file\n3. Re-uploading the file`)
-              return
-            }
-          } else {
-            // 파일이 있지만 접근할 수 없는 경우
-            alert(`Error: Unable to load file "${file.name}". The file exists but cannot be accessed. Please try:\n1. Refreshing the page\n2. Selecting another file\n3. Re-uploading the file`)
-            return
-          }
-        } catch (checkError) {
-          console.error('❌ [MediaLibraryModal] Failed to check IndexedDB:', checkError)
-          // IndexedDB 확인 실패 시에도 파일이 없으면 삭제 시도
-          if (!file.storedInIndexedDB && !file.url && !file.dataUrl) {
-            console.warn(`🗑️ [MediaLibraryModal] Removing file with no data from store: ${file.name} (${file.id})`)
-            deleteMediaFile(file.id)
-            alert(`The file "${file.name}" is not available and has been removed from the library. Please select another file.`)
-          } else {
-            alert(`Error: Unable to load file "${file.name}". Please try selecting another file or contact support if the problem persists.`)
-          }
-          return
-        }
-      }
-    }
-
-    // 🆕 Step 4: 유효한 URL이 있으면 onSelect 호출
-    if (selectedUrl && selectedUrl.trim() && selectedUrl !== 'undefined' && !selectedUrl.startsWith('undefined')) {
-      // 🆕 blob: 또는 data: URL인 경우 indexeddb:// 형식으로 변환하여 전달
-      // blob:와 data: URL은 임시 URL이므로 영구적인 indexeddb:// 형식으로 변환
-      let finalUrl = selectedUrl
-      if (selectedUrl.startsWith('blob:') || selectedUrl.startsWith('data:')) {
-        // blob: 또는 data: URL을 indexeddb:// 형식으로 변환
-        finalUrl = `indexeddb://${file.id}`
-        console.log('🔄 [MediaLibraryModal] Converting temporary URL to indexeddb:// format:', {
-          originalUrl: selectedUrl.substring(0, 50),
-          convertedUrl: finalUrl,
-          fileId: file.id,
-          fileType: file.type
-        })
-      }
-      
-      console.log('✅ [MediaLibraryModal] Valid URL found, calling onSelect:', {
-        fileId: file.id,
-        fileName: file.name,
-        originalUrlPrefix: selectedUrl.substring(0, 50),
-        finalUrl: finalUrl
-      })
-      onSelect(finalUrl)
-      onClose()
-    } else {
-      console.error('❌ [MediaLibraryModal] Invalid URL after all attempts:', {
-        fileId: file.id,
-        fileName: file.name,
-        selectedUrl: selectedUrl
-      })
-      alert(`Error: Unable to load file "${file.name}". Please try selecting another file.`)
-    }
+    onSelect(finalUrl)
+    onClose()
   }
 
   // 파일 크기 포맷팅
@@ -650,26 +334,7 @@ export default function MediaLibraryModal({
                 >
                   {file.type === 'image' ? (
                     (() => {
-                      // URL 우선순위: 복원된 URL > WebP (blob) > WebP (기타) > dataUrl > url
-                      const restoredUrl = restoredUrls[file.id]
-                      
-                      // WebP URL 확인 (blob URL이거나 복원된 URL이 WebP인 경우)
-                      let webpUrl: string | null = null
-                      if (file.webpUrl) {
-                        if (file.webpUrl.startsWith('blob:') || file.webpUrl.startsWith('data:')) {
-                          webpUrl = file.webpUrl
-                        }
-                      }
-                      // 복원된 URL이 WebP인지 확인 (blob URL이면 WebP일 가능성)
-                      const isRestoredWebP = restoredUrl && (restoredUrl.includes('webp') || restoredUrl.startsWith('blob:'))
-                      
-                      // 🆕 최종 이미지 URL 결정 (우선순위: 복원된 URL > WebP > dataUrl > url)
-                      // WebP가 있으면 우선 사용, 없으면 원본으로 폴백
-                      const imageUrl = restoredUrl || 
-                                     webpUrl || 
-                                     file.webpUrl || 
-                                     file.dataUrl || 
-                                     file.url
+                      const imageUrl = file.webpUrl || file.url || file.dataUrl || ''
                       const isValidUrl = imageUrl && 
                                         typeof imageUrl === 'string' && 
                                         imageUrl.trim() !== '' && 
@@ -719,9 +384,7 @@ export default function MediaLibraryModal({
                   ) : file.type === 'video' ? (
                     <div className="w-full h-20 sm:h-24 md:h-28 lg:h-32 bg-gray-100 flex flex-col items-center justify-center relative">
                       {(() => {
-                        // 복원된 URL이 있으면 우선 사용
-                        const restoredUrl = restoredUrls[file.id]
-                        const videoUrl = restoredUrl || file.dataUrl || file.url
+                        const videoUrl = file.url || file.dataUrl || ''
                         const isValidUrl = videoUrl && 
                                           typeof videoUrl === 'string' && 
                                           videoUrl.trim() !== '' && 
@@ -783,19 +446,7 @@ export default function MediaLibraryModal({
                     {/* Thumbnail */}
                     <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                       {file.type === 'image' ? (() => {
-                        // URL 우선순위: 복원된 URL > WebP (blob) > WebP (기타) > dataUrl > url
-                        const restoredUrl = restoredUrls[file.id]
-                        
-                        // WebP URL 확인 (blob URL이거나 복원된 URL이 WebP인 경우)
-                        let webpUrl: string | null = null
-                        if (file.webpUrl) {
-                          if (file.webpUrl.startsWith('blob:') || file.webpUrl.startsWith('data:')) {
-                            webpUrl = file.webpUrl
-                          }
-                        }
-                        
-                        // 최종 이미지 URL 결정
-                        const imageUrl = restoredUrl || webpUrl || file.dataUrl || file.url || file.webpUrl
+                        const imageUrl = file.webpUrl || file.url || file.dataUrl || ''
                         const isValidUrl = imageUrl && 
                                           typeof imageUrl === 'string' && 
                                           imageUrl.trim() !== '' && 
@@ -847,9 +498,7 @@ export default function MediaLibraryModal({
                       })() : file.type === 'video' ? (
                         <div className="w-full h-full flex items-center justify-center bg-gray-200 relative">
                           {(() => {
-                            // 복원된 URL이 있으면 우선 사용
-                            const restoredUrl = restoredUrls[file.id]
-                            const videoUrl = restoredUrl || file.dataUrl || file.url
+                            const videoUrl = file.url || file.dataUrl || ''
                             const isValidVideoUrl = videoUrl && 
                                                    typeof videoUrl === 'string' && 
                                                    videoUrl.trim() !== '' && 

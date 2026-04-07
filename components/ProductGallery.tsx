@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import ImageGallery from 'react-image-gallery'
 import 'react-image-gallery/styles/image-gallery.css'
 import { useMediaStore } from '@/lib/mediaStore'
-import { indexedDBStorage } from '@/lib/indexedDBStorage'
 import { ImageIcon } from 'lucide-react'
 
 function isValidFallbackUrl(url: unknown): url is string {
@@ -34,7 +33,7 @@ export default function ProductGallery({
   slideInterval = 3000,
   fallbackImage
 }: ProductGalleryProps) {
-  const { getMediaFilesByProduct, mediaFiles, updateMediaFile, getMediaFileById, refreshMediaFilesFromStorage } = useMediaStore()
+  const { getMediaFilesByProduct, mediaFiles, getMediaFileById, refreshMediaFilesFromStorage } = useMediaStore()
 
   // 마운트 시 localStorage에서 미디어 스토어 즉시 동기화 (persist 복원 전에도 연결 이미지 목록 확보)
   useEffect(() => {
@@ -58,10 +57,7 @@ export default function ProductGallery({
     return []
   })
   const [isLoading, setIsLoading] = useState(() => !isValidFallbackUrl(fallbackImage))
-  const [restoredUrls, setRestoredUrls] = useState<Record<string, string>>({})
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set())
-  const isRestoringRef = useRef(false)
-  const restoredFileIdsRef = useRef(new Set<string>())
   const retryAttemptsRef = useRef<Record<string, number>>({})
 
   // productId로 연결된 미디어 가져오기 (이미지 + 동영상)
@@ -73,101 +69,6 @@ export default function ProductGallery({
     return media.filter(file => file.type === 'image' || file.type === 'video')
   }, [productId, getMediaFilesByProduct, mediaFiles]) // mediaFiles를 의존성에 추가하여 변경 감지
 
-  // IndexedDB에서 파일 URL 복원
-  useEffect(() => {
-    if (!productId || isRestoringRef.current) return
-
-    const restoreFiles = async () => {
-      if (isRestoringRef.current) return
-      isRestoringRef.current = true
-
-      try {
-        const filesToRestore = productMedia.filter(file => {
-          if (!file.storedInIndexedDB) return false
-          if (restoredFileIdsRef.current.has(file.id)) {
-            return false
-          }
-          // URL이 없거나 빈 문자열이거나 blob URL이 아닌 경우만 복원
-          if (!file.url || file.url === '' || !file.url.startsWith('blob:')) {
-            return true
-          }
-          restoredFileIdsRef.current.add(file.id)
-          return false
-        })
-
-        if (filesToRestore.length > 0) {
-          console.log(`📦 [ProductGallery] Restoring ${filesToRestore.length} files from IndexedDB...`)
-
-          const restorePromises = filesToRestore.map(async (file) => {
-            try {
-              // 먼저 WebP 파일 확인 (이미지인 경우)
-              if (file.type === 'image') {
-                // 1. WebP URL이 유효한 blob URL이면 사용
-                if (file.webpUrl && (file.webpUrl.startsWith('blob:') || file.webpUrl.startsWith('data:'))) {
-                  restoredFileIdsRef.current.add(file.id)
-                  setRestoredUrls(prev => ({ ...prev, [file.id]: file.webpUrl! }))
-                  updateMediaFile(file.id, { webpUrl: file.webpUrl! })
-                  return
-                }
-
-                // 2. IndexedDB에서 WebP 파일 복원 시도
-                // 🆕 hasWebp가 true이거나, webpUrl이 있거나, 또는 모든 이미지에 대해 시도 (더 적극적인 복원)
-                const shouldTryWebP = file.hasWebp || file.webpUrl || file.storedInIndexedDB
-                if (shouldTryWebP) {
-                  try {
-                    const webpFileId = file.id + '_webp'
-                    console.log(`🔍 [ProductGallery] Attempting to restore WebP file: ${webpFileId} (hasWebp: ${file.hasWebp}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                    const webpUrl = await indexedDBStorage.getFile(webpFileId)
-                    if (webpUrl && webpUrl.trim()) {
-                      console.log(`✅ [ProductGallery] Restored WebP URL for file: ${file.name} (${file.id})`)
-                      restoredFileIdsRef.current.add(file.id)
-                      setRestoredUrls(prev => ({ ...prev, [file.id]: webpUrl }))
-                      updateMediaFile(file.id, { 
-                        webpUrl: webpUrl,
-                        url: webpUrl, // WebP를 기본 URL로 사용
-                        hasWebp: true // WebP 파일이 있음을 명시
-                      })
-                      return
-                    } else {
-                      console.log(`ℹ️ [ProductGallery] WebP file ID ${webpFileId} not found in IndexedDB, will try original`)
-                    }
-                  } catch (webpError) {
-                    console.log(`ℹ️ [ProductGallery] WebP restore error for ${file.name}, using original:`, webpError)
-                  }
-                } else {
-                  console.log(`ℹ️ [ProductGallery] File ${file.name} skipping WebP restore (hasWebp: ${file.hasWebp}, webpUrl: ${!!file.webpUrl}, storedInIndexedDB: ${file.storedInIndexedDB})`)
-                }
-              }
-
-              // 3. 원본 파일 복원 (WebP가 없을 때)
-              const fileUrl = await indexedDBStorage.getFile(file.id)
-
-              if (fileUrl) {
-                console.log(`✅ [ProductGallery] Restored URL for file: ${file.name} (${file.id})`)
-                restoredFileIdsRef.current.add(file.id)
-                updateMediaFile(file.id, { url: fileUrl })
-                setRestoredUrls(prev => ({ ...prev, [file.id]: fileUrl }))
-              } else {
-                console.warn(`⚠️ [ProductGallery] File not found in IndexedDB: ${file.name} (${file.id})`)
-              }
-            } catch (error) {
-              console.error(`❌ [ProductGallery] Failed to restore file ${file.name}:`, error)
-            }
-          })
-
-          await Promise.all(restorePromises)
-          console.log(`✅ [ProductGallery] Completed restoring ${filesToRestore.length} files`)
-        }
-      } catch (error) {
-        console.error('❌ [ProductGallery] Error during file restoration:', error)
-      } finally {
-        isRestoringRef.current = false
-      }
-    }
-
-    restoreFiles()
-  }, [productId, productMedia, updateMediaFile])
-
   // media-files-updated 이벤트 리스너 (새로고침 없이 갤러리 업데이트)
   useEffect(() => {
     const handleMediaFilesUpdate = (e: CustomEvent) => {
@@ -176,11 +77,6 @@ export default function ProductGallery({
       // 이 상품과 관련된 파일이 업데이트된 경우에만 갤러리 새로고침
       if (eventDetail?.productId === productId || !eventDetail?.productId) {
         console.log('🔄 [ProductGallery] Media files updated, refreshing gallery:', eventDetail)
-        
-        // 복원된 파일 ID 초기화하여 다시 복원 시도
-        if (eventDetail?.fileId) {
-          restoredFileIdsRef.current.delete(eventDetail.fileId)
-        }
         
         // 강제 리렌더링을 위해 상태 업데이트 (productImages가 변경되면 자동으로 갤러리 업데이트됨)
         // mediaFiles가 변경되면 useMemo가 자동으로 재계산되므로 추가 작업 불필요
@@ -196,72 +92,28 @@ export default function ProductGallery({
     }
   }, [productId])
 
-  // 🆕 indexeddb:// URL을 blob URL로 변환하는 함수
-  const convertIndexedDbUrl = async (url: string): Promise<string | null> => {
-    if (!url || !url.startsWith('indexeddb://')) {
-      return url
-    }
-    
-    try {
-      const fileId = url.replace('indexeddb://', '')
-      const blobUrl = await indexedDBStorage.getFile(fileId)
-      if (blobUrl) {
-        console.log(`✅ [ProductGallery] Converted indexeddb:// URL to blob URL: ${fileId}`)
-        return blobUrl
-      } else {
-        console.warn(`⚠️ [ProductGallery] File not found in IndexedDB: ${fileId}`)
-        return null
-      }
-    } catch (error) {
-      console.error(`❌ [ProductGallery] Failed to convert indexeddb:// URL:`, error)
-      return null
-    }
-  }
-
-  // 이미지 URL 가져오기 함수 (백업 경로 포함, indexeddb:// 지원)
-  const getImageUrlWithFallback = async (file: any, restoredUrl?: string): Promise<{ imageUrl: string | null; originalUrl: string | null; triedUrls: string[] }> => {
+  const getImageUrlWithFallback = async (
+    file: any,
+    _restoredUrl?: string
+  ): Promise<{ imageUrl: string | null; originalUrl: string | null; triedUrls: string[] }> => {
     const triedUrls: string[] = []
-    
-    // URL 우선순위: 복원된 URL > WebP (blob/data) > WebP (기타) > 원본 URL > dataUrl
-    const urlPriority = [
-      restoredUrl,
-      file.webpUrl && (file.webpUrl.startsWith('blob:') || file.webpUrl.startsWith('data:')) ? file.webpUrl : null,
-      file.webpUrl,
-      file.url,
-      file.dataUrl
-    ].filter(Boolean) as string[]
-    
-    // 각 URL의 유효성 검사 및 indexeddb:// 변환
+    const urlPriority = [file.webpUrl, file.url, file.dataUrl].filter(Boolean) as string[]
+
     for (const url of urlPriority) {
-      if (!url) continue
-      
-      const isValid = url &&
-        typeof url === 'string' &&
-        url.trim() !== '' &&
-        url !== 'undefined' &&
-        !url.startsWith('undefined')
-      
-      if (!isValid) continue
-      
-      // indexeddb:// URL인 경우 blob URL로 변환
-      let finalUrl = url
-      if (url.startsWith('indexeddb://')) {
-        const convertedUrl = await convertIndexedDbUrl(url)
-        if (convertedUrl) {
-          finalUrl = convertedUrl
-          triedUrls.push(finalUrl)
-          return { imageUrl: finalUrl, originalUrl: finalUrl, triedUrls }
-        } else {
-          // 변환 실패 시 다음 URL 시도
-          triedUrls.push(url) // 원본 URL도 기록
-          continue
-        }
-      } else {
-        triedUrls.push(finalUrl)
-        return { imageUrl: finalUrl, originalUrl: finalUrl, triedUrls }
+      if (
+        !url ||
+        typeof url !== 'string' ||
+        url.trim() === '' ||
+        url === 'undefined' ||
+        url.startsWith('undefined') ||
+        url.startsWith('indexeddb://')
+      ) {
+        continue
       }
+      triedUrls.push(url)
+      return { imageUrl: url, originalUrl: url, triedUrls }
     }
-    
+
     return { imageUrl: null, originalUrl: null, triedUrls }
   }
 
@@ -287,34 +139,7 @@ export default function ProductGallery({
         return null
       }
       
-      // 2. IndexedDB에서 복원 시도 (WebP 우선)
-      if (file.type === 'image' && file.storedInIndexedDB) {
-        try {
-          // WebP 파일 복원 시도
-          const webpFileId = file.id + '_webp'
-          const webpUrl = await indexedDBStorage.getFile(webpFileId)
-          if (webpUrl) {
-            console.log(`✅ [ProductGallery] Recovered WebP URL from IndexedDB: ${fileId}`)
-            setRestoredUrls(prev => ({ ...prev, [fileId]: webpUrl }))
-            updateMediaFile(fileId, { webpUrl: webpUrl })
-            return webpUrl
-          }
-        } catch (webpError) {
-          console.log(`ℹ️ [ProductGallery] WebP recovery failed, trying original: ${fileId}`)
-        }
-        
-        // 원본 파일 복원 시도
-        const fileUrl = await indexedDBStorage.getFile(file.id)
-        if (fileUrl) {
-          console.log(`✅ [ProductGallery] Recovered original URL from IndexedDB: ${fileId}`)
-          setRestoredUrls(prev => ({ ...prev, [fileId]: fileUrl }))
-          updateMediaFile(fileId, { url: fileUrl })
-          return fileUrl
-        }
-      }
-      
-      // 3. 기존 URL 중 유효한 것 찾기
-      const { imageUrl } = await getImageUrlWithFallback(file, restoredUrls[fileId])
+      const { imageUrl } = await getImageUrlWithFallback(file)
       if (imageUrl) {
         console.log(`✅ [ProductGallery] Found valid URL in existing data: ${fileId}`)
         return imageUrl
@@ -343,24 +168,24 @@ export default function ProductGallery({
           return
         }
 
-        // ✅ fallback도 indexeddb://면 먼저 blob URL로 변환해서 "첫 클릭 진입"에서도 바로 보이게 함
         setIsLoading(true)
-        let finalFallback = fallbackImage
-        if (fallbackImage.startsWith('indexeddb://')) {
-          const converted = await convertIndexedDbUrl(fallbackImage)
-          if (converted) finalFallback = converted
-        }
+        const finalFallback =
+          fallbackImage.startsWith('indexeddb://') ? '' : fallbackImage
 
         if (!cancelled) {
-          setGalleryImages([{
-            original: finalFallback,
-            thumbnail: finalFallback,
-            originalAlt: 'Product image',
-            thumbnailAlt: 'Product thumbnail',
-            description: '',
-            originalClass: 'gallery-image',
-            thumbnailClass: 'gallery-thumbnail'
-          }])
+          if (finalFallback) {
+            setGalleryImages([{
+              original: finalFallback,
+              thumbnail: finalFallback,
+              originalAlt: 'Product image',
+              thumbnailAlt: 'Product thumbnail',
+              description: '',
+              originalClass: 'gallery-image',
+              thumbnailClass: 'gallery-thumbnail'
+            }])
+          } else {
+            setGalleryImages([])
+          }
           setIsLoading(false)
         }
       }
@@ -377,22 +202,18 @@ export default function ProductGallery({
       productId,
       productMediaCount: productMedia.length,
       fallbackImage: fallbackImage ? 'exists' : 'none',
-      restoredUrlsCount: Object.keys(restoredUrls).length,
       failedImageIdsCount: failedImageIds.size
     })
-    
-    // 미디어 URL 준비 (이미지 + 동영상, 복원된 URL > WebP 우선 > 원본, indexeddb:// 변환 포함)
+
     const processMedia = async () => {
       const formattedImagesPromises = productMedia
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) // order 순서대로 정렬
         .map(async (file) => {
-          const restoredUrl = restoredUrls[file.id]
-          const { imageUrl, originalUrl, triedUrls } = await getImageUrlWithFallback(file, restoredUrl)
+          const { imageUrl, originalUrl, triedUrls } = await getImageUrlWithFallback(file)
         
         // URL 유효성 검사
         if (!imageUrl || !originalUrl) {
           console.warn(`⚠️ [ProductGallery] Invalid URL for file: ${file.name || file.id}`, {
-            restoredUrl,
             webpUrl: file.webpUrl,
             url: file.url,
             dataUrl: file.dataUrl ? 'exists' : 'none',
@@ -456,18 +277,8 @@ export default function ProductGallery({
                                 fallbackImage !== 'undefined' &&
                                 !fallbackImage.startsWith('undefined')
         
-        if (isValidFallback) {
-          // 🆕 fallback 이미지도 indexeddb:// URL인 경우 변환
-          let finalFallbackImage = fallbackImage
-          if (fallbackImage.startsWith('indexeddb://')) {
-            const convertedFallback = await convertIndexedDbUrl(fallbackImage)
-            if (convertedFallback) {
-              finalFallbackImage = convertedFallback
-            } else {
-              console.warn('⚠️ [ProductGallery] Failed to convert fallback indexeddb:// URL')
-            }
-          }
-          
+        if (isValidFallback && !fallbackImage.startsWith('indexeddb://')) {
+          const finalFallbackImage = fallbackImage
           console.log('✅ [ProductGallery] Using fallback image:', finalFallbackImage)
           formattedImages.push({
             original: finalFallbackImage,
@@ -499,7 +310,7 @@ export default function ProductGallery({
     }
     
     processMedia()
-  }, [productMedia, fallbackImage, productId, restoredUrls])
+  }, [productMedia, fallbackImage, productId])
 
   // 이미지가 없을 때
   if (isLoading) {
@@ -585,56 +396,25 @@ export default function ProductGallery({
                     fileName,
                     backupUrlsCount: backupUrls.length
                   })
-                  
-                  // 🆕 0단계: indexeddb:// URL인 경우 변환 시도
-                  if (currentSrc && currentSrc.startsWith('indexeddb://')) {
-                    console.log(`🔄 [ProductGallery] Converting indexeddb:// URL: ${currentSrc}`)
-                    const convertedUrl = await convertIndexedDbUrl(currentSrc)
-                    if (convertedUrl) {
-                      console.log(`✅ [ProductGallery] Successfully converted indexeddb:// URL`)
-                      img.src = convertedUrl
-                      // 복원된 URL로 상태 업데이트
-                      if (fileId) {
-                        setRestoredUrls(prev => ({ ...prev, [fileId]: convertedUrl }))
-                      }
-                      return
-                    }
-                  }
-                  
-                  // 1단계: 백업 URL 목록에서 다음 URL 시도
+
                   if (backupUrls.length > 0) {
                     const nextUrlIndex = backupUrls.findIndex((url: string) => url === currentSrc) + 1
                     if (nextUrlIndex < backupUrls.length) {
-                      let nextUrl = backupUrls[nextUrlIndex]
-                      // 🆕 백업 URL도 indexeddb://인 경우 변환
-                      if (nextUrl.startsWith('indexeddb://')) {
-                        const convertedUrl = await convertIndexedDbUrl(nextUrl)
-                        if (convertedUrl) {
-                          nextUrl = convertedUrl
-                        }
+                      const nextUrl = backupUrls[nextUrlIndex]
+                      if (!nextUrl.startsWith('indexeddb://')) {
+                        console.log(`🔄 [ProductGallery] Trying backup URL ${nextUrlIndex + 1}/${backupUrls.length}`)
+                        img.src = nextUrl
+                        return
                       }
-                      console.log(`🔄 [ProductGallery] Trying backup URL ${nextUrlIndex + 1}/${backupUrls.length}: ${nextUrl.substring(0, 50)}...`)
-                      img.src = nextUrl
-                      return
                     }
                   }
-                  
-                  // 2단계: 썸네일 URL 시도 (다른 경우)
-                  if (item.thumbnail && item.thumbnail !== currentSrc) {
-                    let thumbnailUrl = item.thumbnail
-                    // 🆕 썸네일 URL도 indexeddb://인 경우 변환
-                    if (thumbnailUrl.startsWith('indexeddb://')) {
-                      const convertedUrl = await convertIndexedDbUrl(thumbnailUrl)
-                      if (convertedUrl) {
-                        thumbnailUrl = convertedUrl
-                      }
-                    }
+
+                  if (item.thumbnail && item.thumbnail !== currentSrc && !String(item.thumbnail).startsWith('indexeddb://')) {
                     console.log(`🔄 [ProductGallery] Trying thumbnail URL: ${safeAlt}`)
-                    img.src = thumbnailUrl
+                    img.src = item.thumbnail
                     return
                   }
-                  
-                  // 3단계: 자동 복구 시도 (mediaStore에서 재조회)
+
                   if (fileId) {
                     console.log(`🔄 [ProductGallery] Attempting automatic recovery for: ${fileId}`)
                     const recoveredUrl = await recoverImage(fileId, fileName)
@@ -642,8 +422,6 @@ export default function ProductGallery({
                     if (recoveredUrl) {
                       console.log(`✅ [ProductGallery] Image recovered successfully: ${fileId}`)
                       img.src = recoveredUrl
-                      // 복원된 URL로 상태 업데이트하여 다음 렌더링에 반영
-                      setRestoredUrls(prev => ({ ...prev, [fileId]: recoveredUrl }))
                       return
                     }
                   }
@@ -708,7 +486,6 @@ export default function ProductGallery({
                     const recoveredUrl = await recoverImage(fileId)
                     if (recoveredUrl) {
                       img.src = recoveredUrl
-                      setRestoredUrls(prev => ({ ...prev, [fileId]: recoveredUrl }))
                       return
                     }
                   }
