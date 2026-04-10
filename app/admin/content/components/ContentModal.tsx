@@ -13,6 +13,11 @@ interface ContentModalProps {
   section: string
 }
 
+function normalizeOrder(order: unknown): number {
+  const n = typeof order === 'number' ? order : Number(order)
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+}
+
 export default function ContentModal({ isOpen, onClose, onSave, content, section }: ContentModalProps) {
   const [formData, setFormData] = useState<Partial<ContentItem>>({
     type: 'text',
@@ -33,7 +38,10 @@ export default function ContentModal({ isOpen, onClose, onSave, content, section
 
   useEffect(() => {
     if (content) {
-      setFormData(content)
+      setFormData({
+        ...content,
+        order: normalizeOrder(content.order),
+      })
     } else {
       setFormData({
         type: 'text',
@@ -70,7 +78,7 @@ export default function ContentModal({ isOpen, onClose, onSave, content, section
       content: formData.content,
       mediaUrl: formData.mediaUrl,
       linkUrl: formData.linkUrl,
-      order: formData.order || 1,
+      order: normalizeOrder(formData.order),
       isActive: formData.isActive ?? true,
       buttonStyle: formData.buttonStyle,
       target: formData.target,
@@ -136,8 +144,20 @@ export default function ContentModal({ isOpen, onClose, onSave, content, section
               </label>
               <input
                 type="number"
-                value={formData.order}
-                onChange={(e) => handleInputChange('order', parseInt(e.target.value))}
+                value={
+                  formData.order != null && Number.isFinite(Number(formData.order))
+                    ? formData.order
+                    : ''
+                }
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === '') {
+                    handleInputChange('order', 1)
+                    return
+                  }
+                  const n = parseInt(raw, 10)
+                  handleInputChange('order', Number.isFinite(n) ? n : 1)
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 min="1"
               />

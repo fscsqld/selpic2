@@ -3566,8 +3566,162 @@ const defaultSubcategoryItems: SubcategoryItem[] = [
   }
 ]
 
-/** Zustand persist merge + Supabase 원격 payload 병합에 공통 사용 */
-export function mergePersistedSiteConfig(persistedState: any, currentState: ContentStore): any {
+/** Zustand `partialize`와 동일 — Supabase autosave에서 재사용 */
+export function partializedSiteConfigForPersist(state: ContentStore): Record<string, unknown> {
+  return {
+    contentItems: state.contentItems.map((item) => ({
+      ...item,
+      createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+    })),
+    sidebarMenuItems: state.sidebarMenuItems.map((item) => ({
+      ...item,
+      createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+    })),
+    heroSlides: state.heroSlides.map((slide) => ({
+      ...slide,
+      createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+      updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
+    })),
+    categoryHeroSlides: (state.categoryHeroSlides || []).map((slide) => ({
+      ...slide,
+      createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
+      updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
+    })),
+    categoryItems: state.categoryItems.map((item) => ({
+      ...item,
+      createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+    })),
+    subcategoryItems: (state.subcategoryItems || []).map((item: any) => ({
+      ...item,
+      createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
+    })),
+    promoCodes: (state.promoCodes || []).map((code: any) => ({
+      ...code,
+      startDate: code.startDate instanceof Date ? code.startDate.toISOString() : code.startDate,
+      endDate: code.endDate instanceof Date ? code.endDate.toISOString() : code.endDate,
+      createdAt: code.createdAt instanceof Date ? code.createdAt.toISOString() : code.createdAt,
+      updatedAt: code.updatedAt instanceof Date ? code.updatedAt.toISOString() : code.updatedAt
+    })),
+    paymentOptions: (state.paymentOptions || []).map((option: any) => ({
+      ...option,
+      createdAt: option.createdAt instanceof Date ? option.createdAt.toISOString() : option.createdAt,
+      updatedAt: option.updatedAt instanceof Date ? option.updatedAt.toISOString() : option.updatedAt,
+      bankAccounts: option.bankAccounts
+        ? option.bankAccounts.map((acc: any) => ({
+            ...acc,
+            createdAt: acc.createdAt instanceof Date ? acc.createdAt.toISOString() : acc.createdAt,
+            updatedAt: acc.updatedAt instanceof Date ? acc.updatedAt.toISOString() : acc.updatedAt
+          }))
+        : undefined
+    })),
+    shippingOptions: (state.shippingOptions || []).map((option: any) => ({
+      ...option,
+      createdAt: option.createdAt instanceof Date ? option.createdAt.toISOString() : option.createdAt,
+      updatedAt: option.updatedAt instanceof Date ? option.updatedAt.toISOString() : option.updatedAt
+    })),
+    pickupLocations: (state.pickupLocations || []).map((location: any) => ({
+      ...location,
+      createdAt: location.createdAt instanceof Date ? location.createdAt.toISOString() : location.createdAt,
+      updatedAt: location.updatedAt instanceof Date ? location.updatedAt.toISOString() : location.updatedAt
+    })),
+    vipGradeBenefits: (state.vipGradeBenefits || []).map((benefit: any) => ({
+      ...benefit,
+      createdAt: benefit.createdAt instanceof Date ? benefit.createdAt.toISOString() : benefit.createdAt,
+      updatedAt: benefit.updatedAt instanceof Date ? benefit.updatedAt.toISOString() : benefit.updatedAt,
+      eventStartDate: benefit.eventStartDate instanceof Date ? benefit.eventStartDate.toISOString() : benefit.eventStartDate,
+      eventEndDate: benefit.eventEndDate instanceof Date ? benefit.eventEndDate.toISOString() : benefit.eventEndDate
+    })),
+    vipGradeConfigs: (state.vipGradeConfigs || []).map((config: any) => ({
+      ...config,
+      createdAt: config.createdAt instanceof Date ? config.createdAt.toISOString() : config.createdAt,
+      updatedAt: config.updatedAt instanceof Date ? config.updatedAt.toISOString() : config.updatedAt
+    })),
+    heroSliderSettings: state.heroSliderSettings,
+    heroSlideTemplates: (state.heroSlideTemplates || []).map((template: any) => ({
+      ...template,
+      createdAt: template.createdAt instanceof Date ? template.createdAt.toISOString() : template.createdAt,
+      updatedAt: template.updatedAt instanceof Date ? template.updatedAt.toISOString() : template.updatedAt
+    })),
+    freeShippingSettings: state.freeShippingSettings
+  }
+}
+
+function contentItemUpdatedAtMs(item: { updatedAt?: Date | string } | undefined): number {
+  if (!item?.updatedAt) return 0
+  const u = item.updatedAt
+  if (u instanceof Date) return u.getTime()
+  if (typeof u === 'string') return new Date(u).getTime() || 0
+  return 0
+}
+
+/**
+ * Merge id-keyed records from remote vs local by `updatedAt` (last-write-wins per id).
+ * Supabase sync must use this so a stale `site_configs` row cannot wipe edits that exist
+ * in localStorage (e.g. after refresh, saves still in flight, or failed upsert).
+ */
+function mergeRecordArraysByLastWrite(remoteItems: any[] | undefined, localItems: any[] | undefined): any[] {
+  const remote = Array.isArray(remoteItems) ? remoteItems : []
+  const local = Array.isArray(localItems) ? localItems : []
+  const localById = new Map<string, any>()
+  for (const item of local) {
+    if (item?.id != null) localById.set(String(item.id), item)
+  }
+
+  const mergedById = new Map<string, any>()
+  const remoteOrder: string[] = []
+
+  for (const item of remote) {
+    const id = item?.id != null ? String(item.id) : ''
+    if (!id) continue
+    if (!remoteOrder.includes(id)) remoteOrder.push(id)
+
+    const localItem = localById.get(id)
+    if (!localItem) {
+      mergedById.set(id, item)
+      continue
+    }
+    const localMs = contentItemUpdatedAtMs(localItem)
+    const remoteMs = contentItemUpdatedAtMs(item)
+    mergedById.set(id, localMs >= remoteMs ? localItem : item)
+  }
+
+  for (const item of local) {
+    const id = item?.id != null ? String(item.id) : ''
+    if (!id || mergedById.has(id)) continue
+    mergedById.set(id, item)
+  }
+
+  const seen = new Set<string>()
+  const result: any[] = []
+  for (const id of remoteOrder) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    const m = mergedById.get(id)
+    if (m) result.push(m)
+  }
+  for (const item of local) {
+    const id = item?.id != null ? String(item.id) : ''
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    const m = mergedById.get(id)
+    if (m) result.push(m)
+  }
+  return result
+}
+
+/**
+ * Zustand persist merge + optional Supabase remote payload merge.
+ * @param fromRemoteSupabaseSync When true, `persistedState` is treated as remote: array fields merge by per-record `updatedAt` so localStorage edits survive refresh if newer than remote.
+ */
+export function mergePersistedSiteConfig(
+  persistedState: any,
+  currentState: ContentStore,
+  fromRemoteSupabaseSync?: boolean
+): any {
   // slide 효과가 있으면 fade로 변환
   if (persistedState?.heroSliderSettings?.effect === 'slide') {
     persistedState.heroSliderSettings.effect = 'fade'
@@ -3585,39 +3739,76 @@ export function mergePersistedSiteConfig(persistedState: any, currentState: Cont
   const merged: any = {
     ...currentState,
     contentItems: dedupeHeaderLogoImageItems(
-      persistedState?.contentItems || currentState.contentItems
+      fromRemoteSupabaseSync
+        ? mergeRecordArraysByLastWrite(persistedState?.contentItems, currentState.contentItems)
+        : persistedState?.contentItems || currentState.contentItems
     ),
-    sidebarMenuItems: persistedState?.sidebarMenuItems || currentState.sidebarMenuItems,
-    heroSlides: persistedState?.heroSlides || currentState.heroSlides,
+    sidebarMenuItems: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.sidebarMenuItems, currentState.sidebarMenuItems)
+      : persistedState?.sidebarMenuItems || currentState.sidebarMenuItems,
+    heroSlides: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.heroSlides, currentState.heroSlides)
+      : persistedState?.heroSlides || currentState.heroSlides,
     heroSliderSettings: (() => {
+      if (fromRemoteSupabaseSync) {
+        const settings = {
+          ...(persistedState?.heroSliderSettings || {}),
+          ...(currentState.heroSliderSettings || {}),
+        }
+        if (settings?.effect === 'slide') {
+          return { ...settings, effect: 'fade' }
+        }
+        return settings
+      }
       const settings = persistedState?.heroSliderSettings || currentState.heroSliderSettings
       if (settings?.effect === 'slide') {
         return { ...settings, effect: 'fade' }
       }
       return settings
     })(),
-    heroSlideTemplates: persistedState?.heroSlideTemplates || currentState.heroSlideTemplates,
-    categoryHeroSlides: (persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0)
-      ? persistedState.categoryHeroSlides
-      : defaultCategoryHeroSlides,
-    categoryItems: (persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0)
-      ? persistedState.categoryItems
-      : currentState.categoryItems,
+    heroSlideTemplates: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.heroSlideTemplates, currentState.heroSlideTemplates)
+      : persistedState?.heroSlideTemplates || currentState.heroSlideTemplates,
+    categoryHeroSlides: fromRemoteSupabaseSync
+      ? (() => {
+          const m = mergeRecordArraysByLastWrite(
+            persistedState?.categoryHeroSlides,
+            currentState.categoryHeroSlides
+          )
+          return m.length > 0 ? m : defaultCategoryHeroSlides
+        })()
+      : persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0
+        ? persistedState.categoryHeroSlides
+        : defaultCategoryHeroSlides,
+    categoryItems: fromRemoteSupabaseSync
+      ? (() => {
+          const m = mergeRecordArraysByLastWrite(persistedState?.categoryItems, currentState.categoryItems)
+          return m.length > 0 ? m : currentState.categoryItems
+        })()
+      : persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0
+        ? persistedState.categoryItems
+        : currentState.categoryItems,
     subcategoryItems: migrateLegacyBespokeLabelsSubcategoryItems(
-      persistedState?.subcategoryItems &&
-        Array.isArray(persistedState.subcategoryItems) &&
-        persistedState.subcategoryItems.length >= 0
-        ? persistedState.subcategoryItems
-        : currentState.subcategoryItems
+      fromRemoteSupabaseSync
+        ? mergeRecordArraysByLastWrite(persistedState?.subcategoryItems, currentState.subcategoryItems)
+        : persistedState?.subcategoryItems &&
+            Array.isArray(persistedState.subcategoryItems) &&
+            persistedState.subcategoryItems.length >= 0
+          ? persistedState.subcategoryItems
+          : currentState.subcategoryItems
     ),
-    promoCodes: hasPersistedPromoCodes
-      ? persistedState.promoCodes
-      : currentState.promoCodes,
+    promoCodes: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.promoCodes, currentState.promoCodes)
+      : hasPersistedPromoCodes
+        ? persistedState.promoCodes
+        : currentState.promoCodes,
     paymentOptions: (() => {
       const mergedOpts = mergeStripePaymentOptionIfMissing(
-        (persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0)
-          ? persistedState.paymentOptions
-          : currentState.paymentOptions
+        fromRemoteSupabaseSync
+          ? mergeRecordArraysByLastWrite(persistedState?.paymentOptions, currentState.paymentOptions)
+          : persistedState?.paymentOptions && Array.isArray(persistedState.paymentOptions) && persistedState.paymentOptions.length >= 0
+            ? persistedState.paymentOptions
+            : currentState.paymentOptions
       )
 
       const opts = Array.isArray(mergedOpts) ? mergedOpts : currentState.paymentOptions
@@ -3637,26 +3828,48 @@ export function mergePersistedSiteConfig(persistedState: any, currentState: Cont
 
       return opts
     })(),
-    shippingOptions: (persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0)
-      ? persistedState.shippingOptions
-      : currentState.shippingOptions,
-    freeShippingSettings: {
-      ...defaultFreeShippingSettings,
-      ...(currentState.freeShippingSettings || {}),
-      ...(persistedState?.freeShippingSettings &&
-      typeof persistedState.freeShippingSettings === 'object'
-        ? persistedState.freeShippingSettings
-        : {})
-    },
-    pickupLocations: (persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0)
-      ? persistedState.pickupLocations
-      : currentState.pickupLocations,
-    vipGradeBenefits: (persistedState?.vipGradeBenefits && Array.isArray(persistedState.vipGradeBenefits) && persistedState.vipGradeBenefits.length > 0)
-      ? persistedState.vipGradeBenefits
-      : currentState.vipGradeBenefits,
-    vipGradeConfigs: (persistedState?.vipGradeConfigs && Array.isArray(persistedState.vipGradeConfigs) && persistedState.vipGradeConfigs.length > 0)
-      ? persistedState.vipGradeConfigs
-      : currentState.vipGradeConfigs
+    shippingOptions: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.shippingOptions, currentState.shippingOptions)
+      : persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0
+        ? persistedState.shippingOptions
+        : currentState.shippingOptions,
+    freeShippingSettings: fromRemoteSupabaseSync
+      ? {
+          ...defaultFreeShippingSettings,
+          ...(persistedState?.freeShippingSettings && typeof persistedState.freeShippingSettings === 'object'
+            ? persistedState.freeShippingSettings
+            : {}),
+          ...(currentState.freeShippingSettings || {}),
+        }
+      : {
+          ...defaultFreeShippingSettings,
+          ...(currentState.freeShippingSettings || {}),
+          ...(persistedState?.freeShippingSettings &&
+          typeof persistedState.freeShippingSettings === 'object'
+            ? persistedState.freeShippingSettings
+            : {}),
+        },
+    pickupLocations: fromRemoteSupabaseSync
+      ? mergeRecordArraysByLastWrite(persistedState?.pickupLocations, currentState.pickupLocations)
+      : persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0
+        ? persistedState.pickupLocations
+        : currentState.pickupLocations,
+    vipGradeBenefits: fromRemoteSupabaseSync
+      ? (() => {
+          const m = mergeRecordArraysByLastWrite(persistedState?.vipGradeBenefits, currentState.vipGradeBenefits)
+          return m.length > 0 ? m : currentState.vipGradeBenefits
+        })()
+      : persistedState?.vipGradeBenefits && Array.isArray(persistedState.vipGradeBenefits) && persistedState.vipGradeBenefits.length > 0
+        ? persistedState.vipGradeBenefits
+        : currentState.vipGradeBenefits,
+    vipGradeConfigs: fromRemoteSupabaseSync
+      ? (() => {
+          const m = mergeRecordArraysByLastWrite(persistedState?.vipGradeConfigs, currentState.vipGradeConfigs)
+          return m.length > 0 ? m : currentState.vipGradeConfigs
+        })()
+      : persistedState?.vipGradeConfigs && Array.isArray(persistedState.vipGradeConfigs) && persistedState.vipGradeConfigs.length > 0
+        ? persistedState.vipGradeConfigs
+        : currentState.vipGradeConfigs
   }
   console.log('🔄 Merge result:', {
     hasPersistedCategoryHeroSlides: !!(persistedState?.categoryHeroSlides && Array.isArray(persistedState.categoryHeroSlides) && persistedState.categoryHeroSlides.length > 0),
@@ -5677,84 +5890,7 @@ export const useContentStore = create<ContentStore>()(
     }),
     {
       name: 'content-store',
-      partialize: (state) => ({ 
-        contentItems: state.contentItems.map(item => ({
-          ...item,
-          createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-          updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-        })),
-        sidebarMenuItems: state.sidebarMenuItems.map(item => ({
-          ...item,
-          createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-          updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-        })),
-        heroSlides: state.heroSlides.map(slide => ({
-          ...slide,
-          createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-          updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-        })),
-        categoryHeroSlides: (state.categoryHeroSlides || []).map(slide => ({
-          ...slide,
-          createdAt: slide.createdAt instanceof Date ? slide.createdAt.toISOString() : slide.createdAt,
-          updatedAt: slide.updatedAt instanceof Date ? slide.updatedAt.toISOString() : slide.updatedAt
-        })),
-        categoryItems: state.categoryItems.map(item => ({
-          ...item,
-          createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-          updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-        })),
-        subcategoryItems: (state.subcategoryItems || []).map((item: any) => ({
-          ...item,
-          createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
-          updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt
-        })),
-        promoCodes: (state.promoCodes || []).map((code: any) => ({
-          ...code,
-          startDate: code.startDate instanceof Date ? code.startDate.toISOString() : code.startDate,
-          endDate: code.endDate instanceof Date ? code.endDate.toISOString() : code.endDate,
-          createdAt: code.createdAt instanceof Date ? code.createdAt.toISOString() : code.createdAt,
-          updatedAt: code.updatedAt instanceof Date ? code.updatedAt.toISOString() : code.updatedAt
-        })),
-        paymentOptions: (state.paymentOptions || []).map((option: any) => ({
-          ...option,
-          createdAt: option.createdAt instanceof Date ? option.createdAt.toISOString() : option.createdAt,
-          updatedAt: option.updatedAt instanceof Date ? option.updatedAt.toISOString() : option.updatedAt,
-          bankAccounts: option.bankAccounts ? option.bankAccounts.map((acc: any) => ({
-            ...acc,
-            createdAt: acc.createdAt instanceof Date ? acc.createdAt.toISOString() : acc.createdAt,
-            updatedAt: acc.updatedAt instanceof Date ? acc.updatedAt.toISOString() : acc.updatedAt
-          })) : undefined
-        })),
-        shippingOptions: (state.shippingOptions || []).map((option: any) => ({
-          ...option,
-          createdAt: option.createdAt instanceof Date ? option.createdAt.toISOString() : option.createdAt,
-          updatedAt: option.updatedAt instanceof Date ? option.updatedAt.toISOString() : option.updatedAt
-        })),
-        pickupLocations: (state.pickupLocations || []).map((location: any) => ({
-          ...location,
-          createdAt: location.createdAt instanceof Date ? location.createdAt.toISOString() : location.createdAt,
-          updatedAt: location.updatedAt instanceof Date ? location.updatedAt.toISOString() : location.updatedAt
-        })),
-        vipGradeBenefits: (state.vipGradeBenefits || []).map((benefit: any) => ({
-          ...benefit,
-          createdAt: benefit.createdAt instanceof Date ? benefit.createdAt.toISOString() : benefit.createdAt,
-          updatedAt: benefit.updatedAt instanceof Date ? benefit.updatedAt.toISOString() : benefit.updatedAt,
-          eventStartDate: benefit.eventStartDate instanceof Date ? benefit.eventStartDate.toISOString() : benefit.eventStartDate,
-          eventEndDate: benefit.eventEndDate instanceof Date ? benefit.eventEndDate.toISOString() : benefit.eventEndDate
-        })),
-        vipGradeConfigs: (state.vipGradeConfigs || []).map((config: any) => ({
-          ...config,
-          createdAt: config.createdAt instanceof Date ? config.createdAt.toISOString() : config.createdAt,
-          updatedAt: config.updatedAt instanceof Date ? config.updatedAt.toISOString() : config.updatedAt
-        })),
-        heroSliderSettings: state.heroSliderSettings, // Hero Slider Settings 저장
-        heroSlideTemplates: (state.heroSlideTemplates || []).map((template: any) => ({
-          ...template,
-          createdAt: template.createdAt instanceof Date ? template.createdAt.toISOString() : template.createdAt,
-          updatedAt: template.updatedAt instanceof Date ? template.updatedAt.toISOString() : template.updatedAt
-        })),
-        freeShippingSettings: state.freeShippingSettings // 전역 무료 배송 설정 저장
-      }),
+      partialize: (state) => partializedSiteConfigForPersist(state),
       merge: mergePersistedSiteConfig,
       onRehydrateStorage: () => (state) => {
         normalizeRehydratedContentStoreState(state)

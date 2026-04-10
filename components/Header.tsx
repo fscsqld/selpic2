@@ -308,7 +308,14 @@ export default function Header() {
   const loginButton = headerContent.find(item => item.title === 'Login Button')
   const cartButton = headerContent.find(item => item.title === 'Cart Button')
   const searchButtonEnabled = headerContent.find(item => item.title === 'Search Button Enabled')?.content !== 'false'
-  const languageSelectorEnabled = headerContent.find(item => item.title === 'Language Selector Enabled')?.content !== 'false'
+  /** Include inactive rows: `headerContent` drops `isActive: false`, so read from full `contentItems`. */
+  const languageSelectorRow = contentItems.find(
+    (item) => item.section === 'header' && item.title === 'Language Selector Enabled'
+  )
+  const languageSelectorEnabled =
+    !!languageSelectorRow &&
+    languageSelectorRow.isActive !== false &&
+    String(languageSelectorRow.content ?? '').trim().toLowerCase() === 'true'
   const logoItem = pickLogoImageItem(contentItems)
   /** Same source as home footer: CMS media (e.g. indexeddb) → static files under `public/` via `HeaderLogoImage`. */
   const logoMediaSrc = (logoItem?.mediaUrl ?? '').trim()
