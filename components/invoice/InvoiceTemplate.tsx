@@ -244,23 +244,27 @@ export default function InvoiceTemplate({
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Payment Details</h3>
           <div className="space-y-1 text-sm text-gray-700">
             {payment?.bank && (
-              <p className="whitespace-nowrap">
-                <span className="font-semibold w-24 inline-block align-baseline">Bank:</span> {payment.bank}
+              <p className="break-words">
+                <span className="font-semibold w-24 inline-block align-baseline">Bank:</span>
+                <span className="align-baseline">{payment.bank}</span>
               </p>
             )}
             {payment?.accountName && (
-              <p className="whitespace-nowrap">
-                <span className="font-semibold w-24 inline-block align-baseline">Account Name:</span> {payment.accountName}
+              <p className="break-words">
+                <span className="font-semibold w-24 inline-block align-baseline">Account Name:</span>
+                <span className="align-baseline">{payment.accountName}</span>
               </p>
             )}
             {payment?.bsb && (
-              <p className="whitespace-nowrap">
-                <span className="font-semibold w-24 inline-block align-baseline">BSB:</span> {payment.bsb}
+              <p className="break-words">
+                <span className="font-semibold w-24 inline-block align-baseline">BSB:</span>
+                <span className="align-baseline">{payment.bsb}</span>
               </p>
             )}
             {payment?.account && (
-              <p className="whitespace-nowrap">
-                <span className="font-semibold w-24 inline-block align-baseline">Account:</span> {payment.account}
+              <p className="break-words">
+                <span className="font-semibold w-24 inline-block align-baseline">Account:</span>
+                <span className="align-baseline">{payment.account}</span>
               </p>
             )}
             {payment?.note && (

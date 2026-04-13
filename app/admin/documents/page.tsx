@@ -612,6 +612,12 @@ ${brandName} Team`
     }
   }, [activeTab])
 
+  useEffect(() => {
+    if (activeTab !== 'create') return
+    // Create/Send invoice and quote from the dedicated page with the latest PDF renderer.
+    router.push('/admin/invoices/preview')
+  }, [activeTab, router])
+
   // 인보이스 합계: AU GST + 배송/수수료 이중 합산 방지 (lib/invoiceTotals)
   const invoiceItemsKey = useMemo(
     () => JSON.stringify(invoiceData?.items ?? []),
@@ -1078,15 +1084,11 @@ ${brandName} Team`
                   <span>Generated Invoices ({generatedInvoices.length})</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('create')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                    activeTab === 'create'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  onClick={() => router.push('/admin/invoices/preview')}
+                  className="py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>Create Invoice & Quote</span>
+                  <span>Create & Send Invoice / Quote</span>
                 </button>
                 <button
                   onClick={() => {
