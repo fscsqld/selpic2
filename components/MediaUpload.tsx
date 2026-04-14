@@ -30,6 +30,11 @@ export default function MediaUpload({
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { addMediaFileWithData } = useMediaStore()
+  const requiresSharedCloudAsset =
+    usage === 'category-bg' ||
+    usage === 'hero-banner' ||
+    usage === 'subcategory-card' ||
+    usage === 'header-logo'
 
   // type prop 변경 감지
   useEffect(() => {
@@ -172,6 +177,13 @@ export default function MediaUpload({
         !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
         !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+      if (!hasSupabase && requiresSharedCloudAsset) {
+        setUploadError(
+          'Cloud media sync is required for this section. Configure Supabase public env variables and try again.'
+        )
+        return
+      }
+
       if (hasSupabase && !isFromMediaLibrary) {
         try {
           const folder = usage ? `cms/${usage}` : 'cms/general'
@@ -185,6 +197,12 @@ export default function MediaUpload({
           return
         } catch (supabaseErr) {
           console.warn('MediaUpload: Supabase upload failed, falling back to IndexedDB:', supabaseErr)
+          if (requiresSharedCloudAsset) {
+            setUploadError(
+              'Cloud upload failed for this shared section. Check Supabase Storage bucket policies and try again.'
+            )
+            return
+          }
         }
       }
 
@@ -409,6 +427,14 @@ export default function MediaUpload({
             return
           }
           
+          if (requiresSharedCloudAsset && url.startsWith('indexeddb://')) {
+            setUploadError(
+              'This media is local-only (IndexedDB). Please upload it to cloud storage before using it in shared sections.'
+            )
+            setIsMediaLibraryOpen(false)
+            return
+          }
+
           // File 객체는 더미로 생성하되, 실제로는 URL만 사용
           // Media Library에서 선택한 경우이므로 검증을 건너뛰기 위해 skipValidation=true 전달
           const dummyFile = new File([], 'selected-from-library', {
