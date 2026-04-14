@@ -5,6 +5,7 @@ import { fetchSiteConfigValue, flushPendingSiteConfigState } from '@/lib/siteCon
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import {
   mergePersistedSiteConfig,
+  partializedSiteConfigForPersist,
   normalizeRehydratedContentStoreState,
   useContentStore
 } from '@/lib/contentStore'
@@ -35,6 +36,16 @@ export default function ContentStoreSupabaseSync() {
       const merged = mergePersistedSiteConfig(remote, current, false)
       normalizeRehydratedContentStoreState(merged)
       useContentStore.setState(merged)
+      try {
+        // Ensure local browser cache cannot keep stale CMS values after remote sync.
+        const payload = {
+          state: partializedSiteConfigForPersist(useContentStore.getState()),
+          version: 0,
+        }
+        window.localStorage.setItem('content-store', JSON.stringify(payload))
+      } catch (e) {
+        console.warn('[siteConfig] failed to persist synced content-store locally', e)
+      }
       return true
     }
 
