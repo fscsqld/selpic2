@@ -119,6 +119,14 @@ const nextConfig = {
     return [
       ...longCache,
       {
+        // Home is CMS-driven on the client; avoid long-lived CDN HTML cache so mobile/desktop
+        // do not keep an old prerender shell / RSC payload while JS bundles are already updated.
+        source: '/',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, no-cache, must-revalidate' }
+        ]
+      },
+      {
         // Dynamic checkout/cart pages must stay real-time
         source: '/checkout',
         headers: [

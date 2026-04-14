@@ -249,30 +249,16 @@ export default function SlidingBackground({ slides, className = '', onSlideChang
     }
   }, [isMounted])
 
-  // 모바일에서 비디오 자동 일시정지
+  // Phones and desktops use the same playback policy: never pause category-hero video on mobile.
   useEffect(() => {
     if (deviceType !== 'mobile') return
 
     const currentSlide = slides[currentSlideIndex]
     if (!currentSlide || currentSlide.type !== 'video') return
 
-    const pauseVideoOnMobile = currentSlide.responsive?.mobile?.pauseVideoOnMobile !== false
-
-    if (pauseVideoOnMobile) {
-      // 모든 비디오 일시정지
-      videoRefs.current.forEach((video) => {
-        if (video && !video.paused) {
-          video.pause()
-        }
-      })
-    } else {
-      // 현재 슬라이드의 비디오만 재생
-      const currentVideo = videoRefs.current.get(currentSlide.id)
-      if (currentVideo && currentVideo.paused) {
-        currentVideo.play().catch(() => {
-          // 자동 재생 실패 시 무시 (브라우저 정책)
-        })
-      }
+    const currentVideo = videoRefs.current.get(currentSlide.id)
+    if (currentVideo && currentVideo.paused) {
+      currentVideo.play().catch(() => {})
     }
   }, [deviceType, currentSlideIndex, slides])
 
@@ -375,8 +361,9 @@ export default function SlidingBackground({ slides, className = '', onSlideChang
         const responsiveSettings = slide.responsive?.[deviceType]
         const speed = responsiveSettings?.speed ?? slide.speed ?? 5
         const opacity = responsiveSettings?.opacity ?? slide.opacity ?? 1
-        const pauseVideoOnMobile = slide.responsive?.mobile?.pauseVideoOnMobile !== false
-        
+        // Same as desktop: always allow autoplay on mobile (muted + playsInline).
+        const pauseVideoOnMobile = false
+
         const direction = slide.direction || 'left'
         const effect = slide.effect || 'slide'
         

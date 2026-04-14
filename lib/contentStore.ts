@@ -87,7 +87,8 @@ export interface CategoryItem {
 export interface ResponsiveSettings {
   speed?: number // 화면 크기별 애니메이션 속도 (1-10)
   opacity?: number // 화면 크기별 투명도 (0-1)
-  pauseVideoOnMobile?: boolean // 모바일에서 비디오 자동 일시정지 (기본값: true)
+  /** @deprecated Stored for legacy rows; storefront ignores this — mobile matches desktop playback. */
+  pauseVideoOnMobile?: boolean
 }
 
 // 카테고리별 Hero Slide 타입 (sliding background용)

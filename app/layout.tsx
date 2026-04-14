@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { getAllGoogleFontsUrls } from '@/lib/fontList'
@@ -6,6 +6,12 @@ import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
 
 const inter = Inter({ subsets: ['latin'] })
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
+
+/** Ensures phones use the same responsive layout scale as desktop browsers (no accidental zoomed-out “desktop site”). */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
 
 export const metadata: Metadata = {
   title: 'SELPIC - Premium Sticker Shop',

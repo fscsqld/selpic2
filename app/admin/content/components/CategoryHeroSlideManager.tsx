@@ -75,7 +75,7 @@ export default function CategoryHeroSlideManager({
     effect: 'slide' as 'slide' | 'fade' | 'zoom' | 'rotate' | 'blend',
     opacity: 1,
     responsive: {
-      mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: true },
+      mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
       tablet: { speed: 5, opacity: 1 },
       desktop: { speed: 5, opacity: 1 }
     },
@@ -103,14 +103,14 @@ export default function CategoryHeroSlideManager({
           const sp = slide.speed ?? 5
           const op = slide.opacity ?? 1
           const base = {
-            mobile: { speed: sp, opacity: op, pauseVideoOnMobile: true as boolean },
+            mobile: { speed: sp, opacity: op, pauseVideoOnMobile: false as boolean },
             tablet: { speed: sp, opacity: op },
             desktop: { speed: sp, opacity: op }
           }
           const r = slide.responsive
           if (!r) return base
           return {
-            mobile: { ...base.mobile, ...r.mobile, pauseVideoOnMobile: r.mobile?.pauseVideoOnMobile ?? true },
+            mobile: { ...base.mobile, ...r.mobile, pauseVideoOnMobile: r.mobile?.pauseVideoOnMobile ?? false },
             tablet: { ...base.tablet, ...r.tablet },
             desktop: { ...base.desktop, ...r.desktop }
           }
@@ -131,7 +131,7 @@ export default function CategoryHeroSlideManager({
         effect: 'slide',
         opacity: 1,
         responsive: {
-          mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: true },
+          mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
           tablet: { speed: 5, opacity: 1 },
           desktop: { speed: 5, opacity: 1 }
         },
@@ -158,7 +158,7 @@ export default function CategoryHeroSlideManager({
       effect: 'slide',
       opacity: 1,
       responsive: {
-        mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: true },
+        mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
         tablet: { speed: 5, opacity: 1 },
         desktop: { speed: 5, opacity: 1 }
       },
@@ -732,9 +732,19 @@ export default function CategoryHeroSlideManager({
 
               {/* 반응형 설정 섹션 */}
               <div className="border-t pt-4 mt-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">📱 반응형 설정</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Responsive settings</h3>
+                <p className="text-xs text-gray-500 mb-2">
+                  Adjust speed and opacity per screen size. The old “pause video on mobile” option was removed:
+                  phones now use the same video playback as desktop.
+                </p>
+                {formData.type === 'image' && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+                    Media type is <strong>Image</strong>. To use video backgrounds (mobile = desktop playback), select{' '}
+                    <strong>Video</strong> under Media type above.
+                  </p>
+                )}
                 <p className="text-xs text-gray-500 mb-4">
-                  화면 크기별로 다른 속도와 투명도를 설정할 수 있습니다.
+                  You can set different speed and opacity per breakpoint.
                 </p>
                 
                 {/* 탭 */}
@@ -839,31 +849,9 @@ export default function CategoryHeroSlideManager({
 
                   {/* 모바일에서만 비디오 일시정지 옵션 */}
                   {responsiveTab === 'mobile' && formData.type === 'video' && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="pauseVideoOnMobile"
-                        checked={formData.responsive?.mobile?.pauseVideoOnMobile !== false}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            responsive: {
-                              ...prev.responsive,
-                              mobile: {
-                                ...prev.responsive?.mobile,
-                                pauseVideoOnMobile: e.target.checked
-                              }
-                            }
-                          }))
-                        }}
-                        className="rounded"
-                      />
-                      <label htmlFor="pauseVideoOnMobile" className="text-sm font-medium text-gray-700">
-                        모바일에서 비디오 자동 일시정지
-                      </label>
-                      <p className="text-xs text-gray-500 ml-2">
-                        (배터리 절약 및 데이터 사용량 감소)
-                      </p>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                      <strong className="text-slate-900">Mobile video:</strong> matches desktop (muted autoplay).
+                      No separate checkbox — storefront always uses the same behavior on phones and desktops.
                     </div>
                   )}
                 </div>
