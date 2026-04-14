@@ -156,6 +156,24 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     setVideoLoaded(true)
     setVideoError(false)
   }, [])
+
+  // iOS / some mobile browsers ignore autoplay unless play() is invoked after metadata (muted + playsInline still required).
+  useEffect(() => {
+    if (videoError || !actualSrc?.trim()) return
+    const el = videoRef.current
+    if (!el) return
+    const run = () => {
+      const p = el.play()
+      if (p !== undefined && typeof (p as Promise<void>).catch === 'function') {
+        ;(p as Promise<void>).catch(() => {})
+      }
+    }
+    run()
+    el.addEventListener('loadeddata', run)
+    return () => {
+      el.removeEventListener('loadeddata', run)
+    }
+  }, [actualSrc, videoError])
   
   // ✅ Category Hero Backgrounds와 동일하게 간단한 조건 체크
   if (videoError || !actualSrc || actualSrc.trim() === '') {
@@ -186,7 +204,14 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       )}
       
       {/* Video - object-contain으로 전체 노출, 여백은 아래 배경(fallback 이미지)이 비침 */}
-      {!videoError && (
+      {!videoError && (() => {
+        // Use either `src` OR child <source> nodes — not both for the same URL (avoids Safari mobile playback issues).
+        const useDirectSrc =
+          !isBlobUrl &&
+          !!actualSrc &&
+          !actualSrc.startsWith('data:') &&
+          !actualSrc.startsWith('blob:')
+        return (
         <video
           ref={videoRef}
           key={actualSrc}
@@ -196,7 +221,7 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
           loop={true}
           playsInline={true}
           poster={safeFallback}
-          src={!isBlobUrl && actualSrc && !actualSrc.startsWith('data:') && !actualSrc.startsWith('blob:') ? actualSrc : undefined}
+          src={useDirectSrc ? actualSrc : undefined}
           onError={(e) => {
             const videoElement = e.currentTarget
             const error = videoElement.error
@@ -246,28 +271,8 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
             transition: 'opacity 0.5s ease-in-out'
           }}
         >
-          {/* ✅ source 태그와 video src를 함께 사용하여 호환성 향상 */}
-          {/* ✅ video 태그에 직접 src 설정 (source 태그만으로는 부족할 수 있음) */}
-          {!isBlobUrl && actualSrc && !actualSrc.startsWith('data:') && (
-            <>
-              {/* ✅ 파일 확장자에 따라 적절한 type 지정 */}
-              {actualSrc.toLowerCase().includes('.mp4') && (
-                <source src={actualSrc} type="video/mp4" key={`mp4-${actualSrc}`} />
-              )}
-              {actualSrc.toLowerCase().includes('.webm') && (
-                <source src={actualSrc} type="video/webm" key={`webm-${actualSrc}`} />
-              )}
-              {actualSrc.toLowerCase().includes('.ogg') && (
-                <source src={actualSrc} type="video/ogg" key={`ogg-${actualSrc}`} />
-              )}
-              {/* ✅ 확장자가 없거나 알 수 없는 경우 mp4로 시도 */}
-              {!actualSrc.toLowerCase().match(/\.(mp4|webm|ogg)$/i) && (
-                <source src={actualSrc} type="video/mp4" key={`default-${actualSrc}`} />
-              )}
-            </>
-          )}
-          {/* ✅ blob/data URL인 경우 source 태그 사용 (Category Hero Backgrounds와 동일) */}
-          {(isBlobUrl || actualSrc.startsWith('data:')) && (
+          {/* blob/data: no `src` on <video>; use <source> only */}
+          {!useDirectSrc && actualSrc && (isBlobUrl || actualSrc.startsWith('data:')) && (
             <>
               <source src={actualSrc} type="video/mp4" />
               <source src={actualSrc} type="video/webm" />
@@ -275,7 +280,8 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
             </>
           )}
         </video>
-      )}
+        )
+      })()}
       
       {/* Loading indicator */}
       {!videoError && !videoLoaded && (
