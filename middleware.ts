@@ -19,9 +19,10 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
     // connect-src required: without it, some browsers restrict fetch() to Supabase/Stripe from this origin.
+    // Explicit media/img/font allowlists help iOS Safari load hero & CMS assets (some builds infer stricter defaults).
     response.headers.set(
       'Content-Security-Policy',
-      "upgrade-insecure-requests; block-all-mixed-content; connect-src 'self' https: wss:"
+      "upgrade-insecure-requests; block-all-mixed-content; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; img-src 'self' https: data: blob:; font-src 'self' https: data:"
     )
   }
   return response

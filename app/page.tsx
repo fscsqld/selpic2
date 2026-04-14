@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { EffectFade, EffectCube, EffectCoverflow, EffectFlip, Autoplay, Navigation, Pagination } from 'swiper/modules'
 import 'swiper/css'
@@ -157,21 +157,32 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     setVideoError(false)
   }, [])
 
-  // iOS / some mobile browsers ignore autoplay unless play() is invoked after metadata (muted + playsInline still required).
-  useEffect(() => {
+  // iOS Safari: call play() after paint; ref + muted + playsinline are set in ref callback.
+  useLayoutEffect(() => {
     if (videoError || !actualSrc?.trim()) return
-    const el = videoRef.current
-    if (!el) return
-    const run = () => {
+    let cancelled = false
+    let raf2 = 0
+    const tryPlay = () => {
+      if (cancelled) return
+      const el = videoRef.current
+      if (!el) return
+      try {
+        el.muted = true
+      } catch {
+        // ignore
+      }
       const p = el.play()
       if (p !== undefined && typeof (p as Promise<void>).catch === 'function') {
         ;(p as Promise<void>).catch(() => {})
       }
     }
-    run()
-    el.addEventListener('loadeddata', run)
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(tryPlay)
+    })
     return () => {
-      el.removeEventListener('loadeddata', run)
+      cancelled = true
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
     }
   }, [actualSrc, videoError])
   
@@ -198,7 +209,7 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       {/* 로딩/에러 시에만 배경 이미지만 보이게 하는 덮개 */}
       {(!videoLoaded || videoError) && safeFallback && (
         <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-[11]"
+          className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat z-[11]"
           style={{ backgroundImage: `url('${safeFallback}')` }}
         />
       )}
@@ -213,15 +224,30 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
           !actualSrc.startsWith('blob:')
         return (
         <video
-          ref={videoRef}
+          ref={(node) => {
+            videoRef.current = node
+            if (node) {
+              try {
+                node.muted = true
+                node.setAttribute('playsinline', '')
+                node.setAttribute('webkit-playsinline', '')
+              } catch {
+                // ignore
+              }
+            }
+          }}
           key={actualSrc}
           className="absolute inset-0 w-full h-full z-10 object-contain bg-transparent"
           autoPlay={true}
           muted={true}
           loop={true}
-          playsInline={true}
+          playsInline
           poster={safeFallback}
           src={useDirectSrc ? actualSrc : undefined}
+          onPlaying={() => {
+            setVideoLoaded(true)
+            setVideoError(false)
+          }}
           onError={(e) => {
             const videoElement = e.currentTarget
             const error = videoElement.error

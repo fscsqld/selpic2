@@ -56,6 +56,18 @@ export default function ContentStoreSupabaseSync() {
       void applyRemoteIfChanged()
     }
 
+    /** iOS Safari back-forward cache: restore old JS + localStorage; force a fresh CMS merge. */
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        lastRemoteSignature.current = ''
+      }
+      void applyRemoteIfChanged()
+    }
+
+    // Register immediately so bfcache restore and tab switches refetch without waiting on network.
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pageshow', onPageShow as EventListener)
+
     void (async () => {
       try {
         for (let attempt = 1; attempt <= 3; attempt++) {
@@ -89,7 +101,6 @@ export default function ContentStoreSupabaseSync() {
         } catch (e) {
           console.warn('[siteConfig] realtime subscribe failed', e)
         }
-        document.addEventListener('visibilitychange', onVisibilityChange)
       }
     })()
 
@@ -103,6 +114,7 @@ export default function ContentStoreSupabaseSync() {
         }
       }
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pageshow', onPageShow as EventListener)
       flushPendingSiteConfigState()
     }
   }, [])
