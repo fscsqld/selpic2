@@ -15,30 +15,54 @@ import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAu
  */
 export default function ContentStoreSupabaseSync() {
   const ran = useRef(false)
+  const lastRemoteSignature = useRef<string>('')
 
   useLayoutEffect(() => {
     if (ran.current) return
     ran.current = true
 
+    const applyRemoteIfChanged = async (): Promise<boolean> => {
+      const remote = await fetchSiteConfigValue()
+      if (!remote) return false
+      const signature = JSON.stringify(remote)
+      if (signature === lastRemoteSignature.current) return true
+      lastRemoteSignature.current = signature
+
+      const current = useContentStore.getState()
+      // Supabase is the canonical source for storefront/admin CMS across local + deployed.
+      // Keep local-only data only as fallback when remote payload is missing fields.
+      const merged = mergePersistedSiteConfig(remote, current, false)
+      normalizeRehydratedContentStoreState(merged)
+      useContentStore.setState(merged)
+      return true
+    }
+
+    let pollTimer: ReturnType<typeof setInterval> | undefined
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      void applyRemoteIfChanged()
+    }
+
     void (async () => {
       try {
         for (let attempt = 1; attempt <= 3; attempt++) {
-          const remote = await fetchSiteConfigValue()
-          if (remote) {
-            const current = useContentStore.getState()
-            const merged = mergePersistedSiteConfig(remote, current, true)
-            normalizeRehydratedContentStoreState(merged)
-            useContentStore.setState(merged)
-            return
-          }
+          const ok = await applyRemoteIfChanged()
+          if (ok) break
           await new Promise((r) => setTimeout(r, attempt * 800))
         }
       } finally {
         markSiteConfigRemoteFetchSettled()
+        // Keep local/deployed tabs converged even when content is edited elsewhere.
+        pollTimer = setInterval(() => {
+          void applyRemoteIfChanged()
+        }, 15000)
+        document.addEventListener('visibilitychange', onVisibilityChange)
       }
     })()
 
     return () => {
+      if (pollTimer) clearInterval(pollTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       flushPendingSiteConfigState()
     }
   }, [])
