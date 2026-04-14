@@ -1,7 +1,8 @@
 'use client'
 
-import '@/lib/contentStoreLocalStorageShim'
 import ContentStoreSupabaseSync from '@/components/ContentStoreSupabaseSync'
+import SiteConfigStoreAutosave from '@/components/SiteConfigStoreAutosave'
+import SiteConfigWriteStatusBadge from '@/components/SiteConfigWriteStatusBadge'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
 
 /**
@@ -17,6 +18,8 @@ export default function RootTemplate({
   return (
     <div className="contents">
       <ContentStoreSupabaseSync />
+      <SiteConfigStoreAutosave />
+      <SiteConfigWriteStatusBadge />
       <GamePromoCodeSyncLazy />
       {children}
     </div>

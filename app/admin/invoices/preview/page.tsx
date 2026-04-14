@@ -225,6 +225,73 @@ function InvoicePreviewPageContent() {
   const [selectedSavedClientId, setSelectedSavedClientId] = useState<string>('')
   const [newSavedClientLabel, setNewSavedClientLabel] = useState<string>('')
 
+  const waitForNextPaint = async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  }
+
+  const buildPdfOptions = (
+    element: HTMLElement,
+    filename: string
+  ) => {
+    const totalHeight = element.scrollHeight
+    const totalWidth = element.scrollWidth
+
+    return {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        letterRendering: true,
+        allowTaint: true,
+        height: totalHeight,
+        width: totalWidth,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: totalWidth,
+        windowHeight: totalHeight,
+        onclone: (clonedDoc: any) => {
+          try {
+            if (clonedDoc && typeof clonedDoc.querySelector === 'function') {
+              const clonedElement = clonedDoc.querySelector('[data-invoice-root]') as HTMLElement | null
+              if (clonedElement && clonedElement.style) {
+                clonedElement.style.overflow = 'visible'
+                clonedElement.style.maxHeight = 'none'
+                clonedElement.style.height = 'auto'
+                clonedElement.style.position = 'relative'
+                clonedElement.style.top = '0'
+                clonedElement.style.left = '0'
+                clonedElement.style.display = 'block'
+              }
+              if (clonedDoc.body) {
+                clonedDoc.body.style.overflow = 'visible'
+                clonedDoc.body.style.height = 'auto'
+                clonedDoc.body.style.maxHeight = 'none'
+              }
+              if (clonedDoc.documentElement) {
+                clonedDoc.documentElement.style.overflow = 'visible'
+                clonedDoc.documentElement.style.height = 'auto'
+                clonedDoc.documentElement.style.maxHeight = 'none'
+              }
+            }
+          } catch (e) {
+            console.warn('onclone error:', e)
+          }
+        }
+      },
+      jsPDF: {
+        unit: 'mm' as const,
+        format: 'a4' as const,
+        orientation: 'portrait' as const,
+        compress: true
+      },
+      pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before', after: '.page-break-after', avoid: ['.no-break'] }
+    }
+  }
+
   // Saved clients localStorage 동기화 (Create & Send와 동일 키 사용)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -313,62 +380,17 @@ function InvoicePreviewPageContent() {
       await new Promise(resolve => setTimeout(resolve, 200))
       
       element.scrollIntoView({ behavior: 'instant', block: 'start' })
+      element.parentElement?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
       await new Promise(resolve => setTimeout(resolve, 100))
       
-      const currentData = documentType === 'invoice' ? invoiceData : quoteData
       const docNumber = documentType === 'invoice'
         ? ensureInvoiceRefNumber()
         : ensureQuoteRefNumber()
-      const opt = {
-        margin: [10, 10, 10, 10] as [number, number, number, number],
-        filename: `${documentType}-${docNumber}-${new Date().toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true,
-          logging: false,
-          letterRendering: true,
-          allowTaint: true,
-          scrollX: 0,
-          scrollY: 0,
-          onclone: (clonedDoc: any) => {
-            try {
-              if (clonedDoc && typeof clonedDoc.querySelector === 'function') {
-                const clonedElement = clonedDoc.querySelector('[data-invoice-root]') as HTMLElement | null
-                if (clonedElement && clonedElement.style) {
-                  clonedElement.style.overflow = 'visible'
-                  clonedElement.style.maxHeight = 'none'
-                  clonedElement.style.height = 'auto'
-                  clonedElement.style.position = 'relative'
-                  clonedElement.style.top = '0'
-                  clonedElement.style.left = '0'
-                  clonedElement.style.display = 'block'
-                }
-                if (clonedDoc.body) {
-                  clonedDoc.body.style.overflow = 'visible'
-                  clonedDoc.body.style.height = 'auto'
-                  clonedDoc.body.style.maxHeight = 'none'
-                }
-                if (clonedDoc.documentElement) {
-                  clonedDoc.documentElement.style.overflow = 'visible'
-                  clonedDoc.documentElement.style.height = 'auto'
-                  clonedDoc.documentElement.style.maxHeight = 'none'
-                }
-              }
-            } catch (e) {
-              console.warn('onclone error:', e)
-            }
-          }
-        },
-        jsPDF: { 
-          unit: 'mm' as const, 
-          format: 'a4' as const, 
-          orientation: 'portrait' as const,
-          compress: true
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.page-break-before', after: '.page-break-after', avoid: ['.no-break'] }
-      }
-
+      await waitForNextPaint()
+      const opt = buildPdfOptions(
+        element,
+        `${documentType}-${docNumber}-${new Date().toISOString().split('T')[0]}.pdf`
+      )
       await html2pdf().set(opt).from(element).save()
     } catch (error) {
       console.error('PDF generation failed:', error)
@@ -427,61 +449,10 @@ function InvoicePreviewPageContent() {
         
         await new Promise(resolve => setTimeout(resolve, 200))
         element.scrollIntoView({ behavior: 'instant', block: 'start' })
+        element.parentElement?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
         await new Promise(resolve => setTimeout(resolve, 100))
-        
-        const totalHeight = element.scrollHeight
-        const totalWidth = element.scrollWidth
-        
-        const opt = {
-          margin: [10, 10, 10, 10] as [number, number, number, number],
-          filename: `${documentType}-${docNumber}.pdf`,
-          image: { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas: { 
-            scale: 2, 
-            useCORS: true,
-            logging: false,
-            letterRendering: true,
-            allowTaint: true,
-            height: totalHeight,
-            width: totalWidth,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: totalWidth,
-            windowHeight: totalHeight,
-            onclone: (clonedDoc: any) => {
-              try {
-                if (clonedDoc && typeof clonedDoc.querySelector === 'function') {
-                  const clonedElement = clonedDoc.querySelector('[data-invoice-root]') as HTMLElement | null
-                  if (clonedElement && clonedElement.style) {
-                    clonedElement.style.overflow = 'visible'
-                    clonedElement.style.maxHeight = 'none'
-                    clonedElement.style.height = 'auto'
-                  }
-                  if (clonedDoc.body) {
-                    clonedDoc.body.style.overflow = 'visible'
-                    clonedDoc.body.style.height = 'auto'
-                    clonedDoc.body.style.maxHeight = 'none'
-                  }
-                  if (clonedDoc.documentElement) {
-                    clonedDoc.documentElement.style.overflow = 'visible'
-                    clonedDoc.documentElement.style.height = 'auto'
-                    clonedDoc.documentElement.style.maxHeight = 'none'
-                  }
-                }
-              } catch (e) {
-                console.warn('onclone error:', e)
-              }
-            }
-          },
-          jsPDF: { 
-            unit: 'mm' as const, 
-            format: 'a4' as const, 
-            orientation: 'portrait' as const,
-            compress: true
-          },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        }
-
+        await waitForNextPaint()
+        const opt = buildPdfOptions(element, `${documentType}-${docNumber}.pdf`)
         const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob')
         pdfFile = new File([pdfBlob], `${documentType}-${docNumber}.pdf`, { type: 'application/pdf' })
       }

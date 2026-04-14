@@ -573,8 +573,11 @@ export default function ContentManagementPage() {
           section: data.section
         })
         
-        // Show success message
-        showNotificationToast('success', `Content saved successfully! Changes will be visible immediately on the homepage.`)
+        // Store updated; remote save is handled by SiteConfigStoreAutosave (status badge).
+        showNotificationToast(
+          'success',
+          'Changes updated in the store. Cloud save will complete shortly; check the save status badge if it fails.'
+        )
         
       } catch (error) {
         console.error('Content update failed:', error)
@@ -2236,7 +2239,10 @@ export default function ContentManagementPage() {
                             updateContent(searchButtonItem.id, {
                               content: isEnabled ? 'false' : 'true'
                             })
-                            showNotificationToast('success', `Search Button ${isEnabled ? 'disabled' : 'enabled'}`)
+                            showNotificationToast(
+                              'success',
+                              `Search Button ${isEnabled ? 'disabled' : 'enabled'} (check the save status badge)`
+                            )
                           } else {
                             addContent({
                               type: 'button',
@@ -2279,7 +2285,10 @@ export default function ContentManagementPage() {
                             updateContent(languageSelectorItem.id, {
                               content: isEnabled ? 'false' : 'true'
                             })
-                            showNotificationToast('success', `Language Selector ${isEnabled ? 'disabled' : 'enabled'}`)
+                            showNotificationToast(
+                              'success',
+                              `Language Selector ${isEnabled ? 'disabled' : 'enabled'} (check the save status badge)`
+                            )
                           } else {
                             addContent({
                               type: 'button',

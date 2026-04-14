@@ -13,7 +13,7 @@ import {
 const LOG_PREFIX = '[createSupabaseBrowserClient]'
 let loggedOkOnce = false
 
-export function createSupabaseBrowserClient() {
+function readValidatedSupabasePublicEnv(): { url: string; anon: string } {
   const { url, anon } = readRawSupabasePublicEnv()
 
   const urlOk = isValidSupabaseHttpUrl(url)
@@ -48,21 +48,47 @@ export function createSupabaseBrowserClient() {
     )
   }
 
-  if (typeof window !== 'undefined' && !loggedOkOnce) {
-    loggedOkOnce = true
-    try {
-      const origin = new URL(url).origin
-      console.info(
-        LOG_PREFIX,
-        'OK — client will use',
-        origin,
-        '| anon key prefix:',
-        `${anon.slice(0, 8)}…`
-      )
-    } catch {
-      console.warn(LOG_PREFIX, 'OK — URL set but not parseable as URL:', url.slice(0, 48))
-    }
-  }
+  return { url, anon }
+}
 
+function logClientOriginOnce(url: string, anon: string) {
+  if (typeof window === 'undefined' || loggedOkOnce) return
+  loggedOkOnce = true
+  try {
+    const origin = new URL(url).origin
+    console.info(
+      LOG_PREFIX,
+      'OK — client will use',
+      origin,
+      '| anon key prefix:',
+      `${anon.slice(0, 8)}…`
+    )
+  } catch {
+    console.warn(LOG_PREFIX, 'OK — URL set but not parseable as URL:', url.slice(0, 48))
+  }
+}
+
+/** Default browser fetch (HTTP cache behavior follows the browser). */
+export function createSupabaseBrowserClient() {
+  const { url, anon } = readValidatedSupabasePublicEnv()
+  logClientOriginOnce(url, anon)
   return createBrowserClient(url, anon)
+}
+
+/**
+ * Same URL and anon key as {@link createSupabaseBrowserClient}; passes `cache: 'no-store'` on every
+ * request so PostgREST responses are not served from the HTTP cache (avoids stale `site_configs` on
+ * local vs deployed after CMS updates).
+ */
+export function createSupabaseBrowserClientNoStore() {
+  const { url, anon } = readValidatedSupabasePublicEnv()
+  logClientOriginOnce(url, anon)
+  const fetchNoStore: typeof fetch = (input, init) =>
+    fetch(input, {
+      ...init,
+      cache: 'no-store',
+    })
+  return createBrowserClient(url, anon, {
+    global: { fetch: fetchNoStore },
+  })
 }
