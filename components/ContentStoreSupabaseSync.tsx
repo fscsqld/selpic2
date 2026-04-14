@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef } from 'react'
 import { fetchSiteConfigValue, flushPendingSiteConfigState } from '@/lib/siteConfigClient'
+import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import {
   mergePersistedSiteConfig,
   normalizeRehydratedContentStoreState,
@@ -38,6 +39,7 @@ export default function ContentStoreSupabaseSync() {
     }
 
     let pollTimer: ReturnType<typeof setInterval> | undefined
+    let realtimeChannel: ReturnType<ReturnType<typeof createSupabaseBrowserClient>['channel']> | undefined
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
       void applyRemoteIfChanged()
@@ -56,12 +58,39 @@ export default function ContentStoreSupabaseSync() {
         pollTimer = setInterval(() => {
           void applyRemoteIfChanged()
         }, 15000)
+        try {
+          const supabase = createSupabaseBrowserClient()
+          realtimeChannel = supabase
+            .channel('site-configs-live-sync')
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'site_configs',
+                filter: 'config_key=eq.storefront_cms',
+              },
+              () => {
+                void applyRemoteIfChanged()
+              }
+            )
+            .subscribe()
+        } catch (e) {
+          console.warn('[siteConfig] realtime subscribe failed', e)
+        }
         document.addEventListener('visibilitychange', onVisibilityChange)
       }
     })()
 
     return () => {
       if (pollTimer) clearInterval(pollTimer)
+      if (realtimeChannel) {
+        try {
+          realtimeChannel.unsubscribe()
+        } catch {
+          // ignore
+        }
+      }
       document.removeEventListener('visibilitychange', onVisibilityChange)
       flushPendingSiteConfigState()
     }
