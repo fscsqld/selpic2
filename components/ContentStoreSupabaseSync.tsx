@@ -81,12 +81,26 @@ export default function ContentStoreSupabaseSync() {
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pageshow', onPageShow as EventListener)
 
+    /** Slow mobile / flaky networks: retry until success or budget elapses (avoid stale localStorage as "the site"). */
+    const onOnline = () => {
+      void applyRemoteIfChanged()
+    }
+    window.addEventListener('online', onOnline)
+
+    const INITIAL_FETCH_BUDGET_MS = 22_000
+
     void (async () => {
       try {
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        const deadline = Date.now() + INITIAL_FETCH_BUDGET_MS
+        let attempt = 0
+        while (Date.now() < deadline) {
+          attempt += 1
           const ok = await applyRemoteIfChanged()
           if (ok) break
-          await new Promise((r) => setTimeout(r, attempt * 800))
+          const remaining = deadline - Date.now()
+          if (remaining <= 0) break
+          const backoff = Math.min(400 + attempt * 450, 5_500)
+          await new Promise((r) => setTimeout(r, Math.min(backoff, remaining)))
         }
       } finally {
         // Never upsert bundle defaults over Supabase when the remote row was never read (mobile/offline).
@@ -132,6 +146,7 @@ export default function ContentStoreSupabaseSync() {
       }
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow as EventListener)
+      window.removeEventListener('online', onOnline)
       flushPendingSiteConfigState()
     }
   }, [])
