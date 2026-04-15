@@ -351,6 +351,9 @@ interface ContentStore {
   promoCodes: PromoCode[]
   vipGradeConfigs: VIPGradeConfig[]
   vipGradeBenefits: VIPGradeBenefit[]
+  /** Set true after Supabase storefront_cms was merged in this tab (not persisted). */
+  siteConfigRemoteSynced: boolean
+  setSiteConfigRemoteSynced: (value: boolean) => void
   addContent: (content: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateContent: (id: string, updates: Partial<ContentItem>) => void
   deleteContent: (id: string) => void
@@ -4180,6 +4183,10 @@ export const useContentStore = create<ContentStore>()(
       promoCodes: defaultPromoCodes,
       vipGradeConfigs: defaultVIPGradeConfigs,
       vipGradeBenefits: defaultVIPGradeBenefits,
+      siteConfigRemoteSynced: false,
+      setSiteConfigRemoteSynced: (value: boolean) => {
+        set({ siteConfigRemoteSynced: value })
+      },
 
       addContent: (content: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt'>) => {
         const newContent: ContentItem = {
@@ -5918,6 +5925,7 @@ export const useContentStore = create<ContentStore>()(
           promoCodes: defaultPromoCodes,
           vipGradeConfigs: defaultVIPGradeConfigs,
           vipGradeBenefits: defaultVIPGradeBenefits,
+          siteConfigRemoteSynced: true,
           _hasHydrated: true
         }
 

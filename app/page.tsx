@@ -622,6 +622,7 @@ export default function HomePage() {
 
   // 콘텐츠 관리 시스템에서 콘텐츠 가져오기
   const { _hasHydrated: contentHydrated, setHasHydrated: setContentHydrated, contentItems } = useContentStore()
+  const siteConfigRemoteSynced = useContentStore((s) => s.siteConfigRemoteSynced)
   // Subscribe to content changes by selecting contentItems; values below will re-run on change
   // contentItems를 직접 구독하여 변경사항이 즉시 반영되도록 함
   const heroContent = contentItems.filter(item => item.section === 'hero' && item.isActive).sort((a, b) => a.order - b.order)
@@ -695,6 +696,13 @@ export default function HomePage() {
     }, 1500)
     return () => clearTimeout(timer)
   }, [_hasHydrated, contentHydrated])
+
+  // After hydration, wait for Supabase CMS merge (or timeout) so mobile/incognito never paints bundle defaults as "the site".
+  const [cmsSyncTimeout, setCmsSyncTimeout] = useState(false)
+  useEffect(() => {
+    const t = window.setTimeout(() => setCmsSyncTimeout(true), 6000)
+    return () => window.clearTimeout(t)
+  }, [])
 
   // 콘텐츠 상태 확인 (최적화)
   useEffect(() => {
@@ -1172,6 +1180,20 @@ export default function HomePage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!siteConfigRemoteSynced && !cmsSyncTimeout) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center px-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading storefront…</p>
+          <p className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
+            Syncing the latest content. This usually takes a moment on mobile networks.
+          </p>
         </div>
       </div>
     )

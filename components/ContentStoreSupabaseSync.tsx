@@ -18,16 +18,28 @@ import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAu
 export default function ContentStoreSupabaseSync() {
   const ran = useRef(false)
   const lastRemoteSignature = useRef<string>('')
+  const remoteMergeSucceeded = useRef(false)
 
   useLayoutEffect(() => {
     if (ran.current) return
     ran.current = true
 
+    const setSynced = (v: boolean) => {
+      try {
+        useContentStore.getState().setSiteConfigRemoteSynced(v)
+      } catch {
+        // ignore
+      }
+    }
+
     const applyRemoteIfChanged = async (): Promise<boolean> => {
       const remote = await fetchSiteConfigValue()
       if (!remote) return false
       const signature = JSON.stringify(remote)
-      if (signature === lastRemoteSignature.current) return true
+      if (signature === lastRemoteSignature.current) {
+        setSynced(true)
+        return true
+      }
       lastRemoteSignature.current = signature
 
       const current = useContentStore.getState()
@@ -35,6 +47,8 @@ export default function ContentStoreSupabaseSync() {
       const merged = mergeRemoteSiteConfigForStoreApply(remote as Record<string, unknown>, current)
       normalizeRehydratedContentStoreState(merged)
       useContentStore.setState(merged)
+      remoteMergeSucceeded.current = true
+      setSynced(true)
       try {
         // Ensure local browser cache cannot keep stale CMS values after remote sync.
         const payload = {
@@ -75,11 +89,15 @@ export default function ContentStoreSupabaseSync() {
           await new Promise((r) => setTimeout(r, attempt * 800))
         }
       } finally {
-        markSiteConfigRemoteFetchSettled()
+        // Never upsert bundle defaults over Supabase when the remote row was never read (mobile/offline).
+        markSiteConfigRemoteFetchSettled(remoteMergeSucceeded.current)
+        if (!remoteMergeSucceeded.current) {
+          setSynced(true)
+        }
         // Keep local/deployed tabs converged even when content is edited elsewhere.
         pollTimer = setInterval(() => {
           void applyRemoteIfChanged()
-        }, 15000)
+        }, 8000)
         try {
           const supabase = createSupabaseBrowserClient()
           realtimeChannel = supabase

@@ -10,12 +10,15 @@ import {
 /** ContentStoreSupabaseSync 첫 fetch 종료 후 true — 그 전 기본값만 upsert하는 레이스 완화 */
 let siteConfigRemoteFetchSettled = false
 
-export function markSiteConfigRemoteFetchSettled(): void {
+/**
+ * @param allowInitialUpsert When false, skip scheduling an upsert (e.g. remote fetch never succeeded —
+ * avoids writing bundle defaults over production `site_configs` on slow/offline mobile).
+ */
+export function markSiteConfigRemoteFetchSettled(allowInitialUpsert = true): void {
   if (siteConfigRemoteFetchSettled) return
   siteConfigRemoteFetchSettled = true
+  if (!allowInitialUpsert) return
   try {
-    // _hasHydrated 가 아직 false인 타이밍이 있어도 병합된 스토어를 Supabase에 반영해야 함.
-    // (이전에는 여기서 return 되어 첫 저장이 영원히 스킵되는 경우가 있었음)
     const payload = partializedSiteConfigForPersist(useContentStore.getState())
     scheduleSiteConfigStateUpsert(payload)
   } catch (e) {

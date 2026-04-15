@@ -209,7 +209,13 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
       return null
     }
     if (!data?.value || typeof data.value !== 'object') return null
-    return data.value as Record<string, unknown>
+    const raw = data.value as Record<string, unknown>
+    // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
+    const inner = raw.state
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      return inner as Record<string, unknown>
+    }
+    return raw
   } catch (e) {
     console.warn('[siteConfig] fetch error', e)
     return null
