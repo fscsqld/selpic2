@@ -1,5 +1,7 @@
 import path from 'path'
 import fs from 'fs/promises'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { STOREFRONT_CATALOG_CONFIG_KEY } from '@/lib/siteConfigConstants'
 
 export type CatalogProductRecord = {
   id: string
@@ -27,6 +29,38 @@ async function ensureDir() {
 }
 
 export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
+  if (isSupabaseConfigured()) {
+    try {
+      const admin = getSupabaseAdmin()
+      const { data, error } = await admin
+        .from('site_configs')
+        .select('value, updated_at')
+        .eq('config_key', STOREFRONT_CATALOG_CONFIG_KEY)
+        .maybeSingle()
+      if (!error && data) {
+        const value = data.value
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const obj = value as Record<string, unknown>
+          const products = Array.isArray(obj.products) ? (obj.products as CatalogProductRecord[]) : []
+          return {
+            updatedAt:
+              (typeof obj.updatedAt === 'string' ? obj.updatedAt : '') ||
+              (typeof data.updated_at === 'string' ? data.updated_at : ''),
+            products,
+          }
+        }
+        if (Array.isArray(value)) {
+          return {
+            updatedAt: typeof data.updated_at === 'string' ? data.updated_at : '',
+            products: value as CatalogProductRecord[],
+          }
+        }
+      }
+    } catch {
+      // Fall through to file fallback for local/dev recovery.
+    }
+  }
+
   try {
     const raw = await fs.readFile(DATA_FILE, 'utf-8')
     const parsed = JSON.parse(raw) as CatalogFileShape | CatalogProductRecord[]
@@ -55,6 +89,28 @@ export async function readCatalogProducts(): Promise<CatalogProductRecord[]> {
 }
 
 export async function writeCatalogFile(data: CatalogFileShape): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin()
+    const now = new Date().toISOString()
+    const { error } = await admin
+      .from('site_configs')
+      .upsert(
+        {
+          config_key: STOREFRONT_CATALOG_CONFIG_KEY,
+          value: {
+            updatedAt: data.updatedAt || now,
+            products: data.products,
+          },
+          updated_at: now,
+        },
+        { onConflict: 'config_key' }
+      )
+    if (error) {
+      throw new Error(`[catalog] Supabase upsert failed: ${error.message}`)
+    }
+    return
+  }
+
   await ensureDir()
   await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8')
 }
