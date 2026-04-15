@@ -218,6 +218,21 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
     return raw
   } catch (e) {
     console.warn('[siteConfig] fetch error', e)
-    return null
   }
+
+  // Fallback: same-origin server route using service-role Supabase (mobile CORS/RLS/cache-safe path).
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/site-config/public', { cache: 'no-store' })
+      if (!res.ok) return null
+      const body = (await res.json()) as { success?: boolean; value?: unknown }
+      if (!body?.success) return null
+      if (!body.value || typeof body.value !== 'object' || Array.isArray(body.value)) return null
+      return body.value as Record<string, unknown>
+    } catch (e) {
+      console.warn('[siteConfig] fallback fetch error', e)
+    }
+  }
+
+  return null
 }
