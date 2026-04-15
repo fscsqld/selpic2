@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useStore, CustomizationOption } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import { Plus, Edit, Trash2, Eye, Search, Filter, X, CheckCircle, AlertCircle, Package } from 'lucide-react'
@@ -165,6 +165,18 @@ function AdminProductsPageContent() {
       setNotification({ type: 'info', message: '', show: false })
     }, 3000)
   }
+
+  const forceCatalogSync = useCallback(async (): Promise<boolean> => {
+    try {
+      const { syncCatalogToServerNow } = await import('@/lib/catalogSyncScheduler')
+      const snapshot = useStore.getState().products
+      const result = await syncCatalogToServerNow(snapshot, 3)
+      return !!result.ok
+    } catch (e) {
+      console.error('❌ [Product Management] force catalog sync failed:', e)
+      return false
+    }
+  }, [])
 
   // 검색 및 필터링된 상품 목록
   const filteredProducts = products
@@ -447,14 +459,22 @@ function AdminProductsPageContent() {
             version: 0
           }))
         }, 100)
-        showNotification('success', t('admin.products.productUpdatedSuccess').replace('{name}', formData.name))
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? t('admin.products.productUpdatedSuccess').replace('{name}', formData.name)
+            : `${t('admin.products.productUpdatedSuccess').replace('{name}', formData.name)} (Saved locally, server sync failed)`
+        )
         
         // 상품 수정 후 홈페이지와 상품 페이지로 자동 이동
         setTimeout(() => {
           closeModal()
-          // 홈페이지와 상품 페이지로 이동하여 변경사항 확인
-          window.open('/', '_blank')
-          window.open('/stickers', '_blank')
+          if (synced) {
+            // 홈페이지와 상품 페이지로 이동하여 변경사항 확인
+            window.open('/', '_blank')
+            window.open('/stickers', '_blank')
+          }
         }, 2000)
         return
       } else {
@@ -496,14 +516,22 @@ function AdminProductsPageContent() {
             version: 0
           }))
         }, 100)
-        showNotification('success', t('admin.products.productAddedSuccess').replace('{name}', formData.name))
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? t('admin.products.productAddedSuccess').replace('{name}', formData.name)
+            : `${t('admin.products.productAddedSuccess').replace('{name}', formData.name)} (Saved locally, server sync failed)`
+        )
         
         // 새 상품 추가 후 홈페이지와 상품 페이지로 자동 이동
         setTimeout(() => {
           closeModal()
-          // 홈페이지와 상품 페이지로 이동하여 변경사항 확인
-          window.open('/', '_blank')
-          window.open('/stickers', '_blank')
+          if (synced) {
+            // 홈페이지와 상품 페이지로 이동하여 변경사항 확인
+            window.open('/', '_blank')
+            window.open('/stickers', '_blank')
+          }
         }, 2000)
         return
       }
@@ -515,11 +543,17 @@ function AdminProductsPageContent() {
     }
   }
 
-  const handleDelete = (productId: string) => {
+  const handleDelete = async (productId: string) => {
     const product = products.find(p => p.id === productId)
     if (confirm(t('admin.products.confirmDeleteSingle').replace('{name}', product?.name || ''))) {
       deleteProduct(productId)
-      showNotification('success', t('admin.products.productDeletedSuccess').replace('{name}', product?.name || ''))
+      const synced = await forceCatalogSync()
+      showNotification(
+        synced ? 'success' : 'error',
+        synced
+          ? t('admin.products.productDeletedSuccess').replace('{name}', product?.name || '')
+          : `${t('admin.products.productDeletedSuccess').replace('{name}', product?.name || '')} (Saved locally, server sync failed)`
+      )
     }
   }
 

@@ -22,6 +22,22 @@ function isSameOriginRequest(req: Request): boolean {
   }
 }
 
+function isSameOriginByReferer(req: Request): boolean {
+  const referer = req.headers.get('referer') || req.headers.get('Referer')
+  const host = req.headers.get('host') || req.headers.get('Host')
+  if (!referer || !host) return false
+  try {
+    return new URL(referer).host === host
+  } catch {
+    return false
+  }
+}
+
+function isSameOriginByFetchMetadata(req: Request): boolean {
+  const site = (req.headers.get('sec-fetch-site') || '').toLowerCase()
+  return site === 'same-origin'
+}
+
 function hasAdminWriteHint(req: Request): boolean {
   return (req.headers.get('x-selpic-admin-write') || '').trim() === '1'
 }
@@ -32,7 +48,10 @@ function validateSecret(req: Request): boolean {
   if (expected && token === expected) return true
   // Fallback for legacy local-admin auth flow (no server session cookie):
   // accept only same-origin admin-marked writes.
-  return hasAdminWriteHint(req) && isSameOriginRequest(req)
+  return (
+    hasAdminWriteHint(req) &&
+    (isSameOriginRequest(req) || isSameOriginByReferer(req) || isSameOriginByFetchMetadata(req))
+  )
 }
 
 function isValidRecord(p: unknown): p is CatalogProductRecord {
