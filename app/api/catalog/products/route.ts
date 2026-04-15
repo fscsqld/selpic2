@@ -11,11 +11,28 @@ function getBearerToken(req: Request): string | null {
   return alt?.trim() || null
 }
 
+function isSameOriginRequest(req: Request): boolean {
+  const origin = req.headers.get('origin') || req.headers.get('Origin')
+  const host = req.headers.get('host') || req.headers.get('Host')
+  if (!origin || !host) return false
+  try {
+    return new URL(origin).host === host
+  } catch {
+    return false
+  }
+}
+
+function hasAdminWriteHint(req: Request): boolean {
+  return (req.headers.get('x-selpic-admin-write') || '').trim() === '1'
+}
+
 function validateSecret(req: Request): boolean {
   const token = getBearerToken(req)
   const expected = (process.env.CATALOG_SYNC_SECRET || '').trim()
-  if (!expected) return false
-  return token === expected
+  if (expected && token === expected) return true
+  // Fallback for legacy local-admin auth flow (no server session cookie):
+  // accept only same-origin admin-marked writes.
+  return hasAdminWriteHint(req) && isSameOriginRequest(req)
 }
 
 function isValidRecord(p: unknown): p is CatalogProductRecord {

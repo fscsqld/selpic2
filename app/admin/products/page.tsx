@@ -213,58 +213,81 @@ function AdminProductsPageContent() {
     setCurrentPage(1)
   }, [searchTerm, selectedCategory, sortBy, sortOrder, products.length])
 
-  // 🔧 페이지 마운트 시 localStorage에서 products 로드 (홈페이지와 동기화)
+  // Keep admin products aligned with shared server catalog first, then local cache fallback.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
     }
 
-    // localStorage에서 최신 products 가져오기
     const loadProductsFromLocalStorage = () => {
       try {
         const currentStore = localStorage.getItem('selpic-store')
         if (currentStore) {
           const parsed = JSON.parse(currentStore)
           if (parsed?.state?.products && Array.isArray(parsed.state.products)) {
-            // Zustand store에 직접 설정 (localStorage의 최신 데이터 사용)
             const storeState = useStore.getState()
             useStore.setState({ 
               ...storeState,
               products: parsed.state.products 
             })
-            console.log('✅ [Product Management] Products loaded from localStorage:', parsed.state.products.length, '개 상품')
-          } else {
-            console.warn('⚠️ [Product Management] No products in localStorage')
+            return true
           }
-        } else {
-          console.warn('⚠️ [Product Management] No localStorage data found')
         }
       } catch (error) {
         console.error('❌ [Product Management] Failed to load products from localStorage:', error)
       }
+      return false
     }
 
-    // 초기 로드
-    loadProductsFromLocalStorage()
+    const loadProductsFromServerCatalog = async () => {
+      try {
+        const res = await fetch('/api/catalog/public', { cache: 'no-store' })
+        if (!res.ok) return false
+        const payload = await res.json() as { success?: boolean; products?: unknown[] }
+        if (!payload.success || !Array.isArray(payload.products)) return false
+        const storeState = useStore.getState()
+        useStore.setState({
+          ...storeState,
+          products: payload.products as any
+        })
+        return true
+      } catch (error) {
+        console.warn('⚠️ [Product Management] Failed to load server catalog:', error)
+        return false
+      }
+    }
 
-    // refreshProducts도 호출하여 이중 확인
-    refreshProducts()
+    void (async () => {
+      const ok = await loadProductsFromServerCatalog()
+      if (!ok) {
+        loadProductsFromLocalStorage()
+      }
+      refreshProducts()
+    })()
 
-    // Custom Event 리스너 (다른 페이지에서 상품 추가/수정/삭제 시)
     const handleProductsUpdate = (event?: Event) => {
       const customEvent = event as CustomEvent
       const action = customEvent?.detail?.action || 'unknown'
-      console.log('🔄 [Product Management] Products updated:', action)
-      loadProductsFromLocalStorage()
-      refreshProducts()
+      void (async () => {
+        const ok = await loadProductsFromServerCatalog()
+        if (!ok) {
+          loadProductsFromLocalStorage()
+        }
+        refreshProducts()
+        console.log('🔄 [Product Management] Products updated:', action)
+      })()
     }
 
-    // Storage Event 리스너 (다른 탭/페이지에서 변경 시)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'selpic-store') {
-        console.log('🔄 [Product Management] localStorage selpic-store changed, refreshing...')
-        loadProductsFromLocalStorage()
-        refreshProducts()
+        void (async () => {
+          const ok = await loadProductsFromServerCatalog()
+          if (!ok) {
+            loadProductsFromLocalStorage()
+          }
+          refreshProducts()
+          console.log('🔄 [Product Management] localStorage selpic-store changed, refreshing...')
+        })()
       }
     }
 

@@ -49,23 +49,20 @@ export function productsToCatalogRecords(products: Product[]): CatalogProductPay
 
 export async function syncCatalogToServer(products: Product[]): Promise<{ ok: boolean; status?: number }> {
   const secret = (process.env.NEXT_PUBLIC_CATALOG_SYNC_SECRET || '').trim()
-  if (!secret) {
-    if (process.env.NODE_ENV === 'development') {
-      console.info(
-        '[catalog] Sync skipped: set CATALOG_SYNC_SECRET and NEXT_PUBLIC_CATALOG_SYNC_SECRET to the same value, then save a product as admin.'
-      )
-    }
-    return { ok: false }
-  }
-
   const snapshots = productsToCatalogRecords(products)
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      // Admin UI marker (route still checks same-origin + admin hint fallback).
+      'x-selpic-admin-write': '1',
+    }
+    if (secret) {
+      headers.Authorization = `Bearer ${secret}`
+    }
+
     const res = await fetch('/api/catalog/products', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${secret}`
-      },
+      headers,
       body: JSON.stringify({ products: snapshots })
     })
     if (!res.ok) {
