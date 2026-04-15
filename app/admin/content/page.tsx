@@ -38,8 +38,8 @@ import {
   ChevronsRight
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { useContentStore, ContentItem } from '@/lib/contentStore'
-import { persistSiteConfigPayloadNow } from '@/lib/siteConfigClient'
+import { useContentStore, ContentItem, partializedSiteConfigForPersist } from '@/lib/contentStore'
+import { persistSiteConfigPayloadNow, persistSiteConfigStateNow } from '@/lib/siteConfigClient'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { useStore, NewsletterSubscriber } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
@@ -542,8 +542,19 @@ export default function ContentManagementPage() {
     }, 3000)
   }
 
+  const syncSiteConfigNow = async (): Promise<boolean> => {
+    try {
+      const payload = partializedSiteConfigForPersist(useContentStore.getState())
+      await persistSiteConfigStateNow(payload)
+      return true
+    } catch (e) {
+      console.error('❌ [Content Management] immediate cloud sync failed:', e)
+      return false
+    }
+  }
+
   // Quick edit save function
-  const handleQuickEditSave = (data: any) => {
+  const handleQuickEditSave = async (data: any) => {
     console.log('Quick edit save started:', data)
     
     // Find existing content by section and title
@@ -573,10 +584,12 @@ export default function ContentManagementPage() {
           section: data.section
         })
         
-        // Store updated; remote save is handled by SiteConfigStoreAutosave (status badge).
+        const synced = await syncSiteConfigNow()
         showNotificationToast(
-          'success',
-          'Changes updated in the store. Cloud save will complete shortly; check the save status badge if it fails.'
+          synced ? 'success' : 'error',
+          synced
+            ? 'Changes saved and synced to cloud.'
+            : 'Changes saved locally, but cloud sync failed. Check network/Supabase settings.'
         )
         
       } catch (error) {
@@ -602,7 +615,13 @@ export default function ContentManagementPage() {
       
       try {
         addContent(newContent)
-        showNotificationToast('success', `New content added: ${data.title}`)
+        const synced = await syncSiteConfigNow()
+        showNotificationToast(
+          synced ? 'success' : 'error',
+          synced
+            ? `New content added: ${data.title}`
+            : `New content added locally but cloud sync failed: ${data.title}`
+        )
       } catch (error) {
         console.error('Content addition failed:', error)
         showNotificationToast('error', 'An error occurred while adding content.')
