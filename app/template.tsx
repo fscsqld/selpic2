@@ -5,6 +5,7 @@ import CatalogStoreHydrator from '@/components/CatalogStoreHydrator'
 import SiteConfigStoreAutosave from '@/components/SiteConfigStoreAutosave'
 import SiteConfigWriteStatusBadge from '@/components/SiteConfigWriteStatusBadge'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
+import StorefrontDeployVersionGuard from '@/components/StorefrontDeployVersionGuard'
 
 /**
  * Root layout stays server-only (smaller app/layout.js, avoids ChunkLoadError).
@@ -18,6 +19,7 @@ export default function RootTemplate({
 }) {
   return (
     <div className="contents">
+      <StorefrontDeployVersionGuard />
       <ContentStoreSupabaseSync />
       <CatalogStoreHydrator />
       <SiteConfigStoreAutosave />

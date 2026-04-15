@@ -22,6 +22,9 @@ const NEXT_PUBLIC_SUPABASE_URL = stripSupabaseEnvValue(
 const NEXT_PUBLIC_SUPABASE_ANON_KEY = stripSupabaseEnvValue(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
 )
+const NEXT_PUBLIC_DEPLOY_VERSION = stripSupabaseEnvValue(
+  process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_DEPLOY_VERSION || 'dev-local'
+)
 
 if (process.env.VERCEL === '1' && !NEXT_PUBLIC_SUPABASE_URL) {
   console.warn(
@@ -39,6 +42,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_DEPLOY_VERSION,
   },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
