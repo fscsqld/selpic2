@@ -9,14 +9,14 @@ export function scheduleCatalogSyncToServer(products: Product[]): void {
   debounceTimer = setTimeout(() => {
     debounceTimer = null
     void (async () => {
-      const { useAdminAuth } = await import('@/lib/adminAuth')
-      const auth = useAdminAuth.getState()
-      if (!auth.isLoggedIn || !auth.adminUser) return
-      const perms = auth.adminUser.permissions || []
-      const allowed = auth.adminUser.role === 'super_admin' || perms.includes('products:write')
-      if (!allowed) return
       const { syncCatalogToServer } = await import('@/lib/catalogSync')
-      await syncCatalogToServer(products)
+      // Do not gate by local adminAuth state: during hydration/login race this can be false
+      // even though the user is already in admin UI. API-side checks remain enforced.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const r = await syncCatalogToServer(products)
+        if (r.ok) return
+        await new Promise((resolve) => setTimeout(resolve, attempt * 900))
+      }
     })()
   }, 800)
 }
