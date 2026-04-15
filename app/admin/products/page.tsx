@@ -268,14 +268,12 @@ function AdminProductsPageContent() {
     const handleProductsUpdate = (event?: Event) => {
       const customEvent = event as CustomEvent
       const action = customEvent?.detail?.action || 'unknown'
-      void (async () => {
-        const ok = await loadProductsFromServerCatalog()
-        if (!ok) {
-          loadProductsFromLocalStorage()
-        }
-        refreshProducts()
-        console.log('🔄 [Product Management] Products updated:', action)
-      })()
+      // Important: after add/edit/delete in admin, local store is the newest source.
+      // If we fetch server immediately, stale catalog can overwrite just-saved edits
+      // before debounced sync completes.
+      loadProductsFromLocalStorage()
+      refreshProducts()
+      console.log('🔄 [Product Management] Products updated:', action)
     }
 
     const handleStorageChange = (e: StorageEvent) => {
