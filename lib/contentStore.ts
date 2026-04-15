@@ -3881,6 +3881,62 @@ export function mergePersistedSiteConfig(
   return merged
 }
 
+/** Keys saved in `site_configs.value` (same scope as `partializedSiteConfigForPersist`). */
+const REMOTE_CMS_ARRAY_KEYS = [
+  'contentItems',
+  'sidebarMenuItems',
+  'heroSlides',
+  'heroSlideTemplates',
+  'categoryHeroSlides',
+  'categoryItems',
+  'subcategoryItems',
+  'promoCodes',
+  'paymentOptions',
+  'shippingOptions',
+  'pickupLocations',
+  'vipGradeBenefits',
+  'vipGradeConfigs',
+] as const
+
+/**
+ * Apply Supabase `site_configs.value` on top of the live store.
+ *
+ * Private/incognito has no prior `localStorage`; the store starts from bundle defaults whose
+ * `updatedAt` is "now", so `mergeRecordArraysByLastWrite` can beat CMS rows with the same id.
+ * `remote.arr || local` treats `[]` as truthy and keeps an empty remote hero list. This helper
+ * copies each CMS array from `remote` when the key exists (including `[]`), then merges objects.
+ */
+export function mergeRemoteSiteConfigForStoreApply(
+  remote: Record<string, unknown>,
+  current: ContentStore
+): ContentStore {
+  const merged = mergePersistedSiteConfig(remote, current, false) as unknown as Record<string, unknown>
+  for (const key of REMOTE_CMS_ARRAY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(remote, key)) {
+      const v = remote[key]
+      if (Array.isArray(v)) {
+        merged[key] = v
+      }
+    }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(remote, 'heroSliderSettings') &&
+    remote.heroSliderSettings &&
+    typeof remote.heroSliderSettings === 'object'
+  ) {
+    merged.heroSliderSettings = {
+      ...(typeof merged.heroSliderSettings === 'object' && merged.heroSliderSettings !== null
+        ? merged.heroSliderSettings
+        : {}),
+      ...(remote.heroSliderSettings as object),
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(remote, 'freeShippingSettings')) {
+    merged.freeShippingSettings = remote.freeShippingSettings
+  }
+  return merged as unknown as ContentStore
+}
+
 /** persist 재수화 + Supabase 원격 병합 후 Date/레거시 마이그레이션 (상태 객체를 제자리에서 수정) */
 export function normalizeRehydratedContentStoreState(state: ContentStore | undefined): void {
   if (!state) return

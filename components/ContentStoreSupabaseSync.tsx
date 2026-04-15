@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { fetchSiteConfigValue, flushPendingSiteConfigState } from '@/lib/siteConfigClient'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import {
-  mergePersistedSiteConfig,
+  mergeRemoteSiteConfigForStoreApply,
   partializedSiteConfigForPersist,
   normalizeRehydratedContentStoreState,
   useContentStore
@@ -31,9 +31,8 @@ export default function ContentStoreSupabaseSync() {
       lastRemoteSignature.current = signature
 
       const current = useContentStore.getState()
-      // Supabase is the canonical source for storefront/admin CMS across local + deployed.
-      // Keep local-only data only as fallback when remote payload is missing fields.
-      const merged = mergePersistedSiteConfig(remote, current, false)
+      // Supabase is canonical (private/incognito: no localStorage — must not keep bundle defaults over remote arrays).
+      const merged = mergeRemoteSiteConfigForStoreApply(remote as Record<string, unknown>, current)
       normalizeRehydratedContentStoreState(merged)
       useContentStore.setState(merged)
       try {
