@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { getLastSiteConfigWriteStatus } from '@/lib/siteConfigClient'
 
 type Status =
@@ -9,7 +10,11 @@ type Status =
   | { kind: 'saved'; source: 'state' | 'string'; at: number }
   | { kind: 'error'; source: 'state' | 'string'; at: number; message: string }
 
+/** Floating CMS cloud-save indicator — admin only; not for storefront shoppers. */
 export default function SiteConfigWriteStatusBadge() {
+  const pathname = usePathname() || ''
+  const isAdminArea = pathname === '/admin' || pathname.startsWith('/admin/')
+
   const [status, setStatus] = useState<Status>(() => getLastSiteConfigWriteStatus() as Status)
 
   useEffect(() => {
@@ -22,6 +27,7 @@ export default function SiteConfigWriteStatusBadge() {
     return () => window.removeEventListener('site-config-write-status', handler)
   }, [])
 
+  if (!isAdminArea) return null
   if (status.kind === 'idle') return null
 
   const base =
