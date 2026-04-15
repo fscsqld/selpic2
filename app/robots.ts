@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
   return {
     rules: [
       {

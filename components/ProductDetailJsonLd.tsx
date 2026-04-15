@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import type { Product } from '@/lib/store'
 
 function getSiteBase(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
 }
 
 function toAbsoluteUrl(baseUrl: string, maybeUrl?: string): string | undefined {

@@ -7,7 +7,7 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
  * if CATALOG_SYNC_SECRET / NEXT_PUBLIC_CATALOG_SYNC_SECRET are set.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
   const now = new Date()
 
   const paths: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[0]['changeFrequency'] }[] = [

@@ -9,7 +9,7 @@ import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { TRANSACTIONAL_EMAIL_SIGNATURE_NAME } from '@/lib/transactionalEmailBranding'
 import { COMPANY_LEGAL_LINE, EMAIL_CONFIDENTIALITY_NOTICE } from '@/lib/companyLegal'
 
-const SITE_URL = 'https://www.selpic.com.au'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app'
 
 export default function Footer() {
   const {
@@ -164,7 +164,7 @@ export default function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  www.selpic.com.au
+                  {SITE_URL.replace(/^https?:\/\//, '')}
                 </a>
               </p>
             </div>

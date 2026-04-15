@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
 
 function absoluteImageUrl(image?: string): string | undefined {
   if (!image) return undefined

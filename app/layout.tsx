@@ -5,7 +5,7 @@ import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
 
 const inter = Inter({ subsets: ['latin'] })
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app'
 
 /** Ensures phones use the same responsive layout scale as desktop browsers (no accidental zoomed-out “desktop site”). */
 export const viewport: Viewport = {

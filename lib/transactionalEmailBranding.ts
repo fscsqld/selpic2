@@ -5,8 +5,8 @@
 
 import { COMPANY_LOGO_URL, EMAIL_CONFIDENTIALITY_NOTICE } from '@/lib/companyLegal'
 
-export const DEFAULT_PUBLIC_SITE_URL = 'https://www.selpic.com.au'
-const WEBSITE_DISPLAY = 'www.selpic.com.au'
+export const DEFAULT_PUBLIC_SITE_URL = 'https://selpic2.vercel.app'
+const WEBSITE_DISPLAY = 'selpic2.vercel.app'
 
 /** When dev uses localhost, mail clients cannot load `http://localhost/...` images — use this HTTPS base for email assets. */
 const DEFAULT_EMAIL_ASSET_BASE = DEFAULT_PUBLIC_SITE_URL

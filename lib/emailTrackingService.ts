@@ -77,7 +77,7 @@ export class EmailTrackingService {
       return origin
     }
 
-    return 'https://selpic.com.au'
+    return 'https://selpic2.vercel.app'
   }
 
   // Initialize tracking for new email

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.NEXT_PUBLIC_BASE_URL ||
-      'https://selpic.com.au'
+      'https://selpic2.vercel.app'
     const resetLink = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
 
     // Resend API 키가 설정되어 있으면 실제 이메일 전송
