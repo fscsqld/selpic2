@@ -1,5 +1,6 @@
 import path from 'path'
 import fs from 'fs/promises'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { STOREFRONT_CATALOG_CONFIG_KEY } from '@/lib/siteConfigConstants'
 
@@ -23,16 +24,32 @@ export type CatalogFileShape = {
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'catalog')
 const DATA_FILE = path.join(DATA_DIR, 'products.json')
+let catalogSupabaseAnonClient: SupabaseClient | null = null
 
 async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true })
 }
 
-export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
+function getCatalogSupabaseClient(): SupabaseClient | null {
   if (isSupabaseConfigured()) {
+    return getSupabaseAdmin()
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  if (!url || !anon) return null
+  if (!catalogSupabaseAnonClient) {
+    catalogSupabaseAnonClient = createClient(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  }
+  return catalogSupabaseAnonClient
+}
+
+export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
+  const client = getCatalogSupabaseClient()
+  if (client) {
     try {
-      const admin = getSupabaseAdmin()
-      const { data, error } = await admin
+      const { data, error } = await client
         .from('site_configs')
         .select('value, updated_at')
         .eq('config_key', STOREFRONT_CATALOG_CONFIG_KEY)
@@ -89,10 +106,10 @@ export async function readCatalogProducts(): Promise<CatalogProductRecord[]> {
 }
 
 export async function writeCatalogFile(data: CatalogFileShape): Promise<void> {
-  if (isSupabaseConfigured()) {
-    const admin = getSupabaseAdmin()
+  const client = getCatalogSupabaseClient()
+  if (client) {
     const now = new Date().toISOString()
-    const { error } = await admin
+    const { error } = await client
       .from('site_configs')
       .upsert(
         {
