@@ -1,24 +1,108 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useStore } from '@/lib/store'
+import { usePathname } from 'next/navigation'
+import { type Product, useStore } from '@/lib/store'
+
+type CatalogPublicResponse = {
+  success?: boolean
+  updatedAt?: string | null
+  products?: Array<Partial<Product>>
+}
+
+function normalizeCatalogProduct(input: Partial<Product>): Product | null {
+  if (!input || typeof input.id !== 'string' || !input.id.trim()) return null
+  if (typeof input.name !== 'string') return null
+  if (typeof input.description !== 'string') return null
+  if (typeof input.price !== 'number' || !Number.isFinite(input.price)) return null
+  if (typeof input.category !== 'string') return null
+  if (typeof input.inStock !== 'boolean') return null
+
+  return {
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    price: input.price,
+    category: input.category,
+    inStock: input.inStock,
+    image: typeof input.image === 'string' ? input.image : '',
+    subcategory: typeof input.subcategory === 'string' ? input.subcategory : undefined,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString(),
+    hasDetailPage: typeof input.hasDetailPage === 'boolean' ? input.hasDetailPage : undefined,
+  }
+}
+
+function productsSignature(list: Product[]): string {
+  const compact = list
+    .map((p) => `${p.id}|${p.updatedAt || ''}|${p.price}|${p.inStock ? 1 : 0}`)
+    .sort()
+  return compact.join('||')
+}
 
 /**
- * localStorage(selpic-store)에 상품이 없을 때, 동일 비밀번호로 보호된 GET /api/catalog/products로
- * `data/catalog/products.json`을 한 번 불러와 스토어를 채웁니다.
+ * Storefront-only product hydration:
+ * always prefer shared server catalog over device-local selpic-store cache.
  */
 export default function CatalogStoreHydrator() {
+  const pathname = usePathname()
   const _hasHydrated = useStore((s) => s._hasHydrated)
-  const products = useStore((s) => s.products)
-  const tryHydrate = useStore((s) => s.tryHydrateProductsFromServerCatalog)
-  const ran = useRef(false)
+  const lastRemoteVersion = useRef<string>('')
+  const inFlight = useRef(false)
 
   useEffect(() => {
-    if (!_hasHydrated || ran.current) return
-    if (products.length > 0) return
-    ran.current = true
-    void tryHydrate()
-  }, [_hasHydrated, products.length, tryHydrate])
+    if (!_hasHydrated) return
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) return
+
+    const syncFromPublicCatalog = async () => {
+      if (inFlight.current) return
+      inFlight.current = true
+      try {
+        const res = await fetch('/api/catalog/public', { cache: 'no-store' })
+        if (!res.ok) return
+        const payload = (await res.json()) as CatalogPublicResponse
+        if (!payload.success || !Array.isArray(payload.products)) return
+
+        const remoteProducts = payload.products
+          .map(normalizeCatalogProduct)
+          .filter((p): p is Product => !!p)
+
+        const version = payload.updatedAt || productsSignature(remoteProducts)
+        if (version && version === lastRemoteVersion.current) return
+
+        const localProducts = useStore.getState().products
+        const localSig = productsSignature(localProducts)
+        const remoteSig = productsSignature(remoteProducts)
+        if (localSig === remoteSig) {
+          lastRemoteVersion.current = version
+          return
+        }
+
+        useStore.setState({ products: remoteProducts })
+        lastRemoteVersion.current = version
+      } catch {
+        // silent: storefront should continue with existing local cache when offline
+      } finally {
+        inFlight.current = false
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void syncFromPublicCatalog()
+      }
+    }
+    const onOnline = () => {
+      void syncFromPublicCatalog()
+    }
+
+    void syncFromPublicCatalog()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onOnline)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [_hasHydrated, pathname])
 
   return null
 }

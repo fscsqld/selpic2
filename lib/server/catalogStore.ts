@@ -26,18 +26,32 @@ async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true })
 }
 
-export async function readCatalogProducts(): Promise<CatalogProductRecord[]> {
+export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
   try {
     const raw = await fs.readFile(DATA_FILE, 'utf-8')
     const parsed = JSON.parse(raw) as CatalogFileShape | CatalogProductRecord[]
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray((parsed as CatalogFileShape).products)) {
-      return (parsed as CatalogFileShape).products
+      const snapshot = parsed as CatalogFileShape
+      return {
+        updatedAt: snapshot.updatedAt || '',
+        products: snapshot.products,
+      }
     }
-    if (Array.isArray(parsed)) return parsed
-    return []
+    if (Array.isArray(parsed)) {
+      return {
+        updatedAt: '',
+        products: parsed,
+      }
+    }
+    return { updatedAt: '', products: [] }
   } catch {
-    return []
+    return { updatedAt: '', products: [] }
   }
+}
+
+export async function readCatalogProducts(): Promise<CatalogProductRecord[]> {
+  const snapshot = await readCatalogSnapshot()
+  return snapshot.products
 }
 
 export async function writeCatalogFile(data: CatalogFileShape): Promise<void> {

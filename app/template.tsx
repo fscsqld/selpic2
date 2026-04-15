@@ -1,6 +1,7 @@
 'use client'
 
 import ContentStoreSupabaseSync from '@/components/ContentStoreSupabaseSync'
+import CatalogStoreHydrator from '@/components/CatalogStoreHydrator'
 import SiteConfigStoreAutosave from '@/components/SiteConfigStoreAutosave'
 import SiteConfigWriteStatusBadge from '@/components/SiteConfigWriteStatusBadge'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
@@ -18,6 +19,7 @@ export default function RootTemplate({
   return (
     <div className="contents">
       <ContentStoreSupabaseSync />
+      <CatalogStoreHydrator />
       <SiteConfigStoreAutosave />
       <SiteConfigWriteStatusBadge />
       <GamePromoCodeSyncLazy />

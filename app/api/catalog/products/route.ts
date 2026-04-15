@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { CatalogProductRecord } from '@/lib/server/catalogStore'
-import { readCatalogProducts, writeCatalogFile } from '@/lib/server/catalogStore'
+import { readCatalogSnapshot, writeCatalogFile } from '@/lib/server/catalogStore'
 
 const MAX_PRODUCTS = 5000
 
@@ -38,9 +38,14 @@ export async function GET(req: Request) {
   if (!validateSecret(req)) {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
   }
-  const products = await readCatalogProducts()
+  const snapshot = await readCatalogSnapshot()
   return NextResponse.json(
-    { success: true, count: products.length, products },
+    {
+      success: true,
+      count: snapshot.products.length,
+      updatedAt: snapshot.updatedAt || null,
+      products: snapshot.products,
+    },
     { headers: { 'Cache-Control': 'no-store' } }
   )
 }
