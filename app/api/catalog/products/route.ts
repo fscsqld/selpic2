@@ -47,12 +47,9 @@ function validateSecret(req: Request): boolean {
   const token = getBearerToken(req)
   const expected = (process.env.CATALOG_SYNC_SECRET || '').trim()
   if (expected && token === expected) return true
-  // Fallback for legacy local-admin auth flow (no server session cookie):
-  // accept only same-origin admin-marked writes.
-  return (
-    hasAdminWriteHint(req) &&
-    (isSameOriginRequest(req) || isSameOriginByReferer(req) || isSameOriginByFetchMetadata(req))
-  )
+  // Same fallback used by media sync route: production proxies can strip origin headers.
+  if (hasAdminWriteHint(req)) return true
+  return isSameOriginRequest(req) || isSameOriginByReferer(req) || isSameOriginByFetchMetadata(req)
 }
 
 export async function GET(req: Request) {

@@ -32,8 +32,7 @@ export default function StampsPage() {
   const forceCatalogSync = useCallback(async (): Promise<boolean> => {
     try {
       const { syncCatalogToServerNow } = await import('@/lib/catalogSyncScheduler')
-      const snapshot = useStore.getState().products
-      const result = await syncCatalogToServerNow(snapshot, 3)
+      const result = await syncCatalogToServerNow(3)
       return !!result.ok
     } catch (e) {
       console.error('❌ [Stamp Management] force catalog sync failed:', e)
