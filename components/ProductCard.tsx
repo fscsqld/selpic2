@@ -7,6 +7,7 @@ import { Product } from '@/lib/store'
 import { useStore } from '@/lib/store'
 import { useTranslation } from '@/lib/useTranslation'
 import { useUserAuth } from '@/lib/userAuth'
+import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
 const ProductImage = ({
   src,
@@ -68,6 +69,8 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
   // ✅ category 정규화 (대소문자 구분 없이)
   const normalizedCategory = product.category?.toLowerCase() || ''
   const isStickersOrStamps = normalizedCategory === 'stickers' || normalizedCategory === 'stamps'
+  const requiresCustomization = isCustomizationRequired(product)
+  const customizationPath = getCustomizationPath(product)
   
   // ✅ customizationOptions 확인 (배열이고 길이가 0보다 큰지)
   const hasCustomizationOptions = Array.isArray(product.customizationOptions) && product.customizationOptions.length > 0
@@ -99,6 +102,9 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
     typeof stockQuantity === 'number' && stockQuantity > 0 && stockQuantity <= lowStockThreshold && product.inStock
 
   const handleAddToCart = () => {
+    if (requiresCustomization) {
+      return
+    }
     if (!isLoggedIn) {
       alert(t('cart.loginRequired'))
       return
@@ -275,34 +281,26 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
 
         {/* 액션 버튼들 */}
         <div className="flex space-x-2 pt-2">
-          {/* Stickers 또는 Stamps 카테고리: 커스터마이징 옵션이 있으면 Customize 버튼만, 없으면 Cart 버튼만 */}
-          {isStickersOrStamps ? (
-            hasCustomizationOptions ? (
-              // 커스터마이징이 필요한 상품: Customize 버튼만
-              <Link
-                href={
-                  normalizedCategory === 'stickers'
-                    ? `/stickers/customize?product=${product.id}`
-                    : `/stamp/customize?product=${product.id}`
-                }
-                className="flex-1 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-purple-600 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-1 text-center shadow-md hover:shadow-lg"
-              >
-                <Eye size={16} />
-                <span>{t('product.customize')}</span>
-              </Link>
-            ) : (
-              // 일반 상품: Cart 버튼만
-              <button
-                onClick={handleAddToCart}
-                className="flex-1 btn-primary flex items-center justify-center space-x-1"
-                disabled={!product.inStock}
-              >
-                <ShoppingCart size={16} />
-                <span>{t('product.addToCart')}</span>
-              </button>
-            )
+          {/* 커스텀 필수 상품은 항상 커스텀 페이지로 유도 */}
+          {requiresCustomization ? (
+            <Link
+              href={customizationPath}
+              className="flex-1 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-purple-600 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-1 text-center shadow-md hover:shadow-lg"
+            >
+              <Eye size={16} />
+              <span>{t('product.customize')}</span>
+            </Link>
+          ) : isStickersOrStamps ? (
+            <button
+              onClick={handleAddToCart}
+              className="flex-1 btn-primary flex items-center justify-center space-x-1"
+              disabled={!product.inStock}
+            >
+              <ShoppingCart size={16} />
+              <span>{t('product.addToCart')}</span>
+            </button>
           ) : (
-            // 다른 카테고리: Customize와 Cart 버튼 모두 표시
+            // 다른 카테고리: Customize와 Cart 버튼 모두 표시(기존 동작 유지)
             <>
               <Link
                 href={`/customize?product=${product.id}`}

@@ -10,6 +10,7 @@ import Header from '@/components/Header'
 import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
+import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
 const StampProductImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -339,6 +340,10 @@ export default function StampPage() {
   }, [stampProducts, searchTerm, selectedSize, selectedMaterial, selectedUsage, sortBy])
 
   const handleAddToCart = (product: StampProduct) => {
+    if (isCustomizationRequired(product)) {
+      router.push(getCustomizationPath(product))
+      return
+    }
     // ✅ Fix: Use correct CartItem interface structure
     const cartItem = {
       product: product,        // Product object with all properties
@@ -357,8 +362,7 @@ export default function StampPage() {
   }
 
   const handleCustomize = (product: StampProduct) => {
-    // 스템프 전용 커스터마이징 페이지로 이동
-    router.push(`/stamp/customize?product=${product.id}`)
+    router.push(getCustomizationPath(product))
   }
 
   const getSizeLabel = (size: string) => {
@@ -622,9 +626,9 @@ export default function StampPage() {
                     {/* 원본 product에서 customizationOptions 확인 */}
                     {(() => {
                       const originalProduct = products.find(p => p.id === product.id)
-                      const hasCustomizationOptions = originalProduct?.customizationOptions && originalProduct.customizationOptions.length > 0
+                      const requiresCustomization = !!originalProduct && isCustomizationRequired(originalProduct)
                       
-                      if (hasCustomizationOptions) {
+                      if (requiresCustomization) {
                         // 커스터마이징이 필요한 스탬프: Customize 버튼만
                         return (
                           <button

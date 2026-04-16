@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useContentStore } from '@/lib/contentStore'
@@ -9,6 +10,7 @@ import Header from '@/components/Header'
 import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
+import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
 // 폰케이스 타입 정의
 interface PhoneCaseProduct {
@@ -33,6 +35,7 @@ interface PhoneCaseProduct {
 }
 
 export default function PhoneCasesPage() {
+  const router = useRouter()
   const { products, addToCart } = useStore()
   const { isLoggedIn } = useUserAuth()
   const [isMounted, setIsMounted] = useState(false)
@@ -234,6 +237,11 @@ export default function PhoneCasesPage() {
   }, [phoneCaseProducts, searchTerm, selectedBrand, selectedMaterial, selectedColor, selectedModel, sortBy])
 
   const handleAddToCart = (product: PhoneCaseProduct) => {
+    const sourceProduct = products.find((p) => p.id === product.id)
+    if (sourceProduct && isCustomizationRequired(sourceProduct)) {
+      router.push(getCustomizationPath(sourceProduct))
+      return
+    }
     // ✅ Fix: Use correct CartItem interface structure
     const cartItem = {
       product: product,        // Product object with all properties
@@ -525,17 +533,37 @@ export default function PhoneCasesPage() {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleAddToCart(product)}
-                    disabled={!product.inStock}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      product.inStock
-                        ? 'bg-purple-600 text-white hover:bg-purple-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {product.inStock ? 'Cart' : 'Out of Stock'}
-                  </button>
+                  {(() => {
+                    const sourceProduct = products.find((p) => p.id === product.id)
+                    const requiresCustomization = !!sourceProduct && isCustomizationRequired(sourceProduct)
+                    if (requiresCustomization) {
+                      return (
+                        <Link
+                          href={getCustomizationPath(sourceProduct)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            product.inStock
+                              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed pointer-events-none'
+                          }`}
+                        >
+                          {product.inStock ? 'Customize' : 'Out of Stock'}
+                        </Link>
+                      )
+                    }
+                    return (
+                      <button
+                        onClick={() => handleAddToCart(product)}
+                        disabled={!product.inStock}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          product.inStock
+                            ? 'bg-purple-600 text-white hover:bg-purple-700'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {product.inStock ? 'Cart' : 'Out of Stock'}
+                      </button>
+                    )
+                  })()}
                 </div>
               </div>
             </div>

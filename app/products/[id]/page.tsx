@@ -12,6 +12,7 @@ import { useUserAuth } from '@/lib/userAuth'
 import Image from 'next/image'
 import ProductGallery from '@/components/ProductGallery'
 import ProductDetailJsonLd from '@/components/ProductDetailJsonLd'
+import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
@@ -96,6 +97,8 @@ export default function ProductDetailPage() {
   const stockQty = typeof product?.stockQuantity === 'number' 
     ? Math.max(0, product.stockQuantity) 
     : undefined
+  const requiresCustomization = product ? isCustomizationRequired(product) : false
+  const customizationPath = product ? getCustomizationPath(product) : '/customize'
   const safety = typeof (product as any)?.safetyStock === 'number' 
     ? Math.max(0, (product as any).safetyStock) 
     : undefined
@@ -155,6 +158,10 @@ export default function ProductDetailPage() {
   }
 
   const handleAddToCart = () => {
+    if (requiresCustomization) {
+      router.push(customizationPath)
+      return
+    }
     if (!isLoggedIn) {
       alert(t('cart.loginRequired'))
       router.push('/login')
@@ -377,7 +384,7 @@ export default function ProductDetailPage() {
             </div>
 
             {/* 수량 선택 */}
-            {!isOutOfStock && (
+            {!isOutOfStock && !requiresCustomization && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Quantity
@@ -423,26 +430,10 @@ export default function ProductDetailPage() {
 
             {/* 장바구니 추가 버튼 또는 커스터마이징 버튼 */}
             <div className="space-y-3">
-              {/* 커스터마이징 옵션이 있는 상품: CUSTOMIZE NOW 버튼 */}
-              {product.customizationOptions && product.customizationOptions.length > 0 ? (
+              {/* 커스텀 필수 상품: CUSTOMIZE NOW 버튼 */}
+              {requiresCustomization ? (
                 <Link
-                  href={(() => {
-                    // SET 상품인지 확인
-                    const isSetProduct = product.subcategory === 'Set'
-                    
-                    // 카테고리별 링크 설정
-                    if (product.category === 'Stickers') {
-                      // 단일 상품: 기존 커스터마이징 페이지
-                      // SET 상품: 같은 페이지이지만 내부에서 subcategory === 'Set'로 구분하여 SET 로직 처리
-                      return `/stickers/customize?product=${product.id}`
-                    } else if (product.category === 'Stamps') {
-                      // 단일 상품: 기존 커스터마이징 페이지
-                      // SET 상품: 같은 페이지이지만 내부에서 subcategory === 'Set'로 구분하여 SET 로직 처리
-                      return `/stamp/customize?product=${product.id}`
-                    } else {
-                      return `/customize?product=${product.id}`
-                    }
-                  })()}
+                  href={customizationPath}
                   className={`w-full py-4 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-2 ${
                     isOutOfStock
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed pointer-events-none'
@@ -487,7 +478,7 @@ export default function ProductDetailPage() {
               
               {!isLoggedIn && (
                 <p className="text-sm text-gray-500 text-center">
-                  {product.customizationOptions && product.customizationOptions.length > 0 ? (
+                  {requiresCustomization ? (
                     <>To customize this product, you need to <Link href="/login" className="text-red-600 hover:underline">login</Link>.</>
                   ) : (
                     <>To add to cart, you need to <Link href="/login" className="text-red-600 hover:underline">login</Link>.</>
