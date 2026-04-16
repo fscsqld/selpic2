@@ -834,9 +834,9 @@ function StampCustomizeContent() {
 
         {/* 일반 상품인 경우: Game Layout Style */}
         {selectedProduct && selectedProduct.subcategory !== 'Set' && (
-          <div className={`flex flex-col xl:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'xl:max-w-[1000px]' : ''}`}>
+          <div className={`flex flex-col lg:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'lg:max-w-[1000px]' : ''}`}>
             {/* Left: Preview Area */}
-            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'xl:max-w-none' : ''}`}>
+            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'lg:max-w-none' : ''}`}>
               {/* Sidebar Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -948,7 +948,7 @@ function StampCustomizeContent() {
 
             {/* Right: Control Sidebar (Game Sidebar Style) */}
             {!isSidebarCollapsed && (
-              <aside className="w-full xl:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
+              <aside className="w-full lg:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
                 {/* Close Button */}
                 <button
                   onClick={() => setIsSidebarCollapsed(true)}
