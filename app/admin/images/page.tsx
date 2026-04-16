@@ -94,6 +94,57 @@ function ImageManagementPageContent() {
     reorderFiles,
     getOrphanedFiles
   } = useMediaStore()
+
+  const lastRemoteMediaVersionRef = useRef<string>('')
+
+  const mediaSignature = useCallback((list: MediaFile[]): string => {
+    return list
+      .map((f) => {
+        const uploadedAt =
+          f.uploadedAt instanceof Date ? f.uploadedAt.toISOString() : String(f.uploadedAt || '')
+        return `${f.id}|${f.productId || ''}|${f.url || ''}|${f.order ?? ''}|${uploadedAt}`
+      })
+      .sort()
+      .join('||')
+  }, [])
+
+  const syncMediaFromServer = useCallback(async (force = false): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/media/public', { cache: 'no-store' })
+      if (!res.ok) return false
+      const payload = (await res.json()) as {
+        success?: boolean
+        updatedAt?: string | null
+        mediaFiles?: unknown[]
+      }
+      if (!payload.success || !Array.isArray(payload.mediaFiles)) return false
+
+      const remote = payload.mediaFiles
+        .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
+        .map((m) => ({
+          ...(m as unknown as MediaFile),
+          uploadedAt:
+            typeof m.uploadedAt === 'string' ? new Date(m.uploadedAt) : (m.uploadedAt as Date),
+        }))
+
+      const remoteVersion = payload.updatedAt || mediaSignature(remote)
+      if (!force && remoteVersion && remoteVersion === lastRemoteMediaVersionRef.current) {
+        return true
+      }
+
+      const local = useMediaStore.getState().mediaFiles
+      const localSig = mediaSignature(local)
+      const remoteSig = mediaSignature(remote)
+      if (localSig !== remoteSig) {
+        useMediaStore.setState({ mediaFiles: remote })
+      }
+
+      lastRemoteMediaVersionRef.current = remoteVersion || ''
+      return true
+    } catch {
+      return false
+    }
+  }, [mediaSignature])
   
   // 미디어 파일 변경 감지 (다른 탭/페이지에서 변경 시)
   useEffect(() => {
@@ -102,6 +153,7 @@ function ImageManagementPageContent() {
         console.log('🔄 [ImageManagement] localStorage media-store changed, refreshing...')
         // Zustand store가 자동으로 localStorage 변경을 감지하므로
         // 여기서는 로그만 남기고 store가 자동으로 업데이트됨
+        void syncMediaFromServer()
       }
     }
     
@@ -114,17 +166,32 @@ function ImageManagementPageContent() {
         console.log(`📊 [ImageManagement] Current mediaFiles count: ${latestFiles.length}`)
       }, 100)
     }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void syncMediaFromServer()
+      }
+    }
+
+    const handleOnline = () => {
+      void syncMediaFromServer()
+    }
     
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
     window.addEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('online', handleOnline)
+    void syncMediaFromServer()
     
     return () => {
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
       window.removeEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('online', handleOnline)
     }
-  }, [])
+  }, [syncMediaFromServer])
   
   // 드래그 앤 드롭 센서
   const sensors = useSensors(
@@ -242,6 +309,18 @@ function ImageManagementPageContent() {
       setNotification({ type: 'info', message: '', show: false })
     }, 3000)
   }
+
+  const forceMediaSync = useCallback(async (): Promise<boolean> => {
+    try {
+      const { syncMediaToServerNow } = await import('@/lib/mediaSyncScheduler')
+      const { mediaFiles: snapshot } = useMediaStore.getState()
+      const result = await syncMediaToServerNow(snapshot, 3)
+      return !!result.ok
+    } catch (e) {
+      console.error('❌ [ImageManagement] force media sync failed:', e)
+      return false
+    }
+  }, [])
 
   // 파일 업로드 핸들러 (EditStage를 통한 업로드)
   const handleFileUpload = useCallback(async (files: FileList, targetCategory?: string) => {
@@ -624,19 +703,31 @@ function ImageManagementPageContent() {
 
   // Link to Product: 학습 — 사진(썸네일) 클릭 시 Link to Product 모달이 열리도록 SortableFileItem에서 이미지 onClick → handleLinkToProduct(file.id) 사용. Preview는 Eye 버튼으로.
   // 상품에 미디어 파일 연결 (Quick Link 포함 전체 상품에서 상품명 조회)
-  const handleLinkToProduct = (fileId: string, productId: string) => {
+  const handleLinkToProduct = async (fileId: string, productId: string) => {
     const product = products.find(p => p.id === productId) ?? categoryProducts.find(p => p.id === productId)
     updateMediaFile(fileId, { productId, productName: product?.name })
-    showNotification('success', `File linked to product "${product?.name ?? productId}" successfully!`)
+    const synced = await forceMediaSync()
+    showNotification(
+      synced ? 'success' : 'error',
+      synced
+        ? `File linked to product "${product?.name ?? productId}" successfully!`
+        : `Linked locally to "${product?.name ?? productId}", but server sync failed.`
+    )
     setIsLinkingModalOpen(false)
     setLinkingFileId(null)
     setLinkByProductIdInput('')
   }
 
   // 상품 연결 해제
-  const handleUnlinkFromProduct = (fileId: string) => {
+  const handleUnlinkFromProduct = async (fileId: string) => {
     updateMediaFile(fileId, { productId: undefined, productName: undefined })
-    showNotification('success', 'File unlinked from product successfully!')
+    const synced = await forceMediaSync()
+    showNotification(
+      synced ? 'success' : 'error',
+      synced
+        ? 'File unlinked from product successfully!'
+        : 'Unlinked locally, but server sync failed.'
+    )
   }
 
   // Bulk Action 핸들러들
@@ -690,7 +781,7 @@ function ImageManagementPageContent() {
     }
   }
 
-  const handleBulkProductLink = (productId: string) => {
+  const handleBulkProductLink = async (productId: string) => {
     if (selectedFiles.size === 0 || !productId) return
     
     const product = categoryProducts.find(p => p.id === productId)
@@ -699,11 +790,17 @@ function ImageManagementPageContent() {
     selectedFiles.forEach(fileId => {
       updateMediaFile(fileId, { productId, productName: product.name })
     })
+    const synced = await forceMediaSync()
     const count = selectedFiles.size
     setSelectedFiles(new Set())
     setIsBulkActionModalOpen(false)
     setBulkAction(null)
-    showNotification('success', `Linked ${count} file(s) to "${product.name}"`)
+    showNotification(
+      synced ? 'success' : 'error',
+      synced
+        ? `Linked ${count} file(s) to "${product.name}"`
+        : `Linked ${count} file(s) locally to "${product.name}", but server sync failed.`
+    )
   }
 
   // 🆕 벌크 태그 변경 핸들러

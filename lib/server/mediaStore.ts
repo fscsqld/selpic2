@@ -72,21 +72,25 @@ export async function readMediaSnapshot(): Promise<MediaSnapshot> {
 
 export async function writeMediaSnapshot(snapshot: MediaSnapshot): Promise<void> {
   if (isSupabaseConfigured()) {
-    const client = getSupabaseAdmin()
-    const now = new Date().toISOString()
-    const { error } = await client.from('site_configs').upsert(
-      {
-        config_key: STOREFRONT_MEDIA_CONFIG_KEY,
-        value: {
-          updatedAt: snapshot.updatedAt || now,
-          mediaFiles: snapshot.mediaFiles,
+    try {
+      const client = getSupabaseAdmin()
+      const now = new Date().toISOString()
+      const { error } = await client.from('site_configs').upsert(
+        {
+          config_key: STOREFRONT_MEDIA_CONFIG_KEY,
+          value: {
+            updatedAt: snapshot.updatedAt || now,
+            mediaFiles: snapshot.mediaFiles,
+          },
+          updated_at: now,
         },
-        updated_at: now,
-      },
-      { onConflict: 'config_key' }
-    )
-    if (!error) return
-    throw new Error(`[media] Supabase upsert failed: ${error.message}`)
+        { onConflict: 'config_key' }
+      )
+      if (!error) return
+      // Fall back to local file for environments where DB write is blocked.
+    } catch {
+      // Fall back to local file.
+    }
   }
   await ensureDir()
   await fs.writeFile(DATA_FILE, JSON.stringify(snapshot, null, 2), 'utf-8')
