@@ -1187,45 +1187,37 @@ export default function HomePage() {
     )
   }
 
-  if (!siteConfigRemoteSynced) {
-    if (!cmsSyncTimeout) {
-      return (
-        <div className="min-h-screen bg-white flex items-center justify-center">
-          <div className="text-center px-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading storefront…</p>
-            <p className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
-              Syncing the latest content. This usually takes a moment on mobile networks.
-            </p>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-4">
-        <div className="max-w-md w-full text-center border border-gray-200 rounded-2xl p-6 shadow-sm bg-white">
-          <p className="text-gray-900 font-semibold mb-2">Could not sync latest homepage content.</p>
-          <p className="text-sm text-gray-600 mb-5">
-            Your network may be unstable. Please retry to avoid opening an outdated cached homepage.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            Retry Sync
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const showStorefrontSyncLoading = !siteConfigRemoteSynced && !cmsSyncTimeout
+  const showStorefrontSyncError = !siteConfigRemoteSynced && cmsSyncTimeout
 
   // ✅ 상품이 없어도 홈페이지 표시 (관리자가 아직 등록 안 했거나 전부 삭제한 경우)
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
+      {showStorefrontSyncLoading && (
+        <div className="sticky top-0 z-40 bg-blue-50 border-b border-blue-200 px-4 py-2 text-center">
+          <p className="text-xs sm:text-sm text-blue-800">
+            Syncing latest storefront content... You can keep browsing while sync completes.
+          </p>
+        </div>
+      )}
+      {showStorefrontSyncError && (
+        <div className="sticky top-0 z-40 bg-amber-50 border-b border-amber-200 px-4 py-3">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs sm:text-sm text-amber-900">
+              Homepage opened with cached content because remote sync is slow.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="self-start sm:self-auto inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs sm:text-sm"
+            >
+              Retry Sync
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden">

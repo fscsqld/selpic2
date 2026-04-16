@@ -61,6 +61,7 @@ function StickerCustomizeContent() {
   const [textSize, setTextSize] = useState(14) // 텍스트 크기 (9자 한 줄에 맞춤)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [previewDisplayWidth, setPreviewDisplayWidth] = useState(260)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [mobilePreviewMode, setMobilePreviewMode] = useState<'sheet' | 'product'>('sheet')
   const [isFontGuideOpen, setIsFontGuideOpen] = useState(false)
   // 1줄 / 2줄 모드 선택 (기본: 1줄)
@@ -94,6 +95,7 @@ function StickerCustomizeContent() {
     if (typeof window === 'undefined') return
     const updatePreviewWidth = () => {
       const w = window.innerWidth
+      setIsMobileViewport(w < 640)
       if (w < 480) setPreviewDisplayWidth(180)
       else if (w < 640) setPreviewDisplayWidth(220)
       else if (w < 1024) setPreviewDisplayWidth(210)
@@ -103,7 +105,7 @@ function StickerCustomizeContent() {
     window.addEventListener('resize', updatePreviewWidth)
     return () => window.removeEventListener('resize', updatePreviewWidth)
   }, [])
-  const isMobilePreview = previewDisplayWidth <= 220
+  const isMobilePreview = isMobileViewport
 
   useEffect(() => {
     const categories = getActiveCategoryItems()
