@@ -1275,7 +1275,15 @@ function StickerCustomizeContent() {
               </div>
 
               {/* Live Preview: 5:5 비율, 왼쪽 = 상품 이미지, 오른쪽 = 시트 (비교 용이) */}
-              <div className="bg-gradient-to-br from-gray-50 to-white min-h-[620px] sm:min-h-0 sm:h-[440px] lg:h-[500px] rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-3 border-2 border-gray-200 shadow-inner overflow-hidden">
+              <div
+                className={`bg-gradient-to-br from-gray-50 to-white rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-3 border-2 border-gray-200 shadow-inner overflow-hidden ${
+                  isMobilePreview
+                    ? mobilePreviewMode === 'sheet'
+                      ? 'min-h-[500px]'
+                      : 'min-h-[540px]'
+                    : 'min-h-[620px] sm:min-h-0 sm:h-[440px] lg:h-[500px]'
+                }`}
+              >
                 {displayProduct && (() => {
                   // 노트북/데스크탑에서는 상품 이미지가 시트 대비 너무 작아 보이지 않도록 축소를 최소화한다.
                   const PREVIEW_DISPLAY_WIDTH = previewDisplayWidth
@@ -1290,6 +1298,7 @@ function StickerCustomizeContent() {
                   const fittedSheetHeight = actualSheetHeightPx * SHEET_SCALE
                   const leftPreviewWidth = fittedSheetWidth * LEFT_PREVIEW_SCALE
                   const leftPreviewHeight = fittedSheetHeight
+                  const mobileImageScale = isMobilePreview ? 1.04 : 1
                   const textPreviewScale = isMobilePreview ? 1.15 : 1
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
@@ -1326,7 +1335,8 @@ function StickerCustomizeContent() {
                             <img
                               src={resolvedProductImage}
                               alt={displayProduct.name}
-                              className="w-full h-full object-contain"
+                              className={isMobilePreview ? 'w-full h-full object-contain object-top' : 'w-full h-full object-contain'}
+                              style={isMobilePreview ? { transform: `scale(${mobileImageScale})`, transformOrigin: 'top center' } : undefined}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
