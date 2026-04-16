@@ -34,6 +34,7 @@ export default function ProductGallery({
   fallbackImage
 }: ProductGalleryProps) {
   const { getMediaFilesByProduct, mediaFiles, getMediaFileById, refreshMediaFilesFromStorage } = useMediaStore()
+  const [remoteProductMedia, setRemoteProductMedia] = useState<any[]>([])
 
   // 마운트 시 localStorage에서 미디어 스토어 즉시 동기화 (persist 복원 전에도 연결 이미지 목록 확보)
   useEffect(() => {
@@ -68,6 +69,36 @@ export default function ProductGallery({
     // 이미지와 동영상 모두 포함
     return media.filter(file => file.type === 'image' || file.type === 'video')
   }, [productId, getMediaFilesByProduct, mediaFiles]) // mediaFiles를 의존성에 추가하여 변경 감지
+
+  useEffect(() => {
+    let cancelled = false
+    const loadRemoteMedia = async () => {
+      if (!productId || productMedia.length > 0) {
+        if (!cancelled) setRemoteProductMedia([])
+        return
+      }
+      try {
+        const res = await fetch(`/api/media/public?productId=${encodeURIComponent(productId)}`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const payload = (await res.json()) as { success?: boolean; mediaFiles?: unknown[] }
+        if (!payload.success || !Array.isArray(payload.mediaFiles)) return
+        if (!cancelled) {
+          const normalized = payload.mediaFiles.filter((f): f is any => !!f && typeof f === 'object')
+          setRemoteProductMedia(normalized)
+        }
+      } catch {
+        // keep local fallback behavior
+      }
+    }
+    void loadRemoteMedia()
+    return () => {
+      cancelled = true
+    }
+  }, [productId, productMedia.length])
+
+  const effectiveProductMedia = productMedia.length > 0 ? productMedia : remoteProductMedia
 
   // media-files-updated 이벤트 리스너 (새로고침 없이 갤러리 업데이트)
   useEffect(() => {
@@ -156,7 +187,7 @@ export default function ProductGallery({
   // react-image-gallery 형식으로 변환 (모든 이미지 유효성 검사 포함)
   useEffect(() => {
     // 연결된 미디어가 없으면 fallback만 즉시 표시 (로딩 스피너 없이 첫 방문에서도 이미지 노출)
-    if (productMedia.length === 0) {
+    if (effectiveProductMedia.length === 0) {
       let cancelled = false
 
       const showFallback = async () => {
@@ -200,13 +231,13 @@ export default function ProductGallery({
     setIsLoading(true)
     console.log('🖼️ [ProductGallery] Processing media:', {
       productId,
-      productMediaCount: productMedia.length,
+      productMediaCount: effectiveProductMedia.length,
       fallbackImage: fallbackImage ? 'exists' : 'none',
       failedImageIdsCount: failedImageIds.size
     })
 
     const processMedia = async () => {
-      const formattedImagesPromises = productMedia
+      const formattedImagesPromises = effectiveProductMedia
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) // order 순서대로 정렬
         .map(async (file) => {
           const { imageUrl, originalUrl, triedUrls } = await getImageUrlWithFallback(file)
@@ -310,7 +341,7 @@ export default function ProductGallery({
     }
     
     processMedia()
-  }, [productMedia, fallbackImage, productId])
+  }, [effectiveProductMedia, fallbackImage, productId])
 
   // 이미지가 없을 때
   if (isLoading) {

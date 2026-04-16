@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import imageCompression from 'browser-image-compression'
 import { buildSelpicStoragePath, uploadToSelpicContents } from '@/lib/selpicStorageUpload'
+import { scheduleMediaSyncToServer } from '@/lib/mediaSyncScheduler'
 
 // 표준 태그 상수 정의
 export const STANDARD_MEDIA_TAGS = {
@@ -300,6 +301,7 @@ export const useMediaStore = create<MediaStore>()(
         
         // 첫 번째 확인 시작
         checkStorage(1)
+        scheduleMediaSyncToServer(get().mediaFiles)
       },
 
       updateMediaFile: (id, updates) => {
@@ -335,12 +337,14 @@ export const useMediaStore = create<MediaStore>()(
             storageArea: localStorage
           }))
         }
+        scheduleMediaSyncToServer(get().mediaFiles)
       },
 
       deleteMediaFile: (id) => {
         set((state) => ({
           mediaFiles: state.mediaFiles.filter(file => file.id !== id)
         }))
+        scheduleMediaSyncToServer(get().mediaFiles)
       },
 
       getMediaFilesByCategory: (category) => {
@@ -416,6 +420,7 @@ export const useMediaStore = create<MediaStore>()(
             return file
           })
         }))
+        scheduleMediaSyncToServer(get().mediaFiles)
       },
 
       // 여러 파일의 순서 일괄 업데이트 (드래그 앤 드롭용)
@@ -436,6 +441,7 @@ export const useMediaStore = create<MediaStore>()(
           
           return { mediaFiles: updatedFiles }
         })
+        scheduleMediaSyncToServer(get().mediaFiles)
       },
 
       refreshMediaFilesFromStorage: () => {
@@ -443,8 +449,8 @@ export const useMediaStore = create<MediaStore>()(
         try {
           const raw = localStorage.getItem('media-store')
           if (!raw) return
-          const parsed = JSON.parse(raw) as { state?: { mediaFiles?: MediaFile[] } }
-          const stored = parsed?.state?.mediaFiles
+          const parsed = JSON.parse(raw) as { state?: { mediaFiles?: MediaFile[] }; mediaFiles?: MediaFile[] }
+          const stored = parsed?.state?.mediaFiles ?? parsed?.mediaFiles
           if (!stored || !Array.isArray(stored)) return
           const mediaFiles = stored.map((file: MediaFile) => ({
             ...file,
