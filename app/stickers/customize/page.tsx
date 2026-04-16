@@ -1280,10 +1280,10 @@ function StickerCustomizeContent() {
                   isMobilePreview
                     ? mobilePreviewMode === 'sheet'
                       ? isMediumSheet
-                        ? 'min-h-[470px]'
+                        ? 'min-h-[330px]'
                         : 'min-h-[500px]'
                       : isMediumSheet
-                        ? 'min-h-[510px]'
+                        ? 'min-h-[360px]'
                         : 'min-h-[540px]'
                     : 'min-h-[620px] sm:min-h-0 sm:h-[440px] lg:h-[500px]'
                 }`}
@@ -1291,13 +1291,13 @@ function StickerCustomizeContent() {
                 {displayProduct && (() => {
                   // 노트북/데스크탑에서는 상품 이미지가 시트 대비 너무 작아 보이지 않도록 축소를 최소화한다.
                   const PREVIEW_DISPLAY_WIDTH = isMobilePreview && isMediumSheet
-                    ? previewDisplayWidth + 12
+                    ? Math.max(140, previewDisplayWidth - 54)
                     : previewDisplayWidth
                   const LEFT_PREVIEW_SCALE = isMobilePreview ? 0.96 : 1
                   const topOffsetPx = isMobilePreview ? 0 : 12
                   const maxSheetDisplayHeight = isMobilePreview
                     ? isMediumSheet
-                      ? 300
+                      ? 210
                       : 280
                     : 360
                   const SHEET_SCALE = Math.min(
@@ -1308,7 +1308,7 @@ function StickerCustomizeContent() {
                   const fittedSheetHeight = actualSheetHeightPx * SHEET_SCALE
                   const leftPreviewWidth = fittedSheetWidth * LEFT_PREVIEW_SCALE
                   const leftPreviewHeight = fittedSheetHeight
-                  const mobileImageScale = isMobilePreview ? (isMediumSheet ? 1.06 : 1.04) : 1
+                  const mobileImageScale = isMobilePreview ? (isMediumSheet ? 1 : 1.04) : 1
                   const textPreviewScale = isMobilePreview ? 1.15 : 1
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
