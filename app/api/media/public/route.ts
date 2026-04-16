@@ -5,8 +5,9 @@ export async function GET(req: Request) {
   const snapshot = await readMediaSnapshot()
   const url = new URL(req.url)
   const productId = (url.searchParams.get('productId') || '').trim()
-  const mediaFiles = productId
-    ? snapshot.mediaFiles.filter((f) => (f.productId || '').trim() === productId)
+  const pid = productId ? String(productId).trim() : ''
+  const mediaFiles = pid
+    ? snapshot.mediaFiles.filter((f) => String(f.productId ?? '').trim() === pid)
     : snapshot.mediaFiles
   return NextResponse.json(
     {

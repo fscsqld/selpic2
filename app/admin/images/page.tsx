@@ -108,6 +108,14 @@ function ImageManagementPageContent() {
       .join('||')
   }, [])
 
+  /** Keep entries that exist only in the browser until POST /api/media/products succeeds. */
+  const mergeRemoteWithLocalPending = useCallback((remote: MediaFile[], local: MediaFile[]): MediaFile[] => {
+    const remoteIds = new Set(remote.map((f) => f.id))
+    const pendingOnly = local.filter((f) => !remoteIds.has(f.id))
+    if (pendingOnly.length === 0) return remote
+    return [...remote, ...pendingOnly]
+  }, [])
+
   const syncMediaFromServer = useCallback(async (force = false): Promise<boolean> => {
     try {
       const res = await fetch('/api/media/public', { cache: 'no-store' })
@@ -133,10 +141,11 @@ function ImageManagementPageContent() {
       }
 
       const local = useMediaStore.getState().mediaFiles
+      const merged = mergeRemoteWithLocalPending(remote, local)
       const localSig = mediaSignature(local)
-      const remoteSig = mediaSignature(remote)
-      if (localSig !== remoteSig) {
-        useMediaStore.setState({ mediaFiles: remote })
+      const mergedSig = mediaSignature(merged)
+      if (mergedSig !== localSig) {
+        useMediaStore.setState({ mediaFiles: merged })
       }
 
       lastRemoteMediaVersionRef.current = remoteVersion || ''
@@ -144,16 +153,16 @@ function ImageManagementPageContent() {
     } catch {
       return false
     }
-  }, [mediaSignature])
+  }, [mediaSignature, mergeRemoteWithLocalPending])
   
   // 미디어 파일 변경 감지 (다른 탭/페이지에서 변경 시)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'media-store') {
-        console.log('🔄 [ImageManagement] localStorage media-store changed, refreshing...')
-        // Zustand store가 자동으로 localStorage 변경을 감지하므로
-        // 여기서는 로그만 남기고 store가 자동으로 업데이트됨
-        void syncMediaFromServer()
+        console.log('🔄 [ImageManagement] localStorage media-store changed, refreshing from storage...')
+        // Same-tab saves already update Zustand; pulling /api/media/public here races with
+        // debounced POST and can wipe not-yet-synced files. Re-read persisted state only.
+        useMediaStore.getState().refreshMediaFilesFromStorage()
       }
     }
     
@@ -465,67 +474,21 @@ function ImageManagementPageContent() {
         await new Promise(resolve => setTimeout(resolve, 100))
       }
       
-      // Step 3: 저장 확인 (강화된 재시도 로직)
-      console.log('🔍 [ENHANCED] Step 3: Verifying save...')
-      let confirmedFile = null
+      // Step 3: in-memory store only (persist/localStorage can lag; requiring LS caused false "Failed to save")
+      console.log('🔍 [ENHANCED] Step 3: Verifying file in store...')
+      let confirmedFile: MediaFile | null | undefined = useMediaStore.getState().getMediaFileById(addedFile.id)
       let retryCount = 0
-      const maxRetries = 10 // 재시도 횟수 증가
-      const retryDelay = 300 // 재시도 간격 증가
-      
+      const maxRetries = 25
+      const retryDelay = 120
       while (!confirmedFile && retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay))
-        
-        // Store에서 확인
-        const { getMediaFileById, mediaFiles: currentFiles } = useMediaStore.getState()
-        confirmedFile = getMediaFileById(addedFile.id)
-        
-        if (confirmedFile) {
-          console.log(`✅ [ENHANCED] File found in store (attempt ${retryCount + 1})`)
-          
-          // localStorage 저장 확인 (더 확실한 검증)
-          try {
-            await new Promise(resolve => setTimeout(resolve, 100)) // localStorage 쓰기 완료 대기
-            
-            const storedData = localStorage.getItem('media-store')
-            if (storedData) {
-              let parsed: any
-              if (typeof storedData === 'string') {
-                if (storedData === '[object Object]' || storedData.startsWith('[object')) {
-                  console.warn('⚠️ [ENHANCED] Invalid localStorage format, but file exists in store')
-                  break // Store에 있으면 계속 진행
-                }
-                try {
-                  parsed = JSON.parse(storedData)
-                } catch (parseError) {
-                  console.error('❌ [ENHANCED] Failed to parse localStorage:', parseError)
-                  break // Store에 있으면 계속 진행
-                }
-              } else {
-                parsed = storedData
-              }
-              
-              const existsInStorage = parsed?.state?.mediaFiles?.some((f: MediaFile) => f.id === addedFile.id)
-              if (existsInStorage) {
-                console.log('✅ [ENHANCED] File confirmed in both store and localStorage')
-                break // 저장 완료 확인됨
-              } else {
-                console.warn(`⚠️ [ENHANCED] File not in localStorage yet (attempt ${retryCount + 1}/${maxRetries}), retrying...`)
-                confirmedFile = null // 재시도
-                retryCount++
-                continue
-              }
-            } else {
-              console.warn('⚠️ [ENHANCED] localStorage data not found, but file exists in store')
-              break // Store에 있으면 계속 진행
-            }
-          } catch (error) {
-            console.error('❌ [ENHANCED] Error checking localStorage:', error)
-            break // Store에 있으면 계속 진행
-          }
-        } else {
-          console.warn(`⚠️ [ENHANCED] File not found in store (attempt ${retryCount + 1}/${maxRetries}), retrying...`)
-          retryCount++
-        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        confirmedFile = useMediaStore.getState().getMediaFileById(addedFile.id)
+        retryCount++
+      }
+      if (confirmedFile) {
+        console.log(`✅ [ENHANCED] File confirmed in store after ${retryCount} wait(s)`)
+      } else {
+        console.warn('⚠️ [ENHANCED] File not in store after retries; localStorage may be full or blocked')
       }
       
       // Step 4: 최종 확인 및 UI 갱신
@@ -575,7 +538,13 @@ function ImageManagementPageContent() {
           setEditStageFile(null)
           setPendingFiles([])
           setWebPProgress(0) // 진행률 초기화
-          showNotification('success', `All files uploaded successfully!`)
+          const pushed = await forceMediaSync()
+          showNotification(
+            pushed ? 'success' : 'info',
+            pushed
+              ? 'All files uploaded successfully!'
+              : 'All files saved locally. Server snapshot sync failed — check /api/media/products in Network and CATALOG_SYNC_SECRET / Supabase on the host.'
+          )
           setSelectedProductId('')
           
           // 최종 상태 확인
@@ -603,6 +572,7 @@ function ImageManagementPageContent() {
             setIsEditStageOpen(false)
             setEditStageFile(null)
             setPendingFiles([])
+            void forceMediaSync()
             showNotification('success', `Files uploaded (verification may be incomplete)`)
             setSelectedProductId('')
           }
@@ -634,7 +604,17 @@ function ImageManagementPageContent() {
       setIsUploading(false)
       console.log('🏁 [ENHANCED] handleEditStageConfirm completed')
     }
-  }, [selectedProductId, categoryProducts, addMediaFileWithData, updateMediaFile, pendingFiles, showNotification])
+  }, [
+    selectedProductId,
+    categoryProducts,
+    activeTab,
+    activeCategory,
+    addMediaFileWithData,
+    updateMediaFile,
+    pendingFiles,
+    showNotification,
+    forceMediaSync,
+  ])
   
   // EditStage 취소
   const handleEditStageCancel = useCallback(() => {
@@ -1350,7 +1330,7 @@ function ImageManagementPageContent() {
 
         {/* 드래그 앤 드롭 영역 */}
         {isUploadModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -1419,8 +1399,12 @@ function ImageManagementPageContent() {
                       <h3 className="text-lg font-medium text-gray-900 mb-2">
                         Drag and drop files to upload
                       </h3>
-                      <p className="text-sm text-gray-600 mb-4">
+                      <p className="text-sm text-gray-600 mb-2">
                         Drag and drop image or video files here, or click to select
+                      </p>
+                      <p className="text-sm text-gray-700 mb-4 rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-left">
+                        Next, an <strong>Edit</strong> window opens — use the <strong>Confirm and Save</strong> button at the bottom
+                        to finish adding files to the library. You will see a success message when it completes.
                       </p>
                     </div>
                     <button
@@ -2419,7 +2403,7 @@ function ImageManagementPageContent() {
 
         {/* 알림 */}
         {notification.show && (
-          <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          <div className={`fixed top-4 right-4 z-[110] max-w-sm p-4 rounded-lg shadow-lg ${
             notification.type === 'success' ? 'bg-green-500 text-white' :
             notification.type === 'error' ? 'bg-red-500 text-white' :
             'bg-blue-500 text-white'

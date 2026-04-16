@@ -448,16 +448,20 @@ export const useMediaStore = create<MediaStore>()(
         if (typeof window === 'undefined') return
         try {
           const raw = localStorage.getItem('media-store')
+          const inMemory = get().mediaFiles
           if (!raw) return
           const parsed = JSON.parse(raw) as { state?: { mediaFiles?: MediaFile[] }; mediaFiles?: MediaFile[] }
           const stored = parsed?.state?.mediaFiles ?? parsed?.mediaFiles
           if (!stored || !Array.isArray(stored)) return
-          const mediaFiles = stored.map((file: MediaFile) => ({
+          const fromLs = stored.map((file: MediaFile) => ({
             ...file,
-            uploadedAt: typeof file.uploadedAt === 'string' ? new Date(file.uploadedAt) : file.uploadedAt
+            uploadedAt: typeof file.uploadedAt === 'string' ? new Date(file.uploadedAt) : file.uploadedAt,
           }))
-          set({ mediaFiles })
-          console.log('🔄 [MediaStore] Synced mediaFiles from localStorage:', mediaFiles.length, 'files')
+          const fromLsIds = new Set(fromLs.map((f) => f.id))
+          const pending = inMemory.filter((f) => !fromLsIds.has(f.id))
+          const merged = pending.length > 0 ? [...pending, ...fromLs] : fromLs
+          set({ mediaFiles: merged })
+          console.log('🔄 [MediaStore] Synced mediaFiles from localStorage:', merged.length, 'files')
         } catch (e) {
           console.warn('[MediaStore] refreshMediaFilesFromStorage failed:', e)
         }

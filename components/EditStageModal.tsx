@@ -423,10 +423,10 @@ export default function EditStageModal({
   if (!isOpen || !file) return null
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-75 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
+        <div className="shrink-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             {isImage ? <Crop className="w-5 h-5" /> : <Video className="w-5 h-5" />}
             Edit Before Save
@@ -438,8 +438,8 @@ export default function EditStageModal({
             <X className="w-6 h-6" />
           </button>
         </div>
-        
-        <div className="p-6 space-y-6">
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
           {/* 미리보기 영역 */}
           <div className="bg-gray-100 rounded-lg p-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Preview</h3>
@@ -749,10 +749,10 @@ export default function EditStageModal({
             </div>
           )}
         </div>
-        
-        {/* WebP Optimization Progress */}
+
+        {/* WebP Optimization Progress (kept above actions so Save stays visible) */}
         {isOptimizing && (
-          <div className="bg-blue-50 border-t border-blue-200 p-4">
+          <div className="shrink-0 bg-blue-50 border-t border-blue-200 p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
               <span className="text-sm font-medium text-blue-900">Optimizing...</span>
@@ -769,9 +769,9 @@ export default function EditStageModal({
             </p>
           </div>
         )}
-        
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex items-center justify-end gap-3">
+
+        {/* Footer — fixed to bottom of dialog (not inside scroll) */}
+        <div className="shrink-0 bg-gray-50 border-t border-gray-200 p-4 flex items-center justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isOptimizing}

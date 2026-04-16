@@ -87,8 +87,10 @@ export async function writeMediaSnapshot(snapshot: MediaSnapshot): Promise<void>
         { onConflict: 'config_key' }
       )
       if (!error) return
+      console.error('[mediaStore] Supabase upsert storefront_media failed:', error.message || error)
       // Fall back to local file for environments where DB write is blocked.
-    } catch {
+    } catch (e) {
+      console.error('[mediaStore] Supabase write exception:', e)
       // Fall back to local file.
     }
   }

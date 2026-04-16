@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import ImageGallery from 'react-image-gallery'
 import 'react-image-gallery/styles/image-gallery.css'
 import { useMediaStore } from '@/lib/mediaStore'
@@ -36,6 +36,10 @@ export default function ProductGallery({
   const { getMediaFilesByProduct, mediaFiles, getMediaFileById, refreshMediaFilesFromStorage } = useMediaStore()
   const [remoteProductMedia, setRemoteProductMedia] = useState<any[]>([])
   const [remoteLoaded, setRemoteLoaded] = useState(false)
+  const [remoteRefreshToken, setRemoteRefreshToken] = useState(0)
+  const bumpRemoteRefresh = useCallback(() => {
+    setRemoteRefreshToken((n) => n + 1)
+  }, [])
 
   // 마운트 시 localStorage에서 미디어 스토어 즉시 동기화 (persist 복원 전에도 연결 이미지 목록 확보)
   useEffect(() => {
@@ -70,6 +74,11 @@ export default function ProductGallery({
     // 이미지와 동영상 모두 포함
     return media.filter(file => file.type === 'image' || file.type === 'video')
   }, [productId, getMediaFilesByProduct, mediaFiles]) // mediaFiles를 의존성에 추가하여 변경 감지
+
+  useEffect(() => {
+    setRemoteLoaded(false)
+    setRemoteProductMedia([])
+  }, [productId])
 
   useEffect(() => {
     let cancelled = false
@@ -107,33 +116,51 @@ export default function ProductGallery({
     return () => {
       cancelled = true
     }
-  }, [productId])
+  }, [productId, remoteRefreshToken])
 
-  // Public storefront should prefer shared server snapshot to avoid stale per-device local links.
-  const effectiveProductMedia = remoteLoaded ? remoteProductMedia : productMedia
-
-  // media-files-updated 이벤트 리스너 (새로고침 없이 갤러리 업데이트)
+  // Re-fetch shared snapshot when tab becomes visible, storage changes, or media events (admin ↔ storefront).
   useEffect(() => {
-    const handleMediaFilesUpdate = (e: CustomEvent) => {
-      const eventDetail = e.detail as { productId?: string; fileId?: string; action?: string }
-      
-      // 이 상품과 관련된 파일이 업데이트된 경우에만 갤러리 새로고침
-      if (eventDetail?.productId === productId || !eventDetail?.productId) {
-        console.log('🔄 [ProductGallery] Media files updated, refreshing gallery:', eventDetail)
-        
-        // 강제 리렌더링을 위해 상태 업데이트 (productImages가 변경되면 자동으로 갤러리 업데이트됨)
-        // mediaFiles가 변경되면 useMemo가 자동으로 재계산되므로 추가 작업 불필요
-      }
+    if (!productId || typeof window === 'undefined') return
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') bumpRemoteRefresh()
     }
-
-    window.addEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
-    window.addEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
-
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'media-store') bumpRemoteRefresh()
+    }
+    const onMediaEvent = (e: Event) => {
+      const d = (e as CustomEvent<{ productId?: string }>).detail
+      if (!d?.productId || String(d.productId) === String(productId)) bumpRemoteRefresh()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('media-files-updated', onMediaEvent)
+    window.addEventListener('media-file-uploaded', onMediaEvent)
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') bumpRemoteRefresh()
+    }, 60000)
     return () => {
-      window.removeEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
-      window.removeEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('media-files-updated', onMediaEvent)
+      window.removeEventListener('media-file-uploaded', onMediaEvent)
+      window.clearInterval(interval)
     }
-  }, [productId])
+  }, [productId, bumpRemoteRefresh])
+
+  /**
+   * Prefer server snapshot for all visitors, but merge in this browser's not-yet-synced rows
+   * (same IDs as admin flow) so local + deployed stay usable until POST /api/media/products succeeds.
+   */
+  const mergedProductMedia = useMemo(() => {
+    if (!productId) return []
+    if (!remoteLoaded) return productMedia
+    const remoteIds = new Set(remoteProductMedia.map((f: { id?: string }) => String(f?.id ?? '')))
+    const localOnly = productMedia.filter((f) => f.id && !remoteIds.has(String(f.id)))
+    const combined = [...remoteProductMedia, ...localOnly]
+    return combined.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }, [productId, remoteLoaded, remoteProductMedia, productMedia])
+
+  const effectiveProductMedia = mergedProductMedia
 
   const getImageUrlWithFallback = async (
     file: any,
