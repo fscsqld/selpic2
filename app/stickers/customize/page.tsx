@@ -1231,9 +1231,9 @@ function StickerCustomizeContent() {
 
         {/* Single product: main layout */}
         {displayProduct && displayProduct.subcategory !== 'Set' && (
-          <div className={`flex flex-col lg:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'lg:max-w-[1000px]' : ''}`}>
+          <div className={`flex flex-col md:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'md:max-w-[1000px]' : ''}`}>
             {/* Left: Preview Area */}
-            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'lg:max-w-none' : ''}`}>
+            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'md:max-w-none' : ''}`}>
               {/* Sidebar Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1277,13 +1277,13 @@ function StickerCustomizeContent() {
               {/* Live Preview: 5:5 비율, 왼쪽 = 상품 이미지, 오른쪽 = 시트 (비교 용이) */}
               <div className="bg-gradient-to-br from-gray-50 to-white min-h-[620px] sm:min-h-0 sm:h-[440px] lg:h-[500px] rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-3 border-2 border-gray-200 shadow-inner overflow-hidden">
                 {displayProduct && (() => {
-                  // 고정값: 미리보기에서 보기 편한 너비 (오른쪽 시트 기준). 왼쪽 상품 이미지는 15% 축소.
+                  // 노트북/데스크탑에서는 상품 이미지가 시트 대비 너무 작아 보이지 않도록 축소를 최소화한다.
                   const PREVIEW_DISPLAY_WIDTH = previewDisplayWidth
-                  const LEFT_PREVIEW_SCALE = 0.85  // 왼쪽 상품 이미지 15% 축소
+                  const LEFT_PREVIEW_SCALE = isMobilePreview ? 0.96 : 1
                   const leftPreviewWidth = PREVIEW_DISPLAY_WIDTH * LEFT_PREVIEW_SCALE
                   const SHEET_SCALE = PREVIEW_DISPLAY_WIDTH / actualSheetWidthPx
                   const previewDisplayHeight = actualSheetHeightPx * SHEET_SCALE
-                  const leftPreviewHeight = previewDisplayHeight * LEFT_PREVIEW_SCALE
+                  const leftPreviewHeight = previewDisplayHeight
                   const textPreviewScale = isMobilePreview ? 1.15 : 1
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
@@ -1296,7 +1296,7 @@ function StickerCustomizeContent() {
                   <>
                     {/* Left: 상품 이미지 — object-contain으로 박스에 맞는 최대 크기 표시(비율 유지, 잘림 없음) */}
                     <div
-                      className={`min-w-0 flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80 ${
+                      className={`min-w-0 flex flex-col items-center justify-center overflow-hidden border border-slate-200 rounded-lg bg-white/80 ${
                         isMobilePreview && mobilePreviewMode !== 'product' ? 'hidden' : ''
                       }`}
                     >
@@ -1319,32 +1319,43 @@ function StickerCustomizeContent() {
 
                     {/* Right: 시트 (왼쪽과 동일한 표시 너비로 스케일) */}
                     <div
-                      className={`min-w-0 flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80 ${
+                      className={`min-w-0 flex flex-col items-center justify-start overflow-hidden border border-slate-200 rounded-lg bg-white/80 ${
                         isMobilePreview && mobilePreviewMode !== 'sheet' ? 'hidden' : ''
                       }`}
                     >
                       <p className="text-xs font-semibold text-slate-500 py-1.5">Sheet</p>
                       <div className="flex-shrink-0 flex flex-col items-center w-full gap-2 pt-2 pb-2 px-2">
                         <div
-                        style={{
-                            transform: `scale(${SHEET_SCALE})`,
-                            transformOrigin: 'top center'
-                          }}
-                        >
-                        <div
-                          className="bg-white rounded border-2 border-slate-300 shadow overflow-hidden box-border"
                           style={{
-                            width: `${actualSheetWidthPx}px`,
-                            height: `${actualSheetHeightPx}px`,
-                            paddingLeft: `${paddingLeftPx}px`,
-                            paddingRight: `${paddingRightPx}px`,
-                            paddingTop: `${paddingTopPx}px`,
-                            paddingBottom: `${paddingBottomPx}px`,
+                            width: PREVIEW_DISPLAY_WIDTH,
+                            height: previewDisplayHeight,
                             display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'stretch'
+                            alignItems: 'flex-start',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                            paddingTop: `${previewDisplayHeight * 0.05}px`,
                           }}
                         >
+                          <div
+                            style={{
+                              transform: `scale(${SHEET_SCALE})`,
+                              transformOrigin: 'top center'
+                            }}
+                          >
+                            <div
+                              className="bg-white rounded border-2 border-slate-300 shadow overflow-hidden box-border"
+                              style={{
+                                width: `${actualSheetWidthPx}px`,
+                                height: `${actualSheetHeightPx}px`,
+                                paddingLeft: `${paddingLeftPx}px`,
+                                paddingRight: `${paddingRightPx}px`,
+                                paddingTop: `${paddingTopPx}px`,
+                                paddingBottom: `${paddingBottomPx}px`,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'stretch'
+                              }}
+                            >
                           <div
                             style={{
                               display: 'grid',
@@ -1538,7 +1549,8 @@ function StickerCustomizeContent() {
                             )
                           })}
                           </div>
-                        </div>
+                            </div>
+                          </div>
                         </div>
                         <p className="text-slate-500 text-center w-full px-1 text-[8px] sm:text-[9px] leading-tight break-words max-w-[260px] mx-auto mt-1">
                           {actualSheetWidthMm}×{actualSheetHeightMm}mm · cell {Number(stickerSpec.widthMm.toFixed(1))}×{Number(stickerSpec.heightMm.toFixed(1))}mm · each box = 1 label
@@ -1636,7 +1648,7 @@ function StickerCustomizeContent() {
 
             {/* Right: Control Sidebar (Game Sidebar Style) */}
             {!isSidebarCollapsed && (
-              <aside className="w-full lg:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
+              <aside className="w-full md:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
                 {/* Close Button */}
                 <button
                   onClick={() => setIsSidebarCollapsed(true)}
