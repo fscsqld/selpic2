@@ -382,6 +382,8 @@ function StickerCustomizeContent() {
   const twoLineSizeValues = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
   const supportsTwoLines = Boolean(displayProduct?.size && twoLineSizeValues.includes(String(displayProduct.size).trim().toLowerCase()))
   const twoLineMaxChars = 18
+  const twoLinePhoneMaxChars = 10
+  const twoLineNamePhoneMaxChars = 19
   // When true, sticker design has an image (e.g. icon on left); text is placed so it does not overlap.
   const stickerHasImage = !!(displayProduct as any)?.stickerHasImage
   // ✅ 실제 시트 크기 (mm): 위·아래·왼쪽·오른쪽 여백 포함. 좌우 2mm씩, 위아래 절단면 1mm씩 → 96×138
@@ -1752,7 +1754,7 @@ function StickerCustomizeContent() {
                                 const rawParts = prev.split('\n')
                                 if (twoLineFormat === 'name-phone') {
                                   const namePart = (rawParts[0] || twoLineName || 'Emily').slice(0, 9)
-                                  const phonePart = (rawParts[1] || twoLinePhone || '').slice(0, 9)
+                                  const phonePart = (rawParts[1] || twoLinePhone || '').slice(0, twoLinePhoneMaxChars)
                                   setTwoLineName(namePart)
                                   setTwoLinePhone(phonePart)
                                   return phonePart ? `${namePart}\n${phonePart}` : namePart
@@ -1802,7 +1804,7 @@ function StickerCustomizeContent() {
                               // 현재 2줄 텍스트를 이름/전화로 재구성
                               setCustomText(() => {
                                 const namePart = twoLineName.slice(0, 9) || 'Emily'
-                                const phonePart = twoLinePhone.slice(0, 9)
+                                const phonePart = twoLinePhone.slice(0, twoLinePhoneMaxChars)
                                 return phonePart ? `${namePart}\n${phonePart}` : namePart
                               })
                             }}
@@ -1879,12 +1881,12 @@ function StickerCustomizeContent() {
                               type="text"
                               value={twoLinePhone}
                               onChange={(e) => {
-                                const v = e.target.value.slice(0, 9)
+                                const v = e.target.value.slice(0, twoLinePhoneMaxChars)
                                 setTwoLinePhone(v)
                                 setCustomText(twoLineName + (v ? `\n${v}` : ''))
                               }}
                               className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                              placeholder="Phone (up to 9 characters)"
+                              placeholder="Phone (up to 10 characters)"
                             />
                           </div>
                         </div>
@@ -1898,7 +1900,11 @@ function StickerCustomizeContent() {
                           const raw = e.target.value
                           if (supportsTwoLines && lineMode === 'two') {
                             const parts = raw.split('\n').slice(0, 2)
-                            const limited = parts.map(line => line.slice(0, 9))
+                            const limited = parts.map((line, index) =>
+                              twoLineFormat === 'name-phone' && index === 1
+                                ? line.slice(0, twoLinePhoneMaxChars)
+                                : line.slice(0, 9)
+                            )
                             setCustomText(limited.join('\n'))
                           } else {
                             setCustomText(raw.replace(/\n/g, '').slice(0, NAME_MAX_LETTERS))
@@ -1909,7 +1915,9 @@ function StickerCustomizeContent() {
                               ? 'Line 1: Name\nLine 2: Phone number'
                               : 'Line 1: Affiliation\nLine 2: Name')
                           : 'Enter your custom text...'}
-                        maxLength={supportsTwoLines && lineMode === 'two' ? twoLineMaxChars : NAME_MAX_LETTERS}
+                        maxLength={supportsTwoLines && lineMode === 'two'
+                          ? (twoLineFormat === 'name-phone' ? twoLineNamePhoneMaxChars : twoLineMaxChars)
+                          : NAME_MAX_LETTERS}
                         className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm min-h-0"
                         rows={2}
                       />
@@ -1917,7 +1925,9 @@ function StickerCustomizeContent() {
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-xs text-slate-500">
                         {supportsTwoLines && lineMode === 'two'
-                          ? `2 lines available. Up to 9 letters per line (18 total). Name line always displays larger than the second line. Extra charge applies when 2 lines are used.`
+                          ? (twoLineFormat === 'name-phone'
+                              ? `2 lines available. Name: up to 9 letters, Phone: up to 10 characters (19 total). Name line always displays larger than the second line. Extra charge applies when 2 lines are used.`
+                              : `2 lines available. Up to 9 letters per line (18 total). Name line always displays larger than the second line. Extra charge applies when 2 lines are used.`)
                           : `Up to ${NAME_MAX_LETTERS} letters (one line)`}
                       </p>
                       <p className="text-xs font-bold text-blue-400 italic bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/30">
@@ -2037,7 +2047,7 @@ function StickerCustomizeContent() {
                         <p className="font-semibold text-amber-400/90">Please read before ordering</p>
                         <ul className="list-disc list-inside space-y-1.5 text-slate-400">
                           <li><span className="font-medium text-slate-300">Character limit:</span> One line is limited to {NAME_MAX_LETTERS} letters. Do not exceed this or your text may be cut off on the printed label.</li>
-                          <li><span className="font-medium text-slate-300">Large, Extra Large &amp; Medium — 2 lines:</span> Option 1 (Affiliation + Name) or Option 2 (Name + Phone). Up to {twoLineMaxChars} characters. Name line is displayed larger. An extra charge applies when using 2 lines (set in product registration).</li>
+                          <li><span className="font-medium text-slate-300">Large, Extra Large &amp; Medium — 2 lines:</span> Option 1 (Affiliation + Name) allows up to 18 total characters. Option 2 (Name + Phone) allows up to 19 total characters, including up to 10 phone digits. The name line is displayed larger. An extra charge applies when using 2 lines (set in product registration).</li>
                           <li><span className="font-medium text-slate-300">Automatic text scaling:</span> Up to 6 letters use the default size; 7 or more letters are automatically scaled down so the text fits on one line. Longer text will appear smaller on the label.</li>
                           <li><span className="font-medium text-slate-300">Screen vs. Print:</span> Actual printed colors, font weight, and overall quality may vary slightly from your screen due to monitor settings and the printing process.</li>
                           <li><span className="font-medium text-slate-300">Holographic effect:</span> The shimmer and light reflection on hologram stickers may differ by lighting and cannot be perfectly shown in a digital preview.</li>
