@@ -136,14 +136,19 @@ function ImageManagementPageContent() {
         }))
 
       const remoteVersion = payload.updatedAt || mediaSignature(remote)
-      if (!force && remoteVersion && remoteVersion === lastRemoteMediaVersionRef.current) {
-        return true
-      }
-
       const local = useMediaStore.getState().mediaFiles
       const merged = mergeRemoteWithLocalPending(remote, local)
       const localSig = mediaSignature(local)
       const mergedSig = mediaSignature(merged)
+
+      // Same server version as last pull but this browser may still have unsynced rows — merge anyway.
+      if (!force && remoteVersion && remoteVersion === lastRemoteMediaVersionRef.current) {
+        if (mergedSig !== localSig) {
+          useMediaStore.setState({ mediaFiles: merged })
+        }
+        return true
+      }
+
       if (mergedSig !== localSig) {
         useMediaStore.setState({ mediaFiles: merged })
       }
@@ -322,8 +327,7 @@ function ImageManagementPageContent() {
   const forceMediaSync = useCallback(async (): Promise<boolean> => {
     try {
       const { syncMediaToServerNow } = await import('@/lib/mediaSyncScheduler')
-      const { mediaFiles: snapshot } = useMediaStore.getState()
-      const result = await syncMediaToServerNow(snapshot, 3)
+      const result = await syncMediaToServerNow(3)
       return !!result.ok
     } catch (e) {
       console.error('❌ [ImageManagement] force media sync failed:', e)

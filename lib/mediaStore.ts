@@ -301,7 +301,7 @@ export const useMediaStore = create<MediaStore>()(
         
         // 첫 번째 확인 시작
         checkStorage(1)
-        scheduleMediaSyncToServer(get().mediaFiles)
+        scheduleMediaSyncToServer()
       },
 
       updateMediaFile: (id, updates) => {
@@ -337,14 +337,14 @@ export const useMediaStore = create<MediaStore>()(
             storageArea: localStorage
           }))
         }
-        scheduleMediaSyncToServer(get().mediaFiles)
+        scheduleMediaSyncToServer()
       },
 
       deleteMediaFile: (id) => {
         set((state) => ({
           mediaFiles: state.mediaFiles.filter(file => file.id !== id)
         }))
-        scheduleMediaSyncToServer(get().mediaFiles)
+        scheduleMediaSyncToServer()
       },
 
       getMediaFilesByCategory: (category) => {
@@ -420,7 +420,7 @@ export const useMediaStore = create<MediaStore>()(
             return file
           })
         }))
-        scheduleMediaSyncToServer(get().mediaFiles)
+        scheduleMediaSyncToServer()
       },
 
       // 여러 파일의 순서 일괄 업데이트 (드래그 앤 드롭용)
@@ -441,7 +441,7 @@ export const useMediaStore = create<MediaStore>()(
           
           return { mediaFiles: updatedFiles }
         })
-        scheduleMediaSyncToServer(get().mediaFiles)
+        scheduleMediaSyncToServer()
       },
 
       refreshMediaFilesFromStorage: () => {
