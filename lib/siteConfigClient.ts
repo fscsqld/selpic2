@@ -196,6 +196,7 @@ async function pushPersistStringToSupabase(serialized: string): Promise<void> {
 
 /** Load raw value JSON from Supabase (same shape as persist `state` object). */
 export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | null> {
+  let directValue: Record<string, unknown> | null = null
   try {
     const supabase = siteConfigSupabase()
     const { data, error } = await supabase
@@ -206,19 +207,37 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
 
     if (error) {
       console.warn('[siteConfig] fetch:', error.message)
-      return null
+    } else {
+      const rawValue = data?.value
+      if (rawValue) {
+        let raw: Record<string, unknown> | null = null
+        if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+          raw = rawValue as Record<string, unknown>
+        } else if (typeof rawValue === 'string') {
+          try {
+            const parsed = JSON.parse(rawValue)
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              raw = parsed as Record<string, unknown>
+            }
+          } catch {
+            raw = null
+          }
+        }
+        if (raw) {
+          // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
+          const inner = raw.state
+          directValue =
+            inner && typeof inner === 'object' && !Array.isArray(inner)
+              ? (inner as Record<string, unknown>)
+              : raw
+        }
+      }
     }
-    if (!data?.value || typeof data.value !== 'object') return null
-    const raw = data.value as Record<string, unknown>
-    // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
-    const inner = raw.state
-    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
-      return inner as Record<string, unknown>
-    }
-    return raw
   } catch (e) {
     console.warn('[siteConfig] fetch error', e)
   }
+
+  if (directValue) return directValue
 
   // Fallback: same-origin server route using service-role Supabase (mobile CORS/RLS/cache-safe path).
   if (typeof window !== 'undefined') {

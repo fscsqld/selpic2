@@ -1187,15 +1187,35 @@ export default function HomePage() {
     )
   }
 
-  if (!siteConfigRemoteSynced && !cmsSyncTimeout) {
+  if (!siteConfigRemoteSynced) {
+    if (!cmsSyncTimeout) {
+      return (
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="text-center px-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading storefront…</p>
+            <p className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
+              Syncing the latest content. This usually takes a moment on mobile networks.
+            </p>
+          </div>
+        </div>
+      )
+    }
+
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center px-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading storefront…</p>
-          <p className="text-xs text-gray-400 mt-2 max-w-sm mx-auto">
-            Syncing the latest content. This usually takes a moment on mobile networks.
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center border border-gray-200 rounded-2xl p-6 shadow-sm bg-white">
+          <p className="text-gray-900 font-semibold mb-2">Could not sync latest homepage content.</p>
+          <p className="text-sm text-gray-600 mb-5">
+            Your network may be unstable. Please retry to avoid opening an outdated cached homepage.
           </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            Retry Sync
+          </button>
         </div>
       </div>
     )

@@ -56,8 +56,16 @@ export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
         .maybeSingle()
       if (!error && data) {
         const value = data.value
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const obj = value as Record<string, unknown>
+        let normalized: unknown = value
+        if (typeof value === 'string') {
+          try {
+            normalized = JSON.parse(value)
+          } catch {
+            normalized = null
+          }
+        }
+        if (normalized && typeof normalized === 'object' && !Array.isArray(normalized)) {
+          const obj = normalized as Record<string, unknown>
           const products = Array.isArray(obj.products) ? (obj.products as CatalogProductRecord[]) : []
           return {
             updatedAt:
@@ -66,10 +74,10 @@ export async function readCatalogSnapshot(): Promise<CatalogFileShape> {
             products,
           }
         }
-        if (Array.isArray(value)) {
+        if (Array.isArray(normalized)) {
           return {
             updatedAt: typeof data.updated_at === 'string' ? data.updated_at : '',
-            products: value as CatalogProductRecord[],
+            products: normalized as CatalogProductRecord[],
           }
         }
       }
