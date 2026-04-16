@@ -1280,10 +1280,16 @@ function StickerCustomizeContent() {
                   // 노트북/데스크탑에서는 상품 이미지가 시트 대비 너무 작아 보이지 않도록 축소를 최소화한다.
                   const PREVIEW_DISPLAY_WIDTH = previewDisplayWidth
                   const LEFT_PREVIEW_SCALE = isMobilePreview ? 0.96 : 1
-                  const leftPreviewWidth = PREVIEW_DISPLAY_WIDTH * LEFT_PREVIEW_SCALE
-                  const SHEET_SCALE = PREVIEW_DISPLAY_WIDTH / actualSheetWidthPx
-                  const previewDisplayHeight = actualSheetHeightPx * SHEET_SCALE
-                  const leftPreviewHeight = previewDisplayHeight
+                  const topOffsetPx = isMobilePreview ? 0 : 12
+                  const maxSheetDisplayHeight = isMobilePreview ? 280 : 360
+                  const SHEET_SCALE = Math.min(
+                    PREVIEW_DISPLAY_WIDTH / actualSheetWidthPx,
+                    maxSheetDisplayHeight / actualSheetHeightPx
+                  )
+                  const fittedSheetWidth = actualSheetWidthPx * SHEET_SCALE
+                  const fittedSheetHeight = actualSheetHeightPx * SHEET_SCALE
+                  const leftPreviewWidth = fittedSheetWidth * LEFT_PREVIEW_SCALE
+                  const leftPreviewHeight = fittedSheetHeight
                   const textPreviewScale = isMobilePreview ? 1.15 : 1
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
@@ -1302,18 +1308,30 @@ function StickerCustomizeContent() {
                     >
                       <p className="text-xs font-semibold text-slate-500 py-1.5 text-center truncate max-w-full px-2">{displayProduct.name}</p>
                       <div
-                        className="relative rounded-lg border-2 border-slate-300 shadow-lg overflow-hidden bg-gray-50 flex-shrink-0"
-                        style={{ width: leftPreviewWidth, height: leftPreviewHeight }}
+                        style={{
+                          width: fittedSheetWidth,
+                          height: fittedSheetHeight + topOffsetPx,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          paddingTop: topOffsetPx,
+                        }}
                       >
-                        {resolvedProductImage ? (
-                          <img
-                            src={resolvedProductImage}
-                            alt={displayProduct.name}
-                      className="w-full h-full object-contain"
-                    />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
-                        )}
+                        <div
+                          className="relative rounded-lg border-2 border-slate-300 shadow-lg overflow-hidden bg-gray-50 flex-shrink-0"
+                          style={{ width: leftPreviewWidth, height: leftPreviewHeight }}
+                        >
+                          {resolvedProductImage ? (
+                            <img
+                              src={resolvedProductImage}
+                              alt={displayProduct.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1327,13 +1345,13 @@ function StickerCustomizeContent() {
                       <div className="flex-shrink-0 flex flex-col items-center w-full gap-2 pt-2 pb-2 px-2">
                         <div
                           style={{
-                            width: PREVIEW_DISPLAY_WIDTH,
-                            height: previewDisplayHeight,
+                            width: fittedSheetWidth,
+                            height: fittedSheetHeight + topOffsetPx,
                             display: 'flex',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             overflow: 'hidden',
-                            paddingTop: `${previewDisplayHeight * 0.05}px`,
+                            paddingTop: topOffsetPx,
                           }}
                         >
                           <div
