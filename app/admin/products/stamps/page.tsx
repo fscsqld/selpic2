@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
 import AdminProductHeader from '@/components/AdminProductHeader'
@@ -29,6 +29,17 @@ interface StampFormData {
 
 export default function StampsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useStore()
+  const forceCatalogSync = useCallback(async (): Promise<boolean> => {
+    try {
+      const { syncCatalogToServerNow } = await import('@/lib/catalogSyncScheduler')
+      const snapshot = useStore.getState().products
+      const result = await syncCatalogToServerNow(snapshot, 3)
+      return !!result.ok
+    } catch (e) {
+      console.error('❌ [Stamp Management] force catalog sync failed:', e)
+      return false
+    }
+  }, [])
   
   // 스템프 상품만 필터링
   const stampsProducts = products.filter(product => product.category === 'Stamps')
@@ -153,7 +164,13 @@ export default function StampsPage() {
           updatedAt: new Date().toISOString()
         }
         updateProduct(updatedProduct)
-        showNotification('success', `"${formData.name}" stamp updated successfully!`)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${formData.name}" stamp updated successfully!`
+            : `"${formData.name}" stamp saved locally, but server sync failed.`
+        )
       } else {
         // 새 상품 추가
         const newProduct = {
@@ -163,7 +180,13 @@ export default function StampsPage() {
           updatedAt: new Date().toISOString()
         }
         addProduct(newProduct)
-        showNotification('success', `"${formData.name}" stamp added successfully!`)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${formData.name}" stamp added successfully!`
+            : `"${formData.name}" stamp saved locally, but server sync failed.`
+        )
       }
       
       closeModal()
@@ -177,8 +200,16 @@ export default function StampsPage() {
   const handleDelete = (productId: string) => {
     const product = stampsProducts.find(p => p.id === productId)
     if (confirm(`Are you sure you want to delete "${product?.name}" stamp?`)) {
-      deleteProduct(productId)
-      showNotification('success', `"${product?.name}" stamp deleted successfully.`)
+      void (async () => {
+        deleteProduct(productId)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${product?.name}" stamp deleted successfully.`
+            : `"${product?.name}" stamp deleted locally, but server sync failed.`
+        )
+      })()
     }
   }
 

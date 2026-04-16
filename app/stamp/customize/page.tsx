@@ -153,7 +153,13 @@ function StampCustomizeContent() {
   ]
   
   const colors = ['#000000', '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
-  const fixedSize = { id: 'medium', name: 'Medium', price: 25.00 }
+  const fixedSize = selectedProduct?.size
+    ? {
+        id: String(selectedProduct.size).toLowerCase().replace(/\s+/g, '-'),
+        name: selectedProduct.size,
+        price: typeof selectedProduct.price === 'number' ? selectedProduct.price : 25.00
+      }
+    : { id: 'medium', name: 'Medium', price: 25.00 }
 
   // HEX 코드를 색상 이름으로 변환
   const getColorName = (hex: string): string => {

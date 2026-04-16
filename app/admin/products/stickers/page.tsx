@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
 import AdminProductHeader from '@/components/AdminProductHeader'
@@ -39,6 +39,18 @@ interface StickerFormData {
 }
 
 export default function StickersPage() {
+  const forceCatalogSync = useCallback(async (): Promise<boolean> => {
+    try {
+      const { syncCatalogToServerNow } = await import('@/lib/catalogSyncScheduler')
+      const snapshot = useStore.getState().products
+      const result = await syncCatalogToServerNow(snapshot, 3)
+      return !!result.ok
+    } catch (e) {
+      console.error('❌ [Sticker Management] force catalog sync failed:', e)
+      return false
+    }
+  }, [])
+
   const { products, addProduct, updateProduct, deleteProduct } = useStore()
   
   // Filter only sticker products
@@ -236,7 +248,13 @@ export default function StickersPage() {
           updatedAt: new Date().toISOString()
         }
         updateProduct(updatedProduct)
-        showNotification('success', `"${formData.name}" sticker has been successfully updated!`)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${formData.name}" sticker has been successfully updated!`
+            : `"${formData.name}" sticker saved locally, but server sync failed.`
+        )
       } else {
         // Add new product
         const newProduct = {
@@ -248,7 +266,13 @@ export default function StickersPage() {
           updatedAt: new Date().toISOString()
         }
         addProduct(newProduct)
-        showNotification('success', `"${formData.name}" sticker has been successfully added!`)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${formData.name}" sticker has been successfully added!`
+            : `"${formData.name}" sticker saved locally, but server sync failed.`
+        )
       }
       
       closeModal()
@@ -262,8 +286,16 @@ export default function StickersPage() {
   const handleDelete = (productId: string) => {
     const product = stickersProducts.find(p => p.id === productId)
     if (confirm(`Are you sure you want to delete the "${product?.name}" sticker?`)) {
-      deleteProduct(productId)
-      showNotification('success', `"${product?.name}" sticker has been deleted.`)
+      void (async () => {
+        deleteProduct(productId)
+        const synced = await forceCatalogSync()
+        showNotification(
+          synced ? 'success' : 'error',
+          synced
+            ? `"${product?.name}" sticker has been deleted.`
+            : `"${product?.name}" sticker deleted locally, but server sync failed.`
+        )
+      })()
     }
   }
 

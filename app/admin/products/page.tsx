@@ -269,10 +269,12 @@ function AdminProductsPageContent() {
       }
     }
 
+    // Local-first: admin just-saved values may be newer than server catalog.
+    // Only fall back to server when local cache is empty/unavailable.
     void (async () => {
-      const ok = await loadProductsFromServerCatalog()
-      if (!ok) {
-        loadProductsFromLocalStorage()
+      const hasLocal = loadProductsFromLocalStorage()
+      if (!hasLocal) {
+        await loadProductsFromServerCatalog()
       }
       refreshProducts()
     })()
@@ -291,10 +293,9 @@ function AdminProductsPageContent() {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'selpic-store') {
         void (async () => {
-          const ok = await loadProductsFromServerCatalog()
-          if (!ok) {
-            loadProductsFromLocalStorage()
-          }
+          // localStorage changed => prefer newest local snapshot first.
+          const hasLocal = loadProductsFromLocalStorage()
+          if (!hasLocal) await loadProductsFromServerCatalog()
           refreshProducts()
           console.log('🔄 [Product Management] localStorage selpic-store changed, refreshing...')
         })()

@@ -58,7 +58,7 @@ interface StampProduct {
   originalPrice?: number
   image: string
   category: string
-  size: 'small' | 'medium' | 'large' | 'custom'
+  size: string
   material: 'rubber' | 'wood' | 'metal' | 'acrylic'
   usage: 'personal' | 'office' | 'commercial' | 'craft'
   rating: number
@@ -253,7 +253,7 @@ export default function StampPage() {
       
       // 관리자가 등록한 상품을 StampProduct 형식으로 변환
       const allStamps: StampProduct[] = baseProducts.map(product => {
-        const size = (product as any).size || 'medium'
+        const size = (product as any).size || 'Medium'
         const material = (product as any).material || 'rubber'
         const usage = (product as any).usage || 'personal'
         const rating = product.rating || 4.5
@@ -268,9 +268,8 @@ export default function StampPage() {
           originalPrice: product.originalPrice,
           image: product.image,
           category: product.category,
-          size: (['small', 'medium', 'large', 'custom'].includes(size.toLowerCase())) 
-            ? size.toLowerCase() as 'small' | 'medium' | 'large' | 'custom'
-            : 'medium' as const,
+          // Keep admin-entered size verbatim so customize page can reflect exactly.
+          size: typeof size === 'string' && size.trim().length > 0 ? size : 'Medium',
           material: (['rubber', 'wood', 'metal', 'acrylic'].includes(material.toLowerCase())) 
             ? material.toLowerCase() as 'rubber' | 'wood' | 'metal' | 'acrylic'
             : 'rubber' as const,
