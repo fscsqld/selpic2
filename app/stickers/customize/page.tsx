@@ -60,6 +60,8 @@ function StickerCustomizeContent() {
   const [textPosition, setTextPosition] = useState({ x: 50, y: 50 }) // 텍스트 위치 (퍼센트)
   const [textSize, setTextSize] = useState(14) // 텍스트 크기 (9자 한 줄에 맞춤)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [previewDisplayWidth, setPreviewDisplayWidth] = useState(260)
+  const [mobilePreviewMode, setMobilePreviewMode] = useState<'sheet' | 'product'>('sheet')
   const [isFontGuideOpen, setIsFontGuideOpen] = useState(false)
   // 1줄 / 2줄 모드 선택 (기본: 1줄)
   const [lineMode, setLineMode] = useState<'single' | 'two'>('single')
@@ -87,6 +89,21 @@ function StickerCustomizeContent() {
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const updatePreviewWidth = () => {
+      const w = window.innerWidth
+      if (w < 480) setPreviewDisplayWidth(180)
+      else if (w < 640) setPreviewDisplayWidth(220)
+      else if (w < 1024) setPreviewDisplayWidth(210)
+      else setPreviewDisplayWidth(260)
+    }
+    updatePreviewWidth()
+    window.addEventListener('resize', updatePreviewWidth)
+    return () => window.removeEventListener('resize', updatePreviewWidth)
+  }, [])
+  const isMobilePreview = previewDisplayWidth <= 220
 
   useEffect(() => {
     const categories = getActiveCategoryItems()
@@ -955,10 +972,10 @@ function StickerCustomizeContent() {
       <div className="max-w-[1400px] mx-auto px-4 py-8">
         {/* Page Title — 가독성: 배경 이미지와 관계없이 텍스트가 보이도록 그림자·배경 적용 (Custom Design Studio와 동일) */}
         <div className="text-center mb-8 px-4 py-6 rounded-xl bg-black/30 backdrop-blur-sm max-w-3xl mx-auto">
-          <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+          <h1 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
             Sticker Customization
           </h1>
-          <p className="text-xl text-slate-200 max-w-2xl mx-auto drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-200 max-w-2xl mx-auto drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
             {displayProduct 
               ? `Customize your ${displayProduct.name} with text and fonts`
               : 'Design your own unique sticker. You can freely choose text and font.'
@@ -1007,8 +1024,8 @@ function StickerCustomizeContent() {
         {/* Selected product info */}
         {displayProduct && (
           <div className="bg-slate-800/90 rounded-xl shadow-2xl border border-slate-700 p-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start sm:items-center space-x-4">
                 {resolvedProductImage ? (
                 <img
                     src={resolvedProductImage}
@@ -1020,9 +1037,9 @@ function StickerCustomizeContent() {
                     <Package className="w-8 h-8 text-gray-400" />
                   </div>
                 )}
-                <div>
-                  <h2 className="text-2xl font-bold text-white">{displayProduct.name}</h2>
-                  <p className="text-slate-300">Size: {fixedSize.name} • ${getCustomizationPrice().toFixed(2)} • {(displayProduct as { stickerSheetQuantity?: number }).stickerSheetQuantity ?? 3} sheets</p>
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white break-words">{displayProduct.name}</h2>
+                  <p className="text-slate-300 text-sm sm:text-base">Size: {fixedSize.name} • ${getCustomizationPrice().toFixed(2)} • {(displayProduct as { stickerSheetQuantity?: number }).stickerSheetQuantity ?? 3} sheets</p>
                   <p className="text-slate-400 text-sm mt-0.5">
                     {Number(stickerSpec.widthMm.toFixed(1))}×{Number(stickerSpec.heightMm.toFixed(1))}mm · {stickerSpec.cols}×{stickerSpec.rows} = {totalCells} labels
                     {supportsTwoLines && (
@@ -1212,9 +1229,9 @@ function StickerCustomizeContent() {
 
         {/* Single product: main layout */}
         {displayProduct && displayProduct.subcategory !== 'Set' && (
-          <div className={`flex gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'max-w-[1000px]' : ''}`}>
+          <div className={`flex flex-col xl:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'xl:max-w-[1000px]' : ''}`}>
             {/* Left: Preview Area */}
-            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'max-w-none' : ''}`}>
+            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'xl:max-w-none' : ''}`}>
               {/* Sidebar Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1227,18 +1244,45 @@ function StickerCustomizeContent() {
               {/* Preview Header */}
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-t-xl mb-4">
                 <h3 className="text-xl font-bold text-center">Live Preview</h3>
+                {isMobilePreview && (
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMobilePreviewMode('sheet')}
+                      className={`px-3 py-1.5 text-xs rounded-md border ${
+                        mobilePreviewMode === 'sheet'
+                          ? 'bg-white text-blue-700 border-white'
+                          : 'bg-blue-800/40 text-white border-blue-300/50'
+                      }`}
+                    >
+                      Sheet Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobilePreviewMode('product')}
+                      className={`px-3 py-1.5 text-xs rounded-md border ${
+                        mobilePreviewMode === 'product'
+                          ? 'bg-white text-blue-700 border-white'
+                          : 'bg-blue-800/40 text-white border-blue-300/50'
+                      }`}
+                    >
+                      Product Image
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Live Preview: 5:5 비율, 왼쪽 = 상품 이미지, 오른쪽 = 시트 (비교 용이) */}
-              <div className="bg-gradient-to-br from-gray-50 to-white h-[500px] min-h-[500px] max-h-[500px] rounded-xl grid grid-cols-2 gap-3 p-3 border-2 border-gray-200 shadow-inner overflow-hidden">
+              <div className="bg-gradient-to-br from-gray-50 to-white min-h-[620px] sm:min-h-0 sm:h-[440px] lg:h-[500px] rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-3 border-2 border-gray-200 shadow-inner overflow-hidden">
                 {displayProduct && (() => {
                   // 고정값: 미리보기에서 보기 편한 너비 (오른쪽 시트 기준). 왼쪽 상품 이미지는 15% 축소.
-                  const PREVIEW_DISPLAY_WIDTH = 260
+                  const PREVIEW_DISPLAY_WIDTH = previewDisplayWidth
                   const LEFT_PREVIEW_SCALE = 0.85  // 왼쪽 상품 이미지 15% 축소
                   const leftPreviewWidth = PREVIEW_DISPLAY_WIDTH * LEFT_PREVIEW_SCALE
                   const SHEET_SCALE = PREVIEW_DISPLAY_WIDTH / actualSheetWidthPx
                   const previewDisplayHeight = actualSheetHeightPx * SHEET_SCALE
                   const leftPreviewHeight = previewDisplayHeight * LEFT_PREVIEW_SCALE
+                  const textPreviewScale = isMobilePreview ? 1.15 : 1
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
                   // Large일 때는 이미지를 2×3(6등분)으로 잘라 셀마다 1/6만 표시 → 칸당 라벨 1개.
@@ -1249,7 +1293,11 @@ function StickerCustomizeContent() {
                   return (
                   <>
                     {/* Left: 상품 이미지 — object-contain으로 박스에 맞는 최대 크기 표시(비율 유지, 잘림 없음) */}
-                    <div className="min-w-0 flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80">
+                    <div
+                      className={`min-w-0 flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80 ${
+                        isMobilePreview && mobilePreviewMode !== 'product' ? 'hidden' : ''
+                      }`}
+                    >
                       <p className="text-xs font-semibold text-slate-500 py-1.5 text-center truncate max-w-full px-2">{displayProduct.name}</p>
                       <div
                         className="relative rounded-lg border-2 border-slate-300 shadow-lg overflow-hidden bg-gray-50 flex-shrink-0"
@@ -1268,7 +1316,11 @@ function StickerCustomizeContent() {
                     </div>
 
                     {/* Right: 시트 (왼쪽과 동일한 표시 너비로 스케일) */}
-                    <div className="min-w-0 flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80">
+                    <div
+                      className={`min-w-0 flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden border border-slate-200 rounded-lg bg-white/80 ${
+                        isMobilePreview && mobilePreviewMode !== 'sheet' ? 'hidden' : ''
+                      }`}
+                    >
                       <p className="text-xs font-semibold text-slate-500 py-1.5">Sheet</p>
                       <div className="flex-shrink-0 flex flex-col items-center w-full gap-2 pt-2 pb-2 px-2">
                         <div
@@ -1420,8 +1472,8 @@ function StickerCustomizeContent() {
                                         otherSize = phoneSize
                                       }
 
-                                      const size1 = isNameFirst ? nameSize : otherSize
-                                      const size2 = isNameFirst ? otherSize : nameSize
+                                      const size1 = Math.round((isNameFirst ? nameSize : otherSize) * textPreviewScale)
+                                      const size2 = Math.round((isNameFirst ? otherSize : nameSize) * textPreviewScale)
                                       return (
                                         <>
                                           <span
@@ -1461,7 +1513,9 @@ function StickerCustomizeContent() {
                                         style={{
                                           fontFamily: getCurrentFont().fontFamily,
                                           color: selectedColor,
-                                          fontSize: getSheetNameFontSize(customText.trim().length),
+                                          fontSize: Math.round(
+                                            getSheetNameFontSize(customText.trim().length) * textPreviewScale
+                                          ),
                                           fontWeight: 'bold',
                                           textShadow: '1px 1px 2px rgba(0,0,0,0.08)',
                                           whiteSpace: 'nowrap',
@@ -1484,10 +1538,7 @@ function StickerCustomizeContent() {
                           </div>
                         </div>
                         </div>
-                        <p
-                          className="text-slate-500 text-center w-full px-1 text-[8px] sm:text-[9px] leading-tight break-words max-w-[260px] mx-auto"
-                          style={{ marginTop: `-${actualSheetHeightPx * (1 - SHEET_SCALE)}px` }}
-                        >
+                        <p className="text-slate-500 text-center w-full px-1 text-[8px] sm:text-[9px] leading-tight break-words max-w-[260px] mx-auto mt-1">
                           {actualSheetWidthMm}×{actualSheetHeightMm}mm · cell {Number(stickerSpec.widthMm.toFixed(1))}×{Number(stickerSpec.heightMm.toFixed(1))}mm · each box = 1 label
                         </p>
                       </div>
@@ -1583,7 +1634,7 @@ function StickerCustomizeContent() {
 
             {/* Right: Control Sidebar (Game Sidebar Style) */}
             {!isSidebarCollapsed && (
-              <aside className="w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
+              <aside className="w-full xl:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
                 {/* Close Button */}
                 <button
                   onClick={() => setIsSidebarCollapsed(true)}

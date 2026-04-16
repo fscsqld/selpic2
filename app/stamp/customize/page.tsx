@@ -540,10 +540,10 @@ function StampCustomizeContent() {
       <div className="max-w-[1400px] mx-auto px-4 py-8">
         {/* Page Title */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">
+          <h1 className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-4">
             📮 Stamp Customization
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-300 max-w-2xl mx-auto">
             {selectedProduct 
               ? `Customize your ${selectedProduct.name} with text, colors, and fonts`
               : 'Design your own unique stamp. You can freely choose text, font, and color.'
@@ -834,9 +834,9 @@ function StampCustomizeContent() {
 
         {/* 일반 상품인 경우: Game Layout Style */}
         {selectedProduct && selectedProduct.subcategory !== 'Set' && (
-          <div className={`flex gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'max-w-[1000px]' : ''}`}>
+          <div className={`flex flex-col xl:flex-row gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'xl:max-w-[1000px]' : ''}`}>
             {/* Left: Preview Area */}
-            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'max-w-none' : ''}`}>
+            <div className={`flex-1 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 shadow-2xl border border-slate-700 transition-all relative ${isSidebarCollapsed ? 'xl:max-w-none' : ''}`}>
               {/* Sidebar Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -852,7 +852,7 @@ function StampCustomizeContent() {
               </div>
 
               {/* Preview Canvas (Bright Style) */}
-              <div className="bg-gradient-to-br from-gray-50 to-white min-h-[500px] rounded-xl flex items-center justify-center p-8 border-2 border-gray-200 shadow-inner">
+              <div className="bg-gradient-to-br from-gray-50 to-white h-[340px] sm:h-[440px] lg:h-[500px] rounded-xl flex items-center justify-center p-4 sm:p-6 lg:p-8 border-2 border-gray-200 shadow-inner">
                 <div
                   className="text-center"
                   style={{
@@ -948,7 +948,7 @@ function StampCustomizeContent() {
 
             {/* Right: Control Sidebar (Game Sidebar Style) */}
             {!isSidebarCollapsed && (
-              <aside className="w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
+              <aside className="w-full xl:w-80 bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-2xl flex flex-col gap-3 relative">
                 {/* Close Button */}
                 <button
                   onClick={() => setIsSidebarCollapsed(true)}
