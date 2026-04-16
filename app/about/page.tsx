@@ -10,21 +10,21 @@ import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 export default function AboutPage() {
   const { getActiveContentBySection, _hasHydrated: contentHydrated, setHasHydrated: setContentHydrated } = useContentStore()
   
-  // About Us 섹션의 콘텐츠 가져오기
+  // Load content for the About Us section.
   const aboutContent = getActiveContentBySection('about')
   
-  // 각 콘텐츠 항목을 쉽게 접근할 수 있도록 함수 생성
+  // Helper to access each content entry more easily.
   const getContent = (title: string) => {
     return aboutContent.find(item => item.title === title)?.content || ''
   }
   
-  // 링크 URL을 가져오는 함수
+  // Helper to resolve link URLs.
   const getLinkUrl = (title: string, defaultUrl: string) => {
     const linkItem = aboutContent.find(item => item.title === title && item.type === 'link')
     return linkItem?.linkUrl || defaultUrl
   }
 
-  // 콘텐츠 스토어 하이드레이션 설정
+  // Ensure the content store is hydrated before rendering.
   useEffect(() => {
     if (!contentHydrated) {
       setContentHydrated(true)
@@ -112,10 +112,10 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-              {getContent('Why SELPIC 제목') || '왜 SELPIC인가요?'}
+              {getContent('Why SELPIC 제목') || 'Why SELPIC?'}
             </h2>
             <p className="text-xl text-gray-600">
-              {getContent('Why SELPIC 부제목') || '최고의 품질과 서비스로 고객 만족을 실현합니다'}
+              {getContent('Why SELPIC 부제목') || 'We deliver outstanding quality and service to keep every customer satisfied.'}
             </p>
           </div>
           
@@ -126,8 +126,8 @@ export default function AboutPage() {
                   <Package className="text-white" size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{getContent('최고 품질 제목') || '최고 품질'}</h3>
-                  <p className="text-gray-600">{getContent('최고 품질 설명') || '최첨단 기술로 완벽한 품질을 보장합니다. 모든 제품은 엄격한 품질 검사를 거쳐 고객에게 전달됩니다.'}</p>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{getContent('최고 품질 제목') || 'Premium Quality'}</h3>
+                  <p className="text-gray-600">{getContent('최고 품질 설명') || 'We use advanced technology to deliver premium results. Every product goes through strict quality checks before it reaches you.'}</p>
                 </div>
               </div>
               
@@ -136,8 +136,8 @@ export default function AboutPage() {
                   <Heart className="text-white" size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{getContent('고객 만족 제목') || '고객 만족'}</h3>
-                  <p className="text-gray-600">{getContent('고객 만족 설명') || '100% 만족하지 않으면 전액 환불을 보장합니다. 고객의 만족이 우리의 최우선 목표입니다.'}</p>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{getContent('고객 만족 제목') || 'Customer Satisfaction'}</h3>
+                  <p className="text-gray-600">{getContent('고객 만족 설명') || 'If you are not fully satisfied, we stand behind our work. Your satisfaction is always our highest priority.'}</p>
                 </div>
               </div>
             </div>
@@ -148,9 +148,9 @@ export default function AboutPage() {
                   <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Star className="text-white" size={32} />
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-900 mb-4">{getContent('SELPIC의 약속 제목') || 'SELPIC의 약속'}</h4>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-4">{getContent('SELPIC의 약속 제목') || 'The SELPIC Promise'}</h4>
                   <p className="text-gray-600 leading-relaxed">
-                    {getContent('SELPIC의 약속 설명') || '우리는 단순히 제품을 판매하는 것이 아니라, 고객의 창의적 아이디어를 현실로 만들어드리는 파트너입니다. 최고의 품질과 서비스로 고객의 만족을 실현하는 것이 SELPIC의 핵심 가치입니다.'}
+                    {getContent('SELPIC의 약속 설명') || 'We are more than a store. We are your creative partner, helping turn your ideas into real products with quality craftsmanship and dependable service.'}
                   </p>
                 </div>
               </div>
