@@ -35,6 +35,7 @@ export default function ProductGallery({
 }: ProductGalleryProps) {
   const { getMediaFilesByProduct, mediaFiles, getMediaFileById, refreshMediaFilesFromStorage } = useMediaStore()
   const [remoteProductMedia, setRemoteProductMedia] = useState<any[]>([])
+  const [remoteLoaded, setRemoteLoaded] = useState(false)
 
   // 마운트 시 localStorage에서 미디어 스토어 즉시 동기화 (persist 복원 전에도 연결 이미지 목록 확보)
   useEffect(() => {
@@ -73,32 +74,43 @@ export default function ProductGallery({
   useEffect(() => {
     let cancelled = false
     const loadRemoteMedia = async () => {
-      if (!productId || productMedia.length > 0) {
-        if (!cancelled) setRemoteProductMedia([])
+      if (!productId) {
+        if (!cancelled) {
+          setRemoteProductMedia([])
+          setRemoteLoaded(false)
+        }
         return
       }
       try {
         const res = await fetch(`/api/media/public?productId=${encodeURIComponent(productId)}`, {
           cache: 'no-store',
         })
-        if (!res.ok) return
+        if (!res.ok) {
+          if (!cancelled) setRemoteLoaded(true)
+          return
+        }
         const payload = (await res.json()) as { success?: boolean; mediaFiles?: unknown[] }
-        if (!payload.success || !Array.isArray(payload.mediaFiles)) return
+        if (!payload.success || !Array.isArray(payload.mediaFiles)) {
+          if (!cancelled) setRemoteLoaded(true)
+          return
+        }
         if (!cancelled) {
           const normalized = payload.mediaFiles.filter((f): f is any => !!f && typeof f === 'object')
           setRemoteProductMedia(normalized)
+          setRemoteLoaded(true)
         }
       } catch {
-        // keep local fallback behavior
+        if (!cancelled) setRemoteLoaded(true)
       }
     }
     void loadRemoteMedia()
     return () => {
       cancelled = true
     }
-  }, [productId, productMedia.length])
+  }, [productId])
 
-  const effectiveProductMedia = productMedia.length > 0 ? productMedia : remoteProductMedia
+  // Public storefront should prefer shared server snapshot to avoid stale per-device local links.
+  const effectiveProductMedia = remoteLoaded ? remoteProductMedia : productMedia
 
   // media-files-updated 이벤트 리스너 (새로고침 없이 갤러리 업데이트)
   useEffect(() => {
