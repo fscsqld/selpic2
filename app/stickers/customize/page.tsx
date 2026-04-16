@@ -1434,25 +1434,7 @@ function StickerCustomizeContent() {
                                 minWidth: 0,
                                 minHeight: 0,
                                 boxShadow: 'inset 0 0 0 1px rgba(148,163,184,0.3)',
-                                ...(singleLabelImage
-                                  ? {
-                                      // ✅ 각 박스에 라벨 1장(동일)을 꽉 채워 넣기
-                                      backgroundImage: `url(${singleLabelImage})`,
-                                      backgroundRepeat: 'no-repeat',
-                                      backgroundSize: '100% 100%',
-                                      backgroundPosition: 'center',
-                                      backgroundColor: 'transparent'
-                                    }
-                                  : resolvedProductImage
-                                    ? {
-                                        // fallback: 시트 전체를 cols×rows로 슬라이스
-                                        backgroundImage: `url(${resolvedProductImage})`,
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundSize: `${partCols * 100}% ${partRows * 100}%`,
-                                        backgroundPosition: `${bgPosX}% ${bgPosY}%`,
-                                        backgroundColor: 'transparent'
-                                      }
-                                    : {})
+                                backgroundColor: '#ffffff'
                               }}
                             >
                               {/* Text overlay — shift text 10% to the right. 2-line: name line always larger. */}
