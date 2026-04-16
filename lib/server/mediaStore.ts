@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs/promises'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { STOREFRONT_MEDIA_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import type { MediaSyncRecord } from '@/lib/mediaSync'
 
@@ -16,11 +17,37 @@ async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true })
 }
 
-export async function readMediaSnapshot(): Promise<MediaSnapshot> {
-  if (isSupabaseConfigured()) {
+function getSupabaseMediaClient(): { client: SupabaseClient; source: 'service' | 'anon' } | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+
+  if (url && service) {
     try {
-      const client = getSupabaseAdmin()
-      const { data, error } = await client
+      return { client: getSupabaseAdmin(), source: 'service' }
+    } catch (e) {
+      console.warn('[mediaStore] getSupabaseAdmin failed, falling back to anon:', e)
+    }
+  }
+
+  // site_configs RLS is open in this project; anon fallback prevents split-brain when service key is missing.
+  if (url && anon) {
+    return {
+      client: createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      }),
+      source: 'anon',
+    }
+  }
+
+  return null
+}
+
+export async function readMediaSnapshot(): Promise<MediaSnapshot> {
+  const supabase = getSupabaseMediaClient()
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.client
         .from('site_configs')
         .select('value, updated_at')
         .eq('config_key', STOREFRONT_MEDIA_CONFIG_KEY)
@@ -50,8 +77,11 @@ export async function readMediaSnapshot(): Promise<MediaSnapshot> {
             mediaFiles: normalized as MediaSyncRecord[],
           }
         }
+      } else if (error) {
+        console.warn(`[mediaStore] read storefront_media failed via ${supabase.source}:`, error.message || error)
       }
-    } catch {
+    } catch (e) {
+      console.warn('[mediaStore] readMediaSnapshot supabase exception:', e)
       // fall through to file fallback
     }
   }
@@ -71,11 +101,11 @@ export async function readMediaSnapshot(): Promise<MediaSnapshot> {
 }
 
 export async function writeMediaSnapshot(snapshot: MediaSnapshot): Promise<void> {
-  if (isSupabaseConfigured()) {
+  const supabase = getSupabaseMediaClient()
+  if (supabase) {
     try {
-      const client = getSupabaseAdmin()
       const now = new Date().toISOString()
-      const { error } = await client.from('site_configs').upsert(
+      const { error } = await supabase.client.from('site_configs').upsert(
         {
           config_key: STOREFRONT_MEDIA_CONFIG_KEY,
           value: {
@@ -87,7 +117,10 @@ export async function writeMediaSnapshot(snapshot: MediaSnapshot): Promise<void>
         { onConflict: 'config_key' }
       )
       if (!error) return
-      console.error('[mediaStore] Supabase upsert storefront_media failed:', error.message || error)
+      console.error(
+        `[mediaStore] Supabase upsert storefront_media failed via ${supabase.source}:`,
+        error.message || error
+      )
       // Fall back to local file for environments where DB write is blocked.
     } catch (e) {
       console.error('[mediaStore] Supabase write exception:', e)
