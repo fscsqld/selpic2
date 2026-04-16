@@ -275,7 +275,9 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
           {/* 평점 */}
           <div className="flex items-center space-x-1">
             <Star size={14} className="text-yellow-400 fill-current" />
-            <span className="text-sm text-gray-600">4.8</span>
+            <span className="text-sm text-gray-600">
+              {typeof product.rating === 'number' ? product.rating.toFixed(1) : '4.8'}
+            </span>
           </div>
         </div>
 
