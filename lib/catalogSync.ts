@@ -1,50 +1,10 @@
+import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
+import { productToCatalogRecord } from '@/lib/catalogRecordSanitize'
 import type { Product } from '@/lib/store'
 
-function publicImageUrl(image?: string): string | undefined {
-  if (!image || typeof image !== 'string') return undefined
-  const t = image.trim()
-  if (!t || t === 'undefined') return undefined
-  if (t.startsWith('indexeddb://') || t.startsWith('data:')) return undefined
-  if (t.startsWith('http://') || t.startsWith('https://') || t.startsWith('/')) return t
-  return undefined
-}
-
-function snapshotInStock(p: Product): boolean {
-  const stockQty = typeof p.stockQuantity === 'number' ? Math.max(0, p.stockQuantity) : undefined
-  if (typeof stockQty === 'number') return stockQty > 0
-  return !!p.inStock
-}
-
-export type CatalogProductPayload = {
-  id: string
-  name: string
-  description: string
-  image?: string
-  price: number
-  category: string
-  subcategory?: string
-  inStock: boolean
-  updatedAt: string
-  hasDetailPage?: boolean
-}
-
-export function productsToCatalogRecords(products: Product[]): CatalogProductPayload[] {
+export function productsToCatalogRecords(products: Product[]): CatalogProductRecord[] {
   const now = new Date().toISOString()
-  return products.map((p) => {
-    const img = publicImageUrl(p.fallbackImage) || publicImageUrl(p.image)
-    return {
-      id: p.id,
-      name: p.name,
-      description: (p.description || '').slice(0, 8000),
-      image: img,
-      price: typeof p.price === 'number' ? p.price : 0,
-      category: p.category || '',
-      subcategory: p.subcategory,
-      inStock: snapshotInStock(p),
-      updatedAt: now,
-      hasDetailPage: p.hasDetailPage
-    }
-  })
+  return products.map((p) => productToCatalogRecord(p, now))
 }
 
 export async function syncCatalogToServer(products: Product[]): Promise<{ ok: boolean; status?: number }> {

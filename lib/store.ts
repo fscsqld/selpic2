@@ -60,6 +60,8 @@ export interface Product {
   rating?: number
   /** 리뷰 수. Edit Product에서 설정. */
   reviews?: number
+  /** Catalog sync / public API merge timestamp (ISO string). */
+  updatedAt?: string
 }
 
 export interface BundleItem {

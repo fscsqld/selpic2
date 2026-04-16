@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { sanitizeIncomingCatalogRecord } from '@/lib/catalogRecordSanitize'
 import type { CatalogProductRecord } from '@/lib/server/catalogStore'
 import { readCatalogSnapshot, writeCatalogFile } from '@/lib/server/catalogStore'
 
@@ -54,22 +55,6 @@ function validateSecret(req: Request): boolean {
   )
 }
 
-function isValidRecord(p: unknown): p is CatalogProductRecord {
-  if (!p || typeof p !== 'object') return false
-  const o = p as Record<string, unknown>
-  return (
-    typeof o.id === 'string' &&
-    o.id.length > 0 &&
-    typeof o.name === 'string' &&
-    typeof o.description === 'string' &&
-    typeof o.price === 'number' &&
-    Number.isFinite(o.price) &&
-    typeof o.category === 'string' &&
-    typeof o.inStock === 'boolean' &&
-    typeof o.updatedAt === 'string'
-  )
-}
-
 export async function GET(req: Request) {
   if (!validateSecret(req)) {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
@@ -114,27 +99,8 @@ export async function POST(req: Request) {
 
   const products: CatalogProductRecord[] = []
   for (const item of list) {
-    if (!isValidRecord(item)) continue
-    const img = item.image
-    const safeImage =
-      typeof img === 'string' &&
-      !img.startsWith('data:') &&
-      !img.startsWith('indexeddb://') &&
-      (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/'))
-        ? img
-        : undefined
-    products.push({
-      id: item.id,
-      name: item.name.slice(0, 500),
-      description: item.description.slice(0, 8000),
-      price: item.price,
-      category: item.category.slice(0, 200),
-      subcategory: typeof item.subcategory === 'string' ? item.subcategory.slice(0, 200) : undefined,
-      inStock: item.inStock,
-      updatedAt: item.updatedAt,
-      hasDetailPage: item.hasDetailPage,
-      ...(safeImage ? { image: safeImage.slice(0, 2000) } : {})
-    })
+    const rec = sanitizeIncomingCatalogRecord(item)
+    if (rec) products.push(rec)
   }
 
   const updatedAt = new Date().toISOString()

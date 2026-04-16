@@ -24,7 +24,9 @@ export function catalogRecordsToProducts(records: unknown): Product[] {
   if (!Array.isArray(records)) return []
   return records.filter(isCatalogRecord).map((r) => {
     const img = typeof r.image === 'string' ? r.image.trim() : ''
+    const { updatedAt: catalogSyncAt, ...rest } = r as CatalogProductRecord
     return {
+      ...(rest as Product),
       id: r.id,
       name: r.name,
       price: r.price,
@@ -33,8 +35,13 @@ export function catalogRecordsToProducts(records: unknown): Product[] {
       subcategory: r.subcategory,
       description: typeof r.description === 'string' ? r.description : String(r.description ?? ''),
       inStock: r.inStock,
+      updatedAt: catalogSyncAt,
       hasDetailPage: r.hasDetailPage,
-      customizationOptions: [],
+      detailDescription:
+        typeof r.detailDescription === 'string' ? r.detailDescription : undefined,
+      customizationOptions: Array.isArray(r.customizationOptions)
+        ? (r.customizationOptions as Product['customizationOptions'])
+        : undefined,
     }
   })
 }

@@ -214,7 +214,7 @@ export default function PhoneCaseManager() {
         const updatedProduct = {
           ...formData,
           customizationOptions: (editingProduct as any).customizationOptions || [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         updateProduct(updatedProduct)
         
@@ -229,7 +229,7 @@ export default function PhoneCaseManager() {
           ...formData,
           id: Date.now().toString(),
           customizationOptions: [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         addProduct(newProduct)
         

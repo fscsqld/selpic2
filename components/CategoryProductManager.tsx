@@ -212,7 +212,7 @@ export default function CategoryProductManager({
         const updatedProduct = {
           ...finalFormData,
           customizationOptions: editingProduct.customizationOptions || [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         console.log('💾 Updating product:', updatedProduct)
         updateProduct(updatedProduct)
@@ -223,7 +223,7 @@ export default function CategoryProductManager({
           ...finalFormData,
           id: Date.now().toString(),
           customizationOptions: [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         console.log('💾 Adding new product:', newProduct)
         addProduct(newProduct)

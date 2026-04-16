@@ -233,7 +233,7 @@ export default function StickersPage() {
           ...optionalSticker,
           twoLineSurcharge: twoLineSurchargeVal,
           customizationOptions: (editingProduct as any).customizationOptions || [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         updateProduct(updatedProduct)
         showNotification('success', `"${formData.name}" sticker has been successfully updated!`)
@@ -245,7 +245,7 @@ export default function StickersPage() {
           twoLineSurcharge: twoLineSurchargeVal,
           id: Date.now().toString(),
           customizationOptions: [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         addProduct(newProduct)
         showNotification('success', `"${formData.name}" sticker has been successfully added!`)

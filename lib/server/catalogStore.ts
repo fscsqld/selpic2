@@ -3,19 +3,9 @@ import fs from 'fs/promises'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { STOREFRONT_CATALOG_CONFIG_KEY } from '@/lib/siteConfigConstants'
+import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
 
-export type CatalogProductRecord = {
-  id: string
-  name: string
-  description: string
-  image?: string
-  price: number
-  category: string
-  subcategory?: string
-  inStock: boolean
-  updatedAt: string
-  hasDetailPage?: boolean
-}
+export type { CatalogProductRecord }
 
 export type CatalogFileShape = {
   updatedAt: string

@@ -7,10 +7,10 @@ import { type Product, useStore } from '@/lib/store'
 type CatalogPublicResponse = {
   success?: boolean
   updatedAt?: string | null
-  products?: Array<Partial<Product>>
+  products?: Array<Partial<Product> & { updatedAt?: string }>
 }
 
-function normalizeCatalogProduct(input: Partial<Product>): Product | null {
+function normalizeCatalogProduct(input: Partial<Product> & { updatedAt?: string }): Product | null {
   if (!input || typeof input.id !== 'string' || !input.id.trim()) return null
   if (typeof input.name !== 'string') return null
   if (typeof input.description !== 'string') return null
@@ -18,7 +18,11 @@ function normalizeCatalogProduct(input: Partial<Product>): Product | null {
   if (typeof input.category !== 'string') return null
   if (typeof input.inStock !== 'boolean') return null
 
+  const catalogRowUpdatedAt =
+    typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString()
+
   return {
+    ...(input as Product),
     id: input.id,
     name: input.name,
     description: input.description,
@@ -27,8 +31,13 @@ function normalizeCatalogProduct(input: Partial<Product>): Product | null {
     inStock: input.inStock,
     image: typeof input.image === 'string' ? input.image : '',
     subcategory: typeof input.subcategory === 'string' ? input.subcategory : undefined,
-    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString(),
     hasDetailPage: typeof input.hasDetailPage === 'boolean' ? input.hasDetailPage : undefined,
+    detailDescription:
+      typeof input.detailDescription === 'string' ? input.detailDescription : undefined,
+    customizationOptions: Array.isArray(input.customizationOptions)
+      ? (input.customizationOptions as Product['customizationOptions'])
+      : undefined,
+    updatedAt: catalogRowUpdatedAt,
   }
 }
 

@@ -433,7 +433,7 @@ function AdminProductsPageContent() {
           customizationOptions: Array.isArray(formData.customizationOptions) 
             ? formData.customizationOptions 
             : (formData.customizationOptions || []),
-          updatedAt: new Date() // 업데이트 시간 추가
+          updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: customizationOptions 확인 (개발 환경에서만)
         if (process.env.NODE_ENV === 'development') {
@@ -487,7 +487,7 @@ function AdminProductsPageContent() {
           customizationOptions: Array.isArray(formData.customizationOptions) 
             ? formData.customizationOptions 
             : (formData.customizationOptions || []),
-          updatedAt: new Date() // 업데이트 시간 추가
+          updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: 상품 데이터 확인 (개발 환경에서만)
         if (process.env.NODE_ENV === 'development') {

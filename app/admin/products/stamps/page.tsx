@@ -150,7 +150,7 @@ export default function StampsPage() {
         const updatedProduct = {
           ...formData,
           customizationOptions: (editingProduct as any).customizationOptions || [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         updateProduct(updatedProduct)
         showNotification('success', `"${formData.name}" stamp updated successfully!`)
@@ -160,7 +160,7 @@ export default function StampsPage() {
           ...formData,
           id: Date.now().toString(),
           customizationOptions: [],
-          updatedAt: new Date()
+          updatedAt: new Date().toISOString()
         }
         addProduct(newProduct)
         showNotification('success', `"${formData.name}" stamp added successfully!`)
