@@ -526,7 +526,9 @@ export default function HomePage() {
 
     const normalize = (value: string | undefined) => (value || '').toLowerCase().replace(/[\s-]/g, '')
     let list = Array.isArray(products) ? products : []
-    if (typeof window !== 'undefined' && list.length === 0) {
+    // Hydration safety: do not read localStorage during first client render.
+    // SSR and initial CSR must produce identical text (e.g. "0 products").
+    if (isClientMounted && typeof window !== 'undefined' && list.length === 0) {
       try {
         const raw = localStorage.getItem('selpic-store')
         if (raw) {
@@ -568,7 +570,7 @@ export default function HomePage() {
     })
 
     return counts
-  }, [products])
+  }, [products, isClientMounted])
 
   const getProductCountForCategory = useCallback((category: CategoryItemWithType) => {
     const normalize = (value: string | undefined) => (value || '').toLowerCase().replace(/[\s-]/g, '')
