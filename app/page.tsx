@@ -687,14 +687,16 @@ export default function HomePage() {
 
   // 하이드레이션 타임아웃: 1.5초 후에도 미완료 시 본문 강제 표시 (홈이 안 열릴 때 대비)
   const [hydrationTimeout, setHydrationTimeout] = useState(false)
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  // useLayoutEffect: 태블릿 등에서 persist 복원/대형 localStorage 때문에 메인 스레드가 잠깐 막히면
+  // useEffect 타이머가 늦게 등록되어 "로딩만 계속"처럼 보일 수 있음 → 레이아웃 단계에서 먼저 예약.
+  useLayoutEffect(() => {
+    const timer = window.setTimeout(() => {
       if (!_hasHydrated || !contentHydrated) {
         devWarn('⚠️ Hydration timeout - forcing render')
         setHydrationTimeout(true)
       }
     }, 1500)
-    return () => clearTimeout(timer)
+    return () => window.clearTimeout(timer)
   }, [_hasHydrated, contentHydrated])
 
   // After hydration, wait for Supabase CMS merge (or timeout) so mobile/incognito never paints bundle defaults as "the site".
