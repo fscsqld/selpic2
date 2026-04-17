@@ -642,6 +642,7 @@ export default function HomePage() {
   const showFooterLogo = !!(headerLogoItem?.isActive && headerLogoItem?.mediaUrl?.trim())
   const footerLogoSrc = headerLogoItem?.mediaUrl?.trim() || ''
   const footerLogoHref = headerLogoItem?.linkUrl?.trim() || '/'
+  const currentYear = useMemo(() => new Date().getUTCFullYear(), [])
 
   // Footer 링크를 CMS에서 안전하게 읽기 위한 헬퍼
   const getFooterLink = useCallback((
@@ -1205,16 +1206,6 @@ export default function HomePage() {
       
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden">
-        {!isClientMounted ? (
-          <div className="h-screen w-full bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 flex items-center justify-center">
-            <div className="text-center text-white px-6">
-              <h2 className="text-3xl lg:text-5xl font-bold tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.55)]">
-                SELPIC
-              </h2>
-              <p className="mt-4 text-base sm:text-lg text-white/90">Preparing latest hero content...</p>
-            </div>
-          </div>
-        ) : (
           <>
             {/* Swiper Slider */}
             <Swiper
@@ -1388,7 +1379,6 @@ export default function HomePage() {
               </div>
             </div>
           </>
-        )}
       </section>
 
 
@@ -1636,7 +1626,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="mt-16 text-center text-gray-500 text-sm">
-          &copy; {new Date().getFullYear()} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'SELPIC'}. All rights reserved.
+          &copy; {currentYear} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'SELPIC'}. All rights reserved.
         </div>
       </footer>
     </div>

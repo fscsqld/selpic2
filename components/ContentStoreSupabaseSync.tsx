@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { fetchSiteConfigValue, flushPendingSiteConfigState } from '@/lib/siteConfigClient'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import {
@@ -21,7 +21,7 @@ export default function ContentStoreSupabaseSync() {
   const lastRemoteSignature = useRef<string>('')
   const remoteMergeSucceeded = useRef(false)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (ran.current) return
     ran.current = true
 
