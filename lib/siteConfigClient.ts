@@ -196,7 +196,33 @@ async function pushPersistStringToSupabase(serialized: string): Promise<void> {
 
 /** Load raw value JSON from Supabase (same shape as persist `state` object). */
 export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | null> {
-  let directValue: Record<string, unknown> | null = null
+  // Primary path: same-origin server route (service-role read). This is most stable on iPad Safari.
+  if (typeof window !== 'undefined') {
+    try {
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 5500)
+      const res = await fetch(`/api/site-config/public?cb=${Date.now()}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      window.clearTimeout(timeout)
+      if (res.ok) {
+        const body = (await res.json()) as { success?: boolean; value?: unknown }
+        if (
+          body?.success &&
+          body.value &&
+          typeof body.value === 'object' &&
+          !Array.isArray(body.value)
+        ) {
+          return body.value as Record<string, unknown>
+        }
+      }
+    } catch (e) {
+      console.warn('[siteConfig] public route fetch error', e)
+    }
+  }
+
+  // Fallback: direct browser Supabase read.
   try {
     const supabase = siteConfigSupabase()
     const { data, error } = await supabase
@@ -206,51 +232,33 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
       .maybeSingle()
 
     if (error) {
-      console.warn('[siteConfig] fetch:', error.message)
-    } else {
-      const rawValue = data?.value
-      if (rawValue) {
-        let raw: Record<string, unknown> | null = null
-        if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-          raw = rawValue as Record<string, unknown>
-        } else if (typeof rawValue === 'string') {
-          try {
-            const parsed = JSON.parse(rawValue)
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-              raw = parsed as Record<string, unknown>
-            }
-          } catch {
-            raw = null
-          }
+      console.warn('[siteConfig] direct fetch:', error.message)
+      return null
+    }
+    const rawValue = data?.value
+    if (!rawValue) return null
+
+    let raw: Record<string, unknown> | null = null
+    if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+      raw = rawValue as Record<string, unknown>
+    } else if (typeof rawValue === 'string') {
+      try {
+        const parsed = JSON.parse(rawValue)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          raw = parsed as Record<string, unknown>
         }
-        if (raw) {
-          // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
-          const inner = raw.state
-          directValue =
-            inner && typeof inner === 'object' && !Array.isArray(inner)
-              ? (inner as Record<string, unknown>)
-              : raw
-        }
+      } catch {
+        raw = null
       }
     }
+    if (!raw) return null
+    // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
+    const inner = raw.state
+    return inner && typeof inner === 'object' && !Array.isArray(inner)
+      ? (inner as Record<string, unknown>)
+      : raw
   } catch (e) {
-    console.warn('[siteConfig] fetch error', e)
-  }
-
-  if (directValue) return directValue
-
-  // Fallback: same-origin server route using service-role Supabase (mobile CORS/RLS/cache-safe path).
-  if (typeof window !== 'undefined') {
-    try {
-      const res = await fetch(`/api/site-config/public?cb=${Date.now()}`, { cache: 'no-store' })
-      if (!res.ok) return null
-      const body = (await res.json()) as { success?: boolean; value?: unknown }
-      if (!body?.success) return null
-      if (!body.value || typeof body.value !== 'object' || Array.isArray(body.value)) return null
-      return body.value as Record<string, unknown>
-    } catch (e) {
-      console.warn('[siteConfig] fallback fetch error', e)
-    }
+    console.warn('[siteConfig] direct fetch error', e)
   }
 
   return null

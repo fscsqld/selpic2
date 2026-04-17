@@ -22,14 +22,24 @@ export default function StorefrontDeployVersionGuard() {
     const currentVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     if (!currentVersion) return
 
-    const previousVersion = window.localStorage.getItem(VERSION_KEY)
+    let previousVersion: string | null = null
+    try {
+      previousVersion = window.localStorage.getItem(VERSION_KEY)
+    } catch {
+      // iOS private mode can throw SecurityError on localStorage access.
+      return
+    }
     if (!previousVersion) {
       try {
         window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
       } catch {
         // ignore
       }
-      window.localStorage.setItem(VERSION_KEY, currentVersion)
+      try {
+        window.localStorage.setItem(VERSION_KEY, currentVersion)
+      } catch {
+        // ignore
+      }
       return
     }
     if (previousVersion === currentVersion) return
@@ -40,8 +50,12 @@ export default function StorefrontDeployVersionGuard() {
     } catch {
       // ignore
     }
-    window.localStorage.removeItem('content-store')
-    window.localStorage.setItem(VERSION_KEY, currentVersion)
+    try {
+      window.localStorage.removeItem('content-store')
+      window.localStorage.setItem(VERSION_KEY, currentVersion)
+    } catch {
+      // ignore
+    }
     window.location.reload()
   }, [pathname])
 
