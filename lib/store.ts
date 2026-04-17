@@ -2709,21 +2709,21 @@ SELPIC Team`,
           orders: data.orders && Array.isArray(data.orders) ? data.orders : (data.orders ?? currentState.orders)
         }
       },
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state._hasHydrated = true
-          state.language = 'en'
-          
-          // 🔧 최종 확인: products가 localStorage에서 제대로 복원되었는지 확인
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          console.warn('[selpic-store] persist rehydrate error', error)
+        }
+        // Mutating `state` alone does not always notify subscribers — force a merge update.
+        useStore.setState({ _hasHydrated: true, language: 'en' })
+        const latest = useStore.getState()
+        if (process.env.NODE_ENV === 'development') {
           console.log('🏪 [Store] Rehydration complete:', {
-            productsCount: state.products.length,
-            products: state.products.map(p => ({ id: p.id, name: p.name }))
+            productsCount: latest.products.length,
+            products: latest.products.map((p) => ({ id: p.id, name: p.name }))
           })
-
-          // Production: empty localStorage → load catalog from server (data/catalog/products.json via sync)
-          if (typeof window !== 'undefined' && state.products.length === 0) {
-            void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
-          }
+        }
+        if (typeof window !== 'undefined' && latest.products.length === 0) {
+          void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
         }
       }
     }

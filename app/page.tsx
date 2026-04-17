@@ -691,13 +691,13 @@ export default function HomePage() {
   // useEffect 타이머가 늦게 등록되어 "로딩만 계속"처럼 보일 수 있음 → 레이아웃 단계에서 먼저 예약.
   useLayoutEffect(() => {
     const timer = window.setTimeout(() => {
-      if (!_hasHydrated || !contentHydrated) {
-        devWarn('⚠️ Hydration timeout - forcing render')
+      if (!contentHydrated) {
+        devWarn('⚠️ Content store hydration timeout - forcing homepage render')
         setHydrationTimeout(true)
       }
     }, 1500)
     return () => window.clearTimeout(timer)
-  }, [_hasHydrated, contentHydrated])
+  }, [contentHydrated])
 
   // After hydration, wait for Supabase CMS merge (or timeout) so mobile/incognito never paints bundle defaults as "the site".
   // Must be >= ContentStoreSupabaseSync initial fetch budget so slow phones finish before we show possibly stale localStorage.
@@ -1177,8 +1177,9 @@ export default function HomePage() {
 
 
 
-  // Show loading if hydration is not complete (타임아웃 체크 추가)
-  if ((!_hasHydrated || !contentHydrated) && !hydrationTimeout) {
+  // Homepage shell is driven by the CMS store. Do not block on `useStore` (selpic-store):
+  // large orders/cart JSON can block tablets; CatalogStoreHydrator runs after this route tree.
+  if (!contentHydrated && !hydrationTimeout) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
