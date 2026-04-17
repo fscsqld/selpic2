@@ -93,6 +93,7 @@ export default function ContentStoreSupabaseSync() {
 
     let pollTimer: ReturnType<typeof setInterval> | undefined
     let realtimeChannel: ReturnType<ReturnType<typeof createSupabaseBrowserClient>['channel']> | undefined
+    let realtimeClient: ReturnType<typeof createSupabaseBrowserClient> | undefined
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
       void applyRemoteIfChanged()
@@ -149,9 +150,11 @@ export default function ContentStoreSupabaseSync() {
           void applyRemoteIfChanged()
         }, 8000)
         try {
-          const supabase = createSupabaseBrowserClient()
-          realtimeChannel = supabase
-            .channel('site-configs-live-sync')
+          realtimeClient = createSupabaseBrowserClient()
+          // Unique channel name per mount avoids "cannot add callbacks after subscribe" races.
+          const channelName = `site-configs-live-sync-${Date.now()}`
+          realtimeChannel = realtimeClient
+            .channel(channelName)
             .on(
               'postgres_changes',
               {
@@ -175,7 +178,11 @@ export default function ContentStoreSupabaseSync() {
       if (pollTimer) clearInterval(pollTimer)
       if (realtimeChannel) {
         try {
-          realtimeChannel.unsubscribe()
+          if (realtimeClient?.removeChannel) {
+            void realtimeClient.removeChannel(realtimeChannel)
+          } else {
+            realtimeChannel.unsubscribe()
+          }
         } catch {
           // ignore
         }

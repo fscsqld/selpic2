@@ -337,7 +337,6 @@ import { translations } from '@/lib/translations'
 import { useContentStore } from '@/lib/contentStore'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
-import '@/lib/store-debug' // 디버깅 유틸리티 로드
 
 const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string }) => {
   const defaultImage = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop&q=80'
