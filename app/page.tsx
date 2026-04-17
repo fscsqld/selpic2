@@ -365,6 +365,12 @@ export default function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [swiperInstance, setSwiperInstance] = useState<any>(null)
   const [forceUpdate, setForceUpdate] = useState(0)
+  const [isClientMounted, setIsClientMounted] = useState(false)
+
+  // Prevent SSR/CSR markup mismatch on iPad Safari when persisted CMS state differs at hydration time.
+  useEffect(() => {
+    setIsClientMounted(true)
+  }, [])
 
   // 🔧 상품 상태 확인 (개발 환경에서만)
   useEffect(() => {
@@ -1197,26 +1203,37 @@ export default function HomePage() {
       
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden">
-        {/* Swiper Slider */}
-        <Swiper
-          key={`swiper-${heroSliderSettings?.effect || 'fade'}-${heroSliderSettings?.speed || 1000}-${heroSliderSettings?.loop !== false}-${slidesToUse.length}-${slidesToUse.map(s => `${s.id}-${s.type}`).join('-')}-${forceUpdate}`}
-          modules={swiperModules}
-          effect={(heroSliderSettings?.effect || 'fade') as any}
-          speed={heroSliderSettings?.speed || 1000}
-          autoplay={{
-            delay: heroSliderSettings?.autoplayDelay || 5000,
-            disableOnInteraction: false,
-          }}
-          loop={heroSliderSettings?.loop !== false}
-          navigation={{
-            nextEl: '.swiper-button-next',
-            prevEl: '.swiper-button-prev',
-          }}
-          pagination={{
-            clickable: true,
-            el: '.swiper-pagination',
-          }}
-          onSlideChange={(swiper) => {
+        {!isClientMounted ? (
+          <div className="h-screen w-full bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 flex items-center justify-center">
+            <div className="text-center text-white px-6">
+              <h2 className="text-3xl lg:text-5xl font-bold tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.55)]">
+                SELPIC
+              </h2>
+              <p className="mt-4 text-base sm:text-lg text-white/90">Preparing latest hero content...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Swiper Slider */}
+            <Swiper
+              key={`swiper-${heroSliderSettings?.effect || 'fade'}-${heroSliderSettings?.speed || 1000}-${heroSliderSettings?.loop !== false}-${slidesToUse.length}-${slidesToUse.map(s => `${s.id}-${s.type}`).join('-')}-${forceUpdate}`}
+              modules={swiperModules}
+              effect={(heroSliderSettings?.effect || 'fade') as any}
+              speed={heroSliderSettings?.speed || 1000}
+              autoplay={{
+                delay: heroSliderSettings?.autoplayDelay || 5000,
+                disableOnInteraction: false,
+              }}
+              loop={heroSliderSettings?.loop !== false}
+              navigation={{
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+              }}
+              pagination={{
+                clickable: true,
+                el: '.swiper-pagination',
+              }}
+              onSlideChange={(swiper) => {
             // ✅ loop={true} 설정 시 realIndex와 activeIndex가 어긋나지 않도록 처리
             // loop 모드에서는 realIndex를 우선 사용, 없으면 activeIndex 사용
             const realIndex = swiper.realIndex !== undefined && swiper.realIndex !== null 
@@ -1236,17 +1253,17 @@ export default function HomePage() {
               currentSlideTitle: slidesToUse[validIndex]?.title,
               isLoopMode: heroSliderSettings?.loop !== false
             })
-          }}
-          onSwiper={(swiper) => {
-            setSwiperInstance(swiper)
-            devLog('✅ Swiper initialized:', {
-              slidesCount: slidesToUse.length,
-              slides: Array.isArray(slidesToUse) ? slidesToUse.map(s => ({ id: s?.id || '', title: s?.title || '', order: s?.order || 0 })) : []
-            })
-          }}
-          className="h-screen w-full"
-        >
-          {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => {
+              }}
+              onSwiper={(swiper) => {
+                setSwiperInstance(swiper)
+                devLog('✅ Swiper initialized:', {
+                  slidesCount: slidesToUse.length,
+                  slides: Array.isArray(slidesToUse) ? slidesToUse.map(s => ({ id: s?.id || '', title: s?.title || '', order: s?.order || 0 })) : []
+                })
+              }}
+              className="h-screen w-full"
+            >
+              {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => {
             // ✅ 안전성 체크: slide 객체와 필수 속성 확인
             if (!slide || !slide.id) {
               devWarn('⚠️ Invalid slide object:', slide)
@@ -1327,47 +1344,49 @@ export default function HomePage() {
                 </div>
               </SwiperSlide>
             )
-          }).filter(Boolean) : null}
-        </Swiper>
+              }).filter(Boolean) : null}
+            </Swiper>
         
-        {/* Floating Elements - Between Text and Pagination */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/4 w-3 h-3 bg-selpic-pink-400 rounded-full opacity-60 animate-float blur-sm" style={{animationDelay: '0s'}}></div>
-          <div className="absolute top-1/2 right-1/3 w-2 h-2 bg-selpic-blue-400 rounded-full opacity-50 animate-float blur-sm" style={{animationDelay: '2s'}}></div>
-          <div className="absolute top-1/2 left-1/2 w-2.5 h-2.5 bg-selpic-yellow-400 rounded-full opacity-40 animate-float blur-sm" style={{animationDelay: '4s'}}></div>
-        </div>
-        
-        {/* Custom Pagination - Center Aligned with Background */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
-          <div className="swiper-pagination-container">
-            <div className="swiper-pagination flex space-x-4">
-              {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => (
-                <div
-                  key={`pagination-${slide?.id ?? 'slide'}-${index}`}
-                  className={`w-4 h-4 rounded-full transition-all duration-300 cursor-pointer border-2 border-white/40 ${
-                    currentSlide === index 
-                      ? 'bg-white scale-125 shadow-lg shadow-white/50' 
-                      : 'bg-white/60 hover:bg-white/80 hover:scale-110'
-                  }`}
-                  onClick={() => {
-                    if (swiperInstance) {
-                      // 🆕 loop 모드에서는 realIndex를 사용하여 정확한 슬라이드로 이동
-                      const targetIndex = heroSliderSettings?.loop !== false ? index : index
-                      swiperInstance.slideTo(targetIndex)
-                    }
-                  }}
-                />
-              )) : null}
+            {/* Floating Elements - Between Text and Pagination */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-1/2 left-1/4 w-3 h-3 bg-selpic-pink-400 rounded-full opacity-60 animate-float blur-sm" style={{animationDelay: '0s'}}></div>
+              <div className="absolute top-1/2 right-1/3 w-2 h-2 bg-selpic-blue-400 rounded-full opacity-50 animate-float blur-sm" style={{animationDelay: '2s'}}></div>
+              <div className="absolute top-1/2 left-1/2 w-2.5 h-2.5 bg-selpic-yellow-400 rounded-full opacity-40 animate-float blur-sm" style={{animationDelay: '4s'}}></div>
             </div>
-          </div>
-        </div>
         
-        {/* Scroll Indicator */}
-        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
-          <div className="w-6 h-10 border-2 border-white/60 rounded-full flex justify-center">
-            <div className="w-1 h-3 bg-white/80 rounded-full mt-2 animate-pulse"></div>
-          </div>
-        </div>
+            {/* Custom Pagination - Center Aligned with Background */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+              <div className="swiper-pagination-container">
+                <div className="swiper-pagination flex space-x-4">
+                  {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => (
+                    <div
+                      key={`pagination-${slide?.id ?? 'slide'}-${index}`}
+                      className={`w-4 h-4 rounded-full transition-all duration-300 cursor-pointer border-2 border-white/40 ${
+                        currentSlide === index 
+                          ? 'bg-white scale-125 shadow-lg shadow-white/50' 
+                          : 'bg-white/60 hover:bg-white/80 hover:scale-110'
+                      }`}
+                      onClick={() => {
+                        if (swiperInstance) {
+                          // 🆕 loop 모드에서는 realIndex를 사용하여 정확한 슬라이드로 이동
+                          const targetIndex = heroSliderSettings?.loop !== false ? index : index
+                          swiperInstance.slideTo(targetIndex)
+                        }
+                      }}
+                    />
+                  )) : null}
+                </div>
+              </div>
+            </div>
+        
+            {/* Scroll Indicator */}
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
+              <div className="w-6 h-10 border-2 border-white/60 rounded-full flex justify-center">
+                <div className="w-1 h-3 bg-white/80 rounded-full mt-2 animate-pulse"></div>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
 
