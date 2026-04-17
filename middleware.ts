@@ -80,6 +80,27 @@ export async function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next()
+
+  // iPad Safari can keep an old HTML/RSC shell longer than Chrome; avoid CDN/browser document cache.
+  const isStaticAsset =
+    path.startsWith('/_next/') ||
+    path === '/favicon.ico' ||
+    path === '/robots.txt' ||
+    path.startsWith('/uploads/') ||
+    path.startsWith('/images/') ||
+    path.startsWith('/videos/')
+  if (!isStaticAsset && !path.startsWith('/api')) {
+    const accept = request.headers.get('accept') || ''
+    const rsc = (request.headers.get('rsc') || '').toLowerCase()
+    const secFetchDest = request.headers.get('sec-fetch-dest')
+    const looksLikeDocumentOrFlight =
+      secFetchDest === 'document' || accept.includes('text/html') || rsc === '1' || rsc === 'true'
+    if (looksLikeDocumentOrFlight) {
+      response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate')
+      response.headers.set('Pragma', 'no-cache')
+    }
+  }
+
   return applyProductionSecurityHeaders(response, isLocal)
 }
 

@@ -10,6 +10,7 @@ import {
   useContentStore
 } from '@/lib/contentStore'
 import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAutosave'
+import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
 /**
  * After mount, loads storefront CMS from Supabase `site_configs` via `fetchSiteConfigValue()`
@@ -23,6 +24,18 @@ export default function ContentStoreSupabaseSync() {
   useLayoutEffect(() => {
     if (ran.current) return
     ran.current = true
+
+    const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+    if (typeof window !== 'undefined' && deployVersion) {
+      try {
+        const applied = window.sessionStorage.getItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
+        if (applied !== deployVersion) {
+          lastRemoteSignature.current = ''
+        }
+      } catch {
+        lastRemoteSignature.current = ''
+      }
+    }
 
     const setSynced = (v: boolean) => {
       try {
@@ -38,6 +51,15 @@ export default function ContentStoreSupabaseSync() {
       const signature = JSON.stringify(remote)
       if (signature === lastRemoteSignature.current) {
         setSynced(true)
+        if (typeof window !== 'undefined' && deployVersion) {
+          try {
+            if (window.sessionStorage.getItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY) !== deployVersion) {
+              window.sessionStorage.setItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY, deployVersion)
+            }
+          } catch {
+            // ignore
+          }
+        }
         return true
       }
       lastRemoteSignature.current = signature
@@ -59,6 +81,13 @@ export default function ContentStoreSupabaseSync() {
       } catch (e) {
         console.warn('[siteConfig] failed to persist synced content-store locally', e)
       }
+      if (typeof window !== 'undefined' && deployVersion) {
+        try {
+          window.sessionStorage.setItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY, deployVersion)
+        } catch {
+          // ignore
+        }
+      }
       return true
     }
 
@@ -72,6 +101,13 @@ export default function ContentStoreSupabaseSync() {
     /** iOS Safari back-forward cache: restore old JS + localStorage; force a fresh CMS merge. */
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
+        lastRemoteSignature.current = ''
+      }
+      try {
+        if (deployVersion && window.sessionStorage.getItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY) !== deployVersion) {
+          lastRemoteSignature.current = ''
+        }
+      } catch {
         lastRemoteSignature.current = ''
       }
       void applyRemoteIfChanged()

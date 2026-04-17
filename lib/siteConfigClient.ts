@@ -242,7 +242,7 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
   // Fallback: same-origin server route using service-role Supabase (mobile CORS/RLS/cache-safe path).
   if (typeof window !== 'undefined') {
     try {
-      const res = await fetch('/api/site-config/public', { cache: 'no-store' })
+      const res = await fetch(`/api/site-config/public?cb=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) return null
       const body = (await res.json()) as { success?: boolean; value?: unknown }
       if (!body?.success) return null

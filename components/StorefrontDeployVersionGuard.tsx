@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
 const VERSION_KEY = 'selpic-deploy-version'
 
@@ -12,7 +13,9 @@ const VERSION_KEY = 'selpic-deploy-version'
 export default function StorefrontDeployVersionGuard() {
   const pathname = usePathname()
 
-  useEffect(() => {
+  // useLayoutEffect: must run before ContentStoreSupabaseSync (also layout) so session bust
+  // is visible on first paint; useEffect would run too late on iOS Safari.
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') return
     if (pathname === '/admin' || pathname.startsWith('/admin/')) return
 
@@ -21,12 +24,22 @@ export default function StorefrontDeployVersionGuard() {
 
     const previousVersion = window.localStorage.getItem(VERSION_KEY)
     if (!previousVersion) {
+      try {
+        window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
+      } catch {
+        // ignore
+      }
       window.localStorage.setItem(VERSION_KEY, currentVersion)
       return
     }
     if (previousVersion === currentVersion) return
 
     // Cached storefront CMS can keep old hero/content on some clients after deploy.
+    try {
+      window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
+    } catch {
+      // ignore
+    }
     window.localStorage.removeItem('content-store')
     window.localStorage.setItem(VERSION_KEY, currentVersion)
     window.location.reload()
