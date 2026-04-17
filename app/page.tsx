@@ -1172,8 +1172,9 @@ export default function HomePage() {
 
 
 
-  const showStorefrontSyncLoading = !siteConfigRemoteSynced && !cmsSyncTimeout
-  const showStorefrontSyncError = !siteConfigRemoteSynced && cmsSyncTimeout
+  // Client-only banner: SSR should render the real homepage, not a temporary sync strip.
+  const showStorefrontSyncLoading = isClientMounted && !siteConfigRemoteSynced && !cmsSyncTimeout
+  const showStorefrontSyncError = isClientMounted && !siteConfigRemoteSynced && cmsSyncTimeout
 
   // ✅ 상품이 없어도 홈페이지 표시 (관리자가 아직 등록 안 했거나 전부 삭제한 경우)
 
