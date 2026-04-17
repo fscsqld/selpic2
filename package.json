@@ -13,7 +13,7 @@
     "start": "next start --port 3000",
     "start:3001": "next start --port 3001",
     "lint": "next lint",
-    "clean": "if exist .next rmdir /s /q .next && if exist node_modules\\.cache rmdir /s /q node_modules\\.cache",
+    "clean": "node scripts/clean.mjs",
     "redev": "npm run clean && next dev --port 3000",
     "reset": "npm run clean && npm install && npm run dev",
     "type-check": "tsc --noEmit",
