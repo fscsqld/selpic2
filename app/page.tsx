@@ -685,20 +685,6 @@ export default function HomePage() {
     }
   }, [contentHydrated, setContentHydrated])
 
-  // 하이드레이션 타임아웃: 1.5초 후에도 미완료 시 본문 강제 표시 (홈이 안 열릴 때 대비)
-  const [hydrationTimeout, setHydrationTimeout] = useState(false)
-  // useLayoutEffect: 태블릿 등에서 persist 복원/대형 localStorage 때문에 메인 스레드가 잠깐 막히면
-  // useEffect 타이머가 늦게 등록되어 "로딩만 계속"처럼 보일 수 있음 → 레이아웃 단계에서 먼저 예약.
-  useLayoutEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!contentHydrated) {
-        devWarn('⚠️ Content store hydration timeout - forcing homepage render')
-        setHydrationTimeout(true)
-      }
-    }, 1500)
-    return () => window.clearTimeout(timer)
-  }, [contentHydrated])
-
   // After hydration, wait for Supabase CMS merge (or timeout) so mobile/incognito never paints bundle defaults as "the site".
   // Must be >= ContentStoreSupabaseSync initial fetch budget so slow phones finish before we show possibly stale localStorage.
   const CMS_SYNC_WAIT_MS = 23_000
@@ -710,10 +696,10 @@ export default function HomePage() {
 
   // 콘텐츠 상태 확인 (최적화)
   useEffect(() => {
-    if (!contentHydrated || !_hasHydrated) {
+    if (!contentHydrated) {
       devLog('⏳ Loading content...')
     }
-  }, [contentHydrated, _hasHydrated])
+  }, [contentHydrated])
 
 
 
@@ -1176,19 +1162,6 @@ export default function HomePage() {
   }, [])
 
 
-
-  // Homepage shell is driven by the CMS store. Do not block on `useStore` (selpic-store):
-  // large orders/cart JSON can block tablets; CatalogStoreHydrator runs after this route tree.
-  if (!contentHydrated && !hydrationTimeout) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
 
   const showStorefrontSyncLoading = !siteConfigRemoteSynced && !cmsSyncTimeout
   const showStorefrontSyncError = !siteConfigRemoteSynced && cmsSyncTimeout
