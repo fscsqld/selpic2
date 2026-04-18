@@ -8,7 +8,7 @@ import 'swiper/css/effect-fade'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import 'swiper/css/autoplay'
-import { Package, Palette, Sparkles, ArrowRight } from 'lucide-react'
+import { Package, Palette, Sparkles, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Header, { HeaderLogoImage } from '@/components/Header'
 import NewsletterForm from '@/components/NewsletterForm'
@@ -1217,7 +1217,7 @@ export default function HomePage() {
 
 
 
-  // Client-only banner: SSR should render the real homepage, not a temporary sync strip.
+  // Background CMS sync: no sticky text banner — thin top line + optional spinner (non-blocking).
   const showStorefrontSyncLoading = isClientMounted && !siteConfigRemoteSynced && !cmsSyncTimeout
   const showStorefrontSyncError = isClientMounted && !siteConfigRemoteSynced && cmsSyncTimeout
 
@@ -1227,24 +1227,33 @@ export default function HomePage() {
     <div className="min-h-screen bg-white">
       <Header />
       {showStorefrontSyncLoading && (
-        <div className="sticky top-0 z-40 bg-blue-50 border-b border-blue-200 px-4 py-2 text-center">
-          <p className="text-xs sm:text-sm text-blue-800">
-            Syncing latest storefront content... You can keep browsing while sync completes.
-          </p>
-        </div>
+        <>
+          <div className="storefront-cms-sync-line" aria-hidden />
+          <span className="sr-only">Updating storefront content in the background</span>
+          <div
+            className="fixed bottom-5 right-5 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-md ring-1 ring-slate-200/80 pointer-events-none md:bottom-6 md:right-6"
+            aria-hidden
+          >
+            <Loader2 className="h-4 w-4 animate-spin text-sky-600/70" strokeWidth={2.5} />
+          </div>
+        </>
       )}
       {showStorefrontSyncError && (
-        <div className="sticky top-0 z-40 bg-amber-50 border-b border-amber-200 px-4 py-3">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="text-xs sm:text-sm text-amber-900">
-              Homepage opened with cached content because remote sync is slow.
+        <div
+          className="fixed bottom-4 left-1/2 z-40 max-w-[min(92vw,22rem)] -translate-x-1/2 rounded-full border border-amber-200/90 bg-amber-50/95 px-4 py-2.5 shadow-lg backdrop-blur-sm pointer-events-auto"
+          role="status"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-2 text-center">
+            <p className="text-xs text-amber-950/90">
+              Still on cached content. Pull to refresh or retry.
             </p>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="self-start sm:self-auto inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs sm:text-sm"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
             >
-              Retry Sync
+              <RefreshCw className="h-3 w-3" aria-hidden />
+              Retry
             </button>
           </div>
         </div>

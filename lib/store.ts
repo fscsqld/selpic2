@@ -2713,18 +2713,21 @@ SELPIC Team`,
         if (error) {
           console.warn('[selpic-store] persist rehydrate error', error)
         }
-        // Mutating `state` alone does not always notify subscribers — force a merge update.
-        useStore.setState({ _hasHydrated: true, language: 'en' })
-        const latest = useStore.getState()
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🏪 [Store] Rehydration complete:', {
-            productsCount: latest.products.length,
-            products: latest.products.map((p) => ({ id: p.id, name: p.name }))
-          })
-        }
-        if (typeof window !== 'undefined' && latest.products.length === 0) {
-          void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
-        }
+        // Defer until after `useStore` is assigned — persist can call this synchronously
+        // during `create()`, which triggers "Cannot access 'useStore' before initialization".
+        queueMicrotask(() => {
+          useStore.setState({ _hasHydrated: true, language: 'en' })
+          const latest = useStore.getState()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🏪 [Store] Rehydration complete:', {
+              productsCount: latest.products.length,
+              products: latest.products.map((p) => ({ id: p.id, name: p.name }))
+            })
+          }
+          if (typeof window !== 'undefined' && latest.products.length === 0) {
+            void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
+          }
+        })
       }
     }
   )

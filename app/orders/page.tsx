@@ -141,16 +141,16 @@ export default function OrdersPage() {
             <p className="text-gray-600 mb-4">{t('lookupTitle')}</p>
             <form onSubmit={handleLookup} className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('OrderID')}</label>
-                <input value={lookupId} onChange={(e) => setLookupId(e.target.value)} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+                <label htmlFor="order-lookup-id" className="block text-sm font-medium text-gray-700 mb-1">{t('OrderID')}</label>
+                <input id="order-lookup-id" name="orderId" autoComplete="off" value={lookupId} onChange={(e) => setLookupId(e.target.value)} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('Email')}</label>
-                <input type="email" value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+                <label htmlFor="order-lookup-email" className="block text-sm font-medium text-gray-700 mb-1">{t('Email')}</label>
+                <input id="order-lookup-email" name="email" type="email" autoComplete="email" value={lookupEmail} onChange={(e) => setLookupEmail(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('Phone')}</label>
-                <input value={lookupPhone} onChange={(e) => setLookupPhone(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+                <label htmlFor="order-lookup-phone" className="block text-sm font-medium text-gray-700 mb-1">{t('Phone')}</label>
+                <input id="order-lookup-phone" name="phone" type="tel" autoComplete="tel" inputMode="tel" value={lookupPhone} onChange={(e) => setLookupPhone(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
               </div>
               <div className="md:col-span-3">
                 <button type="submit" className="w-full md:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:from-purple-700 hover:to-pink-700">

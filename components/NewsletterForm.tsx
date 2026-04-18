@@ -93,6 +93,7 @@ export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps
     <form onSubmit={handleNewsletterSubmit} className="flex flex-col gap-2">
       {/* Honeypot to deter bots */}
       <input
+        id="newsletter-honeypot"
         type="text"
         name="company"
         tabIndex={-1}
@@ -102,8 +103,12 @@ export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps
         onChange={(e) => setHoneypot(e.target.value)}
       />
       <input
+        id="newsletter-email"
+        name="email"
         type="email"
         placeholder="Enter your email"
+        autoComplete="email"
+        inputMode="email"
         value={newsletterEmail}
         onChange={(e) => setNewsletterEmail(e.target.value)}
         className={`${baseInputClasses} ${

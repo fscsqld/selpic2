@@ -12,6 +12,9 @@ import {
 import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAutosave'
 import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
+/** After initial retries, periodic merge with Supabase. Realtime + visibility handle most updates; this is a safety net (not every 8s — saves battery and server load on tablets). */
+const BACKGROUND_SITE_CONFIG_POLL_MS = 120_000
+
 /**
  * After mount, loads storefront CMS from Supabase `site_configs` via `fetchSiteConfigValue()`
  * in `@/lib/siteConfigClient` — same Supabase URL/anon key and `cache: 'no-store'` fetch as saves.
@@ -145,10 +148,11 @@ export default function ContentStoreSupabaseSync() {
         if (!remoteMergeSucceeded.current) {
           setSynced(true)
         }
-        // Keep local/deployed tabs converged even when content is edited elsewhere.
+        // Keep local/deployed tabs converged when realtime misses (flaky Wi‑Fi / Safari).
         pollTimer = setInterval(() => {
+          if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
           void applyRemoteIfChanged()
-        }, 8000)
+        }, BACKGROUND_SITE_CONFIG_POLL_MS)
         try {
           realtimeClient = createSupabaseBrowserClient()
           // Unique channel name per mount avoids "cannot add callbacks after subscribe" races.
