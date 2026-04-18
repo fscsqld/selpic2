@@ -1354,25 +1354,27 @@ body {
 }
 
 /*
- * Touch UI: phones + small tablets, OR large tablets (iPad landscape) with touch-primary UI.
- * Excludes typical desktop: wide viewport + hover-capable pointer (mouse).
+ * Touch-primary devices only — avoids showing the bar on desktop (mouse / narrow windows).
+ * Main signal: coarse pointer + no hover (phones/tablets). Fallback for small hover:none viewports.
+ * Bar lives as #touchControls sibling of #game-root so nested overflow cannot clip it.
  */
-@media screen and (max-width: 1024px),
-       screen and (min-width: 1025px) and (max-width: 1366px) and (hover: none) {
-  /* Touch bar only after Start — avoids overlap with start screen and broken pause taps */
-  #game-root.game-running .touch-game-controls {
+@media screen and (hover: none) and (pointer: coarse),
+       screen and (max-width: 480px) and (hover: none) {
+  /* Touch bar only after Start — avoids overlap with start screen */
+  #game-root.game-running ~ #touchControls.touch-game-controls {
     display: flex;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 120;
+    z-index: 9000;
     max-width: none;
     margin-top: 0;
     padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: linear-gradient(to top, rgba(15, 23, 42, 0.98) 60%, rgba(15, 23, 42, 0.88));
-    border-top: 1px solid rgba(148, 163, 184, 0.35);
-    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(to top, rgb(15, 23, 42) 75%, rgba(15, 23, 42, 0.96));
+    border-top: 2px solid rgba(148, 163, 184, 0.45);
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.65);
+    pointer-events: auto;
   }
 
   #game-root.game-running {

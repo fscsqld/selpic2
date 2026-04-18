@@ -104,22 +104,6 @@
             <div id="statusMessage" class="status-message"></div>
             <div id="levelProgress" class="level-progress"></div>
           </div>
-
-          <!-- Touch / tablet: L↔R stay in one row (ltr) so Pause never reorders arrows -->
-          <div class="touch-game-controls" id="touchControls" aria-label="Touch game controls">
-            <div class="touch-dir-row" dir="ltr">
-              <button type="button" class="touch-dir-btn" id="touchBtnLeft" aria-label="Move left">
-                <span class="touch-dir-btn-icon" aria-hidden="true">←</span>
-              </button>
-              <button type="button" class="touch-dir-btn touch-dir-btn-soft" id="touchBtnDown" aria-label="Soft drop">
-                <span class="touch-dir-btn-icon" aria-hidden="true">↓</span>
-              </button>
-              <button type="button" class="touch-dir-btn" id="touchBtnRight" aria-label="Move right">
-                <span class="touch-dir-btn-icon" aria-hidden="true">→</span>
-              </button>
-            </div>
-            <button type="button" class="touch-pause-btn" id="touchBtnPause" aria-label="Pause or resume">Pause</button>
-          </div>
         </div>
 
         <!-- Level Complete Modal -->
@@ -230,6 +214,22 @@
           </div>
         </aside>
       </div>
+    </div>
+
+    <!-- Sibling of #game-root: fixed bar avoids clipping from nested overflow; IDs unchanged for game.js -->
+    <div class="touch-game-controls" id="touchControls" aria-label="Touch game controls">
+      <div class="touch-dir-row" dir="ltr">
+        <button type="button" class="touch-dir-btn" id="touchBtnLeft" aria-label="Move left">
+          <span class="touch-dir-btn-icon" aria-hidden="true">←</span>
+        </button>
+        <button type="button" class="touch-dir-btn touch-dir-btn-soft" id="touchBtnDown" aria-label="Soft drop">
+          <span class="touch-dir-btn-icon" aria-hidden="true">↓</span>
+        </button>
+        <button type="button" class="touch-dir-btn" id="touchBtnRight" aria-label="Move right">
+          <span class="touch-dir-btn-icon" aria-hidden="true">→</span>
+        </button>
+      </div>
+      <button type="button" class="touch-pause-btn" id="touchBtnPause" aria-label="Pause or resume">Pause</button>
     </div>
 
     <!-- Background music 
