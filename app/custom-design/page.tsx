@@ -9,6 +9,8 @@ import { useContentStore } from '@/lib/contentStore'
 import { getStickerFonts, getEffectiveFont, type FontConfig } from '@/lib/fontList'
 import { Type, Palette, Package, X, Gamepad2, ChevronDown, ChevronUp } from 'lucide-react'
 import Header from '@/components/Header'
+import CustomDesignStudioPreview from '@/components/CustomDesignStudioPreview'
+import { isStampsCheckoutEnabled } from '@/lib/stampsCommerce'
 
 // Suspense wrapper for useSearchParams
 export default function CustomDesignPage() {
@@ -240,6 +242,11 @@ function CustomDesignContent() {
   })()
 
   const handleAddToCart = () => {
+    if (categoryFilter === 'Stamps' && !isStampsCheckoutEnabled()) {
+      alert('Stamps are not available for purchase yet. You can still use this studio to preview typography.')
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
       router.push('/login')
@@ -309,6 +316,11 @@ function CustomDesignContent() {
   }
 
   const handleDirectOrder = () => {
+    if (categoryFilter === 'Stamps' && !isStampsCheckoutEnabled()) {
+      alert('Stamps are not available for purchase yet. You can still use this studio to preview typography.')
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to place orders')
       router.push('/login')
@@ -442,16 +454,35 @@ function CustomDesignContent() {
             🏷️ Stickers
           </button>
           <button
+            type="button"
             onClick={() => setCategoryFilter('Stamps')}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+            className={`inline-flex flex-wrap items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
               categoryFilter === 'Stamps'
                 ? 'bg-gradient-to-r from-green-600 to-teal-600 text-white shadow-lg'
                 : 'bg-slate-700 text-slate-300 border-2 border-slate-600 hover:border-green-400'
             }`}
           >
-            📮 Stamps
+            <span>📮 Stamps</span>
+            {!isStampsCheckoutEnabled() && (
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 ring-1 ring-amber-400/40">
+                Coming soon
+              </span>
+            )}
           </button>
         </div>
+
+        {categoryFilter === 'Stamps' && !isStampsCheckoutEnabled() && (
+          <div
+            className="mb-6 rounded-xl border border-amber-400/35 bg-amber-950/40 px-4 py-3 text-center shadow-inner backdrop-blur-sm max-w-2xl mx-auto"
+            role="status"
+          >
+            <p className="text-sm font-semibold text-amber-100">Stamps — not on sale yet</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-100/85">
+              You can explore fonts and text here; purchasing stamp products is not available until launch. Stickers are
+              available from the Stickers tab.
+            </p>
+          </div>
+        )}
 
         {/* Game Layout: Left (Preview) + Right (Sidebar) */}
         <div className={`flex gap-4 transition-all duration-300 ${isSidebarCollapsed ? 'max-w-[1000px]' : ''}`}>
@@ -471,48 +502,16 @@ function CustomDesignContent() {
               <h3 className="text-xl font-bold text-center">{getFilteredPreviewTitle()}</h3>
             </div>
 
-            {/* Preview Canvas (Bright Style) */}
-            <div className="bg-gradient-to-br from-gray-50 to-white min-h-[500px] rounded-xl flex items-center justify-center p-8 border-2 border-gray-200 shadow-inner">
-              <div
-                className="flex items-center justify-center text-center"
-                style={{
-                  fontFamily: getCurrentFont().fontFamily,
-                  color: selectedColor
-                }}
-              >
-                  <div className="space-y-6 max-w-2xl">
-                    {customText.split('\n').map((line, index, arr) => {
-                      // 두 줄일 때, Option 1/2에 따라 Name 줄이 항상 더 크게 보이도록 폰트 크기 비율 조정
-                      let fontSize = '3rem'
-                      if (arr.length >= 2) {
-                        if (twoLineFormat === 'affiliation-name') {
-                          // Line 1: Affiliation (작게), Line 2: Name (크게)
-                          fontSize = index === 0 ? '2.5rem' : '4rem'
-                        } else {
-                          // name-phone: Line 1: Name (크게), Line 2: Phone (작게)
-                          fontSize = index === 0 ? '4rem' : '2.5rem'
-                        }
-                      } else {
-                        // 한 줄만 있을 때는 기본 크게
-                        fontSize = '4rem'
-                      }
-
-                      return (
-                        <div
-                          key={index}
-                          className="font-bold"
-                          style={{
-                            fontSize,
-                            textShadow: `0 0 20px ${selectedColor}30, 2px 2px 4px rgba(0,0,0,0.1)`,
-                            lineHeight: 1.2
-                          }}
-                        >
-                          {line || ' '}
-                        </div>
-                      )
-                    })}
-                  </div>
-              </div>
+            {/* Preview canvas: generic studio sheet — responsive; rest of page unchanged */}
+            <div className="overflow-hidden rounded-xl border-2 border-gray-200/90 bg-gradient-to-br from-[#f8f9fb] via-white to-[#eef1f6] shadow-inner">
+              <CustomDesignStudioPreview
+                categoryFilter={categoryFilter}
+                customText={customText}
+                lineMode={lineMode}
+                twoLineFormat={twoLineFormat}
+                fontFamily={getCurrentFont().fontFamily}
+                color={selectedColor}
+              />
             </div>
 
             {/* HUD at Bottom (Game Style) */}
@@ -526,11 +525,15 @@ function CustomDesignContent() {
                 </div>
               </div>
               <div className="mt-2 text-[11px] text-amber-400 min-h-[18px]">
-                {designStats.characters > designStats.maxCharacters 
-                  ? '⚠️ Character limit exceeded!' 
-                  : designStats.completion === 100
-                  ? '✨ Design complete! Ready to add to cart'
-                  : '💡 Complete your design to proceed'}
+                {designStats.characters > designStats.maxCharacters
+                  ? '⚠️ Character limit exceeded!'
+                  : categoryFilter === 'Stamps' && !isStampsCheckoutEnabled()
+                    ? designStats.completion === 100
+                      ? '✨ Preview ready — stamps not available for purchase yet'
+                      : '💡 Studio preview only (stamps coming soon)'
+                    : designStats.completion === 100
+                      ? '✨ Design complete! Ready to add to cart'
+                      : '💡 Complete your design to proceed'}
               </div>
               <div className="mt-2 w-full bg-slate-700 rounded-full h-2">
                 <div 
