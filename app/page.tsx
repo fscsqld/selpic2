@@ -1149,6 +1149,29 @@ export default function HomePage() {
       return a.id.localeCompare(b.id)
     })
 
+    // CMS had slides but event/date filters removed all → Swiper rendered zero slides (blank hero).
+    // Same if every slide lacked id/src at page level — fall back to bundled defaults.
+    if (sortedSlides.length === 0) {
+      const fallbackFiltered = defaultHeroSlides.filter((slide) => {
+        const isEventBanner = !!(slide.isEventBanner && slide.linkUrl)
+        const isEventActive =
+          isEventBanner &&
+          ((!slide.eventStartDate || new Date(slide.eventStartDate) <= new Date()) &&
+            (!slide.eventEndDate || new Date(slide.eventEndDate) >= new Date()))
+        return !isEventBanner || isEventActive
+      })
+      const fallbackSorted = [...fallbackFiltered].sort((a, b) =>
+        a.order !== b.order ? a.order - b.order : a.id.localeCompare(b.id)
+      )
+      devWarn('[HomePage] No visible hero slides after CMS/event filter — using defaults', {
+        heroSlidesCount: heroSlides.length,
+      })
+      devLog('🔄 [HomePage] slidesToUse fallback:', {
+        slidesToUseCount: fallbackSorted.length,
+      })
+      return fallbackSorted.length > 0 ? fallbackSorted : defaultHeroSlides
+    }
+
     devLog('🔄 [HomePage] slidesToUse updated:', {
       heroSlidesCount: heroSlides.length,
       slidesToUseCount: sortedSlides.length,
@@ -1165,6 +1188,10 @@ export default function HomePage() {
     })
     return sortedSlides
   }, [heroSlides, forceUpdate]) // 🆕 forceUpdate도 의존성에 추가
+
+  // Swiper loop with 0–1 slides breaks on some Safari/iPad builds (blank slider).
+  const heroLoopEnabled =
+    slidesToUse.length > 1 && (heroSliderSettings?.loop !== false)
 
   // localStorage 변경 감지 및 상태 동기화 (최적화됨)
   useEffect(() => {
@@ -1229,7 +1256,7 @@ export default function HomePage() {
           <>
             {/* Swiper Slider */}
             <Swiper
-              key={`swiper-${heroSliderSettings?.effect || 'fade'}-${heroSliderSettings?.speed || 1000}-${heroSliderSettings?.loop !== false}-${slidesToUse.length}-${slidesToUse.map(s => `${s.id}-${s.type}`).join('-')}-${forceUpdate}`}
+              key={`swiper-${heroSliderSettings?.effect || 'fade'}-${heroSliderSettings?.speed || 1000}-${heroLoopEnabled}-${slidesToUse.length}-${slidesToUse.map(s => `${s.id}-${s.type}`).join('-')}-${forceUpdate}`}
               modules={swiperModules}
               effect={(heroSliderSettings?.effect || 'fade') as any}
               speed={heroSliderSettings?.speed || 1000}
@@ -1237,7 +1264,7 @@ export default function HomePage() {
                 delay: heroSliderSettings?.autoplayDelay || 5000,
                 disableOnInteraction: false,
               }}
-              loop={heroSliderSettings?.loop !== false}
+              loop={heroLoopEnabled}
               navigation={{
                 nextEl: '.swiper-button-next',
                 prevEl: '.swiper-button-prev',
@@ -1264,7 +1291,7 @@ export default function HomePage() {
               slidesCount: slidesToUse.length,
               currentSlideId: slidesToUse[validIndex]?.id,
               currentSlideTitle: slidesToUse[validIndex]?.title,
-              isLoopMode: heroSliderSettings?.loop !== false
+              isLoopMode: heroLoopEnabled
             })
               }}
               onSwiper={(swiper) => {
