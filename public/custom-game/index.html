@@ -35,7 +35,7 @@
                 <div class="tutorial-step-number">1</div>
                 <div class="tutorial-step-content">
                   <h3>Move Blocks</h3>
-                  <p>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to move blocks left and right. Use <kbd>↓</kbd> to drop blocks faster. Blocks fall automatically at a speed that increases with each level.</p>
+                  <p>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to move blocks left and right. Use <kbd>↓</kbd> to drop blocks faster. On phone or tablet, use the <strong>on-screen direction buttons</strong> below the score bar (Pause is included there). Blocks fall automatically at a speed that increases with each level.</p>
                 </div>
               </div>
               <div class="tutorial-step">
@@ -75,7 +75,7 @@
                 <li><strong>Korean blocks</strong> can be collected - try to collect all characters from your Korean name</li>
                 <li><strong>Mission Progress</strong>: Each explosion (3 blocks matched) = 10% progress. You need 10 explosions to complete a level</li>
                 <li><strong>Scoring</strong>: Each block gives random points (5-50 points) when cleared</li>
-                <li>Press <kbd>SPACE</kbd> or <kbd>P</kbd> to pause anytime</li>
+                <li>Pause: press <kbd>SPACE</kbd> or <kbd>P</kbd>, tap <strong>Pause</strong> in the sidebar, or use the touch <strong>Pause</strong> button below the score bar on mobile/tablet</li>
                 <li>Plan your moves to create row/column explosions with SELPIC blocks for maximum effect</li>
               </ul>
             </div>
@@ -103,6 +103,20 @@
             </div>
             <div id="statusMessage" class="status-message"></div>
             <div id="levelProgress" class="level-progress"></div>
+          </div>
+
+          <!-- Touch / tablet: same input as ArrowLeft/Right/Down + Pause (game.js enqueueMove) -->
+          <div class="touch-game-controls" id="touchControls" aria-label="Touch game controls">
+            <button type="button" class="touch-dir-btn" id="touchBtnLeft" aria-label="Move left">
+              <span class="touch-dir-btn-icon" aria-hidden="true">←</span>
+            </button>
+            <button type="button" class="touch-dir-btn touch-dir-btn-soft" id="touchBtnDown" aria-label="Soft drop">
+              <span class="touch-dir-btn-icon" aria-hidden="true">↓</span>
+            </button>
+            <button type="button" class="touch-dir-btn" id="touchBtnRight" aria-label="Move right">
+              <span class="touch-dir-btn-icon" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="touch-pause-btn" id="touchBtnPause" aria-label="Pause or resume">Pause</button>
           </div>
         </div>
 
@@ -177,15 +191,15 @@
             <div class="score-board">
               <div class="score-board-item">
                 <div class="score-board-label">Move</div>
-                <div class="score-board-value">← / →</div>
+                <div class="score-board-value">← / → / touch</div>
               </div>
               <div class="score-board-item">
                 <div class="score-board-label">Soft Drop</div>
-                <div class="score-board-value">↓</div>
+                <div class="score-board-value">↓ / touch</div>
               </div>
               <div class="score-board-item">
                 <div class="score-board-label">Pause</div>
-                <div class="score-board-value">SPACE / P</div>
+                <div class="score-board-value">SPACE / P / touch Pause</div>
               </div>
             </div>
             <div class="score-board" style="margin-top: 12px;">

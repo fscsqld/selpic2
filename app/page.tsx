@@ -16,6 +16,10 @@ import type { CategoryItem } from '@/lib/contentStore'
 
 type CategoryItemWithType = CategoryItem & { categoryType?: string }
 
+/** Same backdrop as VideoSlide/ImageSlide poster shell — used until client mount so persisted CMS (video vs image) cannot diverge from SSR during hydration. */
+const HYDRATION_SAFE_HERO_POSTER_URL =
+  'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80'
+
 // ✅ 개발 환경에서만 로그 출력하는 유틸리티 함수
 const isDev = process.env.NODE_ENV === 'development'
 const devLog = (...args: any[]) => {
@@ -72,27 +76,43 @@ const isValidVideoUrl = (url: string): boolean => {
 
 const ImageSlide = React.memo(({ src }: { src: string }) => {
   const s = (src || '').trim()
-  if (!s || s.startsWith('indexeddb://')) {
-    return <div className="w-full h-full bg-cover bg-center bg-no-repeat bg-gray-800" />
-  }
+  const bgUrl =
+    !s || s.startsWith('indexeddb://') ? HYDRATION_SAFE_HERO_POSTER_URL : s
   return (
-    <div
-      className="w-full h-full bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url('${s}')` }}
-    />
+    <div className="relative w-full h-full bg-black">
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
+        style={{ backgroundImage: `url('${bgUrl}')` }}
+        aria-hidden
+      />
+    </div>
   )
 })
+
+/** Same normalization as legacy useEffect — SSR + CSR must agree on first paint when src matches. */
+function computeVideoSlideSafeSrc(raw: string): string {
+  const trimmedSrc = (raw || '').trim()
+  if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) return ''
+  return trimmedSrc.startsWith('data:') ||
+    trimmedSrc.startsWith('blob:') ||
+    trimmedSrc.startsWith('http://') ||
+    trimmedSrc.startsWith('https://')
+    ? trimmedSrc
+    : encodeURI(trimmedSrc)
+}
 
 // Video Slide Component with error handling (최적화됨)
 // 학습: 동영상이 전체로 보이도록 항상 object-contain 사용. 잘림 없이 비율 유지, 여백은 bg-black으로 채움.
 const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: string, fallbackImage: string, title?: string, subtitle?: string }) => {
-  const normalizedSrc = (src || '').trim()
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  const [actualSrc, setActualSrc] = useState<string>(
-    normalizedSrc && !normalizedSrc.startsWith('indexeddb://') ? normalizedSrc : ''
-  )
+  const [actualSrc, setActualSrc] = useState<string>(() => computeVideoSlideSafeSrc(src))
+  const [mediaReady, setMediaReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useEffect(() => {
+    setMediaReady(true)
+  }, [])
 
   useEffect(() => {
     const trimmedSrc = (src || '').trim()
@@ -102,13 +122,7 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       setVideoLoaded(false)
       return
     }
-    const safeSrc =
-      trimmedSrc.startsWith('data:') ||
-      trimmedSrc.startsWith('blob:') ||
-      trimmedSrc.startsWith('http://') ||
-      trimmedSrc.startsWith('https://')
-        ? trimmedSrc
-        : encodeURI(trimmedSrc)
+    const safeSrc = computeVideoSlideSafeSrc(trimmedSrc)
     setActualSrc(safeSrc)
     setVideoError(false)
     setVideoLoaded(false)
@@ -185,17 +199,22 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       cancelAnimationFrame(raf2)
     }
   }, [actualSrc, videoError])
-  
-  // ✅ Category Hero Backgrounds와 동일하게 간단한 조건 체크
-  if (videoError || !actualSrc || actualSrc.trim() === '') {
+
+  // Single non-video shell for SSR, first client paint, and error/empty src — identical DOM avoids hydration mismatch.
+  const canRenderVideo =
+    mediaReady && !videoError && !!actualSrc && actualSrc.trim() !== ''
+  if (!canRenderVideo) {
     return (
-      <div 
-        className="w-full h-full bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${safeFallback}')` }}
-      />
+      <div className="relative w-full h-full bg-black">
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
+          style={{ backgroundImage: `url('${safeFallback}')` }}
+          aria-hidden
+        />
+      </div>
     )
   }
-  
+
   return (
     <div className="relative w-full h-full">
       {/* 배경 레이어: 동영상 좌우(또는 상하) 여백을 같은 이미지(fallback)로 채움. 검은 막대 대신 자연스럽게 보이도록 */}
@@ -1206,6 +1225,7 @@ export default function HomePage() {
       
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden">
+          {isClientMounted ? (
           <>
             {/* Swiper Slider */}
             <Swiper
@@ -1379,6 +1399,18 @@ export default function HomePage() {
               </div>
             </div>
           </>
+          ) : (
+            <div
+              className="h-screen w-full relative bg-black"
+              aria-busy="true"
+            >
+              <div
+                className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
+                style={{ backgroundImage: `url('${HYDRATION_SAFE_HERO_POSTER_URL}')` }}
+                aria-hidden
+              />
+            </div>
+          )}
       </section>
 
 

@@ -2118,6 +2118,49 @@ function setupInput() {
       togglePause();
     });
   }
+
+  setupTouchControls();
+}
+
+/** Queue the same logical input as Arrow keys — used by on-screen buttons on touch devices. */
+function enqueueMove(dir) {
+  if (!isGameStarted || isGameOver || isPaused) return;
+  if (dir === 'left' || dir === 'right' || dir === 'down') {
+    inputQueue.push(dir);
+  }
+}
+
+function setupTouchControls() {
+  function bind(btnId, dir) {
+    const el = document.getElementById(btnId);
+    if (!el) return;
+    el.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        enqueueMove(dir);
+      },
+      { passive: false },
+    );
+  }
+
+  bind('touchBtnLeft', 'left');
+  bind('touchBtnDown', 'down');
+  bind('touchBtnRight', 'right');
+
+  const pauseTouch = document.getElementById('touchBtnPause');
+  if (pauseTouch) {
+    pauseTouch.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        if (!isGameOver) togglePause();
+      },
+      { passive: false },
+    );
+  }
 }
 
 // Web Audio API를 사용한 프로그래밍 방식 배경음악 생성
