@@ -1309,18 +1309,20 @@ export default function HomePage() {
                     <ImageSlide key={mediaKey} src={slide.src || ''} />
                   )}
                   
-                  {/* Color Overlay based on slide color */}
-                  <div className={`absolute inset-0 z-20 ${
+                  {/* Color Overlay — visual only; must not intercept touches (iPad Safari / Swiper) */}
+                  <div
+                    className={`pointer-events-none absolute inset-0 z-20 ${
                     slide.color === 'pink' ? 'bg-pink-500/20' :
                     slide.color === 'blue' ? 'bg-blue-500/20' :
                     slide.color === 'yellow' ? 'bg-yellow-500/20' :
                     slide.color === 'purple' ? 'bg-purple-500/20' :
                     slide.color === 'green' ? 'bg-green-500/20' :
                     'bg-gray-500/20'
-                  }`}></div>
+                  }`}
+                  />
                   
                   {/* 선명도 유지: 얕은 그라데이션만 (텍스트 가독용) */}
-                  <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
+                  <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                 </div>
                 
                 {/* Content */}
@@ -1392,8 +1394,8 @@ export default function HomePage() {
               </div>
             </div>
         
-            {/* Scroll Indicator */}
-            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
+            {/* Scroll Indicator — decorative only */}
+            <div className="pointer-events-none absolute bottom-2 left-1/2 transform -translate-x-1/2 animate-bounce z-20">
               <div className="w-6 h-10 border-2 border-white/60 rounded-full flex justify-center">
                 <div className="w-1 h-3 bg-white/80 rounded-full mt-2 animate-pulse"></div>
               </div>
