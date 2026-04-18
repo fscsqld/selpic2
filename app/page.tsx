@@ -1054,12 +1054,15 @@ export default function HomePage() {
         backgroundImagePreview: selpicN.backgroundImage ? selpicN.backgroundImage.substring(0, 100) + '...' : 'none'
       })
       
-      // 배경 이미지가 없으면 경고
-      if (!selpicN.backgroundImage) {
-        devWarn('⚠️ SELPIC N 배경 이미지가 설정되지 않았습니다. Admin 페이지에서 배경 이미지를 추가해주세요.')
+      // Optional CMS field only: SELPICNBackgroundImage still renders a built-in fallback URL when this is empty,
+      // so the tile can look "fine" while backgroundImage is unset — do not treat as a broken layout.
+      if (!selpicN.backgroundImage?.trim()) {
+        devLog(
+          '[Homepage] SELPIC N: optional category.backgroundImage is empty; built-in fallback image is used. Set a custom URL in Admin → Categories only if you want to replace it.'
+        )
       }
     } else {
-      devWarn('⚠️ SELPIC N 카테고리를 찾을 수 없습니다.')
+      devLog('[Homepage] No category row titled "SELPIC N" in active categoryItems.')
     }
     
     // 모든 카테고리의 title과 description 확인
