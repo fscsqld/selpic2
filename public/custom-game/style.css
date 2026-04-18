@@ -1329,17 +1329,36 @@ body {
   max-width: 100%;
   margin-top: 0;
   padding: 8px 10px;
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
   justify-content: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  direction: ltr;
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
   box-sizing: border-box;
 }
 
-@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
+.touch-dir-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  direction: ltr;
+  width: 100%;
+  gap: 10px;
+  align-items: stretch;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/*
+ * Touch UI: phones + small tablets, OR large tablets (iPad landscape) with touch-primary UI.
+ * Excludes typical desktop: wide viewport + hover-capable pointer (mouse).
+ */
+@media screen and (max-width: 1024px),
+       screen and (min-width: 1025px) and (max-width: 1366px) and (hover: none) {
   /* Touch bar only after Start — avoids overlap with start screen and broken pause taps */
   #game-root.game-running .touch-game-controls {
     display: flex;
@@ -1376,6 +1395,11 @@ body {
   }
 }
 
+.touch-dir-row .touch-dir-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .touch-dir-btn,
 .touch-pause-btn {
   border-radius: 12px;
@@ -1384,8 +1408,7 @@ body {
   color: #f8fafc;
   font-weight: 700;
   min-height: 48px;
-  min-width: 64px;
-  flex: 1 1 auto;
+  min-width: 0;
   cursor: pointer;
   touch-action: manipulation;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
@@ -1412,7 +1435,9 @@ body {
 }
 
 .touch-pause-btn {
-  flex: 1 1 100%;
+  width: 100%;
+  flex: 0 0 auto;
+  min-height: 46px;
   font-size: 0.95rem;
   letter-spacing: 0.03em;
   border-color: rgba(96, 165, 250, 0.55);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <title>SELPIC TETRIS</title>
@@ -105,17 +105,19 @@
             <div id="levelProgress" class="level-progress"></div>
           </div>
 
-          <!-- Touch / tablet: same input as ArrowLeft/Right/Down + Pause (game.js enqueueMove) -->
+          <!-- Touch / tablet: L↔R stay in one row (ltr) so Pause never reorders arrows -->
           <div class="touch-game-controls" id="touchControls" aria-label="Touch game controls">
-            <button type="button" class="touch-dir-btn" id="touchBtnLeft" aria-label="Move left">
-              <span class="touch-dir-btn-icon" aria-hidden="true">←</span>
-            </button>
-            <button type="button" class="touch-dir-btn touch-dir-btn-soft" id="touchBtnDown" aria-label="Soft drop">
-              <span class="touch-dir-btn-icon" aria-hidden="true">↓</span>
-            </button>
-            <button type="button" class="touch-dir-btn" id="touchBtnRight" aria-label="Move right">
-              <span class="touch-dir-btn-icon" aria-hidden="true">→</span>
-            </button>
+            <div class="touch-dir-row" dir="ltr">
+              <button type="button" class="touch-dir-btn" id="touchBtnLeft" aria-label="Move left">
+                <span class="touch-dir-btn-icon" aria-hidden="true">←</span>
+              </button>
+              <button type="button" class="touch-dir-btn touch-dir-btn-soft" id="touchBtnDown" aria-label="Soft drop">
+                <span class="touch-dir-btn-icon" aria-hidden="true">↓</span>
+              </button>
+              <button type="button" class="touch-dir-btn" id="touchBtnRight" aria-label="Move right">
+                <span class="touch-dir-btn-icon" aria-hidden="true">→</span>
+              </button>
+            </div>
             <button type="button" class="touch-pause-btn" id="touchBtnPause" aria-label="Pause or resume">Pause</button>
           </div>
         </div>
