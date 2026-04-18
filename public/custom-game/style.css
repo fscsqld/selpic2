@@ -22,6 +22,7 @@ body {
 
 #game-root {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1321,13 +1322,13 @@ body {
   }
 }
 
-/* --- Touch / tablet: on-screen movement + pause (mirrors keyboard input in game.js) --- */
+/* --- Touch / tablet: fixed bottom bar so controls are not clipped (mobile browser chrome / iframe) --- */
 .touch-game-controls {
   display: none;
   width: 100%;
-  max-width: min(500px, 100%);
-  margin-top: 10px;
-  padding: 8px 4px 4px;
+  max-width: 100%;
+  margin-top: 0;
+  padding: 8px 10px;
   gap: 10px;
   align-items: stretch;
   justify-content: center;
@@ -1335,11 +1336,43 @@ body {
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1024px), (hover: none) and (pointer: coarse) {
-  .touch-game-controls {
+  /* Touch bar only after Start — avoids overlap with start screen and broken pause taps */
+  #game-root.game-running .touch-game-controls {
     display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 120;
+    max-width: none;
+    margin-top: 0;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgba(15, 23, 42, 0.98) 60%, rgba(15, 23, 42, 0.88));
+    border-top: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.5);
+  }
+
+  #game-root.game-running {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+    align-items: flex-start;
+    padding-top: max(6px, env(safe-area-inset-top, 0px));
+  }
+
+  .game-layout {
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  #game-root.game-running .game-main {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -1350,13 +1383,15 @@ body {
   background: linear-gradient(180deg, rgba(51, 65, 85, 0.95), rgba(15, 23, 42, 0.98));
   color: #f8fafc;
   font-weight: 700;
-  min-height: 52px;
-  min-width: 72px;
+  min-height: 48px;
+  min-width: 64px;
   flex: 1 1 auto;
   cursor: pointer;
   touch-action: manipulation;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   transition: transform 0.08s ease, background 0.15s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .touch-dir-btn:active,

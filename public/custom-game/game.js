@@ -518,7 +518,7 @@ function togglePause() {
     if (pauseMusic) {
       pauseMusic();
     }
-    setStatusMessage('Game Paused. Press SPACE or P to resume.');
+    setStatusMessage('Paused. Press SPACE / P or tap Resume below.');
   } else {
     // 재개 시 음악도 다시 재생 (일시정지 전에 재생 중이었던 경우)
     if (resumeMusic) {
@@ -540,6 +540,11 @@ function updatePauseButton() {
       pauseButton.textContent = '⏸️ Pause';
       pauseButton.classList.remove('paused');
     }
+  }
+  const touchPause = document.getElementById('touchBtnPause');
+  if (touchPause) {
+    touchPause.textContent = isPaused ? 'Resume' : 'Pause';
+    touchPause.setAttribute('aria-label', isPaused ? 'Resume game' : 'Pause game');
   }
 }
 
@@ -2131,18 +2136,13 @@ function enqueueMove(dir) {
 }
 
 function setupTouchControls() {
+  /** iOS Safari: rely on `click` (pointerdown + preventDefault can swallow taps in iframe). */
   function bind(btnId, dir) {
     const el = document.getElementById(btnId);
     if (!el) return;
-    el.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
-        enqueueMove(dir);
-      },
-      { passive: false },
-    );
+    el.addEventListener('click', () => {
+      enqueueMove(dir);
+    });
   }
 
   bind('touchBtnLeft', 'left');
@@ -2151,15 +2151,9 @@ function setupTouchControls() {
 
   const pauseTouch = document.getElementById('touchBtnPause');
   if (pauseTouch) {
-    pauseTouch.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        e.preventDefault();
-        if (!isGameOver) togglePause();
-      },
-      { passive: false },
-    );
+    pauseTouch.addEventListener('click', () => {
+      if (!isGameOver) togglePause();
+    });
   }
 }
 
@@ -2352,7 +2346,6 @@ function setupMusicControls() {
     }
     toggle.disabled = false;
     updateLabel();
-    setStatusMessage('저장된 음악 파일이 로드되었습니다.');
   });
 
   // 오디오 로드 완료 (모든 데이터 로드됨)
@@ -2379,12 +2372,12 @@ function setupMusicControls() {
       audioAvailable = true; // 생성된 음악 사용 가능
       toggle.disabled = false;
       updateLabel();
-      setStatusMessage('음악 파일을 찾을 수 없어 생성된 음악을 사용합니다. MP3 파일을 추가하면 저장된 음악이 재생됩니다.');
+      setStatusMessage('Using generated music (no MP3 file). Add an MP3 in public/custom-game to use file playback.');
     } else {
       toggle.disabled = true;
       toggle.textContent = '🎵 Music: Not Available';
-      toggle.title = 'Web Audio API를 지원하지 않는 브라우저입니다.';
-      setStatusMessage('음악을 재생할 수 없습니다. 게임은 정상 작동합니다.');
+      toggle.title = 'Web Audio API is not supported in this browser.';
+      setStatusMessage('Music unavailable. The game still runs normally.');
     }
   });
 
@@ -2409,7 +2402,7 @@ function setupMusicControls() {
         audioAvailable = true;
         toggle.disabled = false;
         updateLabel();
-        setStatusMessage('음악 파일을 찾을 수 없어 생성된 음악을 사용합니다. MP3 파일을 추가하면 저장된 음악이 재생됩니다.');
+        setStatusMessage('Using generated music (no MP3 file). Add an MP3 in public/custom-game to use file playback.');
       }
     }
   }, 3000); // 타임아웃을 2초에서 3초로 증가
@@ -2427,7 +2420,7 @@ function setupMusicControls() {
   toggle.addEventListener('click', async () => {
     if (toggle.disabled || !audioAvailable) {
       if (!generatedMusic) {
-        setStatusMessage('음악을 재생할 수 없습니다.');
+        setStatusMessage('Music playback unavailable.');
       }
       return;
     }
@@ -2449,7 +2442,7 @@ function setupMusicControls() {
           
           await audio.play();
           isPlaying = true;
-          setStatusMessage('저장된 음악이 재생됩니다!');
+          setStatusMessage('Playing music from file.');
         } else if (generatedMusic) {
           // 생성된 음악 재생 (파일이 없을 때만)
           console.log('Starting generated music (file not available)');
@@ -2463,11 +2456,11 @@ function setupMusicControls() {
           
           await generatedMusic.start();
           isPlaying = true;
-          setStatusMessage('생성된 음악이 재생됩니다!');
+          setStatusMessage('Playing generated music.');
           console.log('Generated music started, isPlaying:', isPlaying);
         } else {
           console.warn('No audio source available');
-          setStatusMessage('음악 소스를 찾을 수 없습니다.');
+          setStatusMessage('No music source available.');
         }
       } else {
         // 음악 정지
@@ -2486,18 +2479,18 @@ function setupMusicControls() {
         
         isPlaying = false;
         wasPlayingBeforePause = false; // 수동으로 정지했으므로 일시정지 전 상태도 초기화
-        setStatusMessage('음악이 정지되었습니다.');
+        setStatusMessage('Music stopped.');
       }
       updateLabel();
     } catch (err) {
       console.error('Failed to play background music:', err);
       // 더 구체적인 에러 메시지
       if (err.name === 'NotAllowedError') {
-        setStatusMessage('브라우저가 음악 재생을 차단했습니다. 브라우저 설정에서 사이트 소리를 허용해주세요.');
+        setStatusMessage('Browser blocked audio. Allow sound for this site in browser settings.');
       } else if (err.name === 'NotSupportedError') {
-        setStatusMessage('오디오 형식을 지원하지 않습니다. MP3 파일을 확인해주세요.');
+        setStatusMessage('Audio format not supported. Check your MP3 file.');
       } else {
-        setStatusMessage(`음악 재생 실패: ${err.message || '알 수 없는 오류'}`);
+        setStatusMessage(`Music error: ${err.message || 'unknown error'}`);
       }
       isPlaying = false;
       updateLabel();
@@ -2825,6 +2818,11 @@ function startGame() {
   const startScreen = document.getElementById('startScreen');
   if (startScreen) {
     startScreen.style.display = 'none';
+  }
+
+  const gameRoot = document.getElementById('game-root');
+  if (gameRoot) {
+    gameRoot.classList.add('game-running');
   }
   
   // 게임 초기화 (resetGame 내부에서 음악 자동 재생됨)
