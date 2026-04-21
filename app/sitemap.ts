@@ -7,7 +7,9 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
  * if CATALOG_SYNC_SECRET / NEXT_PUBLIC_CATALOG_SYNC_SECRET are set.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  // Canonical production domain for sitemap output.
+  // Keep this fixed so Search Console never receives preview/legacy hosts.
+  const base = 'https://selpic.com.au'
   const now = new Date()
   const catalog = await readCatalogProducts()
   const latestCatalogUpdate = catalog
