@@ -18,8 +18,6 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
     response.headers.set('X-Frame-Options', 'SAMEORIGIN')
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-    // connect-src required: without it, some browsers restrict fetch() to Supabase/Stripe from this origin.
-    // Explicit media/img/font allowlists help iOS Safari load hero & CMS assets (some builds infer stricter defaults).
     response.headers.set(
       'Content-Security-Policy',
       "upgrade-insecure-requests; block-all-mixed-content; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; img-src 'self' https: data: blob:; font-src 'self' https: data:"
@@ -28,7 +26,7 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
   return response
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   const protoHeader = request.headers.get('x-forwarded-proto')
   const hostHeader = request.headers.get('host') || ''
@@ -42,7 +40,6 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname
 
-  /** PKCE / recovery: never run admin checks or extra redirects on auth return URLs (tokens live in query or hash). */
   if (
     path === '/auth/callback' ||
     path.startsWith('/auth/callback/') ||
@@ -73,7 +70,7 @@ export async function middleware(request: NextRequest) {
 
       return applyProductionSecurityHeaders(response, isLocal)
     } catch (e) {
-      console.error('[middleware] admin Supabase check failed', e)
+      console.error('[proxy] admin Supabase check failed', e)
       const home = new URL('/', request.url)
       return applyProductionSecurityHeaders(NextResponse.redirect(home), isLocal)
     }
@@ -81,7 +78,6 @@ export async function middleware(request: NextRequest) {
 
   const response = NextResponse.next()
 
-  // iPad Safari can keep an old HTML/RSC shell longer than Chrome; avoid CDN/browser document cache.
   const isStaticAsset =
     path.startsWith('/_next/') ||
     path === '/favicon.ico' ||

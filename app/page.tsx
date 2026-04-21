@@ -714,7 +714,7 @@ export default function HomePage() {
 
   // After hydration, wait for Supabase CMS merge (or timeout) so mobile/incognito never paints bundle defaults as "the site".
   // Must be >= ContentStoreSupabaseSync initial fetch budget so slow phones finish before we show possibly stale localStorage.
-  const CMS_SYNC_WAIT_MS = 23_000
+  const CMS_SYNC_WAIT_MS = 46_000
   const [cmsSyncTimeout, setCmsSyncTimeout] = useState(false)
   useEffect(() => {
     const t = window.setTimeout(() => setCmsSyncTimeout(true), CMS_SYNC_WAIT_MS)

@@ -33,7 +33,7 @@ export default function SeoProductJsonLd({
   products: SeoProduct[]
 }) {
   const json = useMemo(() => {
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
     const pageUrl = `${siteUrl}${pagePath.startsWith('/') ? pagePath : `/${pagePath}`}`
 
     const itemListElement = (products || [])

@@ -4,6 +4,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
 
+const CONTENT_STORE_DEBUG =
+  process.env.NODE_ENV === 'development' &&
+  process.env.NEXT_PUBLIC_CONTENT_STORE_DEBUG === '1'
+
 export interface ContentItem {
   id: string
   type: 'text' | 'image' | 'video' | 'link' | 'button'
@@ -4457,14 +4461,18 @@ export const useContentStore = create<ContentStore>()(
           }))
           
           console.log('🔄 Reordering hero slides:', fromIndex, 'to', toIndex)
-          console.log('📊 Reordered slides:', reorderedSlides)
+          if (CONTENT_STORE_DEBUG) {
+            console.log('📊 Reordered slides:', reorderedSlides)
+          }
           
           // 🆕 Custom Event 발생하여 홈페이지에 알림
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('content-store-updated', {
               detail: { type: 'heroSlides', action: 'reorder', fromIndex, toIndex }
             }))
-            console.log('📢 Dispatched content-store-updated event for hero slide reorder')
+            if (CONTENT_STORE_DEBUG) {
+              console.log('📢 Dispatched content-store-updated event for hero slide reorder')
+            }
           }
 
           return {
@@ -4504,11 +4512,13 @@ export const useContentStore = create<ContentStore>()(
           .filter((slide: HeroSlide) => {
             // 🆕 isActive가 false인 슬라이드는 필터링
             if (!slide.isActive) {
-              console.log('🔍 [getActiveHeroSlides] Filtering out inactive slide:', {
-                id: slide.id,
-                title: slide.title,
-                isActive: slide.isActive
-              })
+              if (CONTENT_STORE_DEBUG) {
+                console.log('🔍 [getActiveHeroSlides] Filtering out inactive slide:', {
+                  id: slide.id,
+                  title: slide.title,
+                  isActive: slide.isActive
+                })
+              }
               return false
             }
             return true
@@ -4516,32 +4526,38 @@ export const useContentStore = create<ContentStore>()(
           .filter((slide: HeroSlide) => {
             // 🆕 src가 없는 슬라이드는 필터링
             if (!slide.src || !slide.src.trim()) {
-              console.warn('🔍 [getActiveHeroSlides] Filtering out slide with empty src:', {
-                id: slide.id,
-                title: slide.title,
-                type: slide.type
-              })
+              if (CONTENT_STORE_DEBUG) {
+                console.warn('🔍 [getActiveHeroSlides] Filtering out slide with empty src:', {
+                  id: slide.id,
+                  title: slide.title,
+                  type: slide.type
+                })
+              }
               return false
             }
             
             // 🆕 동영상 슬라이드의 경우 src 유효성 검증
             if (slide.type === 'video') {
               if (isInvalidVideoSrc(slide.src)) {
-                console.warn('🔍 [getActiveHeroSlides] Filtering out invalid video slide src:', {
-                  id: slide.id,
-                  title: slide.title,
-                  src: slide.src.substring(0, 50) + '...'
-                })
+                if (CONTENT_STORE_DEBUG) {
+                  console.warn('🔍 [getActiveHeroSlides] Filtering out invalid video slide src:', {
+                    id: slide.id,
+                    title: slide.title,
+                    src: slide.src.substring(0, 50) + '...'
+                  })
+                }
                 return false
               }
             }
             
             if (slide.src.startsWith('indexeddb://')) {
-              console.warn('🔍 [getActiveHeroSlides] Filtering out legacy indexeddb:// slide:', {
-                id: slide.id,
-                title: slide.title,
-                type: slide.type
-              })
+              if (CONTENT_STORE_DEBUG) {
+                console.warn('🔍 [getActiveHeroSlides] Filtering out legacy indexeddb:// slide:', {
+                  id: slide.id,
+                  title: slide.title,
+                  type: slide.type
+                })
+              }
               return false
             }
 
@@ -4549,17 +4565,19 @@ export const useContentStore = create<ContentStore>()(
           })
           .sort((a: HeroSlide, b: HeroSlide) => a.order - b.order)
         
-        console.log('📊 [getActiveHeroSlides] Filtered slides:', {
-          total: state.heroSlides.length,
-          active: filteredSlides.length,
-          slides: filteredSlides.map(s => ({
-            id: s.id,
-            title: s.title,
-            type: s.type,
-            isActive: s.isActive,
-            src: s.src.substring(0, 50) + '...'
-          }))
-        })
+        if (CONTENT_STORE_DEBUG) {
+          console.log('📊 [getActiveHeroSlides] Filtered slides:', {
+            total: state.heroSlides.length,
+            active: filteredSlides.length,
+            slides: filteredSlides.map(s => ({
+              id: s.id,
+              title: s.title,
+              type: s.type,
+              isActive: s.isActive,
+              src: s.src.substring(0, 50) + '...'
+            }))
+          })
+        }
         
         return filteredSlides
       },

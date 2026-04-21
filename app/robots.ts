@@ -1,15 +1,16 @@
 import type { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
   return {
     rules: [
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin/', '/api/']
+        disallow: ['/admin/', '/api/', '/auth/callback']
       }
     ],
-    sitemap: `${base}/sitemap.xml`
+    host: base,
+    sitemap: [`${base}/sitemap.xml`]
   }
 }

@@ -5,7 +5,12 @@ import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
 
 const inter = Inter({ subsets: ['latin'] })
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app'
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
+const siteName = 'Selpic'
+const siteTitle = 'Selpic | Premium Custom Stickers in Australia'
+const siteDescription =
+  'Create premium custom name labels, stickers, and personalized products with Selpic. Waterproof quality, fast turnaround, and easy online ordering across Australia.'
+const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.png`
 
 /** Ensures phones use the same responsive layout scale as desktop browsers (no accidental zoomed-out “desktop site”). */
 export const viewport: Viewport = {
@@ -14,30 +19,57 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'SELPIC - Premium Sticker Shop',
-  description: 'Create your own unique stickers with SELPIC. Premium quality, waterproof, and customizable stickers for every occasion.',
+  title: {
+    default: siteTitle,
+    template: '%s | Selpic',
+  },
+  description: siteDescription,
+  applicationName: siteName,
+  keywords: [
+    'custom stickers',
+    'name labels',
+    'waterproof stickers',
+    'personalized labels',
+    'Selpic',
+    'Australia',
+  ],
   metadataBase: new URL(siteUrl),
   alternates: {
-    canonical: '/'
+    canonical: '/',
   },
   openGraph: {
-    title: 'SELPIC - Premium Sticker Shop',
-    description:
-      'Create your own unique stickers with SELPIC. Premium quality, waterproof, and customizable stickers for every occasion.',
+    title: siteTitle,
+    description: siteDescription,
     url: siteUrl,
-    siteName: 'SELPIC',
-    type: 'website'
+    siteName,
+    locale: 'en_AU',
+    type: 'website',
+    images: [
+      {
+        url: defaultOgImage,
+        width: 1200,
+        height: 630,
+        alt: 'Selpic custom sticker storefront',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SELPIC - Premium Sticker Shop',
-    description:
-      'Create your own unique stickers with SELPIC. Premium quality, waterproof, and customizable stickers for every occasion.'
+    title: siteTitle,
+    description: siteDescription,
+    images: [defaultOgImage],
   },
   robots: {
     index: true,
-    follow: true
-  }
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
 }
 
 export default function RootLayout({

@@ -25,6 +25,7 @@ const NEXT_PUBLIC_SUPABASE_ANON_KEY = stripSupabaseEnvValue(
 const NEXT_PUBLIC_DEPLOY_VERSION = stripSupabaseEnvValue(
   process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_DEPLOY_VERSION || 'dev-local'
 )
+const NEXT_PUBLIC_SITE_URL = stripSupabaseEnvValue(process.env.NEXT_PUBLIC_SITE_URL || '')
 
 if (process.env.VERCEL === '1' && !NEXT_PUBLIC_SUPABASE_URL) {
   console.warn(
@@ -76,6 +77,22 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   async headers() {
+    const securityHeaders =
+      process.env.NODE_ENV === 'production'
+        ? [
+            {
+              source: '/:path*',
+              headers: [
+                { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+                { key: 'X-Content-Type-Options', value: 'nosniff' },
+                { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+                { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+              ],
+            },
+          ]
+        : []
+
     // In development, long-lived immutable caching on /_next/static can cause
     // stale chunks after HMR → ChunkLoadError / timeout loading app/layout.js.
     const longCache =
@@ -121,6 +138,7 @@ const nextConfig = {
         : []
 
     return [
+      ...securityHeaders,
       ...longCache,
       {
         // Home is CMS-driven on the client; avoid long-lived CDN HTML cache so mobile/desktop
@@ -156,6 +174,29 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
         ]
       }
+    ]
+  },
+  async redirects() {
+    if (!NEXT_PUBLIC_SITE_URL) return []
+    let canonicalHost = ''
+    try {
+      canonicalHost = new URL(NEXT_PUBLIC_SITE_URL).hostname.toLowerCase()
+    } catch {
+      return []
+    }
+    if (!canonicalHost) return []
+
+    const secondaryHost = canonicalHost.startsWith('www.')
+      ? canonicalHost.slice(4)
+      : `www.${canonicalHost}`
+
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: secondaryHost }],
+        destination: `${NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/:path*`,
+        permanent: true,
+      },
     ]
   },
 }

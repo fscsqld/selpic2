@@ -127,7 +127,8 @@ export default function ContentStoreSupabaseSync() {
     }
     window.addEventListener('online', onOnline)
 
-    const INITIAL_FETCH_BUDGET_MS = 22_000
+    /** Must allow ~2× slow `/api/site-config/public` attempts (see siteConfigClient fetch timeout). */
+    const INITIAL_FETCH_BUDGET_MS = 45_000
 
     void (async () => {
       try {
@@ -145,9 +146,8 @@ export default function ContentStoreSupabaseSync() {
       } finally {
         // Never upsert bundle defaults over Supabase when the remote row was never read (mobile/offline).
         markSiteConfigRemoteFetchSettled(remoteMergeSucceeded.current)
-        if (!remoteMergeSucceeded.current) {
-          setSynced(true)
-        }
+        // If remote never merged, keep siteConfigRemoteSynced false so the homepage can show the
+        // timeout + retry UI instead of treating stale localStorage as canonical (common on flaky tablet Wi‑Fi).
         // Keep local/deployed tabs converged when realtime misses (flaky Wi‑Fi / Safari).
         pollTimer = setInterval(() => {
           if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return

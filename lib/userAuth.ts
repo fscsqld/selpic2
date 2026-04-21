@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+const USER_AUTH_DEBUG =
+  process.env.NODE_ENV === 'development' &&
+  process.env.NEXT_PUBLIC_USER_AUTH_DEBUG === '1'
+
 export interface User {
   id: string
   email: string
@@ -84,7 +88,9 @@ const DEFAULT_ADMIN_USER: User = {
 
 // 강제 사용자 재설정 함수
 const resetUsersToDefault = () => {
-  console.log('Resetting users to default...')
+  if (USER_AUTH_DEBUG) {
+    console.log('Resetting users to default...')
+  }
   return [DEFAULT_DEMO_USER, DEFAULT_ADMIN_USER]
 }
 

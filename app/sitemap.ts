@@ -7,8 +7,14 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
  * if CATALOG_SYNC_SECRET / NEXT_PUBLIC_CATALOG_SYNC_SECRET are set.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
   const now = new Date()
+  const catalog = await readCatalogProducts()
+  const latestCatalogUpdate = catalog
+    .map((p) => (p.updatedAt ? Date.parse(p.updatedAt) : NaN))
+    .filter((v) => Number.isFinite(v))
+    .reduce((max, v) => Math.max(max, v), 0)
+  const catalogLastModified = latestCatalogUpdate ? new Date(latestCatalogUpdate) : now
 
   const paths: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[0]['changeFrequency'] }[] = [
     { path: '', priority: 1, changeFrequency: 'weekly' },
@@ -49,14 +55,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: '/unsubscribe', priority: 0.2, changeFrequency: 'yearly' }
   ]
 
-  const staticEntries = paths.map(({ path, priority, changeFrequency }) => ({
-    url: `${base}${path}`,
+  const staticEntries = paths.map(({ path: routePath, priority, changeFrequency }) => ({
+    url: `${base}${routePath}`,
     lastModified: now,
     changeFrequency,
     priority
   }))
 
-  const catalog = await readCatalogProducts()
   const productEntries: MetadataRoute.Sitemap = catalog
     .filter((p) => p.hasDetailPage !== false)
     .map((p) => ({
@@ -66,5 +71,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8
     }))
 
-  return [...staticEntries, ...productEntries]
+  // Ensure high-value catalog index pages use the latest product timestamp.
+  const catalogPageEntries: MetadataRoute.Sitemap = [
+    {
+      url: `${base}/stickers`,
+      lastModified: catalogLastModified,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: `${base}/stamp`,
+      lastModified: catalogLastModified,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: `${base}/phone-cases`,
+      lastModified: catalogLastModified,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+  ]
+
+  const merged = [...staticEntries, ...catalogPageEntries, ...productEntries]
+  const deduped = new Map<string, MetadataRoute.Sitemap[number]>()
+  for (const entry of merged) deduped.set(entry.url, entry)
+  return Array.from(deduped.values())
 }

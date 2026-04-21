@@ -200,7 +200,8 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
   if (typeof window !== 'undefined') {
     try {
       const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 5500)
+      // Slow tablet / LAN dev: 5.5s aborted too many good responses and left stale localStorage visible.
+      const timeout = window.setTimeout(() => controller.abort(), 12_000)
       const res = await fetch(`/api/site-config/public?cb=${Date.now()}`, {
         cache: 'no-store',
         signal: controller.signal,

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic2.vercel.app').replace(/\/$/, '')
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
 
 function absoluteImageUrl(image?: string): string | undefined {
   if (!image) return undefined
@@ -36,8 +36,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: pageTitle,
       description,
       url: canonical,
-      siteName: 'SELPIC',
-      type: 'website',
+      siteName: 'Selpic',
+      type: 'product',
+      locale: 'en_AU',
       ...(ogImage ? { images: [{ url: ogImage }] } : {})
     },
     twitter: {
