@@ -36,7 +36,7 @@ export default function GamePromoCodeSync() {
         sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6)
 
         // Determine description based on game source
-        const description = `🎮 SELPIC TETRIS Level 5 Clear Reward - 10% OFF (Max $15) | Valid for 6 months | Min purchase $30`;
+        const description = `🎮 Selpic TETRIS Level 5 Clear Reward - 10% OFF (Max $15) | Valid for 6 months | Min purchase $30`;
         const discountValue = 10;
         const maxDiscount = 15;
 

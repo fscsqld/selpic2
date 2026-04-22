@@ -119,7 +119,7 @@ export default function PromoCodesPage() {
               Game Promo Code History
             </h1>
             <p className="text-sm md:text-base text-slate-300">
-              View all promo codes earned from SELPIC TETRIS in one place.
+              View all promo codes earned from Selpic TETRIS in one place.
               (Currently stored only in this browser.)
             </p>
           </div>
@@ -194,7 +194,7 @@ export default function PromoCodesPage() {
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300">
             No promo codes have been issued from the game yet.
             <br />
-            Play SELPIC TETRIS and complete the final level to view your codes here.
+            Play Selpic TETRIS and complete the final level to view your codes here.
           </div>
         ) : (
           <div className="space-y-4">

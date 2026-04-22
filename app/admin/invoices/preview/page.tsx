@@ -481,7 +481,7 @@ function InvoicePreviewPageContent() {
           ? `Tax Invoice ${docNumber} from ${brandName}`
           : `Quote ${docNumber} from ${brandName}`,
         message: emailContent,
-        adminName: 'SELPIC Admin',
+        adminName: 'Selpic Admin',
         attachments: pdfFile ? [pdfFile] : []
       })
 

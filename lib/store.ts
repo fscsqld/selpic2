@@ -2408,7 +2408,7 @@ export const useStore = create<Store>()(
                     <div style="white-space: pre-wrap; margin-top: 20px;">${campaign.message.replace(/\n/g, '<br>')}</div>
                     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
                     <p style="color: #6b7280; font-size: 12px; margin: 0;">
-                      This email was sent to you because you subscribed to SELPIC newsletter.<br>
+                      This email was sent to you because you subscribed to Selpic newsletter.<br>
                       <a href="${unsubscribeUrl}" style="color: #2563eb; text-decoration: underline;">Unsubscribe</a>
                     </p>
                   </div>
@@ -2529,7 +2529,7 @@ This offer is valid for a limited time only. Don't miss out on this amazing oppo
 Shop now and save!
 
 Best regards,
-SELPIC Team`,
+Selpic Team`,
           type: 'promotion',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2547,10 +2547,10 @@ We're thrilled to announce our latest product collection!
 
 Check out our new products and discover something special.
 
-Thank you for being part of the SELPIC family!
+Thank you for being part of the Selpic family!
 
 Best regards,
-SELPIC Team`,
+Selpic Team`,
           type: 'announcement',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2569,7 +2569,7 @@ You're invited to join us for a special event!
 We'd love to see you there!
 
 Best regards,
-SELPIC Team`,
+Selpic Team`,
           type: 'event',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2578,7 +2578,7 @@ SELPIC Team`,
         {
           id: 'template-newsletter-1',
           name: 'Monthly Newsletter',
-          subject: 'SELPIC Monthly Newsletter',
+          subject: 'Selpic Monthly Newsletter',
           message: `Dear Subscriber,
 
 Welcome to our monthly newsletter!
@@ -2588,7 +2588,7 @@ Welcome to our monthly newsletter!
 Stay tuned for more updates and special offers!
 
 Best regards,
-SELPIC Team`,
+Selpic Team`,
           type: 'newsletter',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2597,7 +2597,7 @@ SELPIC Team`,
         {
           id: 'template-general-1',
           name: 'General Update',
-          subject: 'Update from SELPIC',
+          subject: 'Update from Selpic',
           message: `Dear Customer,
 
 We wanted to share an important update with you.
@@ -2607,7 +2607,7 @@ We wanted to share an important update with you.
 Thank you for your continued support!
 
 Best regards,
-SELPIC Team`,
+Selpic Team`,
           type: 'general',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

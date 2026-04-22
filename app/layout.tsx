@@ -104,7 +104,7 @@ export default function RootLayout({
   const websiteJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'SELPIC',
+    name: 'Selpic',
     url: siteUrl
   }
   

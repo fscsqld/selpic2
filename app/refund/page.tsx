@@ -29,7 +29,7 @@ export default function RefundPage() {
 	}
 
 	const title = getContent('Refund Policy Title') || 'Refund Policy'
-	const intro = getContent('Refund Policy Intro') || 'SELPIC\'s refund/returns process complies with Australian Consumer Law (ACL). The following policy applies to online orders and may be updated as needed.'
+	const intro = getContent('Refund Policy Intro') || 'Selpic\'s refund/returns process complies with Australian Consumer Law (ACL). The following policy applies to online orders and may be updated as needed.'
 
 	// 하이드레이션 완료 전에는 기본값 표시
 	if (!mounted || !_hasHydrated) {

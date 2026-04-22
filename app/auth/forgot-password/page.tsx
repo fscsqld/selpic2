@@ -73,7 +73,7 @@ function ForgotPasswordInner() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Forgot password</h1>
           <p className="text-sm text-gray-600 mt-2">
-            Enter the email you use for SELPIC. We will send a secure link to reset your password (Supabase Auth).
+            Enter the email you use for Selpic. We will send a secure link to reset your password (Supabase Auth).
           </p>
 
           {status === 'sent' ? (

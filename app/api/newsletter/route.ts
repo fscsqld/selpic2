@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         await resendClient.emails.send({
           from: resendFrom,
           to: normalizedEmail,
-          subject: 'Thanks for subscribing to SELPIC updates',
+          subject: 'Thanks for subscribing to Selpic updates',
           html: welcomeHtml
         })
       } catch (emailError) {

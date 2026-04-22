@@ -85,7 +85,7 @@ export function getTransactionalEmailSiteOrigin(): string {
 }
 
 /** Display name under "Kind Regards," in all transactional emails */
-export const TRANSACTIONAL_EMAIL_SIGNATURE_NAME = 'SELPIC TEAM'
+export const TRANSACTIONAL_EMAIL_SIGNATURE_NAME = 'Selpic Team'
 
 export function buildTransactionalEmailSignaturePlainText(): string {
   return `Kind Regards,

@@ -34,17 +34,17 @@ export const emailTemplates: EmailTemplate[] = [
   {
     id: 'general_thanks',
     name: 'General Thank You',
-    subject: 'Thank you for contacting SELPIC',
+    subject: 'Thank you for contacting Selpic',
     content: `Dear {{customerName}},
 
-Thank you for reaching out to SELPIC. We have received your message and appreciate you taking the time to contact us.
+Thank you for reaching out to Selpic. We have received your message and appreciate you taking the time to contact us.
 
 Your inquiry: {{originalSubject}}
 
 We will review your message and get back to you within 24 hours. If you have any urgent concerns, please don't hesitate to contact us directly.
 
 Best regards,
-SELPIC Customer Support Team
+Selpic Customer Support Team
 
 ---
 This is a response to your inquiry submitted on {{submissionDate}}.`,
@@ -53,7 +53,7 @@ This is a response to your inquiry submitted on {{submissionDate}}.`,
   {
     id: 'order_inquiry',
     name: 'Order Inquiry Response',
-    subject: 'Re: Your Order Inquiry - SELPIC',
+    subject: 'Re: Your Order Inquiry - Selpic',
     content: `Dear {{customerName}},
 
 Thank you for your order-related inquiry. We understand how important it is to keep you informed about your order status.
@@ -65,16 +65,16 @@ Our team is looking into your request and will provide you with detailed informa
 If you need immediate assistance, please contact our customer service team at support@selpic.com.
 
 Best regards,
-SELPIC Order Management Team`,
+Selpic Order Management Team`,
     category: 'order'
   },
   {
     id: 'technical_support',
     name: 'Technical Support Response',
-    subject: 'Technical Support - SELPIC',
+    subject: 'Technical Support - Selpic',
     content: `Dear {{customerName}},
 
-Thank you for contacting SELPIC technical support. We understand you're experiencing some technical difficulties.
+Thank you for contacting Selpic technical support. We understand you're experiencing some technical difficulties.
 
 Your inquiry: {{originalSubject}}
 
@@ -83,16 +83,16 @@ Our technical team has received your request and is working on a solution. We'll
 Expected response time: Within 4-6 hours during business hours.
 
 Technical Support Team
-SELPIC`,
+Selpic`,
     category: 'technical'
   },
   {
     id: 'business_inquiry',
     name: 'Business Partnership Response',
-    subject: 'Business Partnership Inquiry - SELPIC',
+    subject: 'Business Partnership Inquiry - Selpic',
     content: `Dear {{customerName}},
 
-Thank you for your interest in partnering with SELPIC. We're excited to learn about potential collaboration opportunities.
+Thank you for your interest in partnering with Selpic. We're excited to learn about potential collaboration opportunities.
 
 Your inquiry: {{originalSubject}}
 
@@ -101,13 +101,13 @@ Our business development team will review your proposal and contact you within 2
 Please feel free to reach out if you have any additional information to share in the meantime.
 
 Best regards,
-SELPIC Business Development Team`,
+Selpic Business Development Team`,
     category: 'business'
   },
   {
     id: 'complaint_response',
     name: 'Complaint Resolution Response',
-    subject: 'Your Concern - We\'re Here to Help - SELPIC',
+    subject: 'Your Concern - We\'re Here to Help - Selpic',
     content: `Dear {{customerName}},
 
 Thank you for bringing your concern to our attention. We take all customer feedback seriously and are committed to resolving any issues you may have experienced.
@@ -121,7 +121,7 @@ You can expect to hear from us within 24 hours with an update on our progress.
 Thank you for giving us the opportunity to make this right.
 
 Sincerely,
-SELPIC Customer Care Team`,
+Selpic Customer Care Team`,
     category: 'complaint'
   }
 ]
@@ -301,7 +301,7 @@ export class EmailService {
     
     const variables = {
       customerName: params.customerName,
-      adminName: params.adminName || 'SELPIC Support Team',
+      adminName: params.adminName || 'Selpic Support Team',
       submissionDate: new Date().toLocaleDateString(),
       ...params.variables
     }

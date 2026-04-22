@@ -48,7 +48,7 @@ export default function SeoProductJsonLd({
           item: {
             '@type': 'Product',
             name: p.name,
-            description: p.description || `${p.name} by SELPIC`,
+            description: p.description || `${p.name} by Selpic`,
             ...(imageUrl ? { image: [imageUrl] } : {}),
             ...(p.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
             category: p.category || pageName,
@@ -85,7 +85,7 @@ export default function SeoProductJsonLd({
           url: pageUrl,
           isPartOf: {
             '@type': 'WebSite',
-            name: 'SELPIC',
+            name: 'Selpic',
             url: siteUrl
           }
         },

@@ -31,15 +31,15 @@ export async function sendBespokeDecisionEmail(params: {
   const from =
     process.env.RESEND_FROM ||
     process.env.RESEND_FROM_EMAIL ||
-    'SELPIC <onboarding@resend.dev>'
+    'Selpic <onboarding@resend.dev>'
 
   const safeName = escapeHtml(params.customerName || 'Customer')
   const safeId = escapeHtml(params.requestId)
 
   const subject =
     params.decision === 'approved'
-      ? 'Your bespoke label request was approved – SELPIC'
-      : 'Update on your bespoke label request – SELPIC'
+      ? 'Your bespoke label request was approved – Selpic'
+      : 'Update on your bespoke label request – Selpic'
 
   const bodyIntro =
     params.decision === 'approved'
@@ -52,7 +52,7 @@ export async function sendBespokeDecisionEmail(params: {
 <html><body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #111;">
 ${bodyIntro}
 <p style="font-size: 13px; color: #555;">Reference ID: <code>${safeId}</code></p>
-<p style="margin-top: 24px;">Best regards,<br/>SELPIC Team</p>
+<p style="margin-top: 24px;">Best regards,<br/>Selpic Team</p>
 </body></html>`
 
   try {

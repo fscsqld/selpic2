@@ -65,7 +65,7 @@ const checkForBannedContent = (text: string): boolean => {
 const samplePosts: Post[] = [
   {
     id: 1,
-    title: "Welcome to SELPIC Community! 🎉",
+    title: "Welcome to Selpic Community! 🎉",
     author: "Community Manager",
     date: "2025-10-10",
     content: "Hey everyone! Welcome to our vibrant community space where creativity meets conversation! This is YOUR space to share ideas, connect with like-minded people, and express yourself freely. Whether you're a designer, entrepreneur, student, or just looking for interesting conversations - you belong here! Jump in, introduce yourself, and let's make this community amazing together! 💫",
@@ -738,7 +738,7 @@ export default function CommunityPage() {
             <MessageSquare className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-5xl lg:text-6xl font-bold font-playfair tracking-wider mb-6 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
-            SELPIC N
+            Selpic N
           </h1>
           <p className="text-xl text-gray-600 mb-4 max-w-2xl mx-auto">
             Your Space to Connect, Share, and Inspire

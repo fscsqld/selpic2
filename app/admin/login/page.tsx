@@ -166,7 +166,7 @@ export default function AdminLoginPage() {
           </p>
         </div>
         <p className="hidden lg:block font-mono text-[10px] text-zinc-600 uppercase tracking-widest">
-          SELPIC internal
+          Selpic internal
         </p>
       </aside>
 
@@ -185,7 +185,7 @@ export default function AdminLoginPage() {
               <h2 className="text-xl font-semibold text-zinc-100">Administrator Sign-in</h2>
               <p className="mt-3 mx-auto sm:mx-0 max-w-[280px] sm:max-w-xs text-sm text-zinc-400 leading-relaxed text-balance">
                 <span className="block">Sign in with your staff email</span>
-                <span className="block">to manage SELPIC operations.</span>
+                <span className="block">to manage Selpic operations.</span>
               </p>
             </div>
 

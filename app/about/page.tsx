@@ -91,7 +91,7 @@ export default function AboutPage() {
               </h2>
               <div className="space-y-6 text-lg text-slate-600 leading-relaxed">
                 <p>
-                  {getContent('Company Story 첫 번째 문단') || 'SELPIC was born from a simple idea: everyone deserves to express their creativity through high-quality, personalized stickers. We started as a small team of designers and developers who were passionate about making custom printing accessible to everyone.'}
+                  {getContent('Company Story 첫 번째 문단') || 'Selpic was born from a simple idea: everyone deserves to express their creativity through high-quality, personalized stickers. We started as a small team of designers and developers who were passionate about making custom printing accessible to everyone.'}
                 </p>
                 <p>
                   {getContent('Company Story 두 번째 문단') || 'Today, we have grown into a trusted platform that serves thousands of customers worldwide. Our commitment to quality, innovation, and customer satisfaction has made us a leader in the custom sticker industry.'}
@@ -107,15 +107,15 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Why SELPIC Section */}
+      {/* Why Selpic Section */}
       <section className="py-20 bg-gradient-to-br from-blue-50 to-indigo-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-              {getContent('Why SELPIC 제목') || 'Why SELPIC?'}
+              {getContent('Why Selpic 제목') || 'Why Selpic?'}
             </h2>
             <p className="text-xl text-gray-600">
-              {getContent('Why SELPIC 부제목') || 'We deliver outstanding quality and service to keep every customer satisfied.'}
+              {getContent('Why Selpic 부제목') || 'We deliver outstanding quality and service to keep every customer satisfied.'}
             </p>
           </div>
           
@@ -148,9 +148,9 @@ export default function AboutPage() {
                   <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Star className="text-white" size={32} />
                   </div>
-                  <h4 className="text-2xl font-bold text-gray-900 mb-4">{getContent('SELPIC의 약속 제목') || 'The SELPIC Promise'}</h4>
+                  <h4 className="text-2xl font-bold text-gray-900 mb-4">{getContent('Selpic의 약속 제목') || 'The Selpic Promise'}</h4>
                   <p className="text-gray-600 leading-relaxed">
-                    {getContent('SELPIC의 약속 설명') || 'We are more than a store. We are your creative partner, helping turn your ideas into real products with quality craftsmanship and dependable service.'}
+                    {getContent('Selpic의 약속 설명') || 'We are more than a store. We are your creative partner, helping turn your ideas into real products with quality craftsmanship and dependable service.'}
                   </p>
                 </div>
               </div>
@@ -207,7 +207,7 @@ export default function AboutPage() {
               {getContent('Team 섹션 제목') || 'Meet Our Team'}
             </h2>
             <p className="text-xl text-emerald-700 max-w-3xl mx-auto">
-              {getContent('Team 섹션 부제목') || 'The passionate people behind SELPIC'}
+              {getContent('Team 섹션 부제목') || 'The passionate people behind Selpic'}
             </p>
           </div>
           

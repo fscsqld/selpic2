@@ -965,10 +965,10 @@ export default function CustomStickersPage() {
               </div>
 
               <div className="text-xs md:text-sm text-gray-500">
-                <h3 className="font-semibold text-gray-800 mb-2">SELPIC bespoke process</h3>
+                <h3 className="font-semibold text-gray-800 mb-2">Selpic bespoke process</h3>
                 <ol className="space-y-1 list-decimal list-inside">
                   <li>You describe roll, text, font, logo, and layout in your own words.</li>
-                  <li>SELPIC reviews fonts, print methods, and materials.</li>
+                  <li>Selpic reviews fonts, print methods, and materials.</li>
                   <li>We suggest adjustments if needed and share estimated pricing.</li>
                   <li>After physical or digital proof approval, we confirm full production.</li>
                 </ol>

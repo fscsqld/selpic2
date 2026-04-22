@@ -318,7 +318,7 @@ export default function ProfilePage() {
             <User size={40} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.name}</h1>
-          <p className="text-gray-600">SELPIC Member</p>
+          <p className="text-gray-600">Selpic Member</p>
         </div>
 
         {/* VIP 등급 정보 카드 */}

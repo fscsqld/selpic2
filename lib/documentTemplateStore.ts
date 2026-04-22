@@ -189,7 +189,7 @@ const getDefaultEmailSettings = (type: DocumentType, companyName: string = COMPA
     case 'order_confirmation':
       return {
         ...baseSettings,
-        subject: '[SELPIC] Order Confirmed: {orderId} | Thank you for your business!',
+        subject: '[Selpic] Order Confirmed: {orderId} | Thank you for your business!',
         customMessage:
           'Automated order confirmation emails use the fixed template in lib/orderConfirmationEmail.ts (subject + HTML). ' +
           'Edit that file to change customer-facing copy.'
@@ -246,12 +246,12 @@ const getDefaultEmailSettings = (type: DocumentType, companyName: string = COMPA
 }
 
 // Previous defaults (used to migrate older saved templates without overwriting custom edits)
-const PREV_DEFAULT_ORDER_SUBJECT = '[SELPIC] Order confirmed - #{orderId}'
+const PREV_DEFAULT_ORDER_SUBJECT = '[Selpic] Order confirmed - #{orderId}'
 const PREV_DEFAULT_ORDER_MESSAGE =
   'Thanks for your order.\n\nWe have received your payment and started processing your items.\n\nFor quick support, reply directly to this email with your order number.'
 const PREV_DEFAULT_RECEIPT_SUBJECT = 'Receipt - Order #{orderId}'
 const PREV_DEFAULT_RECEIPT_MESSAGE = 'Please find your receipt below. Thank you for your purchase!'
-const PREV_DEFAULT_SHIPPING_SUBJECT = '[SELPIC] Shipping update - Order #{orderId}'
+const PREV_DEFAULT_SHIPPING_SUBJECT = '[Selpic] Shipping update - Order #{orderId}'
 const PREV_DEFAULT_SHIPPING_MESSAGE =
   'Good news - your order is on the way.\n\nTracking details are included below.\n\nIf your delivery details need correction, reply to this email as soon as possible.'
 const PREV_DEFAULT_CONTRACT_SUBJECT = 'Contract Document - {companyName}'

@@ -3,7 +3,7 @@ import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBr
 import { TrackedEmailTemplate } from '@/lib/emailTrackingService'
 
 const resendFrom = () =>
-  process.env.RESEND_FROM || process.env.RESEND_FROM_EMAIL || 'SELPIC <info@selpic.com.au>'
+  process.env.RESEND_FROM || process.env.RESEND_FROM_EMAIL || 'Selpic <info@selpic.com.au>'
 
 export type ResendAttachmentInput = {
   filename: string

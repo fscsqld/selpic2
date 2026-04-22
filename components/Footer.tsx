@@ -33,14 +33,14 @@ export default function Footer() {
     }
   }
 
-  const companyName = getContent('Company Name', 'SELPIC')
+  const companyName = getContent('Company Name', 'Selpic')
   const companyDescription = getContent(
     'Company Description',
     'We deliver premium custom products with clear proofs, seamless setup, and fast Australia-wide shipping.'
   )
   const newsletterTitle = getContent('Newsletter Title', 'Newsletter')
   const newsletterDescription = getContent('Newsletter Description', 'Subscribe to our newsletter for updates.')
-  const copyrightText = getContent('Copyright Information', '© 2025 SELPIC. All rights reserved.')
+  const copyrightText = getContent('Copyright Information', '© 2025 Selpic. All rights reserved.')
 
   const quickLinksTitle = getContent('Quick Links Title', 'Quick Links')
   const helpLinksTitle = getContent('Help/Useful Links Title', 'Resources')
@@ -63,7 +63,7 @@ export default function Footer() {
   const logoMediaSrc = (logoItem?.mediaUrl ?? '').trim()
   const useLogoImage = !!logoItem?.isActive
   const headerCompanyName =
-    contentItems.find((i) => i.section === 'header' && i.title === 'Company Name')?.content?.trim() || 'SELPIC'
+    contentItems.find((i) => i.section === 'header' && i.title === 'Company Name')?.content?.trim() || 'Selpic'
 
   return (
     <footer className="mt-8 border-t border-gray-200 bg-white">

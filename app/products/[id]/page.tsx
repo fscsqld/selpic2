@@ -82,7 +82,7 @@ export default function ProductDetailPage() {
   // 브라우저 탭·메타 설명: 상품은 localStorage 기반이라 서버 메타는 layout 기본값만 가능
   useEffect(() => {
     if (!product || typeof document === 'undefined') return
-    document.title = `${product.name} | SELPIC`
+    document.title = `${product.name} | Selpic`
     let meta = document.querySelector('meta[name="description"]')
     if (!meta) {
       meta = document.createElement('meta')
@@ -90,7 +90,7 @@ export default function ProductDetailPage() {
       document.head.appendChild(meta)
     }
     const text = (product.description || '').replace(/\s+/g, ' ').trim()
-    meta.setAttribute('content', (text.slice(0, 160) || `${product.name} — SELPIC`).trim())
+    meta.setAttribute('content', (text.slice(0, 160) || `${product.name} — Selpic`).trim())
   }, [product])
 
   // 재고 정보 계산

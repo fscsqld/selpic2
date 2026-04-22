@@ -1602,7 +1602,7 @@ export default function ContentManagementPage() {
                 {/* Company Name */}
                 <QuickEditCard
                   title="Company Name"
-                  value={contentItems.find(item => item.section === 'footer' && item.title === 'Company Name')?.content || 'SELPIC'}
+                  value={contentItems.find(item => item.section === 'footer' && item.title === 'Company Name')?.content || 'Selpic'}
                   placeholder="Enter company name"
                   type="text"
                   description="Company name displayed in footer"
@@ -1906,7 +1906,7 @@ export default function ContentManagementPage() {
                 {/* Copyright Information */}
                 <QuickEditCard
                   title="Copyright Information"
-                  value={contentItems.find(item => item.section === 'footer' && item.title === 'Copyright Information')?.content || 'SELPIC'}
+                  value={contentItems.find(item => item.section === 'footer' && item.title === 'Copyright Information')?.content || 'Selpic'}
                   placeholder="Enter copyright information"
                   type="text"
                   description="Copyright text displayed at bottom of footer"
@@ -1987,7 +1987,7 @@ export default function ContentManagementPage() {
                   {/* Company Name */}
                   <QuickEditCard
                     title="Company Name"
-                    value={contentItems.find(item => item.section === 'header' && item.title === 'Company Name')?.content || 'SELPIC'}
+                    value={contentItems.find(item => item.section === 'header' && item.title === 'Company Name')?.content || 'Selpic'}
                     placeholder="Enter company name"
                     type="text"
                     description="Company name displayed in header"
@@ -2646,7 +2646,7 @@ export default function ContentManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <QuickEditCard
                       title="Privacy Policy 제목"
-                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 제목')?.content || 'SELPIC Privacy Policy'}
+                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 제목')?.content || 'Selpic Privacy Policy'}
                       placeholder="Enter Privacy Policy title"
                       type="text"
                       description="Main title of Privacy Policy page"
@@ -3524,28 +3524,28 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="SELPIC Rights 제목"
-                      value={contentItems.find(item => item.section === 'terms' && item.title === 'SELPIC Rights 제목')?.content || 'SELPIC\'s Rights'}
+                      title="Selpic Rights — title"
+                      value={contentItems.find(item => item.section === 'terms' && item.title === 'Selpic Rights Title')?.content || 'Selpic\'s Rights'}
                       placeholder="Enter subsection title"
                       type="text"
-                      description="SELPIC Rights subsection title"
+                      description="Selpic Rights subsection title"
                       section="terms"
                       onSave={handleQuickEditSave}
-                      existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'SELPIC Rights 제목')}
+                      existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Selpic Rights Title')}
                       showNotification={(type, message) => {
                         if (type === 'success') alert(message)
                         else if (type === 'error') alert(`Error: ${message}`)
                       }}
                     />
                     <QuickEditCard
-                      title="SELPIC Rights 내용"
-                      value={contentItems.find(item => item.section === 'terms' && item.title === 'SELPIC Rights 내용')?.content || ''}
+                      title="Selpic Rights — body"
+                      value={contentItems.find(item => item.section === 'terms' && item.title === 'Selpic Rights Content')?.content || ''}
                       placeholder="Enter content"
                       type="text"
-                      description="SELPIC Rights content"
+                      description="Selpic Rights subsection body"
                       section="terms"
                       onSave={handleQuickEditSave}
-                      existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'SELPIC Rights 내용')}
+                      existingContent={contentItems.find(item => item.section === 'terms' && item.title === 'Selpic Rights Content')}
                       showNotification={(type, message) => {
                         if (type === 'success') alert(message)
                         else if (type === 'error') alert(`Error: ${message}`)

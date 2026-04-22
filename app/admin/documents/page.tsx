@@ -3665,7 +3665,7 @@ ${brandName} Team`
                                 `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
                                 `Kind regards,\n` +
                                 `${brandName} Team`,
-                              adminName: adminUser?.username || 'SELPIC Admin',
+                              adminName: adminUser?.username || 'Selpic Admin',
                               attachments: pdfFile ? [pdfFile] : []
                             })
 

@@ -62,7 +62,7 @@ interface UserAuthState {
 const DEFAULT_DEMO_USER: User = {
   id: '1',
   email: 'user@example.com',
-  name: 'SELPIC',
+  name: 'Selpic',
   phone: '0466894279',
   address: 'Mansfield QLD 4122, AU',
   password: 'password123',

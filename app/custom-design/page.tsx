@@ -547,7 +547,7 @@ function CustomDesignContent() {
                 <div className="mt-4 p-3 bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-lg border border-purple-500/30">
                   <div className="text-xs text-slate-300 leading-relaxed space-y-1">
                     <p className="font-semibold text-purple-300 mb-1.5">
-                      🎮 Play SELPIC TETRIS & Win Rewards!
+                      🎮 Play Selpic TETRIS & Win Rewards!
                     </p>
                     <p className="text-[10px] font-bold text-yellow-400 whitespace-nowrap overflow-hidden text-ellipsis">
                       Complete all 5 levels to unlock exclusive promo codes and get up to 15% discount on your order!
@@ -874,7 +874,7 @@ function CustomDesignContent() {
                             className="text-lg font-bold text-slate-100 py-2 px-3 bg-slate-900/50 rounded border border-slate-600/50"
                             style={{ fontFamily: font.fontFamily }}
                           >
-                            {'Hello / SELPIC'}
+                            {'Hello / Selpic'}
                           </div>
                           
                           {/* Description */}
@@ -942,7 +942,7 @@ function CustomDesignContent() {
                       koreanName = firstLine.replace(/[^\u3131-\u3163\uac00-\ud7a3\s,]/g, '').trim()
                     }
                     
-                    // 이름이 없으면 빈 문자열로 전달 (게임에서 SELPIC 기본값 사용)
+                    // 이름이 없으면 빈 문자열로 전달 (게임에서 Selpic 기본값 사용)
                     if (!englishName) englishName = ''
                     if (!koreanName) koreanName = ''
                     

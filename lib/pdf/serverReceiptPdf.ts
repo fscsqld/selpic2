@@ -24,7 +24,7 @@ export function buildOrderReceiptPdfBase64(order: OrderRecord): string {
   }
 
   doc.setFontSize(16)
-  doc.text('SELPIC — Order receipt', margin, y)
+  doc.text('Selpic — Order receipt', margin, y)
   y += 10
 
   addLine(`Order: ${order.id}`, 10)

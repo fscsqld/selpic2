@@ -36,5 +36,5 @@ export function buildSimpleReceiptEmailHtml(order: OrderRecord): string {
 }
 
 export function buildSimpleReceiptSubject(orderId: string): string {
-  return `[SELPIC] Receipt: ${orderId}`
+  return `[Selpic] Receipt: ${orderId}`
 }

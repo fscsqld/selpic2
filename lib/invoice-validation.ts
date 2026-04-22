@@ -2,7 +2,7 @@
  * Invoice Validation Utilities
  * 
  * Validates invoice generation to prevent duplicate billing cycles
- * and ensure plan consistency for SELPIC A
+ * and ensure plan consistency for Selpic A
  */
 
 export interface InvoiceValidationContext {

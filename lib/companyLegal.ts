@@ -13,7 +13,7 @@ export const COMPANY_LEGAL = {
 } as const
 
 /** 푸터/소개용: 저작권 표기 (표시 시 white-space-pre-line 사용 가능) */
-export const COMPANY_LEGAL_LINE = '© 2026 SELPIC. All rights reserved.'
+export const COMPANY_LEGAL_LINE = '© 2026 Selpic. All rights reserved.'
 
 /** Company logo path (emails, invoices, footer — real PNG/SVG in /public, not a stub) */
 export const COMPANY_LOGO_URL = '/logo.png'
@@ -43,6 +43,6 @@ export const COMPANY_BANK = {
 
 export function getCompanyBrandName(companyName: string = COMPANY_LEGAL.companyName): string {
   const raw = String(companyName || '').trim()
-  if (!raw) return 'SELPIC'
+  if (!raw) return 'Selpic'
   return raw.replace(/\s+PTY\s+LTD\b/i, '').trim()
 }

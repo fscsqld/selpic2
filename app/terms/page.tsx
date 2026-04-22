@@ -71,7 +71,7 @@ export default function TermsAndConditions() {
               <h2 className="text-2xl font-bold text-gray-900">{getContent('Agreement to Terms 제목') || 'Agreement to Terms'}</h2>
             </div>
             <p className="text-gray-700 leading-relaxed">
-              {getContent('Agreement to Terms 내용') || 'By accessing and using SELPIC\'s services, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.'}
+              {getContent('Agreement to Terms 내용') || 'By accessing and using Selpic\'s services, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.'}
             </p>
           </div>
 
@@ -160,9 +160,9 @@ export default function TermsAndConditions() {
             </div>
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">{getContent('SELPIC Rights 제목') || 'SELPIC\'s Rights'}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">{getContent('Selpic Rights 제목') || 'Selpic\'s Rights'}</h3>
                 <p className="text-gray-700">
-                  {getContent('SELPIC Rights 내용') || 'All content, designs, and materials on our platform are owned by SELPIC or our licensors. This includes but is not limited to logos, graphics, text, and software.'}
+                  {getContent('Selpic Rights 내용') || 'All content, designs, and materials on our platform are owned by Selpic or our licensors. This includes but is not limited to logos, graphics, text, and software.'}
                 </p>
               </div>
               <div>
@@ -171,7 +171,7 @@ export default function TermsAndConditions() {
                   {getContent('User Content 목록')?.split(', ').map((item, index) => (
                     <li key={index}>{item}</li>
                   )) || [
-                    <li key={1}>By uploading content, you grant SELPIC a non-exclusive license to use, modify, and display your content for the purpose of providing our services.</li>
+                    <li key={1}>By uploading content, you grant Selpic a non-exclusive license to use, modify, and display your content for the purpose of providing our services.</li>
                   ]}
                 </ul>
               </div>
@@ -185,7 +185,7 @@ export default function TermsAndConditions() {
               <h2 className="text-2xl font-bold text-gray-900">{getContent('Limitation of Liability 제목') || 'Limitation of Liability'}</h2>
             </div>
             <p className="text-gray-700 leading-relaxed mb-3">
-              {getContent('Limitation of Liability 내용') || 'To the maximum extent permitted by law, SELPIC shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of our services.'}
+              {getContent('Limitation of Liability 내용') || 'To the maximum extent permitted by law, Selpic shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of our services.'}
             </p>
             {getContent('Limitation of Liability 목록') && (
               <ul className="list-disc list-inside text-gray-700 space-y-1 mb-3">

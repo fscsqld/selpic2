@@ -311,7 +311,7 @@ If you have any questions, please contact us.
 
 Thank you for your order!
 
-SELPIC Team`
+Selpic Team`
   }
 
   const handleCopyMessage = () => {

@@ -202,11 +202,11 @@ export default function LoginPage() {
                 Welcome back to
               </span>
               <span className="mt-2 block text-5xl sm:text-6xl font-extrabold leading-[1.05] tracking-tight whitespace-nowrap bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 bg-clip-text text-transparent">
-                SELPIC
+                Selpic
               </span>
             </h1>
             <p className="mx-auto max-w-[320px] text-center text-sm sm:text-base text-slate-600 leading-relaxed">
-              <span className="block">Sign in to your SELPIC account</span>
+              <span className="block">Sign in to your Selpic account</span>
               <span className="block">to continue shopping.</span>
             </p>
           </div>
@@ -333,7 +333,7 @@ export default function LoginPage() {
 
           <div className="mt-6 border-t border-slate-200 py-6 text-center px-2 sm:px-0">
             <p className="mx-auto max-w-[min(100%,20rem)] text-sm sm:text-[15px] leading-relaxed text-balance text-slate-500">
-              <span className="text-slate-500">New to SELPIC? </span>
+              <span className="text-slate-500">New to Selpic? </span>
               <Link
                 href="/register"
                 className="font-bold text-emerald-600 decoration-emerald-600/40 underline-offset-4 transition-colors duration-200 hover:text-teal-700 hover:underline hover:decoration-teal-600/60"

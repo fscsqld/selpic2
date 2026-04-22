@@ -207,7 +207,7 @@ function TetrisGameContent() {
               <span className="promo-word roll-in highlight-text">you little ripper!</span>
             </div>
             <div className="promo-company absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <span className="promo-text">SELPIC</span>
+              <span className="promo-text">Selpic</span>
             </div>
           </div>
           
@@ -224,7 +224,7 @@ function TetrisGameContent() {
         <iframe
           src={iframeSrc}
           className="w-full h-full border-0"
-          title="SELPIC TETRIS"
+          title="Selpic TETRIS"
           allow="autoplay"
           style={{ display: 'block' }}
         />

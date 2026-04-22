@@ -24,8 +24,8 @@ const faqEn: QAItem[] = [
 ]
 
 export default function HelpCenterPage() {
-  const title = 'SELPIC Help Centre (Frequently Asked Questions)'
-  const intro = 'Find answers to common questions about using SELPIC and placing your custom order.'
+  const title = 'Selpic Help Centre (Frequently Asked Questions)'
+  const intro = 'Find answers to common questions about using Selpic and placing your custom order.'
 
   return (
     <div className="min-h-screen bg-white">

@@ -28,7 +28,7 @@ export default function PrivacyPolicy() {
         <div className="max-w-4xl mx-auto px-4 py-12">
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <div className="mb-6">
-              <h1 className="text-4xl font-bold text-gray-900">SELPIC Privacy Policy</h1>
+              <h1 className="text-4xl font-bold text-gray-900">Selpic Privacy Policy</h1>
               <p className="text-gray-600 mt-2">Loading...</p>
             </div>
           </div>
@@ -51,7 +51,7 @@ export default function PrivacyPolicy() {
           <div className="bg-white rounded-2xl shadow-lg p-8">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-4xl font-bold text-gray-900">{getContent('Privacy Policy 제목') || 'SELPIC Privacy Policy'}</h1>
+            <h1 className="text-4xl font-bold text-gray-900">{getContent('Privacy Policy 제목') || 'Selpic Privacy Policy'}</h1>
             <p className="text-gray-600 mt-2">{getContent('Privacy Policy 부제목') || 'Effective Date: December 2025 (Last Updated: December 2025)'}</p>
           </div>
 
@@ -59,7 +59,7 @@ export default function PrivacyPolicy() {
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-3">{getContent('Introduction 제목') || '1. Introduction and Commitment'}</h2>
             <p className="text-gray-700 leading-relaxed">
-              {getContent('Introduction 내용') || 'At SELPIC, we are committed to protecting your privacy and ensuring the security of your personal information in accordance with the Australian Privacy Principles (APPs) set out in the Privacy Act 1988 (Cth). This Privacy Policy explains how we manage your personal information when you use our services.'}
+              {getContent('Introduction 내용') || 'At Selpic, we are committed to protecting your privacy and ensuring the security of your personal information in accordance with the Australian Privacy Principles (APPs) set out in the Privacy Act 1988 (Cth). This Privacy Policy explains how we manage your personal information when you use our services.'}
             </p>
           </div>
 

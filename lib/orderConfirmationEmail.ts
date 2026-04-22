@@ -9,7 +9,7 @@ export const getEmailSiteOrigin = getTransactionalEmailSiteOrigin
 export { DEFAULT_PUBLIC_SITE_URL } from '@/lib/transactionalEmailBranding'
 
 export function buildOrderConfirmationEmailSubject(orderId: string): string {
-  return `[SELPIC] Order Confirmed: ${orderId} | Thank you for your business!`
+  return `[Selpic] Order Confirmed: ${orderId} | Thank you for your business!`
 }
 
 function formatMoney(n: number): string {
@@ -77,7 +77,7 @@ export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string
 
   return `Dear ${customerName},
 
-Thank you for choosing SELPIC. We've received your order and are excited to start creating your custom stickers!
+Thank you for choosing Selpic. We've received your order and are excited to start creating your custom stickers!
 
 [Action Required: Payment Verification]
 Your order status is currently 'Pending'. If you have chosen Bank Transfer, please ensure the payment is completed. We will begin processing and production as soon as your funds are cleared (usually 1–2 business days).
@@ -147,7 +147,7 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
 
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;color:#111;max-width:600px;margin:0 auto;padding:16px;">
   <p style="margin:0 0 12px;">Dear ${customerName},</p>
-  <p style="margin:0 0 12px;">Thank you for choosing SELPIC. We've received your order and are excited to start creating your custom stickers!</p>
+  <p style="margin:0 0 12px;">Thank you for choosing Selpic. We've received your order and are excited to start creating your custom stickers!</p>
   <p style="margin:0 0 12px;"><strong>[Action Required: Payment Verification]</strong><br/>
   Your order status is currently 'Pending'. If you have chosen Bank Transfer, please ensure the payment is completed. We will begin processing and production as soon as your funds are cleared (usually 1–2 business days).</p>
   <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />

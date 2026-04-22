@@ -1994,7 +1994,7 @@ function StickerCustomizeContent() {
                                 className="text-lg font-bold text-slate-100 py-2 px-3 bg-slate-900/50 rounded border border-slate-600/50"
                                 style={{ fontFamily: font.fontFamily }}
                               >
-                                {'Hello / SELPIC'}
+                                {'Hello / Selpic'}
                               </div>
                               
                               {/* Description */}

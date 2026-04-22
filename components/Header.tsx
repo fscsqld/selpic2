@@ -58,7 +58,7 @@ function normalizeHeaderHomeHref(input: string): string {
 function getHeaderCompanyName(contentItems: { section: string; title: string; content?: string }[]): string {
   const raw = contentItems.find((item) => item.section === 'header' && item.title === 'Company Name')?.content
   const t = typeof raw === 'string' ? raw.trim() : ''
-  return t || 'SELPIC'
+  return t || 'Selpic'
 }
 
 /** Error fallback bar: company name text only (logo is reserved for the main header center on the landing bar). */
@@ -336,7 +336,7 @@ export default function Header() {
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0)
 
-  // Company name: always from CMS "Company Name" row when present (avoid extra SELPIC when row inactive)
+  // Company name: always from CMS "Company Name" row when present (avoid extra brand name when row inactive)
   const companyName = getHeaderCompanyName(contentItems)
   const loginButton = headerContent.find(item => item.title === 'Login Button')
   const cartButton = headerContent.find(item => item.title === 'Cart Button')

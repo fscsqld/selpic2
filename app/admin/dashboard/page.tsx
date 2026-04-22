@@ -349,8 +349,8 @@ export default function AdminDashboard() {
       requiredPermission: 'system:admin' // Only super admin or admin with system:admin permission
     },
     {
-      title: 'SELPIC A',
-      description: 'SELPIC A: AI Tax & Bookkeeping Analyzer',
+      title: 'Selpic A',
+      description: 'Selpic A: AI Tax & Bookkeeping Analyzer',
       icon: Calculator,
       href: accountingBaseUrl,
       color: 'bg-amber-500',
@@ -360,8 +360,8 @@ export default function AdminDashboard() {
   ].filter(action => {
     // Filter actions based on permissions
     if (!action.requiredPermission) return true
-    // SELPIC A: super / accounting / payroll / site-level system admin
-    if (action.title === 'SELPIC A') {
+    // Selpic A: super / accounting / payroll / site-level system admin
+    if (action.title === 'Selpic A') {
       return (
         isAccountingManager() ||
         hasPayrollAccessOnly() ||
@@ -610,8 +610,8 @@ export default function AdminDashboard() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.sections.quickActions')}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {quickActions.map((action, index) => {
-                  // SELPIC A 카드 - 클릭 시 모달 표시
-                  if (action.title === 'SELPIC A') {
+                  // Selpic A 카드 - 클릭 시 모달 표시
+                  if (action.title === 'Selpic A') {
                     const isStaff = adminUser?.role === 'admin' && !adminUser?.permissions.includes('accounting:admin') && !adminUser?.permissions.includes('accounting:full')
                     
                     return (
@@ -632,12 +632,12 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         
-                        {/* SELPIC A Access Modal */}
+                        {/* Selpic A Access Modal */}
                         {showSELPICAModal && (
                           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
                               <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xl font-semibold text-gray-900">SELPIC A Access</h3>
+                                <h3 className="text-xl font-semibold text-gray-900">Selpic A Access</h3>
                                 <button
                                   onClick={() => setShowSELPICAModal(false)}
                                   className="text-gray-400 hover:text-gray-600"

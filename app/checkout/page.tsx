@@ -555,7 +555,7 @@ export default function CheckoutPage() {
   // ALL HOOKS MUST BE CALLED AFTER FUNCTIONS THEY DEPEND ON
   useEffect(() => {
     if (!isLoggedIn) {
-      alert('로그인이 필요합니다.')
+      alert('Please sign in to continue to checkout.')
       router.push('/login')
     } else if (cart.length === 0) {
       router.push('/cart')
@@ -609,16 +609,6 @@ export default function CheckoutPage() {
     }
     return option.fee || 0
   }
-
-
-  useEffect(() => {
-    if (!isLoggedIn) {
-      alert('로그인이 필요합니다.')
-      router.push('/login')
-    } else if (cart.length === 0) {
-      router.push('/cart')
-    }
-  }, [cart, router, isLoggedIn])
 
   // 장바구니가 비어있으면 로딩 표시
   if (!hasCartItems) {

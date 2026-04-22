@@ -1094,7 +1094,7 @@ export default function HomePage() {
       type: 'image' as const,
       src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
       fallbackImage: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      title: 'SELPIC',
+      title: 'Selpic',
       subtitle: 'Premium Sticker Shop',
       color: 'blue' as const,
       order: 1,
@@ -1648,7 +1648,7 @@ export default function HomePage() {
               </Link>
             ) : (
               <h3 className="text-white text-2xl font-bold mb-4">
-                {footerContent.find(item => item.title === 'Company Name')?.content || 'SELPIC'}
+                {footerContent.find(item => item.title === 'Company Name')?.content || 'Selpic'}
               </h3>
             )}
             <p className="text-gray-400">
@@ -1706,7 +1706,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="mt-16 text-center text-gray-500 text-sm">
-          &copy; {currentYear} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'SELPIC'}. All rights reserved.
+          &copy; {currentYear} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'Selpic'}. All rights reserved.
         </div>
       </footer>
     </div>

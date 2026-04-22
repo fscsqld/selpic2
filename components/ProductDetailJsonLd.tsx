@@ -65,11 +65,11 @@ export default function ProductDetailJsonLd({ product, productId }: { product: P
     const productNode: Record<string, unknown> = {
       '@type': 'Product',
       name: product.name,
-      description: (product.detailDescription || product.description || `${product.name} at SELPIC`).slice(0, 5000),
+      description: (product.detailDescription || product.description || `${product.name} at Selpic`).slice(0, 5000),
       sku: productId,
       url: pageUrl,
       ...(img ? { image: [img] } : {}),
-      ...(brandName ? { brand: { '@type': 'Brand', name: brandName } } : { brand: { '@type': 'Brand', name: 'SELPIC' } }),
+      ...(brandName ? { brand: { '@type': 'Brand', name: brandName } } : { brand: { '@type': 'Brand', name: 'Selpic' } }),
       offers: {
         '@type': 'Offer',
         priceCurrency: 'AUD',

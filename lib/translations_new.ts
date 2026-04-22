@@ -34,7 +34,7 @@ export const translations = {
       settings: '설정'
     },
     home: {
-      title: 'SELPIC 스티커 쇼핑몰',
+      title: 'Selpic 스티커 쇼핑몰',
       subtitle: '나만의 특별한 스티커를 만들어보세요',
       customize: '맞춤 제작',
       viewCart: '장바구니 보기',
@@ -88,7 +88,7 @@ export const translations = {
       settings: 'Settings'
     },
     home: {
-      title: 'SELPIC Sticker Shop',
+      title: 'Selpic Sticker Shop',
       subtitle: 'Create your own special stickers',
       customize: 'Customize',
       viewCart: 'View Cart',

@@ -251,7 +251,7 @@ export default function RegisterPage() {
             </div>
           </div>
           
-          <h1 className="text-3xl font-light text-slate-900 mb-2 tracking-wide">Create your SELPIC account</h1>
+          <h1 className="text-3xl font-light text-slate-900 mb-2 tracking-wide">Create your Selpic account</h1>
           <p className="text-slate-600">Register to save your details and track orders.</p>
         </div>
 
@@ -595,7 +595,7 @@ export default function RegisterPage() {
               <div className="prose prose-sm max-w-none">
                 <h4 className="font-semibold text-lg">1. Service and Orders</h4>
                 <p>
-                  SELPIC provides online sticker customization and related services. A purchase is
+                  Selpic provides online sticker customization and related services. A purchase is
                   completed when you place an order, complete payment, and we confirm the order.
                   All prices are displayed in Australian Dollars (AUD) unless otherwise specified.
                 </p>
@@ -615,7 +615,7 @@ export default function RegisterPage() {
                   names, text, and delivery details). You are also responsible for any images, text,
                   and designs you upload, and you confirm that you have the necessary rights
                   (including copyright and portrait rights) to use this content. By uploading
-                  content, you grant SELPIC a non-exclusive license to use, reproduce, and display
+                  content, you grant Selpic a non-exclusive license to use, reproduce, and display
                   your content only for producing, processing, and delivering your orders and for
                   related customer support.
                 </p>
@@ -638,8 +638,8 @@ export default function RegisterPage() {
 
                 <h4 className="font-semibold text-lg">6. Limitation of Liability</h4>
                 <p>
-                  To the maximum extent permitted by law, SELPIC is not liable for indirect,
-                  incidental, or consequential damages arising from your use of the service. SELPIC is
+                  To the maximum extent permitted by law, Selpic is not liable for indirect,
+                  incidental, or consequential damages arising from your use of the service. Selpic is
                   not responsible for issues caused by your own input errors, misuse of the service,
                   or failure to follow our instructions and guidelines. To the extent permitted by
                   law, our total liability for any claim related to a specific order is limited to

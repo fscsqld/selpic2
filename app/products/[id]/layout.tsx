@@ -22,14 +22,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const catalog = await readCatalogProducts()
   const p = catalog.find((x) => x.id === id)
 
-  const pageTitle = p ? `${p.name} | SELPIC` : 'Product | SELPIC'
+  const pageTitle = p ? `${p.name} | Selpic` : 'Product | Selpic'
   const description = p
-    ? (p.description || '').replace(/\s+/g, ' ').trim().slice(0, 160) || `${p.name} — SELPIC`
-    : 'View product details, pricing, and availability at SELPIC.'
+    ? (p.description || '').replace(/\s+/g, ' ').trim().slice(0, 160) || `${p.name} — Selpic`
+    : 'View product details, pricing, and availability at Selpic.'
   const ogImage = absoluteImageUrl(p?.image)
 
   return {
-    title: pageTitle,
+    /** `absolute` avoids stacking with root `metadata.title.template` (`%s | Selpic`). */
+    title: { absolute: pageTitle },
     description,
     alternates: { canonical },
     openGraph: {

@@ -149,7 +149,7 @@ function AdminMessagesPageContent() {
             originalSubject: selectedMessage.subject,
             submissionDate: new Date(selectedMessage.createdAt).toLocaleDateString()
           },
-          adminName: 'SELPIC Support Team',
+          adminName: 'Selpic Support Team',
           messageId: selectedMessage.id,
           attachments: attachedFiles
         })
@@ -162,7 +162,7 @@ function AdminMessagesPageContent() {
           message: replyText,
           originalSubject: selectedMessage.subject,
           submissionDate: new Date(selectedMessage.createdAt).toLocaleDateString(),
-          adminName: 'SELPIC Support Team',
+          adminName: 'Selpic Support Team',
           messageId: selectedMessage.id,
           attachments: attachedFiles
         })
@@ -178,7 +178,7 @@ function AdminMessagesPageContent() {
           subject: emailSubject || `Re: ${selectedMessage.subject}`,
           content: selectedTemplate ? selectedTemplate.content : replyText,
           sentAt: new Date(),
-          sentBy: 'SELPIC Support Team',
+          sentBy: 'Selpic Support Team',
           templateUsed: selectedTemplate?.name,
           attachments: attachedFiles.length > 0 ? attachedFiles.map(f => f.name).join(', ') : undefined,
           status: 'sent',

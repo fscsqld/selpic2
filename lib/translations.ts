@@ -34,7 +34,7 @@ export const translations = {
       settings: '설정'
     },
     home: {
-      title: 'SELPIC 스티커 샵',
+      title: 'Selpic 스티커 샵',
 
       customize: '커스터마이즈',
       viewCart: '장바구니 보기',
@@ -52,7 +52,7 @@ export const translations = {
         }
       },
       features: {
-        title: '왜 SELPIC인가요?',
+        title: '왜 Selpic인가요?',
         subtitle: '최고의 품질과 서비스로 고객 만족을 실현합니다',
 
         quality: {
@@ -404,7 +404,7 @@ export const translations = {
            testAccount: '테스트 계정',
            regularAdmin: '일반 관리자',
            superAdmin: '슈퍼 관리자',
-           copyright: '© 2024 SELPIC. All rights reserved.'
+           copyright: '© 2024 Selpic. All rights reserved.'
          },
          dashboard: {
            title: '관리자 대시보드',
@@ -780,7 +780,7 @@ export const translations = {
         close: '닫기',
         content: {
           purpose: '제1조 (목적)',
-          purposeDesc: '본 약관은 SELPIC(이하 "회사")이 제공하는 스티커 제작 서비스의 이용과 관련하여 회사와 회원 간의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.',
+          purposeDesc: '본 약관은 Selpic(이하 "회사")이 제공하는 스티커 제작 서비스의 이용과 관련하여 회사와 회원 간의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.',
           definition: '제2조 (정의)',
           definitionDesc: '1. "서비스"라 함은 회사가 제공하는 스티커 제작 및 관련 서비스를 의미합니다.\n2. "회원"이라 함은 본 약관에 동의하고 회사와 서비스 이용계약을 체결한 자를 의미합니다.\n3. "주문"이라 함은 회원이 서비스를 통해 스티커를 주문하는 행위를 의미합니다.',
           effectiveness: '제3조 (약관의 효력 및 변경)',
@@ -836,7 +836,7 @@ export const translations = {
      },
      about: {
       hero: {
-        title: 'SELPIC에 대해',
+        title: 'Selpic에 대해',
         subtitle: '혁신적인 제작 기술로 고객의 창의성을 실현합니다',
         heroCta: {
           browse: 'Explore Products',
@@ -845,9 +845,9 @@ export const translations = {
       },
              story: {
          title: '우리의 이야기',
-         paragraph1: 'SELPIC은 2024년에 설립된 혁신적인 제작 회사입니다. 우리는 최첨단 기술과 창의적인 디자인을 결합하여 고객이 상상하는 모든 것을 현실로 만들어냅니다.',
+         paragraph1: 'Selpic은 2024년에 설립된 혁신적인 제작 회사입니다. 우리는 최첨단 기술과 창의적인 디자인을 결합하여 고객이 상상하는 모든 것을 현실로 만들어냅니다.',
          paragraph2: '우리의 미션은 단순한 제작을 넘어서, 고객의 개성과 창의성을 표현할 수 있는 플랫폼을 제공하는 것입니다. 각각의 스티커는 단순한 제품이 아닌, 고객의 이야기와 감정을 담은 예술 작품입니다.',
-         paragraph3: 'SELPIC 팀은 열정적인 디자이너, 기술자, 그리고 고객 서비스 전문가들로 구성되어 있습니다. 우리는 지속적인 혁신과 품질 향상을 통해 고객 만족을 최우선으로 생각합니다.'
+         paragraph3: 'Selpic 팀은 열정적인 디자이너, 기술자, 그리고 고객 서비스 전문가들로 구성되어 있습니다. 우리는 지속적인 혁신과 품질 향상을 통해 고객 만족을 최우선으로 생각합니다.'
        },
        mission: {
          title: '우리의 미션',
@@ -869,7 +869,7 @@ export const translations = {
        },
       values: {
         title: '우리의 가치',
-        subtitle: 'SELPIC이 추구하는 핵심 가치와 원칙들입니다',
+        subtitle: 'Selpic이 추구하는 핵심 가치와 원칙들입니다',
         innovation: {
           title: '혁신',
           description: '최신 기술을 활용한 창의적인 솔루션 개발'
@@ -897,17 +897,17 @@ export const translations = {
       },
       team: {
         title: '우리 팀',
-        subtitle: 'SELPIC을 이끌어가는 열정적인 전문가들',
+        subtitle: 'Selpic을 이끌어가는 열정적인 전문가들',
         members: {
                      ceo: {
              name: '김창현',
              position: 'CEO & 창립자',
-             description: '10년간의 제작 경험을 바탕으로 SELPIC을 설립했습니다.'
+             description: '10년간의 제작 경험을 바탕으로 Selpic을 설립했습니다.'
            },
           cto: {
             name: '박지원',
             position: 'CTO',
-            description: '최신 디지털 제작 기술을 SELPIC에 도입하고 있습니다.'
+            description: '최신 디지털 제작 기술을 Selpic에 도입하고 있습니다.'
           },
           designer: {
             name: '이미영',
@@ -941,7 +941,7 @@ export const translations = {
        },
                cta: {
           title: '지금 시작하세요',
-          description: 'SELPIC과 함께 당신만의 특별한 스티커를 만들어보세요. 창의성과 개성을 표현할 수 있는 최고의 플랫폼을 경험해보세요.'
+          description: 'Selpic과 함께 당신만의 특별한 스티커를 만들어보세요. 창의성과 개성을 표현할 수 있는 최고의 플랫폼을 경험해보세요.'
         },
         ctaButtons: {
           startNow: 'START NOW',
@@ -1356,7 +1356,7 @@ export const translations = {
       settings: 'Settings'
     },
     home: {
-      title: 'SELPIC Sticker Shop',
+      title: 'Selpic Sticker Shop',
 
       customize: 'Customize',
       viewCart: 'View Cart',
@@ -1374,7 +1374,7 @@ export const translations = {
         }
       },
       features: {
-        title: 'Why SELPIC?',
+        title: 'Why Selpic?',
         subtitle: 'We realize customer satisfaction with the best quality and service',
         fast: {
           title: 'Fast Production',
@@ -1724,7 +1724,7 @@ export const translations = {
            testAccount: 'Test Account',
            regularAdmin: 'Regular Admin',
            superAdmin: 'Super Admin',
-           copyright: '© 2024 SELPIC. All rights reserved.'
+           copyright: '© 2024 Selpic. All rights reserved.'
          },
          dashboard: {
            title: 'Admin Dashboard',
@@ -2472,7 +2472,7 @@ export const translations = {
         close: 'Close',
         content: {
           purpose: 'Article 1 (Purpose)',
-          purposeDesc: 'These terms and conditions are established to regulate the rights, obligations, and responsibilities between SELPIC (hereinafter "Company") and members regarding the use of sticker production services provided by the Company, and other necessary matters.',
+          purposeDesc: 'These terms and conditions are established to regulate the rights, obligations, and responsibilities between Selpic (hereinafter "Company") and members regarding the use of sticker production services provided by the Company, and other necessary matters.',
           definition: 'Article 2 (Definitions)',
           definitionDesc: '1. "Service" means the sticker production and related services provided by the Company.\n2. "Member" means a person who agrees to these terms and conditions and enters into a service use agreement with the Company.\n3. "Order" means the act of a member ordering stickers through the service.',
           effectiveness: 'Article 3 (Effectiveness and Changes of Terms)',
@@ -2528,7 +2528,7 @@ export const translations = {
      },
      about: {
       hero: {
-        title: 'About SELPIC',
+        title: 'About Selpic',
         subtitle: 'Realizing customer creativity through innovative production technology',
         heroCta: {
           browse: 'Explore Products',
@@ -2537,9 +2537,9 @@ export const translations = {
       },
              story: {
          title: 'Our Story',
-         paragraph1: 'SELPIC is an innovative production company founded in 2024. We combine cutting-edge technology with creative design to bring to life everything our customers can imagine.',
+         paragraph1: 'Selpic is an innovative production company founded in 2024. We combine cutting-edge technology with creative design to bring to life everything our customers can imagine.',
          paragraph2: 'Our mission goes beyond simple production to provide a platform where customers can express their individuality and creativity. Each sticker is not just a product, but a work of art that carries the customer\'s story and emotions.',
-         paragraph3: 'The SELPIC team consists of passionate designers, engineers, and customer service professionals. We prioritize customer satisfaction through continuous innovation and quality improvement.'
+         paragraph3: 'The Selpic team consists of passionate designers, engineers, and customer service professionals. We prioritize customer satisfaction through continuous innovation and quality improvement.'
        },
        mission: {
          title: 'Our Mission',
@@ -2561,7 +2561,7 @@ export const translations = {
        },
       values: {
         title: 'Our Values',
-        subtitle: 'The core values and principles that SELPIC pursues',
+        subtitle: 'The core values and principles that Selpic pursues',
         innovation: {
           title: 'Innovation',
           description: 'Developing creative solutions using the latest technology'
@@ -2589,17 +2589,17 @@ export const translations = {
       },
       team: {
         title: 'Our Team',
-        subtitle: 'Passionate professionals leading SELPIC',
+        subtitle: 'Passionate professionals leading Selpic',
         members: {
                      ceo: {
              name: 'Kim Chang-hyun',
              position: 'CEO & Founder',
-             description: 'Founded SELPIC based on 10 years of production experience.'
+             description: 'Founded Selpic based on 10 years of production experience.'
            },
           cto: {
             name: 'Park Ji-won',
             position: 'CTO',
-            description: 'Introducing the latest digital production technology to SELPIC.'
+            description: 'Introducing the latest digital production technology to Selpic.'
           },
           designer: {
             name: 'Lee Mi-young',
@@ -2633,7 +2633,7 @@ export const translations = {
       },
               cta: {
          title: 'Start Now',
-         description: 'Create your own special stickers with SELPIC. Experience the best platform to express your creativity and individuality.'
+         description: 'Create your own special stickers with Selpic. Experience the best platform to express your creativity and individuality.'
        },
        ctaButtons: {
          startNow: 'START NOW',

@@ -63,14 +63,14 @@ export async function POST(req: Request) {
   const html = `
     <div style="font-family:system-ui,sans-serif;line-height:1.5;color:#111;max-width:560px">
       <p>Hello,</p>
-      <p>An administrator requested a password reset for your SELPIC account.</p>
+      <p>An administrator requested a password reset for your Selpic account.</p>
       <p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reset password</a></p>
       <p style="font-size:13px;color:#666">If the button does not work, copy this link:<br/><span style="word-break:break-all">${link}</span></p>
     </div>`
 
   const r = await sendEmailViaResendServer({
     to: email,
-    subject: 'SELPIC — Password reset (admin request)',
+    subject: 'Selpic — Password reset (admin request)',
     html,
     skipTracking: true,
   })

@@ -124,7 +124,7 @@ export default function HotGoodsPage() {
   // Content Store에서 동적 콘텐츠 가져오기
   const headerContent = getActiveContentBySection('header')
   const hotGoodsContent = getActiveContentBySection('hot-goods')
-  const companyName = headerContent.find(item => item.title === 'Company Name')?.content || 'SELPIC'
+  const companyName = headerContent.find(item => item.title === 'Company Name')?.content || 'Selpic'
   
   // Market S 페이지 콘텐츠
   const pageTitle = React.useMemo(() => {

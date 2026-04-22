@@ -46,12 +46,12 @@ export async function POST(request: NextRequest) {
         const coreHtml = `
                 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                  <h1 style="color: white; margin: 0; font-size: 28px;">SELPIC</h1>
+                  <h1 style="color: white; margin: 0; font-size: 28px;">Selpic</h1>
                 </div>
                 <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
                   <h2 style="color: #1f2937; margin-top: 0;">Password Reset Request</h2>
                   <p>Hello ${user.name || 'there'},</p>
-                  <p>You requested to reset your password for your SELPIC account. Click the button below to reset it:</p>
+                  <p>You requested to reset your password for your Selpic account. Click the button below to reset it:</p>
                   <div style="text-align: center; margin: 30px 0;">
                     <a href="${resetLink}" 
                        style="display: inline-block; padding: 14px 28px; background-color: #4F46E5; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">
@@ -80,9 +80,9 @@ export async function POST(request: NextRequest) {
   </body>
 </html>`
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'SELPIC <noreply@selpic.com.au>',
+          from: process.env.RESEND_FROM_EMAIL || 'Selpic <noreply@selpic.com.au>',
           to: email,
-          subject: 'Password Reset Request - SELPIC',
+          subject: 'Password Reset Request - Selpic',
           html: htmlDoc
         })
         console.log('✅ Password reset email sent successfully to:', email)
