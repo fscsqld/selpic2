@@ -1263,7 +1263,14 @@ export default function HomePage() {
       )}
       
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
-      <section className="relative min-h-screen overflow-hidden">
+      <section className="relative min-h-screen overflow-hidden" aria-labelledby="home-primary-heading">
+        {/* Single document heading for SEO (one h1 per page). Visually minimal; slides keep h2 for slide-specific titles. */}
+        <h1
+          id="home-primary-heading"
+          className="sr-only"
+        >
+          Selpic
+        </h1>
           {isClientMounted ? (
           <>
             {/* Swiper Slider */}
