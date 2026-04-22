@@ -192,9 +192,11 @@ const nextConfig = {
 
     return [
       {
-        source: '/:path*',
+        // Keep canonical host redirects for storefront pages only.
+        // API routes (especially Stripe webhooks) must not bounce between hosts.
+        source: '/:path((?!api/).*)',
         has: [{ type: 'host', value: secondaryHost }],
-        destination: `${NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/:path*`,
+        destination: `${NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/:path`,
         permanent: true,
       },
     ]
