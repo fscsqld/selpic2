@@ -15,24 +15,20 @@ import {
 } from '@/lib/contentStore'
 import { useUserAuth } from '@/lib/userAuth'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
-import { updateUserGrade } from '@/lib/userGradeUtils'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
-import OrderNotification from '@/components/OrderNotification'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { cart, clearCart, createOrder, sendOrderConfirmationEmail, products, orders } = useStore()
-  const { user, updateUser, users: allUsers } = useUserAuth()
+  const { cart, products, orders } = useStore()
+  const { user } = useUserAuth()
   const { 
     getActiveShippingOptions, 
     getDefaultShippingOption,
     getPaymentOptionByType,
     getActivePaymentOptions,
-    getDefaultPaymentOption,
     validatePromoCode,
-    applyPromoCode,
     incrementPromoCodeUsage,
     promoCodes,
     getVIPGradeBenefitForCheckout,
@@ -86,11 +82,21 @@ export default function CheckoutPage() {
   
   // Get payment options from Content Store
   const allActivePaymentOptions = getActivePaymentOptions()
-  const paymentOptions = allActivePaymentOptions
-  const defaultPaymentOption =
-    getDefaultPaymentOption() ||
-    paymentOptions[0] ||
-    allActivePaymentOptions[0]
+  const stripePaymentOptionFromStore = allActivePaymentOptions.find((option) => option.type === 'stripe')
+  const paymentOptions = stripePaymentOptionFromStore
+    ? [stripePaymentOptionFromStore]
+    : [
+        {
+          id: 'stripe-hosted-checkout',
+          type: 'stripe',
+          name: 'Stripe Checkout',
+          description: 'Secure checkout hosted by Stripe.',
+          fee: 0,
+          isActive: true,
+          requiresAuth: true,
+        } as any,
+      ]
+  const defaultPaymentOption = paymentOptions[0]
   
   // 디버깅: Promo Codes 로드 확인
   useEffect(() => {
@@ -134,15 +140,15 @@ export default function CheckoutPage() {
   
   // ALL HOOKS MUST BE CALLED FIRST, BEFORE ANY FUNCTIONS THAT USE THEM
   const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<string>('')
+  const [paymentMethod, setPaymentMethod] = useState<string>('stripe')
+  const [checkoutNotice, setCheckoutNotice] = useState<{ type: 'error' | 'info' | 'success'; message: string } | null>(null)
+  const [activeSwiftTooltipAccountId, setActiveSwiftTooltipAccountId] = useState<string | null>(null)
   
   // Initialize payment method with default option
   useEffect(() => {
     if (!defaultPaymentOption) return
-
-    const isCurrentMethodActive = paymentOptions.some((o) => o.type === paymentMethod)
-    if (!paymentMethod || !isCurrentMethodActive) {
-      setPaymentMethod(defaultPaymentOption.type)
+    if (paymentMethod !== 'stripe') {
+      setPaymentMethod('stripe')
     }
   }, [defaultPaymentOption, paymentMethod, paymentOptions])
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null)
@@ -162,12 +168,8 @@ export default function CheckoutPage() {
     lastName: '',
     email: '',
     phone: '+61 ', // 호주 국가 코드만 기본값
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
-    cardholderName: '',
     depositorName: '',
-    deliveryContact: '+61 ' // 호주 국가 코드만 기본값
+    deliveryContact: '+61 ',
   })
   
   const [addressData, setAddressData] = useState<AddressData>({
@@ -192,16 +194,6 @@ export default function CheckoutPage() {
       ...(prev.phone === '+61 ' || prev.phone === '' ? { phone: (currentUser.phone && currentUser.phone.trim()) ? (currentUser.phone.startsWith('+') || currentUser.phone.startsWith('0') ? currentUser.phone : `+61 ${currentUser.phone.replace(/^61/, '')}`) : prev.phone } : {}),
     }))
   }, [isLoggedIn, currentUser])
-
-  // 주문 완료 알림 상태
-  const [showOrderNotification, setShowOrderNotification] = useState(false)
-  const [orderNotificationData, setOrderNotificationData] = useState<{
-    orderId: string
-    customerName: string
-    total: number
-    items: Array<{ name: string; quantity: number }>
-    timestamp: string
-  } | null>(null)
 
   // DEFINE ALL HELPER FUNCTIONS FIRST, IN DEPENDENCY ORDER
   
@@ -555,7 +547,7 @@ export default function CheckoutPage() {
   // ALL HOOKS MUST BE CALLED AFTER FUNCTIONS THEY DEPEND ON
   useEffect(() => {
     if (!isLoggedIn) {
-      alert('Please sign in to continue to checkout.')
+      setCheckoutNotice({ type: 'info', message: 'Please sign in to continue to checkout.' })
       router.push('/login')
     } else if (cart.length === 0) {
       router.push('/cart')
@@ -586,13 +578,8 @@ export default function CheckoutPage() {
 
   // Ensure payment method meets minimum order requirements
   useEffect(() => {
-    const currentSubtotal = calculateSubtotal()
-    const selectedOption = paymentOptions.find(opt => opt.type === paymentMethod)
-    if (selectedOption && selectedOption.minOrderAmount && currentSubtotal < selectedOption.minOrderAmount) {
-      // Switch to default payment option if current one doesn't meet requirements
-      if (defaultPaymentOption) {
-        setPaymentMethod(defaultPaymentOption.type)
-      }
+    if (paymentMethod !== 'stripe') {
+      setPaymentMethod('stripe')
     }
   }, [cart, paymentMethod, paymentOptions, defaultPaymentOption])
 
@@ -631,32 +618,8 @@ export default function CheckoutPage() {
     const { name, value } = e.target
     let formattedValue = value
 
-    // 카드번호 자동 포맷팅
-    if (name === 'cardNumber') {
-      const cleaned = value.replace(/\s/g, '')
-      const match = cleaned.match(/(\d{1,4})(\d{1,4})?(\d{1,4})?(\d{1,4})?/)
-      if (match) {
-        formattedValue = [match[1], match[2], match[3], match[4]].filter(Boolean).join(' ')
-      }
-    }
-
-    // 만료일 자동 포맷팅
-    if (name === 'expiryDate') {
-      const cleaned = value.replace(/\D/g, '')
-      if (cleaned.length >= 2) {
-        formattedValue = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4)
-      } else {
-        formattedValue = cleaned
-      }
-    }
-
-    // CVV 숫자만 입력
-    if (name === 'cvv') {
-      formattedValue = value.replace(/\D/g, '').slice(0, 4)
-    }
-
     // 전화번호 필드 (+61 이후 자유 입력)
-    if (name === 'phone' || name === 'deliveryContact') {
+    if (name === 'phone') {
       // +61로 시작하는지 확인
       if (!value.startsWith('+61')) {
         // +61이 없으면 자동으로 추가
@@ -868,45 +831,31 @@ export default function CheckoutPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsProcessing(true)
+    setCheckoutNotice(null)
 
     try {
-      // Check if cart has items
       if (cart.length === 0) {
-        throw new Error(t('checkout.cartEmpty') || '장바구니가 비어있습니다. 상품을 추가한 후 다시 시도해주세요.')
+        throw new Error(t('checkout.cartEmpty') || 'Your cart is empty. Please add items before checkout.')
       }
 
-      // 폼 데이터 검증
-      if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || 
-          !addressData.streetAddress || !addressData.suburb || 
-          !addressData.state || !addressData.postcode) {
-                  throw new Error(t('checkout.requiredFields'))
+      if (
+        !formData.firstName ||
+        !formData.lastName ||
+        !formData.email ||
+        !formData.phone ||
+        !addressData.streetAddress ||
+        !addressData.suburb ||
+        !addressData.state ||
+        !addressData.postcode
+      ) {
+        throw new Error(t('checkout.requiredFields'))
       }
 
-      // 결제 방법별 추가 검증
       const selectedPaymentOption = paymentOptions.find(opt => opt.type === paymentMethod)
-      if (selectedPaymentOption?.requiresAuth) {
-        if (paymentMethod === 'card') {
-          if (!formData.cardNumber || !formData.cardholderName || !formData.expiryDate || !formData.cvv) {
-            throw new Error(t('checkout.cardInfoRequired'))
-          }
-        } else if (paymentMethod === 'paypal') {
-          // PayPal은 별도 인증 필요 없음 (외부 리다이렉트)
-        } else if (paymentMethod === 'stripe') {
-          // Card / wallet collected on Stripe-hosted Checkout
-        }
-      } else {
-        if (paymentMethod === 'bank') {
-          if (!formData.depositorName) {
-            throw new Error(t('checkout.depositorNameRequired'))
-          }
-        } else if (paymentMethod === 'cash') {
-          if (!formData.deliveryContact) {
-            throw new Error(t('checkout.deliveryContactRequired'))
-          }
-        }
+      if (!selectedPaymentOption) {
+        throw new Error('Stripe payment option is currently unavailable. Please try again shortly.')
       }
-      
-      // 최소/최대 주문 금액 검증
+
       if (selectedPaymentOption) {
         const subtotal = calculateSubtotal()
         if (selectedPaymentOption.minOrderAmount && subtotal < selectedPaymentOption.minOrderAmount) {
@@ -919,175 +868,42 @@ export default function CheckoutPage() {
 
       const latestStockIssues = cart.filter(item => item.quantity > getAvailableStock(item.product.id))
       if (latestStockIssues.length > 0) {
-        alert('Some items are no longer available in the requested quantity. Please adjust your cart before checking out.')
-        setIsProcessing(false)
+        setCheckoutNotice({
+          type: 'error',
+          message: 'Some items are no longer available in the requested quantity. Please adjust your cart and try again.',
+        })
         router.push('/cart')
         return
       }
 
-      if (paymentMethod === 'stripe') {
-        let orderData: Omit<OrderRecord, 'id' | 'createdAtIso'>
-        try {
-          orderData = buildOrderPayload('stripe')
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Could not prepare checkout.'
-          alert(msg)
-          setIsProcessing(false)
-          return
-        }
-        const res = await fetch('/api/stripe/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderDraft: orderData }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          alert(typeof data.error === 'string' ? data.error : 'Could not start Stripe checkout.')
-          setIsProcessing(false)
-          return
-        }
-        if (data.url) {
-          window.location.href = data.url as string
-          return
-        }
-        alert('No checkout URL returned.')
-        setIsProcessing(false)
-        return
-      }
-
-      // Legacy "card" form is a demo simulator — do not mark paid when Stripe Checkout is configured.
-      if (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && paymentMethod === 'card') {
-        alert(
-          'Card payments are processed through Stripe Checkout. Please select the Stripe payment option and complete payment on the Stripe page.'
-        )
-        setIsProcessing(false)
-        return
-      }
-
-      // Simulate payment processing
-      await new Promise((resolve) => {
-        setTimeout(() => {
-          // Always succeed for demo purposes
-          resolve(true)
-        }, 2000)
+      const orderData = buildOrderPayload('stripe')
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderDraft: orderData }),
       })
+      const data = await res.json().catch(() => ({}))
 
-      console.log('💳 Payment simulation completed successfully')
-
-      // Create order record for admin
-      try {
-        console.log('🛒 Creating order with cart:', cart)
-        console.log('📝 Form data:', formData)
-        console.log('📍 Address data:', addressData)
-
-        const orderData = buildOrderPayload('default')
-
-        console.log('📋 Order data being sent:', orderData)
-
-        const items = orderData.items
-
-        const newOrderId = createOrder(orderData)
-        
-        // 프로모션 코드 사용 횟수 증가
-        if (appliedPromoCode) {
-          const cartItemsForValidation = items.map(item => ({
-            productId: item.productId,
-            category: item.category
-          }))
-          const promoCode = validatePromoCode(appliedPromoCode.code, orderData.subtotal, cartItemsForValidation, user?.id, orders, user?.email, user?.phone)
-          if (promoCode.valid && promoCode.promoCode) {
-            incrementPromoCodeUsage(promoCode.promoCode.id)
-          }
-        }
-        console.log('🆔 New order ID:', newOrderId)
-        
-        // VIP 등급 자동 업데이트 (로그인된 사용자만)
-        // 주문이 생성된 후 약간의 지연을 두고 등급 업데이트 (주문 목록이 업데이트될 시간 확보)
-        if (user && isLoggedIn) {
-          setTimeout(() => {
-            try {
-              console.log('⭐ Updating VIP grade for user:', user.email)
-              // 주문 목록을 다시 가져와서 최신 주문 포함
-              const { orders: latestOrders } = useStore.getState()
-              // 최신 사용자 정보 가져오기
-              const latestUser = allUsers.find(u => u.id === user.id)
-              if (latestUser) {
-                updateUserGrade(latestUser, latestOrders, updateUser)
-                console.log('✅ VIP grade updated successfully')
-              }
-            } catch (gradeError) {
-              console.error('❌ Failed to update VIP grade:', gradeError)
-              // 등급 업데이트 실패는 주문 완료를 막지 않음
-            }
-          }, 500) // 500ms 지연으로 주문 목록 업데이트 대기
-        }
-        
-        if (typeof newOrderId === 'string') {
-          console.log('✅ Order created successfully, redirecting...')
-          
-          // 주문 알림 데이터 설정
-          setOrderNotificationData({
-            orderId: newOrderId,
-            customerName: `${formData.firstName} ${formData.lastName}`.trim(),
-            total: orderData.total,
-            items: items.map(orderItem => ({
-              name: orderItem.name,
-              quantity: orderItem.quantity
-            })),
-            timestamp: new Date().toISOString()
-          })
-          setShowOrderNotification(true)
-          
-          // 자동으로 주문 확인 이메일 발송
-          try {
-            console.log('📧 Sending automatic order confirmation email...')
-            await sendOrderConfirmationEmail(newOrderId)
-            console.log('✅ Order confirmation email sent successfully')
-            // Bank transfer: receipt PDF is sent manually from admin after deposit is confirmed
-            if (orderData.paymentMethod !== 'bank') {
-              try {
-                console.log('🧾 Sending automatic receipt email...')
-                await useStore.getState().sendReceiptEmail(newOrderId)
-                console.log('✅ Receipt email sent successfully')
-              } catch (receiptError) {
-                console.error('❌ Failed to send receipt email:', receiptError)
-              }
-            } else {
-              console.log('🧾 Receipt email skipped (bank transfer — admin sends after deposit confirmation)')
-            }
-          } catch (emailError) {
-            console.error('❌ Failed to send order confirmation email:', emailError)
-            // 이메일 발송 실패는 주문 완료를 막지 않음
-          }
-          
-          // Clear cart first, then redirect
-          try {
-            clearCart(isLoggedIn)
-            console.log('🛒 Cart cleared successfully')
-          } catch (cartError) {
-            console.error('❌ Error clearing cart:', cartError)
-            // Continue even if cart clearing fails
-          }
-          
-          // Show success message and redirect
-          alert(t('checkout.orderSuccess'))
-          
-          // Redirect customer back to Home so they can continue shopping
-          setTimeout(() => {
-            router.push('/')
-          }, 100)
-        } else {
-          console.error('❌ Invalid order ID returned:', newOrderId)
-                           alert(t('checkout.orderError'))
-        }
-      } catch (e) {
-        console.error('❌ Error creating order:', e)
-                       alert(t('checkout.orderError'))
-        return // Stop execution if order creation fails
+      if (!res.ok) {
+        setCheckoutNotice({
+          type: 'error',
+          message: typeof data.error === 'string' ? data.error : 'Could not start Stripe checkout. Please try again.',
+        })
+        return
       }
+
+      if (typeof data.url === 'string' && data.url) {
+        window.location.href = data.url
+        return
+      }
+
+      setCheckoutNotice({
+        type: 'error',
+        message: 'Checkout session was created, but no redirect URL was returned. Please try again.',
+      })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '주문 처리에 실패했습니다. 다시 시도해주세요.'
-      alert(errorMessage)
+      const errorMessage = error instanceof Error ? error.message : 'Checkout failed. Please try again.'
+      setCheckoutNotice({ type: 'error', message: errorMessage })
     } finally {
       setIsProcessing(false)
     }
@@ -1102,17 +918,6 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
       <Header />
-      
-      {/* 주문 완료 알림 */}
-      {showOrderNotification && orderNotificationData && (
-        <OrderNotification
-          orderId={orderNotificationData.orderId}
-          customerName={orderNotificationData.customerName}
-          total={orderNotificationData.total}
-          items={orderNotificationData.items}
-          timestamp={orderNotificationData.timestamp}
-        />
-      )}
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-12">
@@ -1135,6 +940,21 @@ export default function CheckoutPage() {
               return to your cart
             </Link>{' '}
             to adjust quantities before completing checkout.
+          </div>
+        )}
+
+        {checkoutNotice && (
+          <div
+            role="status"
+            className={`mb-8 rounded-xl border px-4 py-3 text-sm ${
+              checkoutNotice.type === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : checkoutNotice.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-blue-200 bg-blue-50 text-blue-700'
+            }`}
+          >
+            {checkoutNotice.message}
           </div>
         )}
 
@@ -1403,73 +1223,6 @@ export default function CheckoutPage() {
                 })}
               </div>
 
-              {/* 신용카드 정보 */}
-              {paymentMethod === 'card' && (
-                <div className="mt-6 space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">{t('checkout.creditCard')}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('checkout.cardNumber')}
-                          </label>
-                      <input
-                        type="text"
-                        name="cardNumber"
-                        value={formData.cardNumber}
-                        onChange={handleInputChange}
-                        required
-                        maxLength={19}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="1234 5678 9012 3456"
-                      />
-                    </div>
-                    <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('checkout.cardholderName')}
-                          </label>
-                      <input
-                        type="text"
-                        name="cardholderName"
-                        value={formData.cardholderName}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('checkout.expiryDate')}
-                          </label>
-                      <input
-                        type="text"
-                        name="expiryDate"
-                        value={formData.expiryDate}
-                        onChange={handleInputChange}
-                        required
-                        maxLength={5}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="MM/YY"
-                      />
-                    </div>
-                    <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('checkout.cvv')}
-                          </label>
-                      <input
-                        type="text"
-                        name="cvv"
-                        value={formData.cvv}
-                        onChange={handleInputChange}
-                        required
-                        maxLength={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        placeholder="123"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* 계좌이체 정보 */}
               {paymentMethod === 'bank' && (() => {
                 const bankOption = getPaymentOptionByType('bank')
@@ -1511,8 +1264,26 @@ export default function CheckoutPage() {
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium">SWIFT Code:</span>
                                   <div className="relative group">
-                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                                    <div className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setActiveSwiftTooltipAccountId((prev) =>
+                                          prev === account.id ? null : account.id
+                                        )
+                                      }
+                                      className="inline-flex"
+                                      aria-expanded={activeSwiftTooltipAccountId === account.id}
+                                      aria-label="Toggle SWIFT code help"
+                                    >
+                                      <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                    </button>
+                                    <div
+                                      className={`absolute left-0 bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl transition-all duration-200 z-50 ${
+                                        activeSwiftTooltipAccountId === account.id
+                                          ? 'opacity-100 visible'
+                                          : 'opacity-0 invisible group-hover:opacity-100 group-hover:visible'
+                                      }`}
+                                    >
                                       <div className="font-semibold mb-1">SWIFT Code</div>
                                       <div className="text-gray-300 leading-relaxed">
                                         A unique identifier for international bank transfers. Required when sending money from overseas banks to this account.

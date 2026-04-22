@@ -3,6 +3,8 @@ import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import type { OrderRecord } from '@/lib/store'
 import { getStripe } from '@/lib/stripe'
 import { orderDraftToMetadataChunks } from '@/lib/stripeCheckoutMetadata'
+import { readCatalogProducts } from '@/lib/server/catalogStore'
+import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -11,18 +13,45 @@ function audCents(amount: number): number {
   return Math.round((Number(amount) || 0) * 100)
 }
 
-function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): {
+function normalizeSiteOriginFromEnv(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (!raw) {
+    throw new Error('NEXT_PUBLIC_SITE_URL is required for Stripe Checkout redirects.')
+  }
+  const parsed = new URL(raw)
+  return `${parsed.protocol}//${parsed.host}`
+}
+
+async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<{
   line_items: Stripe.Checkout.SessionCreateParams.LineItem[]
   discountCents: number
-} {
-  let sumCents = 0
+  sanitizedOrderDraft: OrderDraft
+}> {
+  const catalogProducts = await readCatalogProducts()
+  const catalogById = new Map(catalogProducts.map((product) => [String(product.id), product]))
+  let itemsSubtotalCents = 0
   const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = []
+  const sanitizedItems: OrderDraft['items'] = []
 
   for (const item of orderDraft.items || []) {
+    const productId = String(item?.productId || '').trim()
+    if (!productId) {
+      throw new Error('Invalid order item: missing product id.')
+    }
+    const catalogProduct = catalogById.get(productId)
+    if (!catalogProduct) {
+      throw new Error(`Product not found in catalog: ${productId}`)
+    }
     const qty = Math.max(1, Math.floor(item.quantity || 1))
-    const unitCents = audCents(item.price)
-    sumCents += unitCents * qty
-    const name = (item.name || 'Item').slice(0, 120)
+    const baseUnitPrice = Number(catalogProduct.price)
+    if (!Number.isFinite(baseUnitPrice) || baseUnitPrice < 0) {
+      throw new Error(`Invalid catalog price for product: ${productId}`)
+    }
+    const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, catalogProduct)
+    const unitPrice = Number((baseUnitPrice + surchargePerUnit).toFixed(2))
+    const unitCents = audCents(unitPrice)
+    itemsSubtotalCents += unitCents * qty
+    const name = (catalogProduct.name || item.name || 'Item').slice(0, 120)
     line_items.push({
       quantity: qty,
       price_data: {
@@ -33,25 +62,49 @@ function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): {
         },
       },
     })
+    sanitizedItems.push({
+      ...item,
+      productId,
+      name: catalogProduct.name || item.name,
+      image: catalogProduct.image || item.image,
+      price: unitPrice,
+      baseUnitPrice: Number(baseUnitPrice.toFixed(2)),
+      customizationSurchargePerUnit: Number(surchargePerUnit.toFixed(2)),
+      quantity: qty,
+      category: (catalogProduct as any).category ?? item.category,
+      subcategory: (catalogProduct as any).subcategory ?? item.subcategory,
+      brand: (catalogProduct as any).brand ?? item.brand,
+      size: (catalogProduct as any).size ?? item.size,
+      color: (catalogProduct as any).color ?? item.color,
+      type: (catalogProduct as any).type ?? item.type,
+      spfLevel: (catalogProduct as any).spfLevel ?? item.spfLevel,
+      isNew: (catalogProduct as any).isNew ?? item.isNew,
+      isBestSeller: (catalogProduct as any).isBestSeller ?? item.isBestSeller,
+      isPopular: (catalogProduct as any).isPopular ?? item.isPopular,
+      inStock: (catalogProduct as any).inStock ?? item.inStock,
+      features: (catalogProduct as any).features ?? item.features,
+      bundleItems: (catalogProduct as any).bundleItems ?? item.bundleItems,
+      isBundle: (catalogProduct as any).isBundle ?? item.isBundle,
+    })
   }
 
-  const shipCents = audCents(orderDraft.shippingPrice)
-  sumCents += shipCents
-  line_items.push({
-    quantity: 1,
-    price_data: {
-      currency: 'aud',
-      unit_amount: shipCents,
-      product_data: {
-        name: (orderDraft.shippingOptionName || 'Shipping').slice(0, 120),
+  const shipCents = Math.max(0, audCents(orderDraft.shippingPrice))
+  if (shipCents > 0) {
+    line_items.push({
+      quantity: 1,
+      price_data: {
+        currency: 'aud',
+        unit_amount: shipCents,
+        product_data: {
+          name: (orderDraft.shippingOptionName || 'Shipping').slice(0, 120),
+        },
       },
-    },
-  })
+    })
+  }
 
-  const fee = orderDraft.paymentFee ?? 0
+  const fee = Math.max(0, Number(orderDraft.paymentFee) || 0)
   if (fee > 0) {
     const feeCents = audCents(fee)
-    sumCents += feeCents
     line_items.push({
       quantity: 1,
       price_data: {
@@ -64,15 +117,32 @@ function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): {
     })
   }
 
-  const discountCents = audCents(orderDraft.discount ?? 0)
-  const expectedTotalCents = sumCents - discountCents
-  const draftTotalCents = audCents(orderDraft.total)
+  const discountCents = Math.max(0, audCents(orderDraft.discount ?? 0))
+  const feeCents = audCents(fee)
+  const grossTotalCents = itemsSubtotalCents + shipCents + feeCents
+  if (discountCents > grossTotalCents) {
+    throw new Error('Invalid discount amount for checkout.')
+  }
+  const expectedTotalCents = grossTotalCents - discountCents
+  const draftTotalCents = Math.max(0, audCents(orderDraft.total))
 
   if (Math.abs(expectedTotalCents - draftTotalCents) > 1) {
     throw new Error('Order total does not match line items and discounts.')
   }
 
-  return { line_items, discountCents }
+  const sanitizedOrderDraft: OrderDraft = {
+    ...orderDraft,
+    items: sanitizedItems,
+    subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
+    shippingPrice: Number((shipCents / 100).toFixed(2)),
+    paymentFee: fee > 0 ? Number(fee.toFixed(2)) : 0,
+    discount: Number((discountCents / 100).toFixed(2)),
+    total: Number((expectedTotalCents / 100).toFixed(2)),
+    paymentMethod: 'stripe',
+    paymentMethodName: 'Stripe Checkout',
+  }
+
+  return { line_items, discountCents, sanitizedOrderDraft }
 }
 
 export async function POST(req: Request) {
@@ -96,35 +166,18 @@ export async function POST(req: Request) {
       stripeKeyPrefix: keyPrefix,
     })
 
-    const { line_items, discountCents } = validateTotalsAndBuildLineItems(orderDraft)
+    const { line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(orderDraft)
     const stripe = getStripe()
-
-    const originHeader = req.headers.get('origin')
-    const referer = req.headers.get('referer')
-    let fromReferer: string | null = null
-    if (referer) {
-      try {
-        const u = new URL(referer)
-        fromReferer = `${u.protocol}//${u.host}`
-      } catch {
-        /* ignore */
-      }
-    }
-    const origin =
-      originHeader ||
-      fromReferer ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      'http://localhost:3000'
+    const origin = normalizeSiteOriginFromEnv()
 
     // Privacy-minimal / guest checkout:
     // - Do NOT create Stripe Customers
     // - Do NOT collect billing/shipping addresses in Stripe Checkout
     // - Only prefill email if available
     // - Store lightweight identifiers in metadata for dashboard visibility
-    const email = orderDraft.customer?.email?.trim()
-    const phone = orderDraft.customer?.phone?.trim()
-    const addr = orderDraft.address
+    const email = sanitizedOrderDraft.customer?.email?.trim()
+    const phone = sanitizedOrderDraft.customer?.phone?.trim()
+    const addr = sanitizedOrderDraft.address
     const addrSingleLine =
       (addr?.asSingleLine || '').trim() ||
       [addr?.streetAddress, addr?.suburb, addr?.state, addr?.postcode, addr?.country]
@@ -133,11 +186,11 @@ export async function POST(req: Request) {
         .trim()
 
     const metadata = {
-      ...orderDraftToMetadataChunks(orderDraft),
+      ...orderDraftToMetadataChunks(sanitizedOrderDraft),
       ...(email ? { selpic_email: email.slice(0, 200) } : {}),
       ...(phone ? { selpic_phone: phone.slice(0, 60) } : {}),
       ...(addrSingleLine ? { selpic_address: addrSingleLine.slice(0, 450) } : {}),
-      ...(orderDraft.shippingOptionId ? { selpic_shipping: String(orderDraft.shippingOptionId).slice(0, 80) } : {}),
+      ...(sanitizedOrderDraft.shippingOptionId ? { selpic_shipping: String(sanitizedOrderDraft.shippingOptionId).slice(0, 80) } : {}),
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
