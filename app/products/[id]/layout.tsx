@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       url: canonical,
       siteName: 'Selpic',
-      type: 'product',
+      type: 'website',
       locale: 'en_AU',
       ...(ogImage ? { images: [{ url: ogImage }] } : {})
     },
