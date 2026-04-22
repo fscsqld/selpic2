@@ -5,6 +5,8 @@
 :root {
   --font-playfair: 'Georgia', serif;
   --font-poppins: 'Segoe UI', system-ui, sans-serif;
+  /** Selpic logo blue — header hovers, chrome theme, links where brand accent is intended */
+  --color-brand-blue: #34aadc;
 }
 
 body {

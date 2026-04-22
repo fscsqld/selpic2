@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ShoppingCart, Menu, X, Search, Globe, Home, Package, ShoppingBag, ArrowRight, Lock, Info, Grid3X3, Smartphone, Flame, Palette, Gift, User, MessageSquare, BarChart3, Users, Settings, Ticket, Image as ImageIcon } from 'lucide-react'
@@ -11,6 +12,20 @@ import { useTranslation } from '@/lib/useTranslation'
 import { useContentStore } from '@/lib/contentStore'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { HEADER_LOGO_STATIC_FALLBACKS } from '@/lib/headerLogoDisplay'
+
+/** English storefront default for SEO / accessibility (CMS company name may differ). */
+const HEADER_LOGO_ALT_EN =
+  'Selpic — Australia custom stickers and merchandise'
+
+/** `next/image` + preload: local app assets only (not remote CMS or blob URLs). */
+function isOptimizablePublicImageSrc(src: string): boolean {
+  const s = src?.trim() ?? ''
+  if (!s || s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('indexeddb:')) {
+    return false
+  }
+  if (/^https?:\/\//i.test(s)) return false
+  return s.startsWith('/')
+}
 
 /**
  * CMS sometimes stores mistaken values (e.g. `public/image`, `/images/logo.png`) as link URLs.
@@ -118,6 +133,7 @@ export function HeaderLogoImage({
   className,
   staticFallbacks = HEADER_LOGO_STATIC_FALLBACKS,
   exhaustedFallback,
+  priority = false,
 }: {
   src: string
   alt: string
@@ -125,6 +141,8 @@ export function HeaderLogoImage({
   staticFallbacks?: readonly string[]
   /** When primary + all static fallbacks fail, show this instead of the dashed placeholder (e.g. company name). */
   exhaustedFallback?: ReactNode
+  /** LCP: use on the sticky header logo when `src` resolves to a local `/…` asset. */
+  priority?: boolean
 }) {
   const primary = src?.trim() || ''
   const blobUrlRef = useRef<string | null>(null)
@@ -213,6 +231,21 @@ export function HeaderLogoImage({
   if (exhausted || !displaySrc) {
     if (exhaustedFallback != null) return <>{exhaustedFallback}</>
     return <HeaderLogoPlaceholder className={className} />
+  }
+
+  if (isOptimizablePublicImageSrc(displaySrc)) {
+    return (
+      <Image
+        src={displaySrc}
+        alt={alt}
+        width={320}
+        height={80}
+        priority={priority}
+        className={`block ${className}`}
+        sizes="(max-width: 768px) 70vw, 280px"
+        onError={handleImgError}
+      />
+    )
   }
 
   return (
@@ -461,44 +494,30 @@ export default function Header() {
     <HeaderErrorBoundary>
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-12">
-            {/* 왼쪽: 네비게이션 토글 버튼 */}
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  console.log('📱 Navigation menu button clicked')
-                  setIsNavigationOpen(!isNavigationOpen)
-                }}
-                className="p-3 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200"
-              >
-                <Menu size={24} />
-              </button>
-            </div>
-
-            {/* Center: public /logo.png first; text only after image load failure */}
-            <div className="flex-1 flex justify-center items-center">
+          <div className="flex justify-between items-center gap-2 md:gap-3 lg:gap-4 min-h-12 py-1.5 lg:py-2">
+            {/* Left: logo (sm/md/lg heights 32px / 40px / 50px via Tailwind defaults) */}
+            <div className="flex items-center min-w-0 flex-1 md:flex-initial md:max-w-[min(320px,45vw)] lg:max-w-[min(360px,40vw)]">
               <Link
                 href={LOGO_BRAND_HREF}
-                className="flex items-center justify-center min-w-0 max-w-full"
+                className="flex items-center justify-start min-w-0 max-w-full"
                 aria-label="Home"
               >
-                <div className="relative min-h-8 min-w-0 flex items-center justify-center w-full max-w-[min(280px,85vw)]">
+                <div className="relative min-h-8 md:min-h-10 lg:min-h-[50px] min-w-0 flex items-center justify-start w-full">
                   {useLogoImage ? (
                     <HeaderLogoImage
                       key={logoMediaSrc || 'header-brand'}
                       src={logoMediaSrc}
-                      alt={companyName}
-                      className="h-8 lg:h-10 object-contain max-w-[min(280px,85vw)] w-auto transform hover:scale-105 transition-transform duration-300 shrink-0"
+                      alt={HEADER_LOGO_ALT_EN}
+                      priority
+                      className="h-8 md:h-10 lg:h-[50px] object-contain object-left max-w-[min(280px,85vw)] w-auto transform hover:scale-105 transition-transform duration-300 shrink-0"
                       exhaustedFallback={
-                        <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider text-center truncate max-w-full transform hover:scale-105 transition-transform duration-300">
+                        <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider text-left truncate max-w-full transform hover:scale-105 transition-transform duration-300">
                           {companyName}
                         </div>
                       }
                     />
                   ) : (
-                    <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider transform hover:scale-105 transition-transform duration-300 text-center truncate max-w-full">
+                    <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider transform hover:scale-105 transition-transform duration-300 text-left truncate max-w-full">
                       {companyName}
                     </div>
                   )}
@@ -506,8 +525,8 @@ export default function Header() {
               </Link>
             </div>
 
-            {/* 우측: 아이콘들 */}
-            <div className="flex items-center space-x-4">
+            {/* Right: search, account, cart, locale, menu (hamburger last on small screens) */}
+            <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 lg:gap-3 flex-shrink-0">
               {/* Search */}
               {searchButtonEnabled && (
                 <button 
@@ -517,7 +536,8 @@ export default function Header() {
                     console.log('🔍 Search button clicked')
                     setIsSearchOpen(true)
                   }}
-                  className="p-3 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200"
+                  type="button"
+                  className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 >
                   <Search size={22} />
                 </button>
@@ -541,14 +561,14 @@ export default function Header() {
                       e.stopPropagation()
                       setIsAccountMenuOpen(!isAccountMenuOpen)
                     }}
-                    className="p-3 text-gray-700 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200 flex items-center space-x-2"
+                    className="p-3 text-gray-700 rounded-full transition-all duration-200 flex items-center space-x-2 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                     title={currentUser?.name || currentUser?.email || 'Account'}
                   >
                     <User size={22} />
                     <span className="hidden sm:inline text-sm font-medium truncate max-w-[120px]">{currentUser?.name || currentUser?.email}</span>
                   </button>
                 ) : (
-                  <Link href={loginLinkUrl} className="p-3 text-gray-600 transition-all duration-200">
+                  <Link href={loginLinkUrl} className="p-3 text-gray-600 transition-all duration-200 rounded-full hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]">
                     <User size={22} />
                   </Link>
                 )}
@@ -609,7 +629,7 @@ export default function Header() {
               </div>
 
               {/* Cart */}
-              <Link href={cartLinkUrl} className="relative p-3 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200">
+              <Link href={cartLinkUrl} className="relative p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]">
                 <ShoppingCart size={22} />
                 {cartItemCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
@@ -628,6 +648,21 @@ export default function Header() {
                   <span className="text-sm font-semibold">{language.toUpperCase()}</span>
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('📱 Navigation menu button clicked')
+                  setIsNavigationOpen(!isNavigationOpen)
+                }}
+                className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                aria-expanded={isNavigationOpen}
+                aria-label="Open navigation menu"
+              >
+                <Menu size={24} />
+              </button>
             </div>
           </div>
 
@@ -654,8 +689,8 @@ export default function Header() {
                         <HeaderLogoImage
                           key={logoMediaSrc || 'header-drawer-brand'}
                           src={logoMediaSrc}
-                          alt={companyName}
-                          className="h-10 max-w-[200px] w-auto object-contain object-left"
+                          alt={HEADER_LOGO_ALT_EN}
+                          className="h-8 md:h-10 lg:h-[50px] max-w-[200px] w-auto object-contain object-left"
                           exhaustedFallback={
                             <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
                               {companyName}
@@ -672,7 +707,7 @@ export default function Header() {
                       <button
                         type="button"
                         onClick={() => setIsNavigationOpen(false)}
-                        className="p-2 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-full transition-all duration-200"
+                        className="p-2 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                       >
                         <X size={24} />
                       </button>

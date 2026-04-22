@@ -16,6 +16,7 @@ const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.png`
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#34aadc',
 }
 
 export const metadata: Metadata = {
@@ -69,6 +70,15 @@ export const metadata: Metadata = {
       'max-snippet': -1,
       'max-video-preview': -1,
     },
+  },
+  icons: {
+    icon: [{ url: '/logo.png', type: 'image/png' }],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: siteName,
+    statusBarStyle: 'default',
   },
 }
 
