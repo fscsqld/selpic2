@@ -11,6 +11,26 @@ import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
 
+function toSubcategorySlug(value: string): string {
+  return decodeURIComponent(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getStickersSubcategoryHref(item: { title: string; linkUrl: string }): string {
+  const raw = (item.linkUrl || '').trim()
+  if (raw.startsWith('/stickers/')) {
+    const segment = raw.split('/').filter(Boolean).pop() || ''
+    const normalized = toSubcategorySlug(segment)
+    if (normalized) return `/stickers/${normalized}`
+  }
+  const fallback = toSubcategorySlug(item.title)
+  return fallback ? `/stickers/${fallback}` : '/stickers'
+}
+
 const SubcategoryImageDisplay = ({ src, emoji, alt }: { src: string, emoji?: string, alt: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
   const [imageError, setImageError] = useState(false)
@@ -333,7 +353,7 @@ export default function StickersPage() {
               {subcategoryCards.map((subcategory) => (
                 <Link 
                   key={subcategory.id}
-                  href={subcategory.linkUrl}
+                  href={getStickersSubcategoryHref(subcategory)}
                   className="group bg-white rounded-xl p-6 text-center hover:shadow-lg transition-all duration-300 border border-gray-200 hover:border-blue-300"
                 >
                   <div className="text-4xl mb-3">

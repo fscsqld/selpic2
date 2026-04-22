@@ -59,6 +59,28 @@ const CATEGORY_LABELS = {
   'hot-goods': 'Market S'
 }
 
+function toSlug(value: string): string {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function buildCategorySubcategoryPath(
+  category: 'stickers' | 'stamps' | 'phone-cases' | 'hot-goods',
+  title: string
+): string {
+  const slug = toSlug(title)
+  if (!slug) return ''
+  if (category === 'stickers') return `/stickers/${slug}`
+  if (category === 'stamps') return `/stamps/${slug}`
+  if (category === 'phone-cases') return `/phone-cases/${slug}`
+  if (category === 'hot-goods') return `/hot-goods/${slug}`
+  return `/${category}/${slug}`
+}
+
 export default function SubcategoryManager({
   subcategoryItems,
   category,
@@ -125,13 +147,20 @@ export default function SubcategoryManager({
   })
 
   const handleAdd = () => {
-    if (!newSubcategory.title || !newSubcategory.linkUrl) {
-      showNotification('error', 'Please fill in title and link URL')
+    if (!newSubcategory.title) {
+      showNotification('error', 'Please fill in title')
+      return
+    }
+    const normalizedLinkUrl =
+      newSubcategory.linkUrl.trim() || buildCategorySubcategoryPath(category, newSubcategory.title)
+    if (!normalizedLinkUrl) {
+      showNotification('error', 'Could not generate a valid link URL from title')
       return
     }
     // pageTitle과 pageSubtitle이 비어있으면 기본값 설정
     const subcategoryToAdd = {
       ...newSubcategory,
+      linkUrl: normalizedLinkUrl,
       pageTitle: newSubcategory.pageTitle || `${newSubcategory.title} Stickers`,
       pageSubtitle: newSubcategory.pageSubtitle || newSubcategory.description
     }
@@ -169,13 +198,20 @@ export default function SubcategoryManager({
 
   const handleUpdate = () => {
     if (!editingSubcategory) return
-    if (!editForm.title || !editForm.linkUrl) {
-      showNotification('error', 'Please fill in title and link URL')
+    if (!editForm.title) {
+      showNotification('error', 'Please fill in title')
+      return
+    }
+    const normalizedLinkUrl =
+      editForm.linkUrl.trim() || buildCategorySubcategoryPath(category, editForm.title)
+    if (!normalizedLinkUrl) {
+      showNotification('error', 'Could not generate a valid link URL from title')
       return
     }
     // pageTitle과 pageSubtitle이 비어있으면 기본값 설정
     const updates = {
       ...editForm,
+      linkUrl: normalizedLinkUrl,
       pageTitle: editForm.pageTitle || `${editForm.title} Stickers`,
       pageSubtitle: editForm.pageSubtitle || editForm.description
     }
@@ -323,22 +359,10 @@ export default function SubcategoryManager({
                 <button
                   type="button"
                   onClick={() => {
-                    // 🆕 Title 기반으로 Link URL 자동 생성
+                    // Title 기반으로 Link URL 자동 생성
                     if (newSubcategory.title) {
-                      const slug = newSubcategory.title
-                        .toLowerCase()
-                        .replace(/\s+/g, '-')
-                        .replace(/[^a-z0-9-]/g, '')
-                      const autoUrl = category === 'stickers' 
-                        ? `/stickers/${slug}`
-                        : category === 'stamps'
-                        ? `/stamps/${slug}`
-                        : category === 'phone-cases'
-                        ? `/phone-cases/${slug}`
-                        : category === 'hot-goods'
-                        ? `/hot-goods/${slug}`
-                        : `/${category}/${slug}`
-                      setNewSubcategory({ ...newSubcategory, linkUrl: autoUrl })
+                      const autoUrl = buildCategorySubcategoryPath(category, newSubcategory.title)
+                      setNewSubcategory({ ...newSubcategory, linkUrl: autoUrl || '' })
                     }
                   }}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm whitespace-nowrap"

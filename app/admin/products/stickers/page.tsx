@@ -38,6 +38,15 @@ interface StickerFormData {
   twoLineSurcharge?: number
 }
 
+const normalizeSubcategoryKey = (value?: string): string =>
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ')
+
+const isStationeryEssentialsSubcategory = (value?: string): boolean =>
+  normalizeSubcategoryKey(value) === 'stationery essentials'
+
 export default function StickersPage() {
   const forceCatalogSync = useCallback(async (): Promise<boolean> => {
     try {
@@ -63,7 +72,8 @@ export default function StickersPage() {
     { value: 'Premium', label: 'Premium', icon: '✨' },
     { value: 'Office', label: 'Office', icon: '💼' },
     { value: 'Kids', label: 'Kids', icon: '👶' },
-    { value: 'Custom', label: 'Custom', icon: '🎨' }
+    { value: 'Custom', label: 'Custom', icon: '🎨' },
+    { value: 'Stationery Essentials', label: 'Stationery Essentials', icon: '📎' }
   ]
   
   const [selectedSubcategory, setSelectedSubcategory] = useState('all')
@@ -103,6 +113,7 @@ export default function StickersPage() {
     stickerHasImage: false,
     twoLineSurcharge: undefined
   })
+  const isStationeryEssentialsProduct = isStationeryEssentialsSubcategory(formData.subcategory)
   
   // Filter by subcategory
   const filteredProducts = selectedSubcategory === 'all' 
@@ -237,10 +248,14 @@ export default function StickersPage() {
         : {}
       const twoLineSurchargeVal =
         formData.twoLineSurcharge != null ? Number(formData.twoLineSurcharge) : undefined
+      const normalizedStickerSheetQuantity = isStationeryEssentialsProduct
+        ? undefined
+        : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
       if (editingProduct) {
         // Update product
         const updatedProduct = {
           ...formData,
+          stickerSheetQuantity: normalizedStickerSheetQuantity,
           ...optionalSticker,
           twoLineSurcharge: twoLineSurchargeVal,
           customizationOptions: (editingProduct as any).customizationOptions || [],
@@ -258,6 +273,7 @@ export default function StickersPage() {
         // Add new product
         const newProduct = {
           ...formData,
+          stickerSheetQuantity: normalizedStickerSheetQuantity,
           ...optionalSticker,
           twoLineSurcharge: twoLineSurchargeVal,
           id: Date.now().toString(),
@@ -324,6 +340,22 @@ export default function StickersPage() {
         next.stickerCols = preset.cols
         next.stickerRows = preset.rows
         next.stickerGapMm = prev.stickerGapMm ?? 2
+      }
+      if (name === 'subcategory') {
+        if (isStationeryEssentialsSubcategory(value)) {
+          next.stickerSheetQuantity = undefined
+          next.size = ''
+        } else if (next.stickerSheetQuantity == null || Number(next.stickerSheetQuantity) < 3) {
+          next.stickerSheetQuantity = 3
+        }
+      }
+      if (
+        name === 'stickerSheetQuantity' &&
+        !isStationeryEssentialsSubcategory(next.subcategory) &&
+        typeof next.stickerSheetQuantity === 'number' &&
+        next.stickerSheetQuantity < 3
+      ) {
+        next.stickerSheetQuantity = 3
       }
       return next
     })
@@ -617,21 +649,37 @@ export default function StickersPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Size
                     </label>
-                    <select
-                      name="size"
-                      value={formData.size || ''}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    >
-                      <option value="">Select Size</option>
-                      <option value="Small">Small (22mm x 9mm)</option>
-                      <option value="Medium">Medium (30mm x 13mm)</option>
-                      <option value="Large">Large (46mm x 15mm)</option>
-                      <option value="Extra Large">Extra Large (45mm x 21mm)</option>
-                      <option value="Round">Round (28mm)</option>
-                      <option value="Custom">Custom Size</option>
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">선택한 크기가 커스텀·미리보기 등 모든 페이지에 반영됩니다. Custom 선택 시 아래 치수를 입력하세요.</p>
+                    {isStationeryEssentialsProduct ? (
+                      <>
+                        <input
+                          type="text"
+                          name="size"
+                          value={formData.size || ''}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                          placeholder="e.g., A4 sheet, 210 x 297mm, printable area"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Stationery Essentials uses free-form size input for stationery file products.</p>
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          name="size"
+                          value={formData.size || ''}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        >
+                          <option value="">Select Size</option>
+                          <option value="Small">Small (22mm x 9mm)</option>
+                          <option value="Medium">Medium (30mm x 13mm)</option>
+                          <option value="Large">Large (46mm x 15mm)</option>
+                          <option value="Extra Large">Extra Large (45mm x 21mm)</option>
+                          <option value="Round">Round (28mm)</option>
+                          <option value="Custom">Custom Size</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">선택한 크기가 커스텀·미리보기 등 모든 페이지에 반영됩니다. Custom 선택 시 아래 치수를 입력하세요.</p>
+                      </>
+                    )}
                   </div>
 
                   {/* Sticker dimensions (optional): used when set; Custom size or override preset */}
@@ -736,6 +784,7 @@ export default function StickersPage() {
                   </div>
 
                   {/* Sticker sheet quantity: price based on 3 sheets, default 3. Events: 3+. Applies to all custom name stickers if not changed. */}
+                  {!isStationeryEssentialsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Sticker sheet quantity (sheets)
@@ -750,6 +799,14 @@ export default function StickersPage() {
                     />
                     <p className="mt-1 text-xs text-gray-500">Price is for 3 sheets. Default 3. Use 3+ for events. Applies to all custom name stickers if not changed.</p>
                   </div>
+                  )}
+
+                  {isStationeryEssentialsProduct && (
+                    <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                      Stationery Essentials selected: name-sticker sheet quantity is hidden.
+                      Use Customization Options type "image" for customer file uploads.
+                    </div>
+                  )}
 
                   {/* Stock status */}
                   <div className="flex items-center">

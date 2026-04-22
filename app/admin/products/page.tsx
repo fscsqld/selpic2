@@ -86,6 +86,15 @@ interface ProductFormData {
   stickerSheetQuantity?: number
 }
 
+const normalizeSubcategoryKey = (value?: string): string =>
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ')
+
+const isStationeryEssentialsSubcategory = (value?: string): boolean =>
+  normalizeSubcategoryKey(value) === 'stationery essentials'
+
 export default function AdminProductsPage() {
   return (
     <AdminRoute requiredPermissions={['products:read']}>
@@ -149,6 +158,9 @@ function AdminProductsPageContent() {
     fallbackImage: '', // 🆕 동영상 로딩 전 표시할 Fallback 이미지
     stickerSheetQuantity: 3 // 네임스티커 시트지 수량 (가격 3장 기준, 기본 3장)
   })
+
+  const isStationeryEssentialsProduct =
+    formData.category === 'Stickers' && isStationeryEssentialsSubcategory(formData.subcategory)
 
   const categories = [
     { value: 'All', label: t('admin.products.categories.all') },
@@ -423,16 +435,25 @@ function AdminProductsPageContent() {
       return
     }
     
-    
+    const isStationeryEssentials =
+      formData.category === 'Stickers' && isStationeryEssentialsSubcategory(formData.subcategory)
+    const normalizedFormData: ProductFormData = {
+      ...formData,
+      // Stationery Essentials uses file-based stationery products, not 3-sheet name-sticker pricing.
+      stickerSheetQuantity: isStationeryEssentials
+        ? undefined
+        : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+    }
+
     try {
       if (editingProduct) {
         // 상품 수정
         // ✅ customizationOptions 명시적 전달 (빈 배열도 유효한 값이므로 || [] 제거)
         const updatedProduct = {
-          ...formData,
-          customizationOptions: Array.isArray(formData.customizationOptions) 
-            ? formData.customizationOptions 
-            : (formData.customizationOptions || []),
+          ...normalizedFormData,
+          customizationOptions: Array.isArray(normalizedFormData.customizationOptions) 
+            ? normalizedFormData.customizationOptions 
+            : (normalizedFormData.customizationOptions || []),
           updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: customizationOptions 확인 (개발 환경에서만)
@@ -481,12 +502,12 @@ function AdminProductsPageContent() {
         // 새 상품 추가
         // ✅ customizationOptions 명시적 전달 (Edit Product와 동일한 로직)
         const newProduct = {
-          ...formData,
+          ...normalizedFormData,
           id: Date.now().toString(), // 간단한 ID 생성
-          image: formData.image || '', // ✅ image 명시적 보존
-          customizationOptions: Array.isArray(formData.customizationOptions) 
-            ? formData.customizationOptions 
-            : (formData.customizationOptions || []),
+          image: normalizedFormData.image || '', // ✅ image 명시적 보존
+          customizationOptions: Array.isArray(normalizedFormData.customizationOptions) 
+            ? normalizedFormData.customizationOptions 
+            : (normalizedFormData.customizationOptions || []),
           updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: 상품 데이터 확인 (개발 환경에서만)
@@ -571,10 +592,29 @@ function AdminProductsPageContent() {
       if (name === 'category') {
         newData.subcategory = ''
         newData.isHotGoods = value === 'HotGoods'
+        if (value === 'Stickers') {
+          newData.stickerSheetQuantity = 3
+        }
+      }
+
+      if (name === 'subcategory' && newData.category === 'Stickers') {
+        if (isStationeryEssentialsSubcategory(value)) {
+          // Stationery Essentials products are not priced by name-sticker sheet count.
+          newData.stickerSheetQuantity = undefined
+          newData.size = ''
+        } else if (newData.stickerSheetQuantity == null || Number(newData.stickerSheetQuantity) < 3) {
+          newData.stickerSheetQuantity = 3
+        }
       }
       
       // 스티커 시트지 수량은 최소 3
-      if (name === 'stickerSheetQuantity' && typeof newData.stickerSheetQuantity === 'number' && newData.stickerSheetQuantity < 3) {
+      if (
+        name === 'stickerSheetQuantity' &&
+        newData.category === 'Stickers' &&
+        !isStationeryEssentialsSubcategory(newData.subcategory) &&
+        typeof newData.stickerSheetQuantity === 'number' &&
+        newData.stickerSheetQuantity < 3
+      ) {
         newData.stickerSheetQuantity = 3
       }
       
@@ -1610,40 +1650,56 @@ function AdminProductsPageContent() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {t('admin.products.sizeLabel')}
                     </label>
-                    <select
-                      name="size"
-                      value={formData.size || ''}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    >
-                      <option value="">{t('admin.products.selectSize')}</option>
-                      {formData.category === 'Stickers' && (
-                        <>
-                          <option value="Small">Small (22mm x 9mm)</option>
-                          <option value="Medium">Medium (30mm x 13mm)</option>
-                          <option value="Large">Large (46mm x 15mm)</option>
-                          <option value="Extra Large">Extra Large (45mm x 21mm)</option>
-                          <option value="Round">Round (28mm)</option>
-                          <option value="Custom">Custom Size</option>
-                        </>
-                      )}
-                      {formData.category === 'Stamps' && (
-                        <>
-                          <option value="Small">Small (2cm x 2cm)</option>
-                          <option value="Medium">Medium (3cm x 3cm)</option>
-                          <option value="Large">Large (5cm x 5cm)</option>
-                          <option value="Custom">Custom Size</option>
-                        </>
-                      )}
-                      {formData.category === 'PhoneCases' && (
-                        <>
-                          <option value="Small">Small</option>
-                          <option value="Medium">Medium</option>
-                          <option value="Large">Large</option>
-                          <option value="Custom">Custom</option>
-                        </>
-                      )}
-                    </select>
+                    {formData.category === 'Stickers' && isStationeryEssentialsProduct ? (
+                      <>
+                        <input
+                          type="text"
+                          name="size"
+                          value={formData.size || ''}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                          placeholder="e.g., A4 sheet, 210 x 297mm, printable area"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Stationery Essentials uses free-form size input for file-based stationery products.
+                        </p>
+                      </>
+                    ) : (
+                      <select
+                        name="size"
+                        value={formData.size || ''}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      >
+                        <option value="">{t('admin.products.selectSize')}</option>
+                        {formData.category === 'Stickers' && (
+                          <>
+                            <option value="Small">Small (22mm x 9mm)</option>
+                            <option value="Medium">Medium (30mm x 13mm)</option>
+                            <option value="Large">Large (46mm x 15mm)</option>
+                            <option value="Extra Large">Extra Large (45mm x 21mm)</option>
+                            <option value="Round">Round (28mm)</option>
+                            <option value="Custom">Custom Size</option>
+                          </>
+                        )}
+                        {formData.category === 'Stamps' && (
+                          <>
+                            <option value="Small">Small (2cm x 2cm)</option>
+                            <option value="Medium">Medium (3cm x 3cm)</option>
+                            <option value="Large">Large (5cm x 5cm)</option>
+                            <option value="Custom">Custom Size</option>
+                          </>
+                        )}
+                        {formData.category === 'PhoneCases' && (
+                          <>
+                            <option value="Small">Small</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Large">Large</option>
+                            <option value="Custom">Custom</option>
+                          </>
+                        )}
+                      </select>
+                    )}
                   </div>
                   )
                 )}
@@ -1741,7 +1797,7 @@ function AdminProductsPageContent() {
                 </div>
 
                 {/* 스티커 시트지 수량: Stickers 카테고리일 때 Color 오른쪽에 표시. 가격 3장 기준, 기본 3장, 이벤트 시 3장 이상. */}
-                {formData.category === 'Stickers' && (
+                {formData.category === 'Stickers' && !isStationeryEssentialsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {t('admin.products.stickerSheetQuantityLabel')}
@@ -1756,6 +1812,13 @@ function AdminProductsPageContent() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     />
                     <p className="mt-1 text-xs text-gray-500">{t('admin.products.stickerSheetQuantityHelp')}</p>
+                  </div>
+                )}
+
+                {formData.category === 'Stickers' && isStationeryEssentialsProduct && (
+                  <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                    Stationery Essentials selected: name-sticker sheet quantity is hidden.  
+                    Use <strong>Customization Options</strong> with type <strong>image</strong> to collect customer file uploads.
                   </div>
                 )}
 

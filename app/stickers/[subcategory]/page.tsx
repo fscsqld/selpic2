@@ -68,35 +68,29 @@ export default function DynamicSubcategoryPage() {
     }
   }, [_hasHydrated, refreshProducts])
 
+  const normalizeString = (str: string) => {
+    return decodeURIComponent(str || '')
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
+
+  const requestedSlug = normalizeString(subcategorySlug)
+
   // URL에서 서브카테고리 슬러그 추출 (예: /stickers/basic -> basic)
-  // linkUrl이 /stickers/[subcategory] 형식인 서브카테고리 찾기
+  // linkUrl/title 둘 다 슬러그로 비교해 매칭 복원
   const subcategoryInfo = isMounted && contentHydrated
-    ? subcategoryItems.find(item => {
-        // linkUrl이 /stickers/[subcategory] 형식인지 확인
-        if (item.linkUrl && item.linkUrl.startsWith('/stickers/')) {
-          const urlSlug = item.linkUrl.replace('/stickers/', '')
-          return urlSlug === subcategorySlug && item.category === 'stickers'
-        }
-        return false
+    ? subcategoryItems.find((item) => {
+        if (item.category !== 'stickers') return false
+        const titleSlug = normalizeString(item.title)
+        const linkSlug = item.linkUrl?.startsWith('/stickers/')
+          ? normalizeString(item.linkUrl.replace('/stickers/', ''))
+          : ''
+        return requestedSlug === titleSlug || (linkSlug && requestedSlug === linkSlug)
       })
     : null
-
-  // 서브카테고리 정보가 없으면 404 (하지만 마운트 전에는 기다림)
-  if (isMounted && contentHydrated && !subcategoryInfo) {
-    return notFound()
-  }
-
-  // 서브카테고리 제목으로 상품 필터링 (대소문자 무시, 공백/하이픈 무시)
-  const normalizeString = (str: string) => {
-    if (!str) return ''
-    return str.toLowerCase().replace(/[\s-]/g, '')
-  }
-  
-  // URL slug를 직접 사용하여 필터링 (subcategoryInfo가 없어도 작동)
-  const normalizeSlug = (slug: string) => {
-    if (!slug) return ''
-    return slug.toLowerCase().replace(/[\s-]/g, '')
-  }
   
   const subcategoryProducts = products.filter(product => {
     if (product.category !== 'Stickers') return false
@@ -104,36 +98,23 @@ export default function DynamicSubcategoryPage() {
     
     // 방법 1: subcategoryInfo가 있으면 title로 비교
     if (subcategoryInfo?.title) {
-      const normalizedSubcategoryTitle = normalizeString(subcategoryInfo.title)
-      const normalizedProductSubcategory = normalizeString(product.subcategory)
-      
-      if (normalizedSubcategoryTitle === normalizedProductSubcategory) {
+      if (normalizeString(subcategoryInfo.title) === normalizeString(product.subcategory)) {
         return true
       }
     }
-    
-    // 방법 2: URL slug와 product.subcategory 직접 비교 (대소문자, 공백/하이픈 무시)
-    const normalizedSlug = normalizeSlug(subcategorySlug)
-    const normalizedProductSubcategory = normalizeString(product.subcategory)
-    
-    if (normalizedSlug === normalizedProductSubcategory) {
+
+    // 방법 2: URL slug와 product.subcategory 직접 비교
+    if (requestedSlug === normalizeString(product.subcategory)) {
       return true
     }
-    
-    // 방법 3: URL slug를 title로 변환하여 비교 (예: "name-stickers" -> "Name Stickers")
-    // slug를 title 형식으로 변환 (하이픈을 공백으로, 각 단어 첫 글자 대문자)
-    const slugAsTitle = subcategorySlug
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
-    const normalizedSlugAsTitle = normalizeString(slugAsTitle)
-    
-    if (normalizedSlugAsTitle === normalizedProductSubcategory) {
-      return true
-    }
-    
+
     return false
   })
+
+  // 서브카테고리 정보도 없고 상품도 없으면 404
+  if (isMounted && contentHydrated && !subcategoryInfo && subcategoryProducts.length === 0) {
+    return notFound()
+  }
   
   // 디버깅 로그 (개발 환경에서만)
   useEffect(() => {
