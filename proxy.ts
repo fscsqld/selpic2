@@ -26,33 +26,6 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
   return response
 }
 
-function normalizeVersionToken(raw: string): string {
-  if (!raw) return ''
-  const cleaned = raw
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-  return cleaned.slice(0, 80)
-}
-
-function resolveDeployVersion(request: NextRequest): string {
-  const candidates = [
-    process.env.NEXT_PUBLIC_DEPLOY_VERSION || '',
-    process.env.VERCEL_DEPLOYMENT_ID || '',
-    process.env.VERCEL_GIT_COMMIT_SHA || '',
-    process.env.VERCEL_URL || '',
-    request.headers.get('x-vercel-deployment-url') || '',
-  ]
-  for (const c of candidates) {
-    const v = normalizeVersionToken(c)
-    if (v) return v
-  }
-  return ''
-}
-
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   const protoHeader = request.headers.get('x-forwarded-proto')
@@ -66,24 +39,6 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
-  const deployVersion = resolveDeployVersion(request) || 'live'
-
-  // Force versioned storefront root URL to avoid stale edge/document cache on iPad Safari.
-  // Applies only to GET / (non-admin) and only when version is available.
-  if (
-    request.method === 'GET' &&
-    path === '/' &&
-    deployVersion &&
-    !(path === '/admin' || path.startsWith('/admin/'))
-  ) {
-    const currentV = (request.nextUrl.searchParams.get('v') || '').trim()
-    // Redirect only once when `v` is missing. Never rewrite existing `v` to avoid loops.
-    if (!currentV) {
-      const next = request.nextUrl.clone()
-      next.searchParams.set('v', deployVersion)
-      return applyProductionSecurityHeaders(NextResponse.redirect(next, 307), isLocal)
-    }
-  }
 
   if (
     path === '/auth/callback' ||

@@ -108,6 +108,13 @@ export default function StorefrontDeployVersionGuard() {
 
     const url = new URL(window.location.href)
     const wantsForcedReset = url.searchParams.get(RESET_QUERY_KEY) === '1'
+    const hasVisibleVersionToken = url.searchParams.has('v')
+
+    // Keep URL clean for visitors. If legacy links/redirects still include `v`, remove it silently.
+    if (!wantsForcedReset && hasVisibleVersionToken) {
+      url.searchParams.delete('v')
+      window.history.replaceState(null, '', url.toString())
+    }
     if (wantsForcedReset) {
       try {
         window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
@@ -124,7 +131,6 @@ export default function StorefrontDeployVersionGuard() {
       void clearClientCaches().finally(() => {
         const next = new URL(window.location.href)
         next.searchParams.delete(RESET_QUERY_KEY)
-        next.searchParams.set('v', currentVersion)
         window.location.replace(next.toString())
       })
       return
@@ -166,7 +172,6 @@ export default function StorefrontDeployVersionGuard() {
     persistVersion(currentVersion)
     void clearClientCaches().finally(() => {
       const next = new URL(window.location.href)
-      next.searchParams.set('v', currentVersion)
       window.location.replace(next.toString())
     })
   }, [pathname])

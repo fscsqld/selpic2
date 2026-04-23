@@ -191,21 +191,7 @@ const nextConfig = {
     ]
   },
   async redirects() {
-    const deployVersionForRedirect = NEXT_PUBLIC_DEPLOY_VERSION || 'live'
-    const redirects = [
-      {
-        // Ensure root URL always carries a version query (tablet/iPad stale shell mitigation).
-        source: '/',
-        missing: [{ type: 'query', key: 'v' }],
-        destination: `/?v=${encodeURIComponent(deployVersionForRedirect)}`,
-        permanent: false,
-      },
-    ]
-
-    // Do not enforce canonical host redirect in app-level config.
-    // Host-level redirect is handled by Vercel domain settings and duplicating it here
-    // can create apex<->www loops on Safari/iPad when edge cache is warm.
-    return redirects
+    return []
   },
 }
 
