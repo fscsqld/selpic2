@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
 import OrderTracking from '@/components/OrderTracking'
 import OrderEmailConfirmation from '@/components/OrderEmailConfirmation'
@@ -42,6 +42,26 @@ export default function AdminOrderDetailPage() {
 
   const orderId = Array.isArray(params?.orderId) ? params.orderId[0] : params?.orderId
   const order = orders.find(o => o.id === orderId)
+  const persistOrderPayloadToLedger = useCallback(
+    async (targetOrderId: string) => {
+      const latest = useStore.getState().orders.find((o) => o.id === targetOrderId)
+      if (!latest) return
+      const res = await fetch(`/api/orders/${encodeURIComponent(targetOrderId)}`, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: latest }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save order.')
+      }
+      if (data.order) {
+        mergeOrdersFromServer([data.order])
+      }
+    },
+    [mergeOrdersFromServer]
+  )
 
   useEffect(() => {
     if (!orderId) return
@@ -85,11 +105,12 @@ export default function AdminOrderDetailPage() {
     }
   }, [order, router, ledgerReady])
 
-  const handleAddTrackingNumber = (trackingNumber: string, provider: string) => {
+  const handleAddTrackingNumber = async (trackingNumber: string, provider: string) => {
     if (order) {
       setIsLoading(true)
       try {
         addTrackingNumber(order.id, trackingNumber, provider)
+        await persistOrderPayloadToLedger(order.id)
         // Show success message
         alert('Tracking number added successfully!')
       } catch (error) {
@@ -101,11 +122,12 @@ export default function AdminOrderDetailPage() {
     }
   }
 
-  const handleUpdateDeliveryStatus = (status: string, location: string, description: string) => {
+  const handleUpdateDeliveryStatus = async (status: string, location: string, description: string) => {
     if (order) {
       setIsLoading(true)
       try {
         updateDeliveryStatus(order.id, status as any, location, description)
+        await persistOrderPayloadToLedger(order.id)
         // Show success message
         alert('Delivery status updated successfully!')
       } catch (error) {

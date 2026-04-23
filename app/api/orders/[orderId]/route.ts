@@ -135,6 +135,53 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
+/** Replace order payload in Supabase ledger (admin only). */
+export async function PUT(request: Request, context: RouteContext) {
+  const adminUser = await requireSupabaseAdminUser()
+  if (!adminUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { orderId } = await context.params
+  if (!orderId?.trim()) {
+    return NextResponse.json({ error: 'Missing order id' }, { status: 400 })
+  }
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
+  }
+
+  let body: { order?: OrderRecord }
+  try {
+    body = (await request.json()) as { order?: OrderRecord }
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const incoming = body?.order
+  if (!incoming || typeof incoming !== 'object') {
+    return NextResponse.json({ error: 'Missing order payload' }, { status: 400 })
+  }
+
+  const sanitized = normalizeLedgerOrder(incoming)
+  if (!sanitized.id || sanitized.id !== orderId.trim()) {
+    return NextResponse.json({ error: 'Order id mismatch' }, { status: 400 })
+  }
+
+  try {
+    const sb = getSupabaseAdmin()
+    const { error } = await sb.from('orders').update({ payload: sanitized }).eq('id', orderId.trim())
+    if (error) {
+      logAndSafeMessage('orders/orderId PUT update', error)
+      return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+    }
+    return NextResponse.json({ order: sanitized })
+  } catch (e) {
+    logAndSafeMessage('orders/orderId PUT catch', e)
+    return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+  }
+}
+
 /** Remove a row from the Supabase ledger (admin only). Client store must also drop the order locally. */
 export async function DELETE(_request: Request, context: RouteContext) {
   const adminUser = await requireSupabaseAdminUser()

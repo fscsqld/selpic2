@@ -142,6 +142,37 @@ export default function AdminOrdersPage() {
 
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const performedBy = adminUser?.username || 'admin'
+  const persistOrderPayloadToLedger = useCallback(
+    async (orderId: string) => {
+      const latest = useStore.getState().orders.find((o) => o.id === orderId)
+      if (!latest) return
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: latest }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Failed to persist order changes.')
+      }
+      if (data.order) {
+        mergeOrdersFromServer([data.order])
+      }
+    },
+    [mergeOrdersFromServer]
+  )
+
+  const persistAfterLocalEdit = useCallback(
+    (orderId: string) => {
+      void persistOrderPayloadToLedger(orderId).catch((e) => {
+        void syncOrdersFromSupabase()
+        alert(e instanceof Error ? e.message : 'Failed to save order changes')
+      })
+    },
+    [persistOrderPayloadToLedger, syncOrdersFromSupabase]
+  )
+
   const persistStatusToLedger = useCallback(
     async (orderId: string, status: 'approved' | 'paid' | 'processing' | 'shipped' | 'cancelled') => {
       const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
@@ -507,6 +538,7 @@ export default function AdminOrdersPage() {
     if (formData.shipping) {
       updateOrderShipping(orderId, formData.shipping.shippingOptionId, formData.shipping.shippingOptionName, performedBy)
     }
+    persistAfterLocalEdit(orderId)
     setEditingOrder(null)
   }
 
@@ -514,6 +546,7 @@ export default function AdminOrdersPage() {
     if (newNote.trim()) {
       addOrderNote(orderId, newNote.trim(), performedBy)
       setNewNote('')
+      persistAfterLocalEdit(orderId)
     }
   }
 
@@ -1351,7 +1384,10 @@ export default function AdminOrdersPage() {
                   newNote={newNote}
                   onNewNoteChange={setNewNote}
                   onAddNote={() => handleAddNote(notesOrder.id)}
-                  onDeleteNote={(noteId) => deleteOrderNote(notesOrder.id, noteId, performedBy)}
+                  onDeleteNote={(noteId) => {
+                    deleteOrderNote(notesOrder.id, noteId, performedBy)
+                    persistAfterLocalEdit(notesOrder.id)
+                  }}
                   T={T}
                 />
               </div>
