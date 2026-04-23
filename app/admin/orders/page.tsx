@@ -142,6 +142,39 @@ export default function AdminOrdersPage() {
 
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const performedBy = adminUser?.username || 'admin'
+  const persistStatusToLedger = useCallback(
+    async (orderId: string, status: 'approved' | 'paid' | 'processing' | 'shipped' | 'cancelled') => {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, performedBy }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Failed to persist order status.')
+      }
+      if (data.order) {
+        mergeOrdersFromServer([data.order])
+      }
+    },
+    [mergeOrdersFromServer, performedBy]
+  )
+
+  const applyStatusChange = useCallback(
+    async (orderId: string, status: 'approved' | 'paid' | 'processing' | 'shipped' | 'cancelled') => {
+      // Keep existing local side effects (emails/grade updates), then persist to server ledger.
+      updateOrderStatus(orderId, status, performedBy)
+      try {
+        await persistStatusToLedger(orderId, status)
+      } catch (e) {
+        // Roll back to canonical server state when persistence fails.
+        void syncOrdersFromSupabase()
+        alert(e instanceof Error ? e.message : 'Failed to save status')
+      }
+    },
+    [performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus]
+  )
 
   /** Admin orders UI is English-only; storefront `language` does not apply here. */
   const isKo = false
@@ -439,8 +472,8 @@ export default function AdminOrdersPage() {
       return
     }
     if (confirm(isKo ? `${selectedIds.length}개의 주문을 ${status} 상태로 변경하시겠습니까?` : `Change ${selectedIds.length} orders to ${status}?`)) {
-      selectedIds.forEach(id => {
-        updateOrderStatus(id, status, performedBy)
+      selectedIds.forEach((id) => {
+        void applyStatusChange(id, status)
       })
       setSelected({})
       setSelectAll(false)
@@ -1178,7 +1211,7 @@ export default function AdminOrdersPage() {
                               type="button"
                               onClick={() => {
                                 if (confirm(T.confirmMarkPaid)) {
-                                  updateOrderStatus(order.id, 'paid', performedBy)
+                                  void applyStatusChange(order.id, 'paid')
                                 }
                               }}
                               className="block text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"

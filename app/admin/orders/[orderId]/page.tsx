@@ -24,7 +24,6 @@ export default function AdminOrderDetailPage() {
   const { adminUser } = useAdminAuth()
   const {
     orders,
-    updateOrderStatus,
     addTrackingNumber,
     updateDeliveryStatus,
     sendOrderConfirmationEmail: sendOrderConfirmationEmailFromStore,
@@ -118,14 +117,13 @@ export default function AdminOrderDetailPage() {
     }
   }
 
-  // ✅ 주문 승인 핸들러 (회계 장부 자동 기록 포함)
-  const handleApproveOrder = () => {
+  // ✅ 주문 승인 핸들러 (Supabase 반영 + 회계 장부 자동 기록 포함)
+  const handleApproveOrder = async () => {
     if (!order) return
-    
+
     try {
-      // 1. 기존 주문 상태 업데이트
-      updateOrderStatus(order.id, 'approved', performedBy)
-      
+      await patchLedgerStatus('approved')
+
       // 2. 회계 장부 자동 기록 (비동기, await 하지 않음, 재시도 로직 포함)
       recordOrderToAccountingAsyncWithRetry(
         {
@@ -327,7 +325,7 @@ Selpic Team`
     window.location.href = smsLink
   }
 
-  const patchLedgerStatusOnly = async (next: 'processing' | 'shipped') => {
+  const patchLedgerStatus = async (next: 'approved' | 'processing' | 'shipped') => {
     if (!order) return
     setStatusSaving(true)
     try {
@@ -459,7 +457,7 @@ Selpic Team`
                     order.status === 'shipped' ||
                     order.status === 'cancelled'
                   }
-                  onClick={() => patchLedgerStatusOnly('processing')}
+                  onClick={() => patchLedgerStatus('processing')}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-900 hover:bg-purple-100 disabled:opacity-50"
                 >
                   <Package className="w-4 h-4" />
@@ -468,7 +466,7 @@ Selpic Team`
                 <button
                   type="button"
                   disabled={statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
-                  onClick={() => patchLedgerStatusOnly('shipped')}
+                  onClick={() => patchLedgerStatus('shipped')}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:opacity-50"
                 >
                   <Truck className="w-4 h-4" />
@@ -894,22 +892,28 @@ Selpic Team`
                 <div className="space-y-3">
                   {/* ✅ 주문 승인 버튼 추가 */}
                   <button
-                    onClick={handleApproveOrder}
-                    disabled={order.status === 'approved'}
+                    onClick={() => {
+                      void handleApproveOrder()
+                    }}
+                    disabled={statusSaving || order.status === 'approved'}
                     className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {order.status === 'approved' ? 'Already Approved' : 'Approve Order'}
                   </button>
                   <button
-                    onClick={() => updateOrderStatus(order.id, 'processing', performedBy)}
-                    disabled={order.status === 'processing'}
+                    onClick={() => {
+                      void patchLedgerStatus('processing')
+                    }}
+                    disabled={statusSaving || order.status === 'processing'}
                     className="w-full px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Mark as Processing
                   </button>
                   <button
-                    onClick={() => updateOrderStatus(order.id, 'shipped', performedBy)}
-                    disabled={order.status === 'shipped'}
+                    onClick={() => {
+                      void patchLedgerStatus('shipped')
+                    }}
+                    disabled={statusSaving || order.status === 'shipped'}
                     className="w-full px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Mark as Shipped

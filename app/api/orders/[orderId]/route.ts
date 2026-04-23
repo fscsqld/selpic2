@@ -7,7 +7,7 @@ import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 
 type RouteContext = { params: Promise<{ orderId: string }> }
 
-const PATCHABLE_STATUSES: OrderStatus[] = ['processing', 'shipped']
+const PATCHABLE_STATUSES: OrderStatus[] = ['approved', 'paid', 'processing', 'shipped', 'cancelled']
 
 /** Single order from Supabase ledger (admin only). */
 export async function GET(_request: Request, context: RouteContext) {
