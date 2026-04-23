@@ -134,3 +134,35 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
   }
 }
+
+/** Remove a row from the Supabase ledger (admin only). Client store must also drop the order locally. */
+export async function DELETE(_request: Request, context: RouteContext) {
+  const adminUser = await requireSupabaseAdminUser()
+  if (!adminUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { orderId } = await context.params
+  if (!orderId?.trim()) {
+    return NextResponse.json({ error: 'Missing order id' }, { status: 400 })
+  }
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
+  }
+
+  try {
+    const sb = getSupabaseAdmin()
+    const { error } = await sb.from('orders').delete().eq('id', orderId.trim())
+
+    if (error) {
+      logAndSafeMessage('orders/orderId DELETE', error)
+      return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    logAndSafeMessage('orders/orderId DELETE catch', e)
+    return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+  }
+}

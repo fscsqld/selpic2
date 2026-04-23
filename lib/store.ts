@@ -922,7 +922,7 @@ export const useStore = create<Store>()(
         }
       },
 
-      deleteOrder: (orderId, performedBy = 'system') => {
+      deleteOrder: (orderId, _performedBy = 'system') => {
         const { orders } = get()
         const updatedOrders = orders.filter(o => o.id !== orderId)
         set({ orders: updatedOrders })
@@ -945,6 +945,20 @@ export const useStore = create<Store>()(
           } catch (e) {
             console.warn('[Store] Failed to persist deleted order to localStorage:', e)
           }
+
+          // Remove from Supabase ledger so the next mergeOrdersFromServer poll does not resurrect the row.
+          void fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+          })
+            .then(async (res) => {
+              if (!res.ok && res.status !== 401 && res.status !== 404) {
+                console.warn('[Store] deleteOrder: server DELETE failed', res.status)
+              }
+            })
+            .catch(() => {
+              /* network — local delete already applied */
+            })
         }
       },
 
