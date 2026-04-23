@@ -23,7 +23,7 @@ import { calculateNextGradeAmount, getGradeInfo } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
 import { User } from '@/lib/userAuth'
-import { calculateUserTotalSales } from '@/lib/userGradeUtils'
+import { calculateUserTotalSales, recalculateAllUserGrades } from '@/lib/userGradeUtils'
 
 interface BorderlineCustomer {
   user: User
@@ -120,6 +120,12 @@ export default function GradeStatusMonitoringPage() {
       }
     }
   }, [])
+
+  // Keep grade dashboards (including Borderline Customers) aligned with latest order ledger.
+  useEffect(() => {
+    if (!_hasHydrated) return
+    recalculateAllUserGrades(users, orders, updateUser)
+  }, [_hasHydrated, users, orders, updateUser])
 
   // 등급별 통계 계산
   const gradeStats = useMemo(() => {
