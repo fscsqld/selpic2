@@ -8,7 +8,16 @@ import { useStore } from '@/lib/store'
 import type { OrderRecord } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import { useUserAuth } from '@/lib/userAuth'
+import { useAdminAuth } from '@/lib/adminAuth'
 import { useTranslation } from '@/lib/useTranslation'
+
+function clearPersistedStaffHeaderForCustomerReturn() {
+  if (typeof window === 'undefined') return
+  if (useAdminAuth.getState().isLoggedIn) {
+    useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
+    window.dispatchEvent(new Event('admin-auth-updated'))
+  }
+}
 
 function SuccessContent() {
   const router = useRouter()
@@ -36,7 +45,10 @@ function SuccessContent() {
       // Safari bfcache revisit: ensure cart badge is reset even when this session was already processed.
       clearCartAfterPaidCheckout()
       setStatus('done')
-      setTimeout(() => router.push('/'), 400)
+      setTimeout(() => {
+        clearPersistedStaffHeaderForCustomerReturn()
+        router.push('/')
+      }, 400)
       return
     }
 
@@ -125,6 +137,7 @@ function SuccessContent() {
         if (cancelled) return
         setStatus('done')
         setTimeout(() => {
+          clearPersistedStaffHeaderForCustomerReturn()
           router.push('/')
         }, 800)
       } catch (e) {

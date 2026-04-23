@@ -297,7 +297,6 @@ export default function Header() {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
       if (!url || !anon) return
-      if (useUserAuth.getState().isLoggedIn) return
       try {
         const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
         const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
@@ -315,6 +314,7 @@ export default function Header() {
           }
           return
         }
+        // Real Supabase admin JWT: leave legacy admin UI policy to admin routes / login.
         if (userHasAdminAccess(u)) return
         if (useAdminAuth.getState().isLoggedIn) {
           useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
@@ -322,7 +322,10 @@ export default function Header() {
             window.dispatchEvent(new Event('admin-auth-updated'))
           }
         }
-        useUserAuth.getState().establishSessionFromSupabaseUser(u)
+        // Hydrated customer session: skip re-establish; stale Staff dashboard was cleared above.
+        if (!useUserAuth.getState().isLoggedIn) {
+          useUserAuth.getState().establishSessionFromSupabaseUser(u)
+        }
       } catch {
         /* non-fatal */
       }
