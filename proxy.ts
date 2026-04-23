@@ -45,7 +45,6 @@ function resolveDeployVersion(request: NextRequest): string {
     process.env.VERCEL_GIT_COMMIT_SHA || '',
     process.env.VERCEL_URL || '',
     request.headers.get('x-vercel-deployment-url') || '',
-    request.headers.get('x-vercel-id') || '',
   ]
   for (const c of candidates) {
     const v = normalizeVersionToken(c)
@@ -77,8 +76,9 @@ export async function proxy(request: NextRequest) {
     deployVersion &&
     !(path === '/admin' || path.startsWith('/admin/'))
   ) {
-    const currentV = request.nextUrl.searchParams.get('v') || ''
-    if (currentV !== deployVersion) {
+    const currentV = (request.nextUrl.searchParams.get('v') || '').trim()
+    // Redirect only once when `v` is missing. Never rewrite existing `v` to avoid loops.
+    if (!currentV) {
       const next = request.nextUrl.clone()
       next.searchParams.set('v', deployVersion)
       return applyProductionSecurityHeaders(NextResponse.redirect(next, 307), isLocal)
