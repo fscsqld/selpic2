@@ -202,28 +202,9 @@ const nextConfig = {
       },
     ]
 
-    if (!NEXT_PUBLIC_SITE_URL) return redirects
-    let canonicalHost = ''
-    try {
-      canonicalHost = new URL(NEXT_PUBLIC_SITE_URL).hostname.toLowerCase()
-    } catch {
-      return redirects
-    }
-    if (!canonicalHost) return redirects
-
-    const secondaryHost = canonicalHost.startsWith('www.')
-      ? canonicalHost.slice(4)
-      : `www.${canonicalHost}`
-
-    redirects.push({
-        // Keep canonical host redirects for storefront pages only.
-        // API routes (especially Stripe webhooks) must not bounce between hosts.
-        source: '/:path((?!api/).*)',
-        has: [{ type: 'host', value: secondaryHost }],
-        destination: `${NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/:path`,
-        permanent: true,
-      })
-
+    // Do not enforce canonical host redirect in app-level config.
+    // Host-level redirect is handled by Vercel domain settings and duplicating it here
+    // can create apex<->www loops on Safari/iPad when edge cache is warm.
     return redirects
   },
 }
