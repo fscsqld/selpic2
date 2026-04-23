@@ -44,7 +44,16 @@ export default function AdminDashboard() {
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
   
   const { adminUser, logout } = useAdminAuth()
-  const { products, orders, currency, autoRefreshInterval, _hasHydrated, refreshProducts, refreshOrdersFromStorage } = useStore()
+  const {
+    products,
+    orders,
+    currency,
+    autoRefreshInterval,
+    _hasHydrated,
+    refreshProducts,
+    refreshOrdersFromStorage,
+    mergeOrdersFromServer,
+  } = useStore()
   const { users } = useUserAuth()
   const { unreadCount } = useMessageStore()
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
@@ -94,6 +103,41 @@ export default function AdminDashboard() {
     }
   }, [refreshProducts, refreshOrdersFromStorage])
 
+  const syncOrdersFromSupabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        mergeOrdersFromServer(data.orders)
+      }
+    } catch {
+      /* ledger unavailable */
+    }
+  }, [mergeOrdersFromServer])
+
+  /** Same ledger merge as /admin/orders so bank-transfer counts include Supabase-backed orders. */
+  useEffect(() => {
+    if (typeof window === 'undefined' || !_hasHydrated) return
+    refreshOrdersFromStorage()
+    syncOrdersFromSupabase()
+    const pollMs = autoRefreshInterval > 0 ? autoRefreshInterval : 15000
+    const id = window.setInterval(() => {
+      syncOrdersFromSupabase()
+    }, pollMs)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshOrdersFromStorage()
+        syncOrdersFromSupabase()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [_hasHydrated, refreshOrdersFromStorage, syncOrdersFromSupabase, autoRefreshInterval])
+
   // 자동 새로고침 기능
   useEffect(() => {
     if (autoRefreshInterval <= 0) return
@@ -140,7 +184,11 @@ export default function AdminDashboard() {
   const pendingBankOrders = useMemo(
     () =>
       orders
-        .filter((o) => o.paymentMethod === 'bank' && o.status === 'pending')
+        .filter(
+          (o) =>
+            String(o.paymentMethod || '').toLowerCase() === 'bank' &&
+            String(o.status || '').toLowerCase() === 'pending'
+        )
         .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
         .slice(0, 8),
     [orders]
