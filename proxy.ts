@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
-  const deployVersion = resolveDeployVersion(request)
+  const deployVersion = resolveDeployVersion(request) || 'live'
 
   // Force versioned storefront root URL to avoid stale edge/document cache on iPad Safari.
   // Applies only to GET / (non-admin) and only when version is available.
