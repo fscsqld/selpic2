@@ -6,6 +6,7 @@ import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
 const VERSION_KEY = 'selpic-deploy-version'
 const VERSION_COOKIE_KEY = 'selpic_deploy_version'
+const RESET_QUERY_KEY = 'resetCache'
 
 /**
  * Prevent stale storefront state across devices after deployments.
@@ -105,10 +106,42 @@ export default function StorefrontDeployVersionGuard() {
     const currentVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     if (!currentVersion) return
 
+    const url = new URL(window.location.href)
+    const wantsForcedReset = url.searchParams.get(RESET_QUERY_KEY) === '1'
+    if (wantsForcedReset) {
+      try {
+        window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
+      } catch {
+        // ignore
+      }
+      try {
+        window.localStorage.removeItem('content-store')
+        window.localStorage.removeItem('selpic-store')
+      } catch {
+        // ignore
+      }
+      persistVersion(currentVersion)
+      void clearClientCaches().finally(() => {
+        const next = new URL(window.location.href)
+        next.searchParams.delete(RESET_QUERY_KEY)
+        next.searchParams.set('v', currentVersion)
+        window.location.replace(next.toString())
+      })
+      return
+    }
+
     const previousVersion = getStoredVersion()
     if (!previousVersion) {
       try {
         window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
+      } catch {
+        // ignore
+      }
+      try {
+        // Safari can occasionally evict only the version key while keeping store snapshots.
+        // If that happens, stale storefront blocks can survive unless we reset here.
+        window.localStorage.removeItem('content-store')
+        window.localStorage.removeItem('selpic-store')
       } catch {
         // ignore
       }
