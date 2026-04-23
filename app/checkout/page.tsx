@@ -16,6 +16,7 @@ import {
 import { useUserAuth } from '@/lib/userAuth'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { updateUserGrade } from '@/lib/userGradeUtils'
+import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import type { OrderRecord } from '@/lib/store'
@@ -24,12 +25,14 @@ export default function CheckoutPage() {
   const router = useRouter()
   const { cart, products, orders, clearCart, mergeOrdersFromServer } = useStore()
   const { isLoggedIn, user: currentUser, updateUser } = useUserAuth()
+  useCustomerOrdersLedgerSync()
   const { 
     getActiveShippingOptions, 
     getDefaultShippingOption,
     getPaymentOptionByType,
     getActivePaymentOptions,
     validatePromoCode,
+    getPromoCodeByCode,
     incrementPromoCodeUsage,
     promoCodes,
     getVIPGradeBenefitForCheckout,
@@ -916,6 +919,14 @@ export default function CheckoutPage() {
         setSkipEmptyCartRedirect(true)
         mergeOrdersFromServer([data.order])
         clearCart(true)
+
+        // Manual bank checkout also consumes promo usage count (parity with Stripe success flow).
+        if (data.order?.promoCode) {
+          const matchedPromo = getPromoCodeByCode(String(data.order.promoCode))
+          if (matchedPromo?.id) {
+            incrementPromoCodeUsage(matchedPromo.id)
+          }
+        }
 
         void (async () => {
           try {
