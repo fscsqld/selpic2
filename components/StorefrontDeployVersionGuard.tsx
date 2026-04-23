@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
 const VERSION_KEY = 'selpic-deploy-version'
+const VERSION_COOKIE_KEY = 'selpic_deploy_version'
 
 /**
  * Prevent stale storefront state across devices after deployments.
@@ -12,6 +13,59 @@ const VERSION_KEY = 'selpic-deploy-version'
  */
 export default function StorefrontDeployVersionGuard() {
   const pathname = usePathname()
+
+  const readCookieVersion = (): string | null => {
+    if (typeof document === 'undefined') return null
+    const chunk = document.cookie
+      .split(';')
+      .map((v) => v.trim())
+      .find((v) => v.startsWith(`${VERSION_COOKIE_KEY}=`))
+    if (!chunk) return null
+    const raw = chunk.slice(VERSION_COOKIE_KEY.length + 1)
+    return raw ? decodeURIComponent(raw) : null
+  }
+
+  const writeCookieVersion = (value: string): void => {
+    if (typeof document === 'undefined') return
+    // 1 year. SameSite=Lax keeps normal navigation behavior.
+    document.cookie = `${VERSION_COOKIE_KEY}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`
+  }
+
+  const getStoredVersion = (): string | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const v = window.localStorage.getItem(VERSION_KEY)
+      if (v) return v
+    } catch {
+      // ignore
+    }
+    try {
+      const v = window.sessionStorage.getItem(VERSION_KEY)
+      if (v) return v
+    } catch {
+      // ignore
+    }
+    return readCookieVersion()
+  }
+
+  const persistVersion = (value: string): void => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(VERSION_KEY, value)
+    } catch {
+      // ignore
+    }
+    try {
+      window.sessionStorage.setItem(VERSION_KEY, value)
+    } catch {
+      // ignore
+    }
+    try {
+      writeCookieVersion(value)
+    } catch {
+      // ignore
+    }
+  }
 
   const clearClientCaches = async (): Promise<void> => {
     if (typeof window === 'undefined') return
@@ -51,24 +105,14 @@ export default function StorefrontDeployVersionGuard() {
     const currentVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     if (!currentVersion) return
 
-    let previousVersion: string | null = null
-    try {
-      previousVersion = window.localStorage.getItem(VERSION_KEY)
-    } catch {
-      // iOS private mode can throw SecurityError on localStorage access.
-      return
-    }
+    const previousVersion = getStoredVersion()
     if (!previousVersion) {
       try {
         window.sessionStorage.removeItem(SELPIC_CMS_BUILD_APPLIED_SESSION_KEY)
       } catch {
         // ignore
       }
-      try {
-        window.localStorage.setItem(VERSION_KEY, currentVersion)
-      } catch {
-        // ignore
-      }
+      persistVersion(currentVersion)
       return
     }
     if (previousVersion === currentVersion) return
@@ -81,10 +125,12 @@ export default function StorefrontDeployVersionGuard() {
     }
     try {
       window.localStorage.removeItem('content-store')
-      window.localStorage.setItem(VERSION_KEY, currentVersion)
+      // Also clear storefront product/order cache to prevent stale UI + broken links on old snapshots.
+      window.localStorage.removeItem('selpic-store')
     } catch {
       // ignore
     }
+    persistVersion(currentVersion)
     void clearClientCaches().finally(() => {
       const next = new URL(window.location.href)
       next.searchParams.set('v', currentVersion)

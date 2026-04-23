@@ -632,6 +632,16 @@ export default function HomePage() {
     return productCounts.byCategory[normalizedTitle] || 0
   }, [productCounts])
 
+  const getCategoryTargetUrl = useCallback((category: CategoryItemWithType) => {
+    let targetUrl = (category.linkUrl || '').trim()
+    if (category.title === 'Market S') {
+      targetUrl = '/hot-goods'
+    } else if (category.title === 'Stickers') {
+      targetUrl = '/stickers'
+    }
+    return targetUrl || '/'
+  }, [])
+
   // 현재 언어에 맞는 번역 가져오기
   const t = (key: string) => {
     const keys = key.split('.')
@@ -1479,10 +1489,12 @@ export default function HomePage() {
             {categoryItems.map((category) => {
               const productCount = getProductCountForCategory(category)
               const backgroundImageUrl = resolvedCategoryBackgrounds[category.id] || category.backgroundImage
+              const targetUrl = getCategoryTargetUrl(category)
 
               return (
-                <div 
+                <Link
                   key={category.id}
+                  href={targetUrl}
                   className={`group relative overflow-hidden rounded-3xl ${
                     category.title === 'SELPIC N' 
                       ? 'bg-white' 
@@ -1503,20 +1515,9 @@ export default function HomePage() {
                     devLog('🎯 Category clicked:', {
                       title: category.title,
                       linkUrl: category.linkUrl,
-                      id: category.id
+                      id: category.id,
+                      targetUrl,
                     })
-                    
-                    // 카테고리 링크 수정
-                    let targetUrl = category.linkUrl
-                    if (category.title === 'Market S') {
-                      targetUrl = '/hot-goods'
-                      devLog('🔧 Market S link corrected to:', targetUrl)
-                    } else if (category.title === 'Stickers') {
-                      targetUrl = '/stickers'
-                      devLog('🔧 Stickers link corrected to:', targetUrl)
-                    }
-                    
-                    window.location.href = targetUrl
                   }}
                 >
                   {/* SELPIC N 전용 배경 이미지 */}
@@ -1562,7 +1563,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   
-                </div>
+                </Link>
               )
             })}
           </div>

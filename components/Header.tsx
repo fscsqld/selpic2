@@ -98,7 +98,7 @@ function HeaderErrorBoundary({ children }: { children: React.ReactNode }) {
 
   if (hasError) {
     return (
-      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-30">
+      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-[70]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <HeaderFallbackBar />
         </div>
@@ -510,7 +510,7 @@ export default function Header() {
 
   return (
     <HeaderErrorBoundary>
-      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-30">
+      <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-[70]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center gap-2 md:gap-3 lg:gap-4 min-h-12 py-1.5 lg:py-2">
             {/* Left: logo (sm/md/lg heights 32px / 40px / 50px via Tailwind defaults) */}
@@ -686,7 +686,7 @@ export default function Header() {
 
           {/* 사이드 네비게이션 */}
           {isNavigationOpen && (
-            <div className="fixed inset-0 z-50">
+            <div className="fixed inset-0 z-[100]">
               {/* 배경 오버레이 */}
               <div 
                 className="absolute inset-0 bg-black bg-opacity-50"
@@ -857,7 +857,7 @@ export default function Header() {
 
           {/* Search Modal */}
           {isSearchOpen && (
-            <div className="fixed inset-0 z-50">
+            <div className="fixed inset-0 z-[100]">
               {/* 배경 오버레이 */}
               <div 
                 className="absolute inset-0 bg-black bg-opacity-50"
