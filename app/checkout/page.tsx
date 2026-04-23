@@ -21,7 +21,7 @@ import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { cart, products, orders } = useStore()
+  const { cart, products, orders, clearCart, mergeOrdersFromServer } = useStore()
   const { user } = useUserAuth()
   const { 
     getActiveShippingOptions, 
@@ -82,20 +82,21 @@ export default function CheckoutPage() {
   
   // Get payment options from Content Store
   const allActivePaymentOptions = getActivePaymentOptions()
-  const stripePaymentOptionFromStore = allActivePaymentOptions.find((option) => option.type === 'stripe')
-  const paymentOptions = stripePaymentOptionFromStore
-    ? [stripePaymentOptionFromStore]
-    : [
-        {
-          id: 'stripe-hosted-checkout',
-          type: 'stripe',
-          name: 'Stripe Checkout',
-          description: 'Secure checkout hosted by Stripe.',
-          fee: 0,
-          isActive: true,
-          requiresAuth: true,
-        } as any,
-      ]
+  const fallbackStripeOption = {
+    id: 'stripe-hosted-checkout',
+    type: 'stripe',
+    name: 'Stripe Checkout',
+    description: 'Secure checkout hosted by Stripe.',
+    fee: 0,
+    isActive: true,
+    requiresAuth: true,
+  } as any
+  const paymentOptions = allActivePaymentOptions.filter((option) =>
+    option.type === 'stripe' || option.type === 'bank'
+  )
+  if (!paymentOptions.some((option) => option.type === 'stripe')) {
+    paymentOptions.unshift(fallbackStripeOption)
+  }
   const defaultPaymentOption = paymentOptions[0]
   
   // 디버깅: Promo Codes 로드 확인
@@ -140,15 +141,16 @@ export default function CheckoutPage() {
   
   // ALL HOOKS MUST BE CALLED FIRST, BEFORE ANY FUNCTIONS THAT USE THEM
   const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<string>('stripe')
+  const [paymentMethod, setPaymentMethod] = useState<string>(defaultPaymentOption?.type || 'stripe')
   const [checkoutNotice, setCheckoutNotice] = useState<{ type: 'error' | 'info' | 'success'; message: string } | null>(null)
   const [activeSwiftTooltipAccountId, setActiveSwiftTooltipAccountId] = useState<string | null>(null)
   
   // Initialize payment method with default option
   useEffect(() => {
     if (!defaultPaymentOption) return
-    if (paymentMethod !== 'stripe') {
-      setPaymentMethod('stripe')
+    const exists = paymentOptions.some((opt) => opt.type === paymentMethod)
+    if (!exists) {
+      setPaymentMethod(defaultPaymentOption.type)
     }
   }, [defaultPaymentOption, paymentMethod, paymentOptions])
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null)
@@ -576,10 +578,11 @@ export default function CheckoutPage() {
     }
   }, [])
 
-  // Ensure payment method meets minimum order requirements
+  // Ensure selected payment method still exists after CMS updates.
   useEffect(() => {
-    if (paymentMethod !== 'stripe') {
-      setPaymentMethod('stripe')
+    const exists = paymentOptions.some((opt) => opt.type === paymentMethod)
+    if (!exists) {
+      setPaymentMethod(defaultPaymentOption?.type || 'stripe')
     }
   }, [cart, paymentMethod, paymentOptions, defaultPaymentOption])
 
@@ -853,7 +856,7 @@ export default function CheckoutPage() {
 
       const selectedPaymentOption = paymentOptions.find(opt => opt.type === paymentMethod)
       if (!selectedPaymentOption) {
-        throw new Error('Stripe payment option is currently unavailable. Please try again shortly.')
+        throw new Error('Selected payment option is currently unavailable. Please try again shortly.')
       }
 
       if (selectedPaymentOption) {
@@ -873,6 +876,35 @@ export default function CheckoutPage() {
           message: 'Some items are no longer available in the requested quantity. Please adjust your cart and try again.',
         })
         router.push('/cart')
+        return
+      }
+
+      if (paymentMethod === 'bank') {
+        const orderData = buildOrderPayload('default')
+        const res = await fetch('/api/orders/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ orderDraft: orderData }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data?.order) {
+          setCheckoutNotice({
+            type: 'error',
+            message:
+              typeof data.error === 'string'
+                ? data.error
+                : 'Could not place your bank transfer order. Please try again.',
+          })
+          return
+        }
+        mergeOrdersFromServer([data.order])
+        clearCart(true)
+        setCheckoutNotice({
+          type: 'success',
+          message: 'Order placed. Please complete your bank transfer using the account details above.',
+        })
+        router.push('/orders?placed=1')
         return
       }
 

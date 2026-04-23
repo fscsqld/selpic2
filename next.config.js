@@ -23,7 +23,10 @@ const NEXT_PUBLIC_SUPABASE_ANON_KEY = stripSupabaseEnvValue(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
 )
 const NEXT_PUBLIC_DEPLOY_VERSION = stripSupabaseEnvValue(
-  process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_DEPLOY_VERSION || 'dev-local'
+  process.env.VERCEL_DEPLOYMENT_ID ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.NEXT_PUBLIC_DEPLOY_VERSION ||
+    'dev-local'
 )
 const NEXT_PUBLIC_SITE_URL = stripSupabaseEnvValue(process.env.NEXT_PUBLIC_SITE_URL || '')
 
@@ -40,6 +43,11 @@ if (process.env.VERCEL === '1' && NEXT_PUBLIC_SUPABASE_URL && !NEXT_PUBLIC_SUPAB
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** New id per deploy so `/_next/static/<buildId>/…` URLs change (stronger than manual ?v= on chunks). */
+  generateBuildId: async () =>
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    `local-${Date.now()}`,
   env: {
     NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -170,6 +178,12 @@ const nextConfig = {
       },
       {
         source: '/api/catalog/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
+        ]
+      },
+      {
+        source: '/api/site-config/:path*',
         headers: [
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
         ]

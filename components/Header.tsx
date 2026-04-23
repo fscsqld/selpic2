@@ -298,7 +298,6 @@ export default function Header() {
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
       if (!url || !anon) return
       if (useUserAuth.getState().isLoggedIn) return
-      if (useAdminAuth.getState().isLoggedIn) return
       try {
         const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
         const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
@@ -306,7 +305,23 @@ export default function Header() {
         const { data } = await supabase.auth.getSession()
         if (cancelled) return
         const u = data.session?.user
-        if (!u || userHasAdminAccess(u)) return
+        if (!u) {
+          // Persisted admin store can stay true after stale tab restore on Safari.
+          if (useAdminAuth.getState().isLoggedIn) {
+            useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new Event('admin-auth-updated'))
+            }
+          }
+          return
+        }
+        if (userHasAdminAccess(u)) return
+        if (useAdminAuth.getState().isLoggedIn) {
+          useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('admin-auth-updated'))
+          }
+        }
         useUserAuth.getState().establishSessionFromSupabaseUser(u)
       } catch {
         /* non-fatal */

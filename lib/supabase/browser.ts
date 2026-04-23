@@ -68,27 +68,25 @@ function logClientOriginOnce(url: string, anon: string) {
   }
 }
 
-/** Default browser fetch (HTTP cache behavior follows the browser). */
+const fetchNoStore: typeof fetch = (input, init) =>
+  fetch(input, {
+    ...init,
+    cache: 'no-store',
+  })
+
+/**
+ * Browser Supabase client — every REST/realtime-capable request uses `cache: 'no-store'` so
+ * PostgREST and session calls are not reused from HTTP cache (fixes stale catalog/CMS on Safari).
+ */
 export function createSupabaseBrowserClient() {
   const { url, anon } = readValidatedSupabasePublicEnv()
   logClientOriginOnce(url, anon)
-  return createBrowserClient(url, anon)
-}
-
-/**
- * Same URL and anon key as {@link createSupabaseBrowserClient}; passes `cache: 'no-store'` on every
- * request so PostgREST responses are not served from the HTTP cache (avoids stale `site_configs` on
- * local vs deployed after CMS updates).
- */
-export function createSupabaseBrowserClientNoStore() {
-  const { url, anon } = readValidatedSupabasePublicEnv()
-  logClientOriginOnce(url, anon)
-  const fetchNoStore: typeof fetch = (input, init) =>
-    fetch(input, {
-      ...init,
-      cache: 'no-store',
-    })
   return createBrowserClient(url, anon, {
     global: { fetch: fetchNoStore },
   })
+}
+
+/** @deprecated Alias of {@link createSupabaseBrowserClient} (same no-store fetch). */
+export function createSupabaseBrowserClientNoStore() {
+  return createSupabaseBrowserClient()
 }

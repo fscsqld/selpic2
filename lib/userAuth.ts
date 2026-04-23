@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useAdminAuth } from '@/lib/adminAuth'
 
 const USER_AUTH_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -407,6 +408,13 @@ export const useUserAuth = create<UserAuthState>()(
       establishSessionFromSupabaseUser: (sbUser) => {
         const id = (sbUser.id || '').trim()
         if (!id) return
+        // Storefront user session should never keep a stale admin badge/menu from persisted admin store.
+        if (useAdminAuth.getState().isLoggedIn) {
+          useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('admin-auth-updated'))
+          }
+        }
         const emailRaw = (sbUser.email || '').trim()
         const email = emailRaw
           ? emailRaw.toLowerCase()

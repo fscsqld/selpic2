@@ -23,6 +23,7 @@ export async function syncCatalogToServer(products: Product[]): Promise<{ ok: bo
     const res = await fetch('/api/catalog/products', {
       method: 'POST',
       headers,
+      cache: 'no-store',
       body: JSON.stringify({ products: snapshots })
     })
     if (!res.ok) {

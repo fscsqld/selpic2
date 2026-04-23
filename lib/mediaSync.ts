@@ -61,6 +61,7 @@ export async function syncMediaToServer(files: MediaFile[]): Promise<{ ok: boole
     const res = await fetch('/api/media/products', {
       method: 'POST',
       headers,
+      cache: 'no-store',
       body: JSON.stringify({ mediaFiles: payload }),
     })
     if (!res.ok) return { ok: false, status: res.status }

@@ -19,6 +19,11 @@ function SuccessContent() {
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
+  const clearCartAfterPaidCheckout = () => {
+    const { clearCart } = useStore.getState()
+    clearCart(true)
+  }
+
   useEffect(() => {
     if (!sessionId) {
       setStatus('error')
@@ -28,6 +33,8 @@ function SuccessContent() {
 
     const doneKey = `stripe-order-done-${sessionId}`
     if (typeof window !== 'undefined' && sessionStorage.getItem(doneKey)) {
+      // Safari bfcache revisit: ensure cart badge is reset even when this session was already processed.
+      clearCartAfterPaidCheckout()
       setStatus('done')
       setTimeout(() => router.push('/'), 400)
       return
@@ -40,6 +47,7 @@ function SuccessContent() {
         const res = await fetch('/api/stripe/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
           body: JSON.stringify({ session_id: sessionId }),
         })
         const data = await res.json().catch(() => ({}))
@@ -54,6 +62,7 @@ function SuccessContent() {
         const user = useUserAuth.getState().user
 
         mergeOrdersFromServer([order])
+        clearCartAfterPaidCheckout()
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(doneKey, order.id)

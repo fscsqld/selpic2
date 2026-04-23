@@ -13,6 +13,35 @@ const VERSION_KEY = 'selpic-deploy-version'
 export default function StorefrontDeployVersionGuard() {
   const pathname = usePathname()
 
+  const clearClientCaches = async (): Promise<void> => {
+    if (typeof window === 'undefined') return
+    try {
+      if ('caches' in window) {
+        const keys = await window.caches.keys()
+        await Promise.all(keys.map((key) => window.caches.delete(key)))
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(
+          regs.map(async (reg) => {
+            try {
+              await reg.update()
+            } catch {
+              // ignore
+            }
+            await reg.unregister()
+          })
+        )
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // useLayoutEffect: must run before ContentStoreSupabaseSync (also layout) so session bust
   // is visible on first paint; useEffect would run too late on iOS Safari.
   useLayoutEffect(() => {
@@ -56,7 +85,11 @@ export default function StorefrontDeployVersionGuard() {
     } catch {
       // ignore
     }
-    window.location.reload()
+    void clearClientCaches().finally(() => {
+      const next = new URL(window.location.href)
+      next.searchParams.set('v', currentVersion)
+      window.location.replace(next.toString())
+    })
   }, [pathname])
 
   return null

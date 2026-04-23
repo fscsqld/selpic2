@@ -195,6 +195,8 @@ export async function POST(req: Request) {
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
+      // Keep Checkout deterministic: disable BNPL wallets (e.g. Zip) by allowing card only.
+      payment_method_types: ['card'],
       line_items,
       success_url: `${origin.replace(/\/$/, '')}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin.replace(/\/$/, '')}/cart`,

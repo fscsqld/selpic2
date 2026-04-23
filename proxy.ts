@@ -78,21 +78,31 @@ export async function proxy(request: NextRequest) {
 
   const response = NextResponse.next()
 
-  const isStaticAsset =
-    path.startsWith('/_next/') ||
+  // Aggressive HTML/RSC shell anti-cache for storefront routes (iPad Safari keeps stale shells easily).
+  // Skip APIs, Next internals, known static dirs, and typical extensioned public files.
+  const skipDocumentCacheBust =
+    path.startsWith('/api') ||
+    path.startsWith('/_next') ||
     path === '/favicon.ico' ||
     path === '/robots.txt' ||
     path.startsWith('/uploads/') ||
     path.startsWith('/images/') ||
-    path.startsWith('/videos/')
-  if (!isStaticAsset && !path.startsWith('/api')) {
+    path.startsWith('/videos/') ||
+    /\.[a-zA-Z0-9]{1,12}$/.test(path)
+
+  if (!skipDocumentCacheBust) {
     const accept = request.headers.get('accept') || ''
     const rsc = (request.headers.get('rsc') || '').toLowerCase()
     const secFetchDest = request.headers.get('sec-fetch-dest')
+    const secFetchMode = request.headers.get('sec-fetch-mode')
     const looksLikeDocumentOrFlight =
       secFetchDest === 'document' || accept.includes('text/html') || rsc === '1' || rsc === 'true'
-    if (looksLikeDocumentOrFlight) {
-      response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate')
+    const looksLikeTopLevelNavigation = secFetchMode === 'navigate'
+    if (looksLikeDocumentOrFlight || looksLikeTopLevelNavigation) {
+      response.headers.set(
+        'Cache-Control',
+        'private, no-cache, no-store, must-revalidate, max-age=0'
+      )
       response.headers.set('Pragma', 'no-cache')
     }
   }

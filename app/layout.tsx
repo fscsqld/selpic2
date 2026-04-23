@@ -12,10 +12,11 @@ const siteDescription =
   'Create premium custom name labels, stickers, and personalized products with Selpic. Waterproof quality, fast turnaround, and easy online ordering across Australia.'
 const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.png`
 
-/** Ensures phones use the same responsive layout scale as desktop browsers (no accidental zoomed-out “desktop site”). */
+/** Ensures phones/tablets use device width; viewportFit helps safe-area on notched iOS; theme for browser chrome. */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#34aadc',
 }
 
@@ -82,13 +83,20 @@ export const metadata: Metadata = {
   },
 }
 
+function withDeployCacheBust(href: string): string {
+  const v = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+  if (!v) return href
+  const sep = href.includes('?') ? '&' : '?'
+  return `${href}${sep}v=${encodeURIComponent(v)}`
+}
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   // Stampzone machine: load Google Fonts for label printer
-  const googleFontsUrls = getAllGoogleFontsUrls()
+  const googleFontsUrls = getAllGoogleFontsUrls().map(withDeployCacheBust)
   const organizationJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -111,6 +119,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Meta no-cache is not authoritative like HTTP headers, but helps older/embedded browsers. */}
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
         {/* ✅ Google Fonts CDN 로드 */}
         {googleFontsUrls.map((url) => (
           <link key={url} rel="stylesheet" href={url} />
@@ -120,7 +132,9 @@ export default function RootLayout({
         <link key="preconnect-gstatic" rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           key="stylesheet-ko-bundle"
-          href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Jua&family=Do+Hyeon&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Brush+Script&family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap"
+          href={withDeployCacheBust(
+            'https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Jua&family=Do+Hyeon&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Brush+Script&family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap'
+          )}
           rel="stylesheet"
         />
         <script
