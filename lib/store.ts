@@ -854,18 +854,70 @@ export const useStore = create<Store>()(
           }
         }
         
-        // When marked paid: notify customer; receipt PDF is skipped for bank transfer (admin sends after deposit)
+        // When marked paid: confirmation email (always); receipt skipped for bank (admin sends via sendAdminOrderEmailAction / receipt button).
+        // Prefer Supabase-backed sendAdminOrderEmailAction so Supabase admins don't depend on legacy adminAuth or CMS templates.
         if (status === 'paid') {
           setTimeout(() => {
-            get().sendOrderConfirmationEmail(orderId)
-            const after = get().orders.find((o) => o.id === orderId)
-            if (
-              after &&
-              after.paymentMethod !== 'bank' &&
-              !after.receiptEmail?.sent
-            ) {
-              get().sendReceiptEmail(orderId)
-            }
+            void (async () => {
+              const markConfirmationSent = () => {
+                const sentAt = new Date().toISOString()
+                set({
+                  orders: get().orders.map((o) =>
+                    o.id === orderId
+                      ? {
+                          ...o,
+                          emailConfirmation: {
+                            sent: true,
+                            sentAt,
+                            status: 'sent' as const,
+                            attempts: (o.emailConfirmation?.attempts || 0) + 1,
+                            lastAttempt: sentAt,
+                          },
+                        }
+                      : o
+                  ),
+                })
+              }
+              const markReceiptSent = () => {
+                const sentAt = new Date().toISOString()
+                set({
+                  orders: get().orders.map((o) =>
+                    o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
+                  ),
+                })
+              }
+
+              try {
+                const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
+                const conf = await sendAdminOrderEmailAction({ orderId, kind: 'confirmation' })
+                if (conf.ok) {
+                  markConfirmationSent()
+                } else {
+                  await get().sendOrderConfirmationEmail(orderId)
+                }
+              } catch {
+                await get().sendOrderConfirmationEmail(orderId)
+              }
+
+              const after = get().orders.find((o) => o.id === orderId)
+              if (
+                after &&
+                after.paymentMethod !== 'bank' &&
+                !after.receiptEmail?.sent
+              ) {
+                try {
+                  const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
+                  const rec = await sendAdminOrderEmailAction({ orderId, kind: 'receipt' })
+                  if (rec.ok) {
+                    markReceiptSent()
+                  } else {
+                    await get().sendReceiptEmail(orderId)
+                  }
+                } catch {
+                  await get().sendReceiptEmail(orderId)
+                }
+              }
+            })()
           }, 100)
         }
       },
@@ -1743,6 +1795,22 @@ export const useStore = create<Store>()(
         if (!order) {
           console.error('Order not found for receipt email:', orderId)
           return false
+        }
+
+        try {
+          const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
+          const ledger = await sendAdminOrderEmailAction({ orderId, kind: 'receipt' })
+          if (ledger.ok) {
+            const sentAt = new Date().toISOString()
+            set((state) => ({
+              orders: state.orders.map((o) =>
+                o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
+              ),
+            }))
+            return true
+          }
+        } catch {
+          /* fall through to legacy paths */
         }
 
         const isAdminSession =

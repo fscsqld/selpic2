@@ -900,6 +900,32 @@ export default function CheckoutPage() {
         }
         mergeOrdersFromServer([data.order])
         clearCart(true)
+
+        void (async () => {
+          try {
+            const { sendGuestCheckoutEmailsAction } = await import('@/app/actions/emails')
+            const placed = data.order as OrderRecord
+            const r = await sendGuestCheckoutEmailsAction(JSON.stringify(placed))
+            if (r.ok) {
+              const sentAt = new Date().toISOString()
+              mergeOrdersFromServer([
+                {
+                  ...placed,
+                  emailConfirmation: {
+                    sent: true,
+                    sentAt,
+                    status: 'sent' as const,
+                    attempts: 1,
+                    lastAttempt: sentAt,
+                  },
+                },
+              ])
+            }
+          } catch {
+            /* non-fatal */
+          }
+        })()
+
         setCheckoutNotice({
           type: 'success',
           message: 'Order placed. Please complete your bank transfer using the account details above.',
