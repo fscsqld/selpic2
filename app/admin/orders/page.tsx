@@ -17,6 +17,14 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-800'
 }
 
+const paymentMethodColors: Record<string, string> = {
+  stripe: 'bg-indigo-100 text-indigo-800',
+  bank: 'bg-emerald-100 text-emerald-800',
+  card: 'bg-blue-100 text-blue-800',
+  paypal: 'bg-sky-100 text-sky-800',
+  cash: 'bg-amber-100 text-amber-800',
+}
+
 export default function AdminOrdersPage() {
   const { orders, updateOrderStatus, deleteOrder, updateOrderCustomer, updateOrderAddress, updateOrderItems, updateOrderDiscounts, updateOrderShipping, recalculateOrderTotal, addOrderNote, updateOrderNote, deleteOrderNote, defaultPageSize, refreshOrdersFromStorage, mergeOrdersFromServer, autoRefreshInterval } = useStore()
   const { adminUser } = useAdminAuth()
@@ -183,10 +191,15 @@ export default function AdminOrdersPage() {
           customer: '고객',
           items: '항목',
           total: '합계',
+          payment: '결제수단',
           shipping: '배송',
           status: '상태',
+          actions: '작업',
+          followUp: '처리',
           subtotal: '소계'
         },
+        markPaid: '입금확인 → Paid',
+        confirmMarkPaid: '이 주문의 입금을 확인하고 상태를 Paid로 변경할까요?',
         delete: '삭제',
         confirmDelete: '이 주문을 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
         packingSlip: '패킹 슬립',
@@ -251,10 +264,15 @@ export default function AdminOrdersPage() {
           customer: 'Customer',
           items: 'Items',
           total: 'Total',
+          payment: 'Payment',
           shipping: 'Shipping',
           status: 'Status',
+          actions: 'Actions',
+          followUp: 'Follow-up',
           subtotal: 'Subtotal'
         },
+        markPaid: 'Confirm Deposit → Paid',
+        confirmMarkPaid: 'Confirm this deposit and set order status to Paid?',
         delete: 'Delete',
         confirmDelete: 'Delete this order? This action cannot be undone.',
         packingSlip: 'Packing Slip',
@@ -726,6 +744,17 @@ export default function AdminOrdersPage() {
   const historyOrder = showHistory ? orders.find(o => o.id === showHistory) : null
   const notesOrder = showNotes ? orders.find(o => o.id === showNotes) : null
 
+  const getPaymentMethodLabel = (order: any) => {
+    const method = String(order?.paymentMethod || '').toLowerCase()
+    if (method === 'stripe') return 'Stripe'
+    if (method === 'bank') return T.bank
+    if (method === 'card') return T.card
+    if (method === 'paypal') return T.paypal
+    if (method === 'cash') return T.cash
+    const fallback = String(order?.paymentMethodName || method || 'Unknown').trim()
+    return fallback || 'Unknown'
+  }
+
   return (
     <AdminRoute>
       <div className="min-h-screen bg-gray-50">
@@ -1049,9 +1078,10 @@ export default function AdminOrdersPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.order}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.customer}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.items}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">Action1</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">Action2</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.actions}</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.followUp}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.total}</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.payment}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.status}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Email</th>
                   </tr>
@@ -1132,7 +1162,31 @@ export default function AdminOrdersPage() {
                         <div className="font-semibold text-gray-900">${order.total.toFixed(2)}</div>
                       </td>
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            paymentMethodColors[String(order.paymentMethod || '').toLowerCase()] || 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {getPaymentMethodLabel(order)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm border-r border-gray-100">
+                        <div className="space-y-2">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                          {String(order.paymentMethod || '').toLowerCase() === 'bank' && order.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(T.confirmMarkPaid)) {
+                                  updateOrderStatus(order.id, 'paid', performedBy)
+                                }
+                              }}
+                              className="block text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                              {T.markPaid}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm">
                         {order.emailConfirmation ? (
@@ -1151,7 +1205,7 @@ export default function AdminOrdersPage() {
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                         <div className="flex items-center justify-center gap-2">
                           <Clock size={18} /> {T.noOrders}
                         </div>
