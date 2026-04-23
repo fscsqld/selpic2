@@ -26,6 +26,34 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
   return response
 }
 
+function normalizeVersionToken(raw: string): string {
+  if (!raw) return ''
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/[^a-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  return cleaned.slice(0, 80)
+}
+
+function resolveDeployVersion(request: NextRequest): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_DEPLOY_VERSION || '',
+    process.env.VERCEL_DEPLOYMENT_ID || '',
+    process.env.VERCEL_GIT_COMMIT_SHA || '',
+    process.env.VERCEL_URL || '',
+    request.headers.get('x-vercel-deployment-url') || '',
+    request.headers.get('x-vercel-id') || '',
+  ]
+  for (const c of candidates) {
+    const v = normalizeVersionToken(c)
+    if (v) return v
+  }
+  return ''
+}
+
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   const protoHeader = request.headers.get('x-forwarded-proto')
@@ -39,7 +67,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
-  const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+  const deployVersion = resolveDeployVersion(request)
 
   // Force versioned storefront root URL to avoid stale edge/document cache on iPad Safari.
   // Applies only to GET / (non-admin) and only when version is available.
