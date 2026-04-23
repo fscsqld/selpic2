@@ -22,12 +22,13 @@ export function calculateUserTotalSales(
   orders: OrderRecord[],
   userPhone?: string
 ): number {
+  const ELIGIBLE_STATUSES = new Set(['paid', 'approved', 'processing', 'shipped'])
   const normalizedEmail = (userEmail || '').trim().toLowerCase()
   const normalizedPhone = userPhone ? (userPhone || '').replace(/\D/g, '').replace(/^\+?61/, '0') : ''
   
   const userOrders = orders.filter(order => {
-    // 취소된 주문 제외
-    if (order.status === 'cancelled') return false
+    // 결제 확정/이행 단계 주문만 포함 (pending, cancelled 제외)
+    if (!ELIGIBLE_STATUSES.has(String(order.status || '').toLowerCase())) return false
     
     const orderEmail = (order.customer.email || '').trim().toLowerCase()
     const orderPhone = (order.customer.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')

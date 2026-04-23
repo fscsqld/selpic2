@@ -15,6 +15,7 @@ import {
 } from '@/lib/contentStore'
 import { useUserAuth } from '@/lib/userAuth'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
+import { updateUserGrade } from '@/lib/userGradeUtils'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import type { OrderRecord } from '@/lib/store'
@@ -22,7 +23,7 @@ import type { OrderRecord } from '@/lib/store'
 export default function CheckoutPage() {
   const router = useRouter()
   const { cart, products, orders, clearCart, mergeOrdersFromServer } = useStore()
-  const { user } = useUserAuth()
+  const { isLoggedIn, user: currentUser, updateUser } = useUserAuth()
   const { 
     getActiveShippingOptions, 
     getDefaultShippingOption,
@@ -110,7 +111,12 @@ export default function CheckoutPage() {
     }
   }, [_hasHydrated, promoCodes])
   const { t } = useTranslation()
-  const { isLoggedIn, user: currentUser } = useUserAuth()
+
+  // Ensure checkout discounts always use up-to-date VIP grade after order ledger syncs.
+  useEffect(() => {
+    if (!_hasHydrated || !isLoggedIn || !currentUser?.id) return
+    updateUserGrade(currentUser, orders, updateUser)
+  }, [_hasHydrated, isLoggedIn, currentUser, orders, updateUser])
   
   // Get shipping options from Content Store
   const shippingOptions = getActiveShippingOptions()
@@ -493,7 +499,15 @@ export default function CheckoutPage() {
       cartLength: cart.length
     })
     
-    const validation = validatePromoCode(normalizedCode, subtotal, cartItems, user?.id, orders, user?.email, user?.phone)
+    const validation = validatePromoCode(
+      normalizedCode,
+      subtotal,
+      cartItems,
+      currentUser?.id,
+      orders,
+      currentUser?.email,
+      currentUser?.phone
+    )
     
     console.log('✅ Validation result:', validation)
     

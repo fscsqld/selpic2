@@ -791,67 +791,42 @@ export const useStore = create<Store>()(
         })
         set({ orders: updatedOrders })
         
-        // VIP 등급 시스템: 배송 완료 시 등급 업데이트 (shipped 상태일 때)
-        // 주문 상태가 'shipped'로 변경되고, 이전 상태가 'shipped'가 아니었을 때만 처리
-        if (status === 'shipped' && previousOrder?.status !== 'shipped') {
-          const order = updatedOrders.find(o => o.id === orderId)
-          
-          if (order?.customer?.email) {
-            setTimeout(() => {
-              try {
-                // 동적 import로 순환 참조 방지
-                import('@/lib/userGradeUtils').then(({ updateUserGrade }) => {
-                  import('@/lib/userAuth').then(({ useUserAuth }) => {
-                    const { users, updateUser } = useUserAuth.getState()
-                    const user = users.find(u => 
+        const order = updatedOrders.find((o) => o.id === orderId)
+
+        // VIP 등급 시스템: 결제/이행/취소 상태 변경 시 등급 재계산
+        // - paid/approved/processing/shipped: 누적 구매액 반영
+        // - cancelled: 누적 구매액 제외 반영
+        const shouldRecalculateGrade =
+          status !== previousOrder?.status &&
+          ['paid', 'approved', 'processing', 'shipped', 'cancelled'].includes(status)
+        if (shouldRecalculateGrade && order?.customer?.email) {
+          setTimeout(() => {
+            try {
+              import('@/lib/userGradeUtils').then(({ updateUserGrade }) => {
+                import('@/lib/userAuth').then(({ useUserAuth }) => {
+                  const { users, updateUser } = useUserAuth.getState()
+                  const user = users.find(
+                    (u) =>
                       (u.email || '').trim().toLowerCase() === (order.customer?.email || '').trim().toLowerCase()
-                    )
-                    if (user) {
-                      updateUserGrade(user, updatedOrders, updateUser)
-                    }
-                  })
+                  )
+                  if (user) {
+                    updateUserGrade(user, updatedOrders, updateUser)
+                  }
                 })
-              } catch (error) {
-                console.error('Error updating user grade:', error)
-              }
-            }, 100)
-          }
-          
-          // Shipping Notification 이메일 자동 발송 (추적 정보가 있는 경우)
-          if (order?.tracking?.number) {
-            setTimeout(() => {
-              get().sendShippingNotificationEmail(orderId).catch(error => {
-                console.error('Failed to send shipping notification email:', error)
               })
-            }, 200)
-          }
+            } catch (error) {
+              console.error('Error updating user grade:', error)
+            }
+          }, 100)
         }
-        
-        // VIP 등급 시스템: 주문 취소 시 등급 업데이트 (cancelled 상태일 때)
-        // 취소된 주문 금액이 총 판매액에서 제외되도록 등급 재계산
-        if (status === 'cancelled') {
-          const order = updatedOrders.find(o => o.id === orderId)
-          if (order?.customer?.email) {
-            setTimeout(() => {
-              try {
-                // 동적 import로 순환 참조 방지
-                import('@/lib/userGradeUtils').then(({ updateUserGrade }) => {
-                  import('@/lib/userAuth').then(({ useUserAuth }) => {
-                    const { users, updateUser } = useUserAuth.getState()
-                    const user = users.find(u => 
-                      (u.email || '').trim().toLowerCase() === (order.customer?.email || '').trim().toLowerCase()
-                    )
-                    if (user) {
-                      console.log(`🔄 VIP 등급 재계산: 주문 ${orderId} 취소로 인한 등급 업데이트`)
-                      updateUserGrade(user, updatedOrders, updateUser)
-                    }
-                  })
-                })
-              } catch (error) {
-                console.error('Error updating user grade after cancellation:', error)
-              }
-            }, 100)
-          }
+
+        // Shipping Notification 이메일 자동 발송 (추적 정보가 있는 경우)
+        if (status === 'shipped' && previousOrder?.status !== 'shipped' && order?.tracking?.number) {
+          setTimeout(() => {
+            get().sendShippingNotificationEmail(orderId).catch(error => {
+              console.error('Failed to send shipping notification email:', error)
+            })
+          }, 200)
         }
         
         // When marked paid: confirmation email (always); receipt skipped for bank (admin sends via sendAdminOrderEmailAction / receipt button).
