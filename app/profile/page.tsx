@@ -11,6 +11,7 @@ import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
 import { calculateUserTotalSales } from '@/lib/userGradeUtils'
+import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -30,6 +31,8 @@ export default function ProfilePage() {
   } | null>(null)
   
   const { orders, _hasHydrated } = useStore()
+
+  useCustomerOrdersLedgerSync()
   
   // VIP 등급 정보 업데이트 함수
   const updateVipGradeInfo = (currentUser: typeof user) => {

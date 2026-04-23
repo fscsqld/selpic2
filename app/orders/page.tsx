@@ -7,6 +7,7 @@ import OrderTracking from '@/components/OrderTracking'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
+import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 
 function normalizeEmail(email: string) {
   return (email || '').trim().toLowerCase()
@@ -21,13 +22,10 @@ function normalizePhoneAu(input: string) {
 
 export default function OrdersPage() {
   const { t } = useTranslation()
-  const { orders, refreshOrdersFromStorage } = useStore()
+  const { orders } = useStore()
   const { isLoggedIn, user } = useUserAuth()
 
-  // 페이지 진입 시 localStorage에서 주문 목록 동기화 (주문 직후 Order History에 반영)
-  useEffect(() => {
-    refreshOrdersFromStorage()
-  }, [refreshOrdersFromStorage])
+  useCustomerOrdersLedgerSync()
 
   const [lookupId, setLookupId] = useState('')
   const [lookupEmail, setLookupEmail] = useState('')

@@ -5,8 +5,10 @@ import Header from '@/components/Header'
 import OrderTracking from '@/components/OrderTracking'
 import OrderEmailConfirmation from '@/components/OrderEmailConfirmation'
 import { useStore } from '@/lib/store'
+import { useUserAuth } from '@/lib/userAuth'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { useTranslation } from '@/lib/useTranslation'
+import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
@@ -16,6 +18,8 @@ export default function OrderDetailPage() {
   const router = useRouter()
   const { t } = useTranslation()
   const { orders, _hasHydrated } = useStore()
+  const { isLoggedIn, user } = useUserAuth()
+  const { ledgerSyncDone } = useCustomerOrdersLedgerSync()
 
   const orderId = Array.isArray(params?.orderId) ? params.orderId[0] : params?.orderId
   const order = orders.find(o => o.id === orderId)
@@ -37,6 +41,22 @@ export default function OrderDetailPage() {
 
   // Wait for hydration before showing not found
   if (!_hasHydrated) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500">
+            Loading order...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const awaitingLedgerMerge =
+    Boolean(isLoggedIn && user?.email?.trim()) && !ledgerSyncDone
+
+  if (awaitingLedgerMerge) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
