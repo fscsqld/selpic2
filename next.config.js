@@ -192,20 +192,7 @@ const nextConfig = {
   },
   async redirects() {
     const deployVersionForRedirect = NEXT_PUBLIC_DEPLOY_VERSION || 'live'
-    if (!NEXT_PUBLIC_SITE_URL) return []
-    let canonicalHost = ''
-    try {
-      canonicalHost = new URL(NEXT_PUBLIC_SITE_URL).hostname.toLowerCase()
-    } catch {
-      return []
-    }
-    if (!canonicalHost) return []
-
-    const secondaryHost = canonicalHost.startsWith('www.')
-      ? canonicalHost.slice(4)
-      : `www.${canonicalHost}`
-
-    return [
+    const redirects = [
       {
         // Ensure root URL always carries a version query (tablet/iPad stale shell mitigation).
         source: '/',
@@ -213,15 +200,31 @@ const nextConfig = {
         destination: `/?v=${encodeURIComponent(deployVersionForRedirect)}`,
         permanent: false,
       },
-      {
+    ]
+
+    if (!NEXT_PUBLIC_SITE_URL) return redirects
+    let canonicalHost = ''
+    try {
+      canonicalHost = new URL(NEXT_PUBLIC_SITE_URL).hostname.toLowerCase()
+    } catch {
+      return redirects
+    }
+    if (!canonicalHost) return redirects
+
+    const secondaryHost = canonicalHost.startsWith('www.')
+      ? canonicalHost.slice(4)
+      : `www.${canonicalHost}`
+
+    redirects.push({
         // Keep canonical host redirects for storefront pages only.
         // API routes (especially Stripe webhooks) must not bounce between hosts.
         source: '/:path((?!api/).*)',
         has: [{ type: 'host', value: secondaryHost }],
         destination: `${NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')}/:path`,
         permanent: true,
-      },
-    ]
+      })
+
+    return redirects
   },
 }
 
