@@ -51,6 +51,57 @@ function receiptPdfAttachment(order: OrderRecord): ResendAttachmentInput | null 
   }
 }
 
+async function markConfirmationSentInLedger(orderId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return
+  try {
+    const sb = getSupabaseAdmin()
+    const { data, error } = await sb.from('orders').select('payload').eq('id', orderId).maybeSingle()
+    if (error || !data?.payload) return
+    const current = normalizeLedgerOrder(data.payload as OrderRecord)
+    const now = new Date().toISOString()
+    const next: OrderRecord = {
+      ...current,
+      emailConfirmation: {
+        sent: true,
+        sentAt: now,
+        status: 'sent',
+        attempts: (current.emailConfirmation?.attempts || 0) + 1,
+        lastAttempt: now,
+      },
+    }
+    const { error: upErr } = await sb.from('orders').update({ payload: next }).eq('id', orderId)
+    if (upErr) {
+      console.warn('[emails] markConfirmationSentInLedger failed:', upErr.message)
+    }
+  } catch (e) {
+    console.warn('[emails] markConfirmationSentInLedger error:', e)
+  }
+}
+
+async function markReceiptSentInLedger(orderId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return
+  try {
+    const sb = getSupabaseAdmin()
+    const { data, error } = await sb.from('orders').select('payload').eq('id', orderId).maybeSingle()
+    if (error || !data?.payload) return
+    const current = normalizeLedgerOrder(data.payload as OrderRecord)
+    const now = new Date().toISOString()
+    const next: OrderRecord = {
+      ...current,
+      receiptEmail: {
+        sent: true,
+        sentAt: now,
+      },
+    }
+    const { error: upErr } = await sb.from('orders').update({ payload: next }).eq('id', orderId)
+    if (upErr) {
+      console.warn('[emails] markReceiptSentInLedger failed:', upErr.message)
+    }
+  } catch (e) {
+    console.warn('[emails] markReceiptSentInLedger error:', e)
+  }
+}
+
 function parseOrderRecordJson(json: string): OrderRecord | null {
   try {
     const o = JSON.parse(json) as unknown
@@ -157,6 +208,7 @@ export async function sendStripeCheckoutEmailsAction(
     console.error('[sendStripeCheckoutEmailsAction] confirmation', c1.logMessage)
     return { ok: false, error: 'SEND_FAILED' }
   }
+  await markConfirmationSentInLedger(order.id)
 
   const rHtml = buildSimpleReceiptEmailHtml(order)
   const rSub = buildSimpleReceiptSubject(order.id)
@@ -170,6 +222,8 @@ export async function sendStripeCheckoutEmailsAction(
   if (!c2.ok) {
     console.error('[sendStripeCheckoutEmailsAction] receipt', c2.logMessage)
     /* non-fatal */
+  } else {
+    await markReceiptSentInLedger(order.id)
   }
 
   return { ok: true }
@@ -199,6 +253,7 @@ export async function sendGuestCheckoutEmailsAction(
     console.error('[sendGuestCheckoutEmailsAction] confirmation', c1.logMessage)
     return { ok: false, error: 'SEND_FAILED' }
   }
+  await markConfirmationSentInLedger(order.id)
 
   if (order.paymentMethod !== 'bank') {
     const rHtml = buildSimpleReceiptEmailHtml(order)
@@ -210,7 +265,11 @@ export async function sendGuestCheckoutEmailsAction(
       html: rHtml,
       ...(pdf ? { attachments: [pdf] } : {}),
     })
-    if (!c2.ok) console.error('[sendGuestCheckoutEmailsAction] receipt', c2.logMessage)
+    if (!c2.ok) {
+      console.error('[sendGuestCheckoutEmailsAction] receipt', c2.logMessage)
+    } else {
+      await markReceiptSentInLedger(order.id)
+    }
   }
 
   return { ok: true }
@@ -247,6 +306,7 @@ export async function sendCustomerReceiptEmailAction(
     console.error('[sendCustomerReceiptEmailAction]', r.logMessage)
     return { ok: false, error: 'SEND_FAILED' }
   }
+  await markReceiptSentInLedger(order.id)
   return { ok: true }
 }
 
@@ -276,6 +336,7 @@ export async function sendAdminOrderEmailAction(input: {
       console.error('[sendAdminOrderEmailAction] confirmation', r.logMessage)
       return { ok: false, error: 'SEND_FAILED' }
     }
+    await markConfirmationSentInLedger(order.id)
   }
 
   if (input.kind === 'receipt' || input.kind === 'both') {
@@ -290,6 +351,7 @@ export async function sendAdminOrderEmailAction(input: {
       console.error('[sendAdminOrderEmailAction] receipt', r.logMessage)
       return { ok: false, error: 'SEND_FAILED' }
     }
+    await markReceiptSentInLedger(order.id)
   }
 
   return { ok: true }
