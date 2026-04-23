@@ -141,6 +141,7 @@ export default function CheckoutPage() {
   
   // ALL HOOKS MUST BE CALLED FIRST, BEFORE ANY FUNCTIONS THAT USE THEM
   const [isProcessing, setIsProcessing] = useState(false)
+  const [skipEmptyCartRedirect, setSkipEmptyCartRedirect] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<string>(defaultPaymentOption?.type || 'stripe')
   const [checkoutNotice, setCheckoutNotice] = useState<{ type: 'error' | 'info' | 'success'; message: string } | null>(null)
   const [activeSwiftTooltipAccountId, setActiveSwiftTooltipAccountId] = useState<string | null>(null)
@@ -551,10 +552,10 @@ export default function CheckoutPage() {
     if (!isLoggedIn) {
       setCheckoutNotice({ type: 'info', message: 'Please sign in to continue to checkout.' })
       router.push('/login')
-    } else if (cart.length === 0) {
+    } else if (!skipEmptyCartRedirect && cart.length === 0) {
       router.push('/cart')
     }
-  }, [cart, router, isLoggedIn])
+  }, [cart, router, isLoggedIn, skipEmptyCartRedirect])
 
   // VIP Grade Benefits/Criteria 변경 감지 및 실시간 반영
   useEffect(() => {
@@ -898,6 +899,7 @@ export default function CheckoutPage() {
           })
           return
         }
+        setSkipEmptyCartRedirect(true)
         mergeOrdersFromServer([data.order])
         clearCart(true)
 
