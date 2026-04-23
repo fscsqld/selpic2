@@ -39,6 +39,23 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
+  const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+
+  // Force versioned storefront root URL to avoid stale edge/document cache on iPad Safari.
+  // Applies only to GET / (non-admin) and only when version is available.
+  if (
+    request.method === 'GET' &&
+    path === '/' &&
+    deployVersion &&
+    !(path === '/admin' || path.startsWith('/admin/'))
+  ) {
+    const currentV = request.nextUrl.searchParams.get('v') || ''
+    if (currentV !== deployVersion) {
+      const next = request.nextUrl.clone()
+      next.searchParams.set('v', deployVersion)
+      return applyProductionSecurityHeaders(NextResponse.redirect(next, 307), isLocal)
+    }
+  }
 
   if (
     path === '/auth/callback' ||
