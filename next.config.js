@@ -191,6 +191,7 @@ const nextConfig = {
     ]
   },
   async redirects() {
+    const deployVersionForRedirect = NEXT_PUBLIC_DEPLOY_VERSION || 'live'
     if (!NEXT_PUBLIC_SITE_URL) return []
     let canonicalHost = ''
     try {
@@ -205,6 +206,13 @@ const nextConfig = {
       : `www.${canonicalHost}`
 
     return [
+      {
+        // Ensure root URL always carries a version query (tablet/iPad stale shell mitigation).
+        source: '/',
+        missing: [{ type: 'query', key: 'v' }],
+        destination: `/?v=${encodeURIComponent(deployVersionForRedirect)}`,
+        permanent: false,
+      },
       {
         // Keep canonical host redirects for storefront pages only.
         // API routes (especially Stripe webhooks) must not bounce between hosts.
