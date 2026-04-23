@@ -226,6 +226,7 @@ export default function AdminOrdersPage() {
         statusAll: '전체 상태',
         pending: '대기',
         paid: '결제완료',
+        approved: '승인됨',
         processing: '처리중',
         shipped: '배송',
         cancelled: '취소',
@@ -299,6 +300,7 @@ export default function AdminOrdersPage() {
         statusAll: 'All Statuses',
         pending: 'Pending',
         paid: 'Paid',
+        approved: 'Approved',
         processing: 'Processing',
         shipped: 'Shipped',
         cancelled: 'Cancelled',
@@ -875,6 +877,7 @@ export default function AdminOrdersPage() {
                 <option value="">{T.statusAll}</option>
                 <option value="pending">{T.pending}</option>
                 <option value="paid">{T.paid}</option>
+                <option value="approved">{T.approved}</option>
                 <option value="processing">{T.processing}</option>
                 <option value="shipped">{T.shipped}</option>
                 <option value="cancelled">{T.cancelled}</option>
