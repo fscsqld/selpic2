@@ -110,9 +110,6 @@ export async function proxy(request: NextRequest) {
   return applyProductionSecurityHeaders(response, isLocal)
 }
 
-/** Next.js 16: `proxy.ts` is the middleware entry; alias for framework convention. */
-export const middleware = proxy
-
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
