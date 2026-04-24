@@ -26,6 +26,34 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
   return response
 }
 
+/** Strong no-cache for HTML/RSC navigations (iPad Safari); skip APIs and static asset paths. */
+function applyDocumentCacheBust(response: NextResponse, request: NextRequest) {
+  const path = request.nextUrl.pathname
+  const skipDocumentCacheBust =
+    path.startsWith('/api') ||
+    path.startsWith('/_next') ||
+    path === '/favicon.ico' ||
+    path === '/robots.txt' ||
+    path.startsWith('/uploads/') ||
+    path.startsWith('/images/') ||
+    path.startsWith('/videos/') ||
+    /\.[a-zA-Z0-9]{1,12}$/.test(path)
+
+  if (skipDocumentCacheBust) return
+
+  const accept = request.headers.get('accept') || ''
+  const rsc = (request.headers.get('rsc') || '').toLowerCase()
+  const secFetchDest = request.headers.get('sec-fetch-dest')
+  const secFetchMode = request.headers.get('sec-fetch-mode')
+  const looksLikeDocumentOrFlight =
+    secFetchDest === 'document' || accept.includes('text/html') || rsc === '1' || rsc === 'true'
+  const looksLikeTopLevelNavigation = secFetchMode === 'navigate'
+  if (looksLikeDocumentOrFlight || looksLikeTopLevelNavigation) {
+    response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   const protoHeader = request.headers.get('x-forwarded-proto')
@@ -39,17 +67,6 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
-
-  if (
-    path === '/auth/callback' ||
-    path.startsWith('/auth/callback/') ||
-    path === '/auth/reset-password' ||
-    path.startsWith('/auth/reset-password/') ||
-    path === '/auth/forgot-password' ||
-    path.startsWith('/auth/forgot-password/')
-  ) {
-    return applyProductionSecurityHeaders(NextResponse.next(), isLocal)
-  }
 
   const isAdminLogin = path === '/admin/login' || path.startsWith('/admin/login/')
   const isAdminArea = path === '/admin' || path.startsWith('/admin/')
@@ -68,6 +85,7 @@ export async function proxy(request: NextRequest) {
         return applyProductionSecurityHeaders(NextResponse.redirect(home), isLocal)
       }
 
+      applyDocumentCacheBust(response, request)
       return applyProductionSecurityHeaders(response, isLocal)
     } catch (e) {
       console.error('[proxy] admin Supabase check failed', e)
@@ -76,39 +94,24 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.next()
-
-  // Aggressive HTML/RSC shell anti-cache for storefront routes (iPad Safari keeps stale shells easily).
-  // Skip APIs, Next internals, known static dirs, and typical extensioned public files.
-  const skipDocumentCacheBust =
-    path.startsWith('/api') ||
-    path.startsWith('/_next') ||
-    path === '/favicon.ico' ||
-    path === '/robots.txt' ||
-    path.startsWith('/uploads/') ||
-    path.startsWith('/images/') ||
-    path.startsWith('/videos/') ||
-    /\.[a-zA-Z0-9]{1,12}$/.test(path)
-
-  if (!skipDocumentCacheBust) {
-    const accept = request.headers.get('accept') || ''
-    const rsc = (request.headers.get('rsc') || '').toLowerCase()
-    const secFetchDest = request.headers.get('sec-fetch-dest')
-    const secFetchMode = request.headers.get('sec-fetch-mode')
-    const looksLikeDocumentOrFlight =
-      secFetchDest === 'document' || accept.includes('text/html') || rsc === '1' || rsc === 'true'
-    const looksLikeTopLevelNavigation = secFetchMode === 'navigate'
-    if (looksLikeDocumentOrFlight || looksLikeTopLevelNavigation) {
-      response.headers.set(
-        'Cache-Control',
-        'private, no-cache, no-store, must-revalidate, max-age=0'
-      )
-      response.headers.set('Pragma', 'no-cache')
+  if (hasPublicSupabase) {
+    try {
+      const { supabase, response } = createSupabaseMiddlewareClient(request)
+      await supabase.auth.getUser()
+      applyDocumentCacheBust(response, request)
+      return applyProductionSecurityHeaders(response, isLocal)
+    } catch (e) {
+      console.error('[proxy] storefront Supabase session refresh failed', e)
     }
   }
 
+  const response = NextResponse.next()
+  applyDocumentCacheBust(response, request)
   return applyProductionSecurityHeaders(response, isLocal)
 }
+
+/** Next.js 16: `proxy.ts` is the middleware entry; alias for framework convention. */
+export const middleware = proxy
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],

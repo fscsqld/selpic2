@@ -88,6 +88,66 @@ function HeroCoverImage({
   )
 }
 
+/**
+ * Category cards used CSS `background-image`, which does not surface load failures (broken URLs / indexeddb leftovers).
+ * Mirror hero behavior: `<img>` + fallback chain.
+ */
+function CategoryCoverImage({
+  primarySrc,
+  className = 'absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110',
+}: {
+  primarySrc: string
+  className?: string
+}) {
+  const [tier, setTier] = useState(0)
+  const [allFailed, setAllFailed] = useState(false)
+
+  useEffect(() => {
+    setTier(0)
+    setAllFailed(false)
+  }, [primarySrc])
+
+  const chain = useMemo(() => {
+    const p = (primarySrc || '').trim()
+    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, '/logo.png', LOCAL_HERO_FALLBACK_URL]
+    const out: string[] = []
+    for (const u of ordered) {
+      if (u && !u.startsWith('indexeddb://') && !out.includes(u)) out.push(u)
+    }
+    return out.length > 0 ? out : [LOCAL_HERO_FALLBACK_URL]
+  }, [primarySrc])
+
+  const idx = Math.min(tier, Math.max(0, chain.length - 1))
+  const src = chain[idx] || LOCAL_HERO_FALLBACK_URL
+
+  if (allFailed) {
+    return <div className={`${className} bg-slate-800`} aria-hidden />
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      role="presentation"
+      className={className}
+      draggable={false}
+      decoding="async"
+      loading="lazy"
+      onError={() => {
+        setTier((t) => {
+          const next = t + 1
+          if (next >= chain.length) {
+            queueMicrotask(() => setAllFailed(true))
+            return t
+          }
+          return next
+        })
+      }}
+    />
+  )
+}
+
 // ✅ 개발 환경에서만 로그 출력하는 유틸리티 함수
 const isDev = process.env.NODE_ENV === 'development'
 const devLog = (...args: any[]) => {
@@ -420,22 +480,9 @@ import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/compan
 const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string }) => {
   const defaultImage = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop&q=80'
   const bg = backgroundImage?.trim()
-  const imageUrl =
-    bg && !bg.startsWith('indexeddb://') ? bg : defaultImage
-  
-  return (
-    <>
-      {/* 배경 이미지 레이어 */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center transform group-hover:scale-110 transition-transform duration-700"
-        style={{
-          backgroundImage: `url('${imageUrl}')`,
-        }}
-      ></div>
-      
-      {/* 오버레이 제거: SELPIC N 배경 이미지 선명하게 표시 */}
-    </>
-  )
+  const primary = bg && !bg.startsWith('indexeddb://') ? bg : defaultImage
+
+  return <CategoryCoverImage primarySrc={primary} />
 }
 
 export default function HomePage() {
@@ -1548,7 +1595,9 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {categoryItems.map((category) => {
               const productCount = getProductCountForCategory(category)
-              const backgroundImageUrl = resolvedCategoryBackgrounds[category.id] || category.backgroundImage
+              const rawBg = (resolvedCategoryBackgrounds[category.id] || category.backgroundImage || '').trim()
+              const safeCategoryBg =
+                rawBg && !rawBg.startsWith('indexeddb://') ? rawBg : ''
               const targetUrl = getCategoryTargetUrl(category)
 
               return (
@@ -1556,21 +1605,12 @@ export default function HomePage() {
                   key={category.id}
                   href={targetUrl}
                   className={`group relative overflow-hidden rounded-3xl ${
-                    category.title === 'SELPIC N' 
-                      ? 'bg-white' 
-                      : backgroundImageUrl
+                    category.title === 'SELPIC N'
+                      ? 'bg-white'
+                      : safeCategoryBg
                         ? ''
                         : `bg-gradient-to-br ${category.gradientFrom} ${category.gradientTo}`
                   } min-h-[400px] cursor-pointer transform hover:scale-105 transition-all duration-500 shadow-xl`}
-                  style={backgroundImageUrl && category.title !== 'SELPIC N' ? {
-                    backgroundImage: `url('${backgroundImageUrl}')`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  } : category.title === 'SELPIC N' && backgroundImageUrl ? {
-                    backgroundImage: `url('${backgroundImageUrl}')`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  } : {}}
                   onClick={() => {
                     devLog('🎯 Category clicked:', {
                       title: category.title,
@@ -1580,6 +1620,9 @@ export default function HomePage() {
                     })
                   }}
                 >
+                  {safeCategoryBg && category.title !== 'SELPIC N' && (
+                    <CategoryCoverImage primarySrc={safeCategoryBg} />
+                  )}
                   {/* SELPIC N 전용 배경 이미지 */}
                   {category.title === 'SELPIC N' && (
                     <SELPICNBackgroundImage backgroundImage={category.backgroundImage} />
