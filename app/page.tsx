@@ -20,6 +20,47 @@ type CategoryItemWithType = CategoryItem & { categoryType?: string }
 const HYDRATION_SAFE_HERO_POSTER_URL =
   'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80'
 
+/** Same-origin fallback when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
+const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
+
+/**
+ * `<img>` + onError chain so a failed remote poster does not leave a plain black hero (CSS `background-image` does not fire onError).
+ */
+function HeroCoverImage({
+  primarySrc,
+  className = 'absolute inset-0 z-0 h-full w-full object-cover',
+}: {
+  primarySrc: string
+  className?: string
+}) {
+  const [tier, setTier] = useState(0)
+  const chain = useMemo(() => {
+    const p = (primarySrc || '').trim()
+    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, LOCAL_HERO_FALLBACK_URL]
+    const out: string[] = []
+    for (const u of ordered) {
+      if (u && !out.includes(u)) out.push(u)
+    }
+    return out.length > 0 ? out : [LOCAL_HERO_FALLBACK_URL]
+  }, [primarySrc])
+
+  const idx = Math.min(tier, Math.max(0, chain.length - 1))
+  const src = chain[idx] || LOCAL_HERO_FALLBACK_URL
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      className={className}
+      draggable={false}
+      decoding="async"
+      loading="eager"
+      onError={() => setTier((t) => Math.min(t + 1, chain.length - 1))}
+    />
+  )
+}
+
 // ✅ 개발 환경에서만 로그 출력하는 유틸리티 함수
 const isDev = process.env.NODE_ENV === 'development'
 const devLog = (...args: any[]) => {
@@ -76,15 +117,11 @@ const isValidVideoUrl = (url: string): boolean => {
 
 const ImageSlide = React.memo(({ src }: { src: string }) => {
   const s = (src || '').trim()
-  const bgUrl =
+  const primary =
     !s || s.startsWith('indexeddb://') ? HYDRATION_SAFE_HERO_POSTER_URL : s
   return (
-    <div className="relative w-full h-full bg-black">
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
-        style={{ backgroundImage: `url('${bgUrl}')` }}
-        aria-hidden
-      />
+    <div className="relative h-full w-full bg-black">
+      <HeroCoverImage primarySrc={primary} />
     </div>
   )
 })
@@ -147,7 +184,13 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
   
   // Defensive helpers (메모이제이션)
   const isBlobUrl = useMemo(() => typeof actualSrc === 'string' && actualSrc.startsWith('blob:'), [actualSrc])
-  const safeFallback = useMemo(() => (fallbackImage && fallbackImage.trim() !== '') ? fallbackImage : '/logo.svg', [fallbackImage])
+  const safeFallback = useMemo(
+    () =>
+      fallbackImage && fallbackImage.trim() !== ''
+        ? fallbackImage
+        : LOCAL_HERO_FALLBACK_URL,
+    [fallbackImage]
+  )
   
   // ✅ actualSrc 변경 시 에러·로드 상태 초기화
   useEffect(() => {
@@ -205,12 +248,8 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     mediaReady && !videoError && !!actualSrc && actualSrc.trim() !== ''
   if (!canRenderVideo) {
     return (
-      <div className="relative w-full h-full bg-black">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
-          style={{ backgroundImage: `url('${safeFallback}')` }}
-          aria-hidden
-        />
+      <div className="relative h-full w-full bg-black">
+        <HeroCoverImage primarySrc={safeFallback} />
       </div>
     )
   }
@@ -218,18 +257,12 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
   return (
     <div className="relative w-full h-full">
       {/* 배경 레이어: 동영상 좌우(또는 상하) 여백을 같은 이미지(fallback)로 채움. 검은 막대 대신 자연스럽게 보이도록 */}
-      {safeFallback && (
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
-          style={{ backgroundImage: `url('${safeFallback}')` }}
-          aria-hidden
-        />
-      )}
+      {safeFallback && <HeroCoverImage primarySrc={safeFallback} />}
       {/* 로딩/에러 시에만 배경 이미지만 보이게 하는 덮개 */}
       {(!videoLoaded || videoError) && safeFallback && (
-        <div 
-          className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat z-[11]"
-          style={{ backgroundImage: `url('${safeFallback}')` }}
+        <HeroCoverImage
+          primarySrc={safeFallback}
+          className="pointer-events-none absolute inset-0 z-[11] h-full w-full object-cover"
         />
       )}
       
@@ -389,6 +422,13 @@ export default function HomePage() {
   useEffect(() => {
     setIsClientMounted(true)
   }, [])
+
+  // New tablets with no selpic-store: fill products from server catalog so category counts are not stuck at 0.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isClientMounted || !_hasHydrated) return
+    void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
+  }, [isClientMounted, _hasHydrated])
 
   // 🔧 상품 상태 확인 (개발 환경에서만)
   useEffect(() => {
@@ -1458,15 +1498,8 @@ export default function HomePage() {
             </div>
           </>
           ) : (
-            <div
-              className="h-screen w-full relative bg-black"
-              aria-busy="true"
-            >
-              <div
-                className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
-                style={{ backgroundImage: `url('${HYDRATION_SAFE_HERO_POSTER_URL}')` }}
-                aria-hidden
-              />
+            <div className="relative h-screen w-full bg-black" aria-busy="true">
+              <HeroCoverImage primarySrc={HYDRATION_SAFE_HERO_POSTER_URL} />
             </div>
           )}
       </section>
