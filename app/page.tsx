@@ -20,11 +20,12 @@ type CategoryItemWithType = CategoryItem & { categoryType?: string }
 const HYDRATION_SAFE_HERO_POSTER_URL =
   'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80'
 
-/** Same-origin fallback when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
+/** Same-origin fallbacks when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
 const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
 
 /**
  * `<img>` + onError chain so a failed remote poster does not leave a plain black hero (CSS `background-image` does not fire onError).
+ * When every URL fails, render a plain black layer — otherwise Safari shows a broken-image glyph ("?") in the hero.
  */
 function HeroCoverImage({
   primarySrc,
@@ -34,9 +35,16 @@ function HeroCoverImage({
   className?: string
 }) {
   const [tier, setTier] = useState(0)
+  const [allFailed, setAllFailed] = useState(false)
+
+  useEffect(() => {
+    setTier(0)
+    setAllFailed(false)
+  }, [primarySrc])
+
   const chain = useMemo(() => {
     const p = (primarySrc || '').trim()
-    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, LOCAL_HERO_FALLBACK_URL]
+    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, '/logo.png', LOCAL_HERO_FALLBACK_URL]
     const out: string[] = []
     for (const u of ordered) {
       if (u && !out.includes(u)) out.push(u)
@@ -47,16 +55,35 @@ function HeroCoverImage({
   const idx = Math.min(tier, Math.max(0, chain.length - 1))
   const src = chain[idx] || LOCAL_HERO_FALLBACK_URL
 
+  if (allFailed) {
+    return (
+      <div
+        className={`${className} bg-black`}
+        aria-hidden
+      />
+    )
+  }
+
   return (
     <img
       src={src}
       alt=""
       aria-hidden
+      role="presentation"
       className={className}
       draggable={false}
       decoding="async"
       loading="eager"
-      onError={() => setTier((t) => Math.min(t + 1, chain.length - 1))}
+      onError={() => {
+        setTier((t) => {
+          const next = t + 1
+          if (next >= chain.length) {
+            queueMicrotask(() => setAllFailed(true))
+            return t
+          }
+          return next
+        })
+      }}
     />
   )
 }

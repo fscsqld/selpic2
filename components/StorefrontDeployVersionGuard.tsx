@@ -103,6 +103,14 @@ export default function StorefrontDeployVersionGuard() {
     if (typeof window === 'undefined') return
     if (pathname === '/admin' || pathname.startsWith('/admin/')) return
 
+    /** Avoid full-document reload during sign-in / auth — was interrupting login & showing confusing failures. */
+    const skipHardReload =
+      pathname === '/login' ||
+      pathname.startsWith('/register') ||
+      pathname.startsWith('/auth/') ||
+      pathname === '/forgot-password' ||
+      pathname.startsWith('/reset-password')
+
     const currentVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     if (!currentVersion) return
 
@@ -131,6 +139,10 @@ export default function StorefrontDeployVersionGuard() {
       void clearClientCaches().finally(() => {
         const next = new URL(window.location.href)
         next.searchParams.delete(RESET_QUERY_KEY)
+        if (skipHardReload) {
+          window.history.replaceState(null, '', next.toString())
+          return
+        }
         window.location.replace(next.toString())
       })
       return
@@ -171,6 +183,7 @@ export default function StorefrontDeployVersionGuard() {
     }
     persistVersion(currentVersion)
     void clearClientCaches().finally(() => {
+      if (skipHardReload) return
       const next = new URL(window.location.href)
       window.location.replace(next.toString())
     })
