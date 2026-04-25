@@ -8,9 +8,9 @@ import ClientSwCacheReset from '@/components/ClientSwCacheReset'
 const inter = Inter({ subsets: ['latin'] })
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
 const siteName = 'Selpic'
-const siteTitle = 'Selpic | Premium Custom Stickers in Australia'
+const siteTitle = 'Custom Stickers & Name Labels Australia | Selpic'
 const siteDescription =
-  'Create premium custom name labels, stickers, and personalized products with Selpic. Waterproof quality, fast turnaround, and easy online ordering across Australia.'
+  'Order custom stickers and waterproof name labels in Australia with Selpic. Fast turnaround, premium print quality, and easy online personalization for school, home, and business.'
 const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.png`
 
 /** Ensures phones/tablets use device width; viewportFit helps safe-area on notched iOS; theme for browser chrome. */
@@ -31,8 +31,11 @@ export const metadata: Metadata = {
   keywords: [
     'custom stickers',
     'name labels',
+    'waterproof name labels',
+    'school name labels',
     'waterproof stickers',
     'personalized labels',
+    'custom labels australia',
     'Selpic',
     'Australia',
   ],

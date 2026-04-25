@@ -3,10 +3,10 @@ import { buildPublicMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/stamp',
-  title: 'Custom Stamps',
+  title: 'Custom Stamps & Labeling Tools',
   description:
-    'Create custom stamps with Selpic for office, personal, and business workflows, with durable materials and clear impressions.',
-  keywords: ['custom stamps', 'stamp printing', 'office stamp australia'],
+    'Create custom stamps and practical labeling tools with Selpic for office, home, and business workflows with clear, durable impressions.',
+  keywords: ['custom stamps', 'labeling tools', 'stamp printing', 'office stamp australia'],
 })
 
 export default function StampLayout({ children }: { children: React.ReactNode }) {
