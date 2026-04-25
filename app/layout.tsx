@@ -38,7 +38,8 @@ export const metadata: Metadata = {
   ],
   metadataBase: new URL(siteUrl),
   alternates: {
-    canonical: '/',
+    // Resolve canonical to each current route instead of forcing every page to "/".
+    canonical: './',
   },
   openGraph: {
     title: siteTitle,

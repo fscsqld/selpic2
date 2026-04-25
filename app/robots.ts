@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next'
 
 export default function robots(): MetadataRoute.Robots {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  // Keep a single canonical host for Search Console and avoid local/preview confusion.
+  const base = 'https://selpic.com.au'
   return {
     rules: [
       {
