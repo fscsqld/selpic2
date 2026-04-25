@@ -20,15 +20,18 @@ function isLanOrDevHost(hostname: string): boolean {
 const CANONICAL_HOST = 'selpic.com.au'
 
 /**
- * Send all public storefront traffic on Vercel / alternate hosts to the apex production domain
- * so crawlers never treat *.vercel.app or www as canonical.
+ * Send Vercel deployment host traffic to the apex production domain so crawlers never treat
+ * *.vercel.app as canonical.
+ *
+ * Do NOT redirect `www` here: Vercel Domains often already enforce www ↔ apex; a second
+ * redirect layer causes ERR_TOO_MANY_REDIRECTS. Configure www → apex once in Vercel project Domains.
  */
 function maybeCanonicalHostRedirect(request: NextRequest): NextResponse | null {
   const host = (request.headers.get('host') || request.nextUrl.hostname || '').split(':')[0].toLowerCase()
   if (!host || isLanOrDevHost(host)) return null
   if (host === CANONICAL_HOST) return null
 
-  const needsRedirect = host.endsWith('.vercel.app') || host === 'www.selpic.com.au'
+  const needsRedirect = host.endsWith('.vercel.app')
 
   if (!needsRedirect) return null
 

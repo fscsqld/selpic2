@@ -3,12 +3,6 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.selpic.com.au" }],
-      "destination": "https://selpic.com.au/:path*",
-      "permanent": true
-    },
-    {
-      "source": "/:path*",
       "has": [{ "type": "host", "value": "selpic2.vercel.app" }],
       "destination": "https://selpic.com.au/:path*",
       "permanent": true
