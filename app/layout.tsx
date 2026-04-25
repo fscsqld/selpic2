@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
+import ClientSwCacheReset from '@/components/ClientSwCacheReset'
 
 const inter = Inter({ subsets: ['latin'] })
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
@@ -115,7 +116,6 @@ export default function RootLayout({
     name: 'Selpic',
     url: siteUrl
   }
-  
   return (
     <html lang="en">
       <head>
@@ -148,7 +148,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <ClientSwCacheReset />
+        {children}
+      </body>
     </html>
   )
 }

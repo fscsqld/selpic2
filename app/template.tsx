@@ -21,8 +21,10 @@ export default function RootTemplate({
 }: {
   children: React.ReactNode
 }) {
+  // Avoid `display: contents` here — it can confuse the browser/React reconciler and cause
+  // removeChild NotFoundError on dev (localhost) with React 19 + nested client roots.
   return (
-    <div className="contents">
+    <>
       <StorefrontDeployVersionGuard />
       <ContentStoreSupabaseSync />
       <SiteConfigStoreAutosave />
@@ -30,6 +32,6 @@ export default function RootTemplate({
       <CatalogStoreHydrator />
       <SiteConfigWriteStatusBadge />
       <GamePromoCodeSyncLazy />
-    </div>
+    </>
   )
 }

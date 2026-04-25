@@ -23,10 +23,22 @@ export default function ContentStoreSupabaseSync() {
   const ran = useRef(false)
   const lastRemoteSignature = useRef<string>('')
   const remoteMergeSucceeded = useRef(false)
+  const disableRemoteSync = (process.env.NEXT_PUBLIC_DISABLE_REMOTE_CMS_SYNC || '').trim() === '1'
 
   useEffect(() => {
     if (ran.current) return
     ran.current = true
+
+    if (disableRemoteSync) {
+      try {
+        useContentStore.getState().setSiteConfigRemoteSynced(true)
+      } catch {
+        // ignore
+      }
+      // Diagnostic mode: ignore Supabase CMS and keep bundle/local defaults.
+      markSiteConfigRemoteFetchSettled(false)
+      return
+    }
 
     const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     if (typeof window !== 'undefined' && deployVersion) {
@@ -196,7 +208,7 @@ export default function ContentStoreSupabaseSync() {
       window.removeEventListener('online', onOnline)
       flushPendingSiteConfigState()
     }
-  }, [])
+  }, [disableRemoteSync])
 
   return null
 }

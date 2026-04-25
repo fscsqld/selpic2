@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       fromReferer ||
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.NEXT_PUBLIC_BASE_URL ||
-      'http://localhost:3000'
+      'http://192.168.1.104:3005'
     const base = site.replace(/\/$/, '')
 
     const supabase = createClient(url, anon, {

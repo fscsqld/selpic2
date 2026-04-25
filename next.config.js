@@ -22,6 +22,9 @@ const NEXT_PUBLIC_SUPABASE_URL = stripSupabaseEnvValue(
 const NEXT_PUBLIC_SUPABASE_ANON_KEY = stripSupabaseEnvValue(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
 )
+// Stable default for local dev: a timestamp here changes on every `next dev` restart and triggers
+// StorefrontDeployVersionGuard → full reload during useLayoutEffect, which races React and causes
+// removeChild NotFoundError on localhost. Bump NEXT_PUBLIC_DEPLOY_VERSION manually when you need a bust.
 const NEXT_PUBLIC_DEPLOY_VERSION = stripSupabaseEnvValue(
   process.env.VERCEL_DEPLOYMENT_ID ||
     process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -43,6 +46,9 @@ if (process.env.VERCEL === '1' && NEXT_PUBLIC_SUPABASE_URL && !NEXT_PUBLIC_SUPAB
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ['192.168.1.104'],
+  // iPad Safari compatibility: ensure swiper client bundle is transpiled for older WebKit engines.
+  transpilePackages: ['swiper'],
   /** New id per deploy so `/_next/static/<buildId>/…` URLs change (stronger than manual ?v= on chunks). */
   generateBuildId: async () =>
     process.env.VERCEL_DEPLOYMENT_ID ||
@@ -53,10 +59,14 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_DEPLOY_VERSION,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname),
+    }
+    // Force fresh compilation in local dev when devices (tablet) keep stale static chunks aggressively.
+    if (dev) {
+      config.cache = false
     }
     if (!isServer && config.output) {
       // Dev/slow disks: avoid spurious ChunkLoadError on large layout chunks
@@ -101,53 +111,18 @@ const nextConfig = {
           ]
         : []
 
-    // In development, long-lived immutable caching on /_next/static can cause
-    // stale chunks after HMR → ChunkLoadError / timeout loading app/layout.js.
-    const longCache =
-      process.env.NODE_ENV === 'production'
-        ? [
-            {
-              source: '/_next/static/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'public, max-age=31536000, immutable'
-                }
-              ]
-            },
-            {
-              source: '/uploads/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'public, max-age=31536000, immutable'
-                }
-              ]
-            },
-            {
-              source: '/images/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'public, max-age=31536000, immutable'
-                }
-              ]
-            },
-            {
-              source: '/videos/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'public, max-age=31536000, immutable'
-                }
-              ]
-            }
-          ]
-        : []
-
     return [
       ...securityHeaders,
-      ...longCache,
+      {
+        // Strong no-cache for HTML/API shells. Do NOT send Clear-Site-Data on document navigations:
+        // browsers may wipe localStorage/sessionStorage while React is hydrating (removeChild errors).
+        source: '/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+        ],
+      },
       {
         // Home is CMS-driven on the client; avoid long-lived CDN HTML cache so mobile/desktop
         // do not keep an old prerender shell / RSC payload while JS bundles are already updated.

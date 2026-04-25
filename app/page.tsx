@@ -22,6 +22,35 @@ const HYDRATION_SAFE_HERO_POSTER_URL =
 
 /** Same-origin fallbacks when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
 const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
+const LOCAL_ASSET_VERSION = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+const PUBLIC_SITE_CONFIG_URL = (() => {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
+  return base ? `${base}/api/site-config/public` : '/api/site-config/public'
+})()
+
+function scheduleMicrotaskSafe(fn: () => void): void {
+  try {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(fn)
+      return
+    }
+  } catch {
+    // ignore
+  }
+  Promise.resolve()
+    .then(fn)
+    .catch(() => {
+      // ignore
+    })
+}
+
+function withAssetVersion(url: string): string {
+  const raw = (url || '').trim()
+  if (!raw || !raw.startsWith('/')) return raw
+  if (!LOCAL_ASSET_VERSION) return raw
+  const glue = raw.includes('?') ? '&' : '?'
+  return `${raw}${glue}v=${encodeURIComponent(LOCAL_ASSET_VERSION)}`
+}
 
 /**
  * `<img>` + onError chain so a failed remote poster does not leave a plain black hero (CSS `background-image` does not fire onError).
@@ -44,7 +73,12 @@ function HeroCoverImage({
 
   const chain = useMemo(() => {
     const p = (primarySrc || '').trim()
-    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, '/logo.png', LOCAL_HERO_FALLBACK_URL]
+    const ordered = [
+      p,
+      HYDRATION_SAFE_HERO_POSTER_URL,
+      withAssetVersion('/logo.png'),
+      withAssetVersion(LOCAL_HERO_FALLBACK_URL),
+    ]
     const out: string[] = []
     for (const u of ordered) {
       if (u && !out.includes(u)) out.push(u)
@@ -78,7 +112,7 @@ function HeroCoverImage({
         setTier((t) => {
           const next = t + 1
           if (next >= chain.length) {
-            queueMicrotask(() => setAllFailed(true))
+            scheduleMicrotaskSafe(() => setAllFailed(true))
             return t
           }
           return next
@@ -109,7 +143,12 @@ function CategoryCoverImage({
 
   const chain = useMemo(() => {
     const p = (primarySrc || '').trim()
-    const ordered = [p, HYDRATION_SAFE_HERO_POSTER_URL, '/logo.png', LOCAL_HERO_FALLBACK_URL]
+    const ordered = [
+      p,
+      HYDRATION_SAFE_HERO_POSTER_URL,
+      withAssetVersion('/logo.png'),
+      withAssetVersion(LOCAL_HERO_FALLBACK_URL),
+    ]
     const out: string[] = []
     for (const u of ordered) {
       if (u && !u.startsWith('indexeddb://') && !out.includes(u)) out.push(u)
@@ -138,7 +177,7 @@ function CategoryCoverImage({
         setTier((t) => {
           const next = t + 1
           if (next >= chain.length) {
-            queueMicrotask(() => setAllFailed(true))
+            scheduleMicrotaskSafe(() => setAllFailed(true))
             return t
           }
           return next
@@ -473,7 +512,11 @@ import 'swiper/css/pagination'
 
 import { useStore, useStore as useStoreDirect } from '@/lib/store'
 import { translations } from '@/lib/translations'
-import { useContentStore } from '@/lib/contentStore'
+import {
+  useContentStore,
+  mergeRemoteSiteConfigForStoreApply,
+  normalizeRehydratedContentStoreState,
+} from '@/lib/contentStore'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 
@@ -491,6 +534,7 @@ export default function HomePage() {
   const [swiperInstance, setSwiperInstance] = useState<any>(null)
   const [forceUpdate, setForceUpdate] = useState(0)
   const [isClientMounted, setIsClientMounted] = useState(false)
+  const [hasPersistedCmsSnapshot, setHasPersistedCmsSnapshot] = useState(false)
 
   // Prevent SSR/CSR markup mismatch on iPad Safari when persisted CMS state differs at hydration time.
   useEffect(() => {
@@ -503,6 +547,71 @@ export default function HomePage() {
     if (!isClientMounted || !_hasHydrated) return
     void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
   }, [isClientMounted, _hasHydrated])
+
+  // Distinguish "real cached CMS snapshot" from bundled defaults.
+  // On tablets where remote fetch times out, rendering defaults as if they were live CMS
+  // causes old-looking header/category/hero combinations.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isClientMounted) return
+    try {
+      const raw = window.localStorage.getItem('content-store')
+      if (!raw) {
+        setHasPersistedCmsSnapshot(false)
+        return
+      }
+      const parsed = JSON.parse(raw) as { state?: Record<string, unknown> }
+      const state = parsed?.state
+      if (!state || typeof state !== 'object') {
+        setHasPersistedCmsSnapshot(false)
+        return
+      }
+      const heroSlides = (state as any).heroSlides
+      const categoryItems = (state as any).categoryItems
+      const contentItems = (state as any).contentItems
+      const hasSnapshot =
+        (Array.isArray(heroSlides) && heroSlides.length > 0) ||
+        (Array.isArray(categoryItems) && categoryItems.length > 0) ||
+        (Array.isArray(contentItems) && contentItems.length > 0)
+      setHasPersistedCmsSnapshot(hasSnapshot)
+    } catch {
+      setHasPersistedCmsSnapshot(false)
+    }
+  }, [isClientMounted])
+
+  // Extra safety-net: force-apply remote CMS on homepage mount so localhost/LAN/tablet cannot
+  // remain on bundled defaults when ContentStoreSupabaseSync is delayed or skipped by browser quirks.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isClientMounted) return
+
+    let cancelled = false
+    const applyRemoteCmsOnce = async () => {
+      try {
+        const res = await fetch(`${PUBLIC_SITE_CONFIG_URL}?cb=${Date.now()}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const body = (await res.json().catch(() => ({}))) as { success?: boolean; value?: unknown }
+        if (!body?.success || !body.value || typeof body.value !== 'object' || Array.isArray(body.value)) return
+        if (cancelled) return
+
+        const current = useContentStore.getState()
+        const merged = mergeRemoteSiteConfigForStoreApply(
+          body.value as Record<string, unknown>,
+          current
+        )
+        normalizeRehydratedContentStoreState(merged)
+        useContentStore.setState(merged)
+        useContentStore.getState().setSiteConfigRemoteSynced(true)
+      } catch {
+        // keep existing non-blocking behavior
+      }
+    }
+
+    void applyRemoteCmsOnce()
+    return () => {
+      cancelled = true
+    }
+  }, [isClientMounted])
 
   // 🔧 상품 상태 확인 (개발 환경에서만)
   useEffect(() => {
@@ -1347,7 +1456,12 @@ export default function HomePage() {
   // Background CMS sync: no sticky text banner — thin top line + optional spinner (non-blocking).
   const showStorefrontSyncLoading = isClientMounted && !siteConfigRemoteSynced && !cmsSyncTimeout
   const showStorefrontSyncError = isClientMounted && !siteConfigRemoteSynced && cmsSyncTimeout
-
+  // Keep home visuals consistent with deployed CMS across localhost/LAN/tablet.
+  // If remote sync times out (offline / captive network / strict iPad policy),
+  // fall back to cached/default visuals instead of staying on a blocked shell forever.
+  const canRenderCmsVisualSections =
+    isClientMounted &&
+    (siteConfigRemoteSynced || (cmsSyncTimeout && hasPersistedCmsSnapshot))
   // ✅ 상품이 없어도 홈페이지 표시 (관리자가 아직 등록 안 했거나 전부 삭제한 경우)
 
   return (
@@ -1395,7 +1509,7 @@ export default function HomePage() {
         >
           Selpic
         </h1>
-          {isClientMounted ? (
+          {canRenderCmsVisualSections ? (
           <>
             {/* Swiper Slider */}
             <Swiper
@@ -1593,11 +1707,11 @@ export default function HomePage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {categoryItems.map((category) => {
+            {(canRenderCmsVisualSections ? categoryItems : []).map((category) => {
               const productCount = getProductCountForCategory(category)
               const rawBg = (resolvedCategoryBackgrounds[category.id] || category.backgroundImage || '').trim()
               const safeCategoryBg =
-                rawBg && !rawBg.startsWith('indexeddb://') ? rawBg : ''
+                rawBg && !rawBg.startsWith('indexeddb://') ? withAssetVersion(rawBg) : ''
               const targetUrl = getCategoryTargetUrl(category)
 
               return (

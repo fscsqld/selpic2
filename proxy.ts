@@ -26,6 +26,22 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
   return response
 }
 
+/** One-shot emergency cache/storage wipe for stubborn tablet browsers. */
+function applyEmergencyResetHeaders(response: NextResponse, request: NextRequest) {
+  const resetParam = request.nextUrl.searchParams.get('resetCache')
+  const wantsReset =
+    resetParam === '1' ||
+    resetParam === '' ||
+    request.nextUrl.pathname === '/resetCache' ||
+    request.nextUrl.pathname.startsWith('/resetCache/')
+  if (!wantsReset) return response
+  response.headers.set('Clear-Site-Data', '"cache", "storage"')
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+  response.headers.set('Pragma', 'no-cache')
+  response.headers.set('Expires', '0')
+  return response
+}
+
 /** Strong no-cache for HTML/RSC navigations (iPad Safari); skip APIs and static asset paths. */
 function applyDocumentCacheBust(response: NextResponse, request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -67,6 +83,27 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
+  const resetParam = request.nextUrl.searchParams.get('resetCache')
+  const wantsReset =
+    resetParam === '1' ||
+    resetParam === '' ||
+    path === '/resetCache' ||
+    path.startsWith('/resetCache/')
+
+  if (wantsReset) {
+    const next = request.nextUrl.clone()
+    if (next.pathname === '/resetCache' || next.pathname.startsWith('/resetCache/')) {
+      next.pathname = '/'
+    }
+    next.searchParams.delete('resetCache')
+    // iPad Safari can reuse a stale navigation entry after redirect;
+    // add a one-shot cache-buster so reset always lands on a fresh document request.
+    next.searchParams.set('rc', Date.now().toString())
+    const resetRedirect = NextResponse.redirect(next, 302)
+    applyEmergencyResetHeaders(resetRedirect, request)
+    applyDocumentCacheBust(resetRedirect, request)
+    return applyProductionSecurityHeaders(resetRedirect, isLocal)
+  }
 
   const isAdminLogin = path === '/admin/login' || path.startsWith('/admin/login/')
   const isAdminArea = path === '/admin' || path.startsWith('/admin/')
@@ -86,6 +123,7 @@ export async function proxy(request: NextRequest) {
       }
 
       applyDocumentCacheBust(response, request)
+      applyEmergencyResetHeaders(response, request)
       return applyProductionSecurityHeaders(response, isLocal)
     } catch (e) {
       console.error('[proxy] admin Supabase check failed', e)
@@ -99,6 +137,7 @@ export async function proxy(request: NextRequest) {
       const { supabase, response } = createSupabaseMiddlewareClient(request)
       await supabase.auth.getUser()
       applyDocumentCacheBust(response, request)
+      applyEmergencyResetHeaders(response, request)
       return applyProductionSecurityHeaders(response, isLocal)
     } catch (e) {
       console.error('[proxy] storefront Supabase session refresh failed', e)
@@ -107,6 +146,7 @@ export async function proxy(request: NextRequest) {
 
   const response = NextResponse.next()
   applyDocumentCacheBust(response, request)
+  applyEmergencyResetHeaders(response, request)
   return applyProductionSecurityHeaders(response, isLocal)
 }
 

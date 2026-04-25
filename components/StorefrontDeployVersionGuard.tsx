@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect } from 'react'
+import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
@@ -14,6 +14,28 @@ const RESET_QUERY_KEY = 'resetCache'
  */
 export default function StorefrontDeployVersionGuard() {
   const pathname = usePathname()
+
+  const readRuntimeBuildId = (): string | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const nextData = (window as any).__NEXT_DATA__
+      const buildId = typeof nextData?.buildId === 'string' ? nextData.buildId.trim() : ''
+      if (buildId) return buildId
+    } catch {
+      // ignore
+    }
+    try {
+      const scripts = Array.from(document.querySelectorAll('script[src]'))
+      for (const s of scripts) {
+        const src = s.getAttribute('src') || ''
+        const m = src.match(/\/_next\/static\/([^/]+)\//)
+        if (m?.[1]) return m[1]
+      }
+    } catch {
+      // ignore
+    }
+    return null
+  }
 
   const readCookieVersion = (): string | null => {
     if (typeof document === 'undefined') return null
@@ -97,9 +119,9 @@ export default function StorefrontDeployVersionGuard() {
     }
   }
 
-  // useLayoutEffect: must run before ContentStoreSupabaseSync (also layout) so session bust
-  // is visible on first paint; useEffect would run too late on iOS Safari.
-  useLayoutEffect(() => {
+  // useEffect (not useLayoutEffect): sync localStorage clears + reload during layout were racing
+  // React 19 hydration on localhost and caused removeChild NotFoundError. iOS may show one stale frame.
+  useEffect(() => {
     if (typeof window === 'undefined') return
     if (pathname === '/admin' || pathname.startsWith('/admin/')) return
 
@@ -111,7 +133,12 @@ export default function StorefrontDeployVersionGuard() {
       pathname === '/forgot-password' ||
       pathname.startsWith('/reset-password')
 
-    const currentVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+    const envVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+    const runtimeBuildId = readRuntimeBuildId()
+    const currentVersion =
+      envVersion && envVersion !== 'dev-local'
+        ? envVersion
+        : (runtimeBuildId || envVersion).trim()
     if (!currentVersion) return
 
     const url = new URL(window.location.href)
@@ -143,7 +170,10 @@ export default function StorefrontDeployVersionGuard() {
           window.history.replaceState(null, '', next.toString())
           return
         }
-        window.location.replace(next.toString())
+        // Defer past React commit — sync reload during layout effect caused removeChild errors on localhost.
+        window.setTimeout(() => {
+          window.location.replace(next.toString())
+        }, 0)
       })
       return
     }
@@ -185,7 +215,9 @@ export default function StorefrontDeployVersionGuard() {
     void clearClientCaches().finally(() => {
       if (skipHardReload) return
       const next = new URL(window.location.href)
-      window.location.replace(next.toString())
+      window.setTimeout(() => {
+        window.location.replace(next.toString())
+      }, 0)
     })
   }, [pathname])
 

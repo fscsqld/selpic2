@@ -2445,7 +2445,7 @@ export const useStore = create<Store>()(
           // 기본 URL (서버 사이드에서는 환경 변수 사용)
           const baseUrl = typeof window !== 'undefined' 
             ? window.location.origin 
-            : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000')
+            : (process.env.NEXT_PUBLIC_BASE_URL || 'http://192.168.1.104:3005')
           
           // 각 수신자별로 개인화된 HTML 이메일 생성
           const generatePersonalizedEmail = (recipientEmail: string) => {

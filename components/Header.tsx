@@ -358,7 +358,13 @@ export default function Header() {
   const companyName = getHeaderCompanyName(contentItems)
   const loginButton = headerContent.find(item => item.title === 'Login Button')
   const cartButton = headerContent.find(item => item.title === 'Cart Button')
-  const searchButtonEnabled = headerContent.find(item => item.title === 'Search Button Enabled')?.content !== 'false'
+  const searchButtonRow = contentItems.find(
+    (item) => item.section === 'header' && item.title === 'Search Button Enabled'
+  )
+  const searchButtonEnabled =
+    !!searchButtonRow &&
+    searchButtonRow.isActive !== false &&
+    String(searchButtonRow.content ?? '').trim().toLowerCase() === 'true'
   /** Include inactive rows: `headerContent` drops `isActive: false`, so read from full `contentItems`. */
   const languageSelectorRow = contentItems.find(
     (item) => item.section === 'header' && item.title === 'Language Selector Enabled'
@@ -367,6 +373,12 @@ export default function Header() {
     !!languageSelectorRow &&
     languageSelectorRow.isActive !== false &&
     String(languageSelectorRow.content ?? '').trim().toLowerCase() === 'true'
+  // Hydration safety: persisted client stores (auth/cart/content) can differ from SSR snapshot.
+  // Keep first client render aligned with server, then reveal live values after mount.
+  const hydrationSafeSearchEnabled = isMounted ? searchButtonEnabled : false
+  const hydrationSafeLanguageSelectorEnabled = isMounted ? languageSelectorEnabled : false
+  const hydrationSafeIsUserLoggedIn = isMounted ? isUserLoggedIn : false
+  const hydrationSafeCartItemCount = isMounted ? cartItemCount : 0
   const logoItem = pickLogoImageItem(contentItems)
   /** Same source as home footer: CMS media (e.g. indexeddb) → static files under `public/` via `HeaderLogoImage`. */
   const logoMediaSrc = (logoItem?.mediaUrl ?? '').trim()
@@ -546,7 +558,7 @@ export default function Header() {
             {/* Right: search, account, cart, locale, menu (hamburger last on small screens) */}
             <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 lg:gap-3 flex-shrink-0">
               {/* Search */}
-              {searchButtonEnabled && (
+              {hydrationSafeSearchEnabled && (
                 <button 
                   onClick={(e) => {
                     e.preventDefault()
@@ -572,7 +584,7 @@ export default function Header() {
 
               {/* Account / Login */}
               <div className="relative">
-                {isUserLoggedIn ? (
+                {hydrationSafeIsUserLoggedIn ? (
                   <button
                     onClick={(e) => {
                       e.preventDefault()
@@ -591,7 +603,7 @@ export default function Header() {
                   </Link>
                 )}
 
-                {isUserLoggedIn && isAccountMenuOpen && (
+                {hydrationSafeIsUserLoggedIn && isAccountMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
                     <div className="px-4 py-3 border-b border-gray-100">
                       <p className="text-sm text-gray-500">Signed in as</p>
@@ -649,14 +661,17 @@ export default function Header() {
               {/* Cart */}
               <Link href={cartLinkUrl} className="relative p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]">
                 <ShoppingCart size={22} />
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                    {cartItemCount}
+                {hydrationSafeCartItemCount > 0 && (
+                  <span
+                    suppressHydrationWarning
+                    className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center"
+                  >
+                    {hydrationSafeCartItemCount}
                   </span>
                 )}
               </Link>
 
-              {languageSelectorEnabled && (
+              {hydrationSafeLanguageSelectorEnabled && (
                 <div
                   className="p-3 text-gray-600 flex items-center space-x-2 rounded-full"
                   title="Site language: English"

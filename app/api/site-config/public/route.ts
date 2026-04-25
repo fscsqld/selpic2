@@ -69,12 +69,16 @@ export async function GET() {
       inner && typeof inner === 'object' && !Array.isArray(inner)
         ? (inner as Record<string, unknown>)
         : raw
+    const normalizedValue =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {}
 
     return NextResponse.json(
       {
         success: true,
         updatedAt: data?.updated_at || null,
-        value: value || null,
+        value: normalizedValue,
       },
       { headers: { 'Cache-Control': 'no-store' } }
     )

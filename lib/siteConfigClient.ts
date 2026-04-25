@@ -12,6 +12,14 @@ function siteConfigSupabase() {
   return createSupabaseBrowserClientNoStore()
 }
 
+function resolvePublicSiteConfigUrl(): string {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
+  if (base) {
+    return `${base}/api/site-config/public`
+  }
+  return '/api/site-config/public'
+}
+
 /** Legacy: Zustand가 localStorage에 쓴 문자열을 그대로 upsert할 때 사용 */
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let pendingSerialized: string | undefined
@@ -202,20 +210,21 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
       const controller = new AbortController()
       // Slow tablet / LAN dev: 5.5s aborted too many good responses and left stale localStorage visible.
       const timeout = window.setTimeout(() => controller.abort(), 12_000)
-      const res = await fetch(`/api/site-config/public?cb=${Date.now()}`, {
+      const res = await fetch(`${resolvePublicSiteConfigUrl()}?cb=${Date.now()}`, {
         cache: 'no-store',
         signal: controller.signal,
       })
       window.clearTimeout(timeout)
       if (res.ok) {
         const body = (await res.json()) as { success?: boolean; value?: unknown }
-        if (
-          body?.success &&
-          body.value &&
-          typeof body.value === 'object' &&
-          !Array.isArray(body.value)
-        ) {
-          return body.value as Record<string, unknown>
+        if (body?.success) {
+          if (body.value && typeof body.value === 'object' && !Array.isArray(body.value)) {
+            return body.value as Record<string, unknown>
+          }
+          // Empty row is still a successful canonical fetch; use empty object instead of "not fetched".
+          if (body.value == null) {
+            return {}
+          }
         }
       }
     } catch (e) {
@@ -237,7 +246,7 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
       return null
     }
     const rawValue = data?.value
-    if (!rawValue) return null
+    if (!rawValue) return {}
 
     let raw: Record<string, unknown> | null = null
     if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {

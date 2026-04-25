@@ -65,5 +65,6 @@ function rmDirSafe(relPath) {
 // Next/Turbopack + PostCSS/Tailwind can keep stale file tracking under .next on Windows.
 tryKillWindowsPortListener(3000)
 tryKillWindowsPortListener(3001)
+tryKillWindowsPortListener(3005)
 rmDirSafe('.next')
 rmDirSafe(path.join('node_modules', '.cache'))

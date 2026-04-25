@@ -20,7 +20,7 @@ function siteBase(req: Request): string {
     fromReferer ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_BASE_URL ||
-    'http://localhost:3000'
+    'http://192.168.1.104:3005'
   ).replace(/\/$/, '')
 }
 
