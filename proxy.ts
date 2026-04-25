@@ -8,6 +8,36 @@ function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
 
+/** Dev / LAN storefront: never force-redirect to production domain. */
+function isLanOrDevHost(hostname: string): boolean {
+  if (isLocalHost(hostname)) return true
+  if (hostname.startsWith('192.168.')) return true
+  if (hostname.startsWith('10.')) return true
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)) return true
+  return false
+}
+
+const CANONICAL_HOST = 'selpic.com.au'
+
+/**
+ * Send all public storefront traffic on Vercel / alternate hosts to the apex production domain
+ * so crawlers never treat *.vercel.app or www as canonical.
+ */
+function maybeCanonicalHostRedirect(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get('host') || request.nextUrl.hostname || '').split(':')[0].toLowerCase()
+  if (!host || isLanOrDevHost(host)) return null
+  if (host === CANONICAL_HOST) return null
+
+  const needsRedirect = host.endsWith('.vercel.app') || host === 'www.selpic.com.au'
+
+  if (!needsRedirect) return null
+
+  const target = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${CANONICAL_HOST}`)
+  const res = NextResponse.redirect(target, 308)
+  res.headers.set('Cache-Control', 'public, max-age=0, must-revalidate')
+  return res
+}
+
 function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean) {
   if (process.env.NODE_ENV === 'production' && !isLocal) {
     response.headers.set(
@@ -76,6 +106,11 @@ export async function proxy(request: NextRequest) {
   const hostHeader = request.headers.get('host') || ''
   const isHttps = url.protocol === 'https:' || protoHeader === 'https'
   const isLocal = isLocalHost(url.hostname) || hostHeader.includes('localhost')
+
+  const canonicalRedirect = maybeCanonicalHostRedirect(request)
+  if (canonicalRedirect) {
+    return applyProductionSecurityHeaders(canonicalRedirect, isLocal)
+  }
 
   if (!isHttps && !isLocal && process.env.NODE_ENV === 'production') {
     url.protocol = 'https:'
