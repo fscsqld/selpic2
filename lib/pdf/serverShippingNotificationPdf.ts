@@ -24,15 +24,21 @@ export function buildShippingNotificationPdfBase64(order: OrderRecord): string {
     y = margin
   }
 
-  const writeKeyValue = (label: string, value: string, size = 10) => {
+  const writeKeyValue = (label: string, value: string, valueX = margin + 46) => {
     ensureSpace(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(size)
-    doc.text(label, margin, y)
-    doc.setFont('helvetica', 'normal')
-    const lines = doc.splitTextToSize(value || '-', contentWidth - 44)
-    doc.text(lines, margin + 44, y)
-    y += Math.max(6, lines.length * (size * 0.4 + 1))
+    doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(75, 85, 99)
+    doc.text(label, margin + 2, y)
+    doc.setFont('helvetica', 'normal').setTextColor(17, 24, 39)
+    const lines = doc.splitTextToSize(value || '-', contentWidth - (valueX - margin) - 4)
+    doc.text(lines, valueX, y)
+    y += Math.max(6, lines.length * 4.3)
+  }
+
+  const sectionTitle = (title: string) => {
+    ensureSpace(10)
+    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(17, 24, 39)
+    doc.text(title, margin, y)
+    y += 6
   }
 
   const tracking = order.tracking
@@ -45,38 +51,61 @@ export function buildShippingNotificationPdfBase64(order: OrderRecord): string {
         day: 'numeric',
       })
     : 'Please check tracking status'
+  const orderDate = order.createdAtIso
+    ? new Date(order.createdAtIso).toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '-'
+  const statusTextMap: Record<string, string> = {
+    delivered: 'Delivered',
+    out_for_delivery: 'Out for Delivery',
+    in_transit: 'In Transit',
+    pending: 'Pending',
+    failed: 'Failed',
+    returned: 'Returned',
+  }
+  const trackingStatus = statusTextMap[String(tracking?.status || '').toLowerCase()] || 'In Transit'
 
-  // Header
-  doc.setFillColor(237, 251, 241)
-  doc.roundedRect(margin, y, contentWidth, 28, 2, 2, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  // Company / document header block (close to preview hierarchy)
+  doc.setFillColor(249, 250, 251)
+  doc.roundedRect(margin, y, contentWidth, 30, 2, 2, 'F')
+  doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(17, 24, 39)
   doc.text(getCompanyBrandName(COMPANY_LEGAL.companyName), margin + 4, y + 8)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text(COMPANY_CONTACT.address, margin + 4, y + 14)
-  doc.text(`${COMPANY_CONTACT.phone}  |  ${COMPANY_CONTACT.email}`, margin + 4, y + 19)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
+  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(75, 85, 99)
+  doc.text(`ABN: ${COMPANY_LEGAL.abn}   ACN: ${COMPANY_LEGAL.acn}`, margin + 4, y + 14)
+  doc.text(`${COMPANY_CONTACT.address}`, margin + 4, y + 19)
+  doc.text(`${COMPANY_CONTACT.phone}  |  ${COMPANY_CONTACT.email}`, margin + 4, y + 24)
+  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(22, 101, 52)
   doc.text('SHIPPING NOTIFICATION', pageWidth - margin - 4, y + 10, { align: 'right' })
-  doc.setFontSize(10)
-  doc.text(order.id, pageWidth - margin - 4, y + 17, { align: 'right' })
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(55, 65, 81)
+  doc.text(`Order ${order.id}`, pageWidth - margin - 4, y + 17, { align: 'right' })
   y += 36
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Tracking details', margin, y)
-  y += 6
-  writeKeyValue('Tracking number', trackingNumber)
-  writeKeyValue('Carrier', trackingProvider)
-  writeKeyValue('Estimated delivery', estimated)
-  writeKeyValue('Track online', shippingTrackUrl(tracking?.provider, trackingNumber), 9)
+  // Highlight tracking box (largest visual emphasis in preview)
+  doc.setFillColor(236, 253, 245)
+  doc.setDrawColor(34, 197, 94)
+  doc.setLineWidth(0.5)
+  doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD')
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(75, 85, 99)
+  doc.text('Tracking Number', margin + 3, y + 6)
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(21, 128, 61)
+  doc.text(trackingNumber, margin + 3, y + 14)
+  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(75, 85, 99)
+  doc.text(`Shipping Provider: ${trackingProvider}`, margin + 3, y + 20)
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(17, 24, 39)
+  doc.text(`Status: ${trackingStatus}`, pageWidth - margin - 4, y + 10, { align: 'right' })
+  y += 30
+
+  sectionTitle('Order Information')
+  writeKeyValue('Order Number', order.id)
+  writeKeyValue('Order Date', orderDate)
+  writeKeyValue('Estimated Delivery', estimated)
+  writeKeyValue('Track Online', shippingTrackUrl(tracking?.provider, trackingNumber))
 
   y += 3
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Customer details', margin, y)
-  y += 6
+  sectionTitle('Customer Information')
   const c = order.customer
   const customerName =
     c?.name || [c?.firstName, c?.lastName].filter(Boolean).join(' ') || c?.email || 'Customer'
@@ -95,26 +124,36 @@ export function buildShippingNotificationPdfBase64(order: OrderRecord): string {
     ]
       .filter(Boolean)
       .join(', ')
-  if (address) writeKeyValue('Shipping address', address, 9)
+  if (address) writeKeyValue('Shipping Address', address)
 
   y += 3
-  ensureSpace(16)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Items', margin, y)
-  y += 6
+  sectionTitle('Order Items')
+  doc.setFillColor(249, 250, 251)
+  doc.rect(margin, y - 4.5, contentWidth, 7, 'F')
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(75, 85, 99)
+  doc.text('Item', margin + 2, y)
+  doc.text('Qty', pageWidth - margin - 4, y, { align: 'right' })
+  y += 7
+
   for (const item of order.items || []) {
     ensureSpace(9)
     const name = String(item.name || 'Item').slice(0, 80)
     const qty = Number(item.quantity) || 0
-    const lines = doc.splitTextToSize(`${name} x${qty}`, contentWidth - 4)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    const lines = doc.splitTextToSize(name, contentWidth - 20)
+    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(17, 24, 39)
     doc.text(lines, margin + 2, y)
+    doc.text(`x${qty}`, pageWidth - margin - 4, y, { align: 'right' })
     y += Math.max(6, lines.length * 4.3)
     doc.setDrawColor(232, 232, 232)
     doc.line(margin, y - 2, margin + contentWidth, y - 2)
   }
+
+  y += 4
+  ensureSpace(18)
+  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(75, 85, 99)
+  doc.text('Please contact us if you have any questions about delivery.', margin, y)
+  y += 5
+  doc.text(`${getCompanyBrandName(COMPANY_LEGAL.companyName)} | ${COMPANY_CONTACT.email} | ${COMPANY_CONTACT.phone}`, margin, y)
 
   const dataUri = doc.output('datauristring') as string
   const parts = dataUri.split(',')
