@@ -51,6 +51,7 @@ import {
   lineLooksLikePaymentFee
 } from '@/lib/invoiceTotals'
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
+import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
 // 문서 발송 이력 인터페이스
 interface DocumentSendHistory {
@@ -68,6 +69,16 @@ interface DocumentSendHistory {
 }
 
 const roundTo2 = (v: number) => Math.round((Number(v) + Number.EPSILON) * 100) / 100
+const formatDateOnlyAU = (isoLike?: string) => {
+  if (!isoLike) return ''
+  const d = new Date(isoLike)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-AU', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
 
 export default function DocumentSenderPage() {
   const router = useRouter()
@@ -432,6 +443,8 @@ Best regards,
 ${brandName} Team`
         }
       case 'shipping_notification':
+        const expectedDelivery =
+          formatDateOnlyAU(order?.tracking?.estimatedDelivery) || 'Please check tracking for delivery date'
         return {
           subject: `Shipping Notification - Order #${orderId || 'N/A'}`,
           content: `Dear ${customerName},
@@ -444,7 +457,7 @@ ${order?.tracking?.provider ? `Shipping Provider: ${order.tracking.provider}` : 
 
 Your order is on its way to you. You can track your shipment using the tracking number above.
 
-Expected delivery: ${order?.tracking?.estimatedDelivery || 'Please check tracking for delivery date'}
+Expected delivery: ${expectedDelivery}
 
 Thank you for your purchase!
 
@@ -826,6 +839,14 @@ ${brandName} Team`
             filename: getPreviewFilename(),
           })
           if (pdfFile) return pdfFile
+
+          // Fallback: deterministic jsPDF path (avoids empty/missing attachments on some clients).
+          const base64 = buildShippingNotificationPdfBase64(sourceOrder as OrderRecord)
+          if (base64) {
+            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+            const blob = new Blob([bytes], { type: 'application/pdf' })
+            return new File([blob], getPreviewFilename(), { type: 'application/pdf' })
+          }
         }
       }
 
@@ -932,6 +953,9 @@ ${brandName} Team`
         selectedDocumentType === 'receipt'
       ) {
         const previewPDF = await generatePreviewPDF()
+        if (selectedDocumentType === 'shipping_notification' && !previewPDF) {
+          throw new Error('Shipping notification PDF generation failed')
+        }
         if (previewPDF) {
           filesToSend.push(previewPDF)
           setAttachedFiles((prev) => [...prev, previewPDF])
