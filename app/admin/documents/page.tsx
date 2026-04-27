@@ -50,6 +50,7 @@ import {
   lineLooksLikeShipping,
   lineLooksLikePaymentFee
 } from '@/lib/invoiceTotals'
+import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
 // 문서 발송 이력 인터페이스
 interface DocumentSendHistory {
@@ -772,6 +773,18 @@ ${brandName} Team`
 
   const generatePreviewPDF = async (): Promise<File | null> => {
     try {
+      if (selectedDocumentType === 'shipping_notification' && documentData.relatedOrderId) {
+        const sourceOrder = orders.find((o) => o.id === documentData.relatedOrderId)
+        if (sourceOrder?.tracking?.number) {
+          const base64 = buildShippingNotificationPdfBase64(sourceOrder as OrderRecord)
+          if (base64) {
+            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+            const blob = new Blob([bytes], { type: 'application/pdf' })
+            return new File([blob], getPreviewFilename(), { type: 'application/pdf' })
+          }
+        }
+      }
+
       const html2pdf = (await import('html2pdf.js')).default
       const previewElement = document.querySelector(
         `[data-document-preview="${selectedDocumentType}"]`
@@ -831,7 +844,7 @@ ${brandName} Team`
           orientation: 'portrait' as const,
           compress: true
         },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        pagebreak: { mode: ['css', 'legacy'] }
       }
 
       const pdfBlob = await html2pdf().set(opt).from(previewElement).outputPdf('blob')
