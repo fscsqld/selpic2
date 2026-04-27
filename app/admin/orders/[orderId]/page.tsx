@@ -29,6 +29,7 @@ export default function AdminOrderDetailPage() {
     sendOrderConfirmationEmail: sendOrderConfirmationEmailFromStore,
     resendOrderConfirmationEmail: resendOrderConfirmationEmailFromStore,
     sendReceiptEmail: sendReceiptEmailFromStore,
+    sendShippingNotificationEmail,
     refreshOrdersFromStorage,
     mergeOrdersFromServer,
   } = useStore()
@@ -111,6 +112,8 @@ export default function AdminOrderDetailPage() {
       try {
         addTrackingNumber(order.id, trackingNumber, provider)
         await persistOrderPayloadToLedger(order.id)
+        // Auto-send after ledger persistence to avoid stale/blank attachment generation.
+        await sendShippingNotificationEmail(order.id)
         // Show success message
         alert('Tracking number added successfully!')
       } catch (error) {

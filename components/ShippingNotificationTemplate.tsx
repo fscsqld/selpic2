@@ -100,9 +100,7 @@ export default function ShippingNotificationTemplate({
     return new Date(dateString).toLocaleDateString('en-AU', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     })
   }
 

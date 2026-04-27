@@ -12,6 +12,7 @@ import {
 } from '@/lib/orderConfirmationEmail'
 import { buildSimpleReceiptEmailHtml, buildSimpleReceiptSubject } from '@/lib/email/simpleReceiptEmail'
 import { buildOrderReceiptPdfBase64 } from '@/lib/pdf/serverReceiptPdf'
+import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
 const GUEST_WINDOW_MS = 60 * 60 * 1000
 const GUEST_MAX_PER_WINDOW = 30
@@ -49,6 +50,30 @@ function receiptPdfAttachment(order: OrderRecord): ResendAttachmentInput | null 
     console.error('[receiptPdfAttachment]', e)
     return null
   }
+}
+
+function shippingNotificationPdfAttachment(order: OrderRecord): ResendAttachmentInput | null {
+  try {
+    const content = buildShippingNotificationPdfBase64(order)
+    if (!content) return null
+    return {
+      filename: `Shipping-Notification-${order.id}.pdf`,
+      content,
+      contentType: 'application/pdf',
+    }
+  } catch (e) {
+    console.error('[shippingNotificationPdfAttachment]', e)
+    return null
+  }
+}
+
+function shippingTrackUrl(provider: string | undefined, trackingNumber: string): string {
+  const p = (provider || '').toLowerCase()
+  const t = encodeURIComponent(trackingNumber.trim())
+  if (p.includes('aus') || p.includes('australia post') || p.includes('post')) {
+    return `https://auspost.com.au/mypost/track/#/details/${t}`
+  }
+  return `https://www.google.com/search?q=${t}+tracking`
 }
 
 async function markConfirmationSentInLedger(orderId: string): Promise<void> {
@@ -354,5 +379,48 @@ export async function sendAdminOrderEmailAction(input: {
     await markReceiptSentInLedger(order.id)
   }
 
+  return { ok: true }
+}
+
+export async function sendAdminShippingNotificationEmailAction(input: {
+  orderId: string
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) return { ok: false, error: 'UNAUTHORIZED' }
+
+  const order = await loadOrderFromSupabaseById(input.orderId)
+  if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
+  if (!order.tracking?.number) return { ok: false, error: 'NO_TRACKING' }
+
+  const tracking = order.tracking
+  const estimated = tracking.estimatedDelivery
+    ? new Date(tracking.estimatedDelivery).toLocaleDateString('en-AU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Please check tracking status'
+
+  const html = `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;color:#111;max-width:640px">
+    <h1 style="font-size:20px">Shipping Notification</h1>
+    <p>Your order <strong>${order.id}</strong> is on its way.</p>
+    <p><strong>Tracking Number:</strong> ${tracking.number}</p>
+    <p><strong>Shipping Provider:</strong> ${tracking.provider || 'Carrier'}</p>
+    <p><strong>Estimated Delivery:</strong> ${estimated}</p>
+    <p><a href="${shippingTrackUrl(tracking.provider, tracking.number)}">Track your shipment</a></p>
+  </div>`
+
+  const pdf = shippingNotificationPdfAttachment(order)
+  const r = await sendEmailViaResendServer({
+    to: order.customer.email.trim(),
+    subject: `Shipping Notification - Order #${order.id}`,
+    html,
+    ...(pdf ? { attachments: [pdf] } : {}),
+  })
+  if (!r.ok) {
+    console.error('[sendAdminShippingNotificationEmailAction]', r.logMessage)
+    return { ok: false, error: 'SEND_FAILED' }
+  }
   return { ok: true }
 }

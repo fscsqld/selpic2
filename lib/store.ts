@@ -1262,13 +1262,6 @@ export const useStore = create<Store>()(
           set({
             orders: orders.map(o => o.id === orderId ? { ...o, tracking: trackingInfo } : o)
           })
-          
-          // 추적 번호 추가 시 Shipping Notification 이메일 자동 발송
-          setTimeout(() => {
-            get().sendShippingNotificationEmail(orderId).catch(error => {
-              console.error('Failed to send shipping notification email:', error)
-            })
-          }, 100)
         }
       },
 
@@ -1675,6 +1668,19 @@ export const useStore = create<Store>()(
         if (!order.tracking || !order.tracking.number) {
           console.log('Tracking information not available for shipping notification:', orderId)
           return false
+        }
+
+        // Preferred path: server-generated PDF attachment (stable for auto-send).
+        try {
+          const { sendAdminShippingNotificationEmailAction } = await import('@/app/actions/emails')
+          const serverResult = await sendAdminShippingNotificationEmailAction({ orderId })
+          if (serverResult.ok) {
+            console.log('✅ Shipping notification email sent via server action:', orderId)
+            return true
+          }
+          console.warn('[sendShippingNotificationEmail] server path failed:', serverResult.error)
+        } catch (e) {
+          console.warn('[sendShippingNotificationEmail] server path exception:', e)
         }
 
         try {
