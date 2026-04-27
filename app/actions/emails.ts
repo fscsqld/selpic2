@@ -385,6 +385,7 @@ export async function sendAdminOrderEmailAction(input: {
 export async function sendAdminShippingNotificationEmailAction(input: {
   orderId: string
   orderJson?: string
+  recipientEmail?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requireSupabaseAdminUser()
   if (!admin) return { ok: false, error: 'UNAUTHORIZED' }
@@ -416,8 +417,10 @@ export async function sendAdminShippingNotificationEmailAction(input: {
   </div>`
 
   const pdf = shippingNotificationPdfAttachment(order)
+  const toEmail = (input.recipientEmail || order.customer.email || '').trim()
+  if (!toEmail || !toEmail.includes('@')) return { ok: false, error: 'INVALID_RECIPIENT' }
   const r = await sendEmailViaResendServer({
-    to: order.customer.email.trim(),
+    to: toEmail,
     subject: `Shipping Notification - Order #${order.id}`,
     html,
     ...(pdf ? { attachments: [pdf] } : {}),

@@ -938,6 +938,61 @@ ${brandName} Team`
 
     setIsLoading(true)
     try {
+      if (selectedDocumentType === 'shipping_notification' && documentData.relatedOrderId) {
+        const sourceOrder = orders.find((o) => o.id === documentData.relatedOrderId)
+        if (!sourceOrder) {
+          throw new Error('Selected order not found')
+        }
+
+        const { sendAdminShippingNotificationEmailAction } = await import('@/app/actions/emails')
+        const results = await Promise.allSettled(
+          selectedRecipients.map(async (email) => {
+            const customer = allCustomers.find((c) => c.email === email)
+            const customerName = customer?.name || email.split('@')[0]
+            const r = await sendAdminShippingNotificationEmailAction({
+              orderId: sourceOrder.id,
+              orderJson: JSON.stringify(sourceOrder),
+              recipientEmail: email,
+            })
+
+            const historyEntry: DocumentSendHistory = {
+              id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              documentType: selectedDocumentType,
+              recipientEmail: email,
+              recipientName: customerName,
+              subject: `Shipping Notification - Order #${sourceOrder.id}`,
+              content: documentData.content,
+              sentAt: new Date().toISOString(),
+              sentBy: adminUser?.username || 'Admin',
+              status: r.ok ? 'sent' : 'failed',
+              relatedOrderId: sourceOrder.id,
+            }
+            setSendHistory((prev) => [historyEntry, ...prev])
+            return { email, success: r.ok }
+          })
+        )
+
+        const successCount = results.filter((x) => x.status === 'fulfilled' && x.value.success).length
+        const failedCount = results.length - successCount
+        if (successCount > 0) {
+          setMessage(
+            `Documents sent successfully to ${successCount} recipient(s)${
+              failedCount > 0 ? `, ${failedCount} failed` : ''
+            } (server PDF attached).`
+          )
+          setIsSendModalOpen(false)
+          setDocumentData({ subject: '', content: '', relatedOrderId: '' })
+          setSelectedRecipients([])
+          setAttachedFiles([])
+          setInvoiceData(null)
+          setActiveTab('history')
+        } else {
+          setMessage('Failed to send documents. Please try again.')
+        }
+        setTimeout(() => setMessage(''), 5000)
+        return
+      }
+
       // Attachments: existing + (optional) preview PDF
       let invoicePDF: File | null = null
       const filesToSend: File[] = [...attachedFiles]
