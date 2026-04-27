@@ -384,11 +384,15 @@ export async function sendAdminOrderEmailAction(input: {
 
 export async function sendAdminShippingNotificationEmailAction(input: {
   orderId: string
+  orderJson?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requireSupabaseAdminUser()
   if (!admin) return { ok: false, error: 'UNAUTHORIZED' }
 
-  const order = await loadOrderFromSupabaseById(input.orderId)
+  const orderFromInput = input.orderJson ? parseOrderRecordJson(input.orderJson) : null
+  const order = orderFromInput && orderFromInput.id === input.orderId
+    ? orderFromInput
+    : await loadOrderFromSupabaseById(input.orderId)
   if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
   if (!order.tracking?.number) return { ok: false, error: 'NO_TRACKING' }
 

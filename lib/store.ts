@@ -1670,114 +1670,19 @@ export const useStore = create<Store>()(
           return false
         }
 
-        // Preferred path: server-generated PDF attachment (stable for auto-send).
+        // Auto-send path is server-only to avoid client-side blank PDF attachments.
         try {
           const { sendAdminShippingNotificationEmailAction } = await import('@/app/actions/emails')
-          const serverResult = await sendAdminShippingNotificationEmailAction({ orderId })
+          const serverResult = await sendAdminShippingNotificationEmailAction({
+            orderId,
+            orderJson: JSON.stringify(order),
+          })
           if (serverResult.ok) {
             console.log('✅ Shipping notification email sent via server action:', orderId)
             return true
           }
           console.warn('[sendShippingNotificationEmail] server path failed:', serverResult.error)
-        } catch (e) {
-          console.warn('[sendShippingNotificationEmail] server path exception:', e)
-        }
-
-        try {
-          // 템플릿 스토어에서 Shipping Notification 템플릿 가져오기
-          const templateStore = useDocumentTemplateStore.getState()
-          const template = templateStore.getTemplate('shipping_notification')
-          
-          if (!template) {
-            console.error('Shipping notification template not found')
-            return false
-          }
-
-          // Company 정보 가져오기 (Invoice Store에서)
-          const { defaultTemplate } = await import('./invoiceStore').then(m => m.useInvoiceStore.getState())
-          const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
-          const brandName = getCompanyBrandName(companyName)
-
-          // 이메일 본문 생성
-          const emailContent = get().generateEmailContent(template, order, companyName)
-          
-          // Subject 생성
-          const subjectVariables = {
-            orderId: order.id,
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            companyName: brandName,
-            companyNameLegal: companyName
-          }
-          const emailSubject = get().replaceTemplatePlaceholders(template.email.subject, subjectVariables)
-
-          // 이메일 발송
-          const { emailService } = await import('./emailService')
-          const attachments: File[] = []
-
-          try {
-            const ShippingNotificationTemplate = (await import('@/components/ShippingNotificationTemplate')).default
-            const company = defaultTemplate?.company
-            const React = (await import('react')).default
-
-            const pdfOrder = {
-              id: order.id,
-              customer: {
-                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-                firstName: (order.customer as any).firstName,
-                lastName: (order.customer as any).lastName,
-                email: order.customer.email || '',
-                phone: order.customer.phone || ''
-              },
-              address: {
-                streetAddress: order.address.streetAddress,
-                suburb: order.address.suburb,
-                state: order.address.state,
-                postcode: order.address.postcode,
-                country: order.address.country
-              },
-              items: order.items.map((it: any) => ({
-                product: {
-                  name: it.name,
-                  price: it.price,
-                  image: it.image || '/placeholder-product.jpg'
-                },
-                quantity: it.quantity,
-                customizations: it.customizations || {}
-              })),
-              shippingOption: {
-                name: order.shippingOptionName || order.shippingOptionId || 'Shipping',
-                price: order.shippingPrice
-              },
-              tracking: order.tracking,
-              createdAtIso: order.createdAtIso
-            }
-
-            const pdfFile = await renderReactPreviewToPdfFile({
-              reactElement: React.createElement(ShippingNotificationTemplate as any, {
-                order: pdfOrder,
-                company
-              }),
-              filename: `Shipping-Notification-${order.id}.pdf`
-            })
-            if (pdfFile) attachments.push(pdfFile)
-          } catch (e) {
-            console.warn('Failed to generate Shipping Notification PDF attachment:', e)
-          }
-          const result = await emailService.sendResponse({
-            customerEmail: order.customer.email || '',
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            subject: emailSubject,
-            message: emailContent,
-            adminName: brandName,
-            attachments
-          })
-
-          if (result.success) {
-            console.log('✅ Shipping notification email sent successfully:', orderId)
-            return true
-          } else {
-            throw new Error(result.message || 'Failed to send email')
-          }
+          return false
         } catch (error) {
           console.error('❌ Failed to send shipping notification email:', error)
           return false

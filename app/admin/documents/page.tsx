@@ -67,6 +67,8 @@ interface DocumentSendHistory {
   attachmentUrl?: string
 }
 
+const roundTo2 = (v: number) => Math.round((Number(v) + Number.EPSILON) * 100) / 100
+
 export default function DocumentSenderPage() {
   const router = useRouter()
   const { adminUser } = useAdminAuth()
@@ -2411,7 +2413,7 @@ ${brandName} Team`
                                 value={item.unitPrice}
                                 onChange={(e) => {
                                   const newItems = [...invoiceData.items]
-                                  newItems[index] = { ...item, unitPrice: parseFloat(e.target.value) || 0 }
+                                  newItems[index] = { ...item, unitPrice: roundTo2(parseFloat(e.target.value) || 0) }
                                   setInvoiceData(prev => prev ? { ...prev, items: newItems } : null)
                                 }}
                                 className="w-full px-2 py-1 border border-gray-300 rounded"

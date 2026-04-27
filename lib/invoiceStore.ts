@@ -223,6 +223,8 @@ export const convertOrderToInvoice = (
   shipping?: number
   paymentFee?: number
 } => {
+  const round2 = (v: number) => Math.round((Number(v) + Number.EPSILON) * 100) / 100
+
   // 인보이스 번호 생성 (SP-YYYY-XXX 형식)
   // 주문 ID의 마지막 3자리 사용 (Base36 인코딩된 경우 영문 포함 가능)
   const year = new Date().getFullYear()
@@ -236,7 +238,7 @@ export const convertOrderToInvoice = (
   const items: InvoiceLineItem[] = order.items.map((item) => {
     const { baseUnit, surchargeUnit } = getOrderItemLineMoney(item)
     const unitPriceInclOptions = baseUnit + surchargeUnit
-    const unitPriceExclGST = unitPriceInclOptions / 1.1
+    const unitPriceExclGST = round2(unitPriceInclOptions / 1.1)
 
     const optionsLabel = surchargeUnit > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
     const description =
