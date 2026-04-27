@@ -285,7 +285,6 @@ export const convertOrderToInvoice = (
   
   const orderShipping = order.shippingPrice
   const orderPaymentFee = order.paymentFee || 0
-  const orderTotal = order.total // 최종 결제 금액
   
   // 인보이스 계산 (주문 상세와 동일한 결과를 보장)
   // 주문 계산식: total = subtotal + shippingPrice + paymentFee - discount
@@ -295,20 +294,20 @@ export const convertOrderToInvoice = (
   // 인보이스는 Tax Invoice이므로 GST를 별도로 표시해야 함
   // 할인은 GST 포함 금액 기준이므로, GST 제외 금액 기준으로 변환 필요
   
-  // 방법 1: 할인 후 금액에서 GST 역산 (더 정확)
-  // 인보이스의 최종 합계는 주문의 total과 동일해야 함
-  const total = orderTotal
-  
-  // 날짜 계산
-  const issueDate = new Date().toISOString().split('T')[0]
-  const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
   const computed = computeAustralianInvoiceTotals({
     items,
     shipping: orderShipping,
     paymentFee: orderPaymentFee,
     discounts: totalDiscount > 0 ? { totalDiscount } : undefined
   })
+
+  // Invoice "Total Due" must stay consistent with displayed subtotal/GST/discount rows.
+  // Use the computed GST-aware total for tax-invoice rendering.
+  const total = computed.total
+  
+  // 날짜 계산
+  const issueDate = new Date().toISOString().split('T')[0]
+  const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   return {
     company: template.company,

@@ -50,7 +50,7 @@ import {
   lineLooksLikeShipping,
   lineLooksLikePaymentFee
 } from '@/lib/invoiceTotals'
-import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
+import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 
 // 문서 발송 이력 인터페이스
 interface DocumentSendHistory {
@@ -776,12 +776,54 @@ ${brandName} Team`
       if (selectedDocumentType === 'shipping_notification' && documentData.relatedOrderId) {
         const sourceOrder = orders.find((o) => o.id === documentData.relatedOrderId)
         if (sourceOrder?.tracking?.number) {
-          const base64 = buildShippingNotificationPdfBase64(sourceOrder as OrderRecord)
-          if (base64) {
-            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-            const blob = new Blob([bytes], { type: 'application/pdf' })
-            return new File([blob], getPreviewFilename(), { type: 'application/pdf' })
+          const company = defaultTemplate?.company
+          const pdfOrder = {
+            id: sourceOrder.id,
+            customer: {
+              name:
+                sourceOrder.customer.name ||
+                sourceOrder.customer.email.split('@')[0] ||
+                'Customer',
+              firstName: (sourceOrder.customer as any).firstName,
+              lastName: (sourceOrder.customer as any).lastName,
+              email: sourceOrder.customer.email || '',
+              phone: sourceOrder.customer.phone || '',
+            },
+            address: {
+              streetAddress: sourceOrder.address.streetAddress,
+              suburb: sourceOrder.address.suburb,
+              state: sourceOrder.address.state,
+              postcode: sourceOrder.address.postcode,
+              country: sourceOrder.address.country,
+            },
+            items: sourceOrder.items.map((it: any) => ({
+              product: {
+                name: it.name,
+                price: it.price,
+                image: it.image || '/placeholder-product.jpg',
+              },
+              quantity: it.quantity,
+              customizations: it.customizations || {},
+            })),
+            shippingOption: {
+              name:
+                sourceOrder.shippingOptionName ||
+                sourceOrder.shippingOptionId ||
+                'Shipping',
+              price: sourceOrder.shippingPrice,
+            },
+            tracking: sourceOrder.tracking as NonNullable<OrderRecord['tracking']>,
+            createdAtIso: sourceOrder.createdAtIso,
           }
+
+          const pdfFile = await renderReactPreviewToPdfFile({
+            reactElement: React.createElement(ShippingNotificationTemplate as any, {
+              order: pdfOrder,
+              company,
+            }),
+            filename: getPreviewFilename(),
+          })
+          if (pdfFile) return pdfFile
         }
       }
 
