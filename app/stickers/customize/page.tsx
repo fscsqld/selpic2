@@ -350,8 +350,10 @@ function StickerCustomizeContent() {
     : NAME_LABEL_SPEC['Medium']
   const STANDARD_CONTENT_WIDTH_MM = 92
   const STANDARD_CONTENT_HEIGHT_MM = 136
-  const isLargeSheet = displayProduct?.size === 'Large' || displayProduct?.size === '대형'
-  const isMediumSheet = displayProduct?.size === 'Medium' || displayProduct?.size === '중형'
+  const normalizedSize = String(displayProduct?.size || '').trim().toLowerCase()
+  const isExtraLargeSheet = normalizedSize.includes('extra large') || normalizedSize.includes('특대형')
+  const isLargeSheet = (normalizedSize.includes('large') || normalizedSize.includes('대형')) && !isExtraLargeSheet
+  const isMediumSheet = normalizedSize.includes('medium') || normalizedSize.includes('중형')
 
   let contentWidthMm: number
   let contentHeightMm: number
@@ -406,7 +408,6 @@ function StickerCustomizeContent() {
   const cellWidthPx = stickerSpec.widthMm * PX_PER_MM
   const cellHeightPx = stickerSpec.heightMm * PX_PER_MM
   // Extra Large만 박스 세로를 10% 줄여 표시
-  const isExtraLargeSheet = displayProduct?.size === 'Extra Large' || displayProduct?.size === '특대형'
   const cellHeightDisplayPx = isExtraLargeSheet ? cellHeightPx * 0.90 : cellHeightPx
   const gapPx = stickerSpec.gapMm * PX_PER_MM
   const paddingLeftPx = sheetMarginLeftMm * PX_PER_MM
@@ -1315,8 +1316,7 @@ function StickerCustomizeContent() {
                   // 학습: Large(2×8=16칸) 선택 시, 시트지 각 칸에 "라벨 1개"만 보여야 함.
                   // 상품 이미지는 시트 전체(라벨 6개, 2×3) 모양이라, 칸마다 전체를 넣으면 한 칸에 6개가 보임.
                   // Large일 때는 이미지를 2×3(6등분)으로 잘라 셀마다 1/6만 표시 → 칸당 라벨 1개.
-                  const isLargeSize =
-                    displayProduct.size === 'Large' || displayProduct.size === '대형'
+                  const isLargeSize = isLargeSheet
                   // 학습: 시트지 크기는 동일(96×138). 특대 2×6, 대형 2×8, 중형 3×8, 소형 4×12, 원형 3×4 → 셀 크기만 다름.
                   // scale로 표시 너비 260px 고정. overflow-x-hidden으로 가로 스크롤 없음; 세로는 행 많을 때 overflow-y-auto.
                   return (
@@ -1413,8 +1413,8 @@ function StickerCustomizeContent() {
                             // - Divide it into stickerSpec.cols × stickerSpec.rows grid.
                             // - Each cell (box) shows exactly one grid slice = one label.
                             const isLargeSizeHere = isLargeSize
-                            const isMediumSizeHere = displayProduct?.size === 'Medium' || displayProduct?.size === '중형'
-                            const isExtraLargeSize = displayProduct?.size === 'Extra Large' || displayProduct?.size === '특대형'
+                            const isMediumSizeHere = isMediumSheet
+                            const isExtraLargeSize = isExtraLargeSheet
                             const partCols = stickerSpec.cols
                             const partRows = stickerSpec.rows
                             const partIndex = index
