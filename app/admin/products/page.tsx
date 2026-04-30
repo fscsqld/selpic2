@@ -1675,8 +1675,8 @@ function AdminProductsPageContent() {
                         {formData.category === 'Stickers' && (
                           <>
                             <option value="Small">Small (22mm x 9mm)</option>
-                            <option value="Medium">Medium (30mm x 13mm)</option>
-                            <option value="Large">Large (46mm x 15mm)</option>
+                            <option value="Medium">Medium (30mm x 15mm)</option>
+                            <option value="Large">Large (47mm x 15mm)</option>
                             <option value="Extra Large">Extra Large (45mm x 21mm)</option>
                             <option value="Round">Round (28mm)</option>
                             <option value="Custom">Custom Size</option>

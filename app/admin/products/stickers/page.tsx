@@ -671,8 +671,8 @@ export default function StickersPage() {
                         >
                           <option value="">Select Size</option>
                           <option value="Small">Small (22mm x 9mm)</option>
-                          <option value="Medium">Medium (30mm x 13mm)</option>
-                          <option value="Large">Large (46mm x 15mm)</option>
+                          <option value="Medium">Medium (30mm x 15mm)</option>
+                          <option value="Large">Large (47mm x 15mm)</option>
                           <option value="Extra Large">Extra Large (45mm x 21mm)</option>
                           <option value="Round">Round (28mm)</option>
                           <option value="Custom">Custom Size</option>
@@ -691,7 +691,7 @@ export default function StickersPage() {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500">세로(mm)</label>
-                      <input type="number" name="stickerHeightMm" value={formData.stickerHeightMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="예: 13" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <input type="number" name="stickerHeightMm" value={formData.stickerHeightMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="예: 15" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500">열(cols)</label>
