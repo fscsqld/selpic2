@@ -524,7 +524,8 @@ export default function Header() {
     <HeaderErrorBoundary>
       <header className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-[70]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center gap-2 md:gap-3 lg:gap-4 min-h-12 py-1.5 lg:py-2">
+          {/* Compact sticky header: keep tap targets (p-3 buttons), reduce vertical chrome */}
+          <div className="flex justify-between items-center gap-2 md:gap-3 lg:gap-4 min-h-11 py-1 lg:py-1">
             {/* Left: logo (sm/md/lg heights 32px / 40px / 50px via Tailwind defaults) */}
             <div className="flex items-center min-w-0 flex-1 md:flex-initial md:max-w-[min(320px,45vw)] lg:max-w-[min(360px,40vw)]">
               <Link
@@ -532,14 +533,14 @@ export default function Header() {
                 className="flex items-center justify-start min-w-0 max-w-full"
                 aria-label="Home"
               >
-                <div className="relative min-h-8 md:min-h-10 lg:min-h-[50px] min-w-0 flex items-center justify-start w-full">
+                <div className="relative min-h-7 md:min-h-9 lg:min-h-10 min-w-0 flex items-center justify-start w-full">
                   {useLogoImage ? (
                     <HeaderLogoImage
                       key={logoMediaSrc || 'header-brand'}
                       src={logoMediaSrc}
                       alt={HEADER_LOGO_ALT_EN}
                       priority
-                      className="h-8 md:h-10 lg:h-[50px] object-contain object-left max-w-[min(280px,85vw)] w-auto transform hover:scale-105 transition-transform duration-300 shrink-0"
+                      className="h-7 md:h-9 lg:h-10 object-contain object-left max-w-[min(260px,85vw)] w-auto transform hover:scale-105 transition-transform duration-300 shrink-0"
                       exhaustedFallback={
                         <div className="text-lg lg:text-xl font-playfair font-bold text-gray-800 tracking-wider text-left truncate max-w-full transform hover:scale-105 transition-transform duration-300">
                           {companyName}
@@ -723,7 +724,7 @@ export default function Header() {
                           key={logoMediaSrc || 'header-drawer-brand'}
                           src={logoMediaSrc}
                           alt={HEADER_LOGO_ALT_EN}
-                          className="h-8 md:h-10 lg:h-[50px] max-w-[200px] w-auto object-contain object-left"
+                          className="h-7 md:h-9 lg:h-11 max-w-[200px] w-auto object-contain object-left"
                           exhaustedFallback={
                             <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
                               {companyName}
