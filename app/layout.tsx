@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
-import Script from 'next/script'
 import './globals.css'
 import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
@@ -104,7 +103,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
   // Stampzone machine: load Google Fonts for label printer
   const googleFontsUrls = getAllGoogleFontsUrls().map(withDeployCacheBust)
   const organizationJsonLd = {
@@ -132,67 +130,6 @@ export default function RootLayout({
         <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
-        {/* Prevent "Flash of Stale Content" after deploy by checking version BEFORE hydration. */}
-        {deployVersion && deployVersion !== 'dev-local' ? (
-          <Script
-            id="selpic-inline-deploy-version-guard"
-            strategy="beforeInteractive"
-            dangerouslySetInnerHTML={{
-              __html: `(function(){
-  try {
-    var current = ${JSON.stringify(deployVersion)};
-    if (!current) return;
-
-    var path = String(location && location.pathname || '');
-    // Never interfere with admin/auth flows.
-    if (path === '/login' || path.indexOf('/register') === 0 || path.indexOf('/auth/') === 0 || path === '/forgot-password' || path.indexOf('/reset-password') === 0) return;
-    if (path === '/admin' || path.indexOf('/admin/') === 0) return;
-
-    var VERSION_KEY = 'selpic-deploy-version';
-    var VERSION_COOKIE_KEY = 'selpic_deploy_version';
-    var APPLIED_KEY = 'selpic-inline-version-applied';
-
-    // Avoid infinite reload loops: if we already applied this version in this tab, do nothing.
-    try {
-      var applied = sessionStorage.getItem(APPLIED_KEY);
-      if (applied === current) return;
-    } catch (e) {}
-
-    var previous = null;
-    try { previous = localStorage.getItem(VERSION_KEY); } catch (e) {}
-    if (!previous) {
-      try {
-        var c = document.cookie.split(';').map(function(v){ return v.trim(); }).find(function(v){ return v.indexOf(VERSION_COOKIE_KEY+'=') === 0; });
-        if (c) previous = decodeURIComponent(c.slice(VERSION_COOKIE_KEY.length + 1));
-      } catch (e) {}
-    }
-
-    if (!previous || previous === current) {
-      try { localStorage.setItem(VERSION_KEY, current); } catch (e) {}
-      try { sessionStorage.setItem(APPLIED_KEY, current); } catch (e) {}
-      try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
-      return;
-    }
-
-    // Version changed: clear Selpic storefront snapshots only (do NOT localStorage.clear()).
-    try {
-      localStorage.removeItem('content-store');
-      localStorage.removeItem('selpic-store');
-      localStorage.setItem(VERSION_KEY, current);
-    } catch (e) {}
-    try {
-      sessionStorage.removeItem('selpic-cms-build-applied');
-      sessionStorage.setItem(APPLIED_KEY, current);
-    } catch (e) {}
-    try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
-
-    // Hard reload BEFORE hydration so stale HTML never paints.
-    location.replace(location.href);
-  } catch (e) {}
-})();`,
-            }}
-          />
-        ) : null}
         {/* ✅ Google Fonts CDN 로드 */}
         {googleFontsUrls.map((url) => (
           <link key={url} rel="stylesheet" href={url} />
