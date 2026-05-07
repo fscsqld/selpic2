@@ -104,7 +104,15 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+  /**
+   * A stable token that changes on every production deploy (safest way to detect "new build").
+   * - Prefer explicit NEXT_PUBLIC_DEPLOY_VERSION if you set it.
+   * - Otherwise use Vercel-provided envs that change per deploy/commit.
+   */
+  const deployVersion =
+    (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim() ||
+    (process.env.VERCEL_GIT_COMMIT_SHA || '').trim() ||
+    (process.env.VERCEL_DEPLOYMENT_ID || '').trim()
   // Stampzone machine: load Google Fonts for label printer
   const googleFontsUrls = getAllGoogleFontsUrls().map(withDeployCacheBust)
   const organizationJsonLd = {
@@ -134,6 +142,14 @@ export default function RootLayout({
         <meta httpEquiv="Expires" content="0" />
         {/* Prevent "Flash of Stale Content" after deploy by checking version BEFORE hydration. */}
         {deployVersion && deployVersion !== 'dev-local' ? (
+          <>
+            {/* Hide until the beforeInteractive guard finishes (prevents stale frame flash). */}
+            <style
+              id="selpic-prehydration-hide"
+              dangerouslySetInnerHTML={{
+                __html: 'html{visibility:hidden}body{visibility:hidden}',
+              }}
+            />
           <Script
             id="selpic-inline-deploy-version-guard"
             strategy="beforeInteractive"
@@ -171,6 +187,8 @@ export default function RootLayout({
       try { localStorage.setItem(VERSION_KEY, current); } catch (e) {}
       try { sessionStorage.setItem(APPLIED_KEY, current); } catch (e) {}
       try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
+      try { var el=document.getElementById('selpic-prehydration-hide'); if(el&&el.parentNode) el.parentNode.removeChild(el); } catch(e) {}
+      try { document.documentElement.style.visibility='visible'; document.body && (document.body.style.visibility='visible'); } catch(e) {}
       return;
     }
 
@@ -192,6 +210,7 @@ export default function RootLayout({
 })();`,
             }}
           />
+          </>
         ) : null}
         {/* ✅ Google Fonts CDN 로드 */}
         {googleFontsUrls.map((url) => (
