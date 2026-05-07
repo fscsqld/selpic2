@@ -104,7 +104,18 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const deployVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
+  /**
+   * Deploy token for stale-flash prevention.
+   * - Prefer explicit NEXT_PUBLIC_DEPLOY_VERSION if you manage it.
+   * - Otherwise use Vercel-provided values that change per deploy/commit.
+   *
+   * IMPORTANT: Do not gate UX-critical rendering on this token (no visibility-hiding).
+   * We only use it to decide whether to clear stale local snapshots and reload early.
+   */
+  const deployVersion =
+    (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim() ||
+    (process.env.VERCEL_GIT_COMMIT_SHA || '').trim() ||
+    (process.env.VERCEL_DEPLOYMENT_ID || '').trim()
   // Stampzone machine: load Google Fonts for label printer
   const googleFontsUrls = getAllGoogleFontsUrls().map(withDeployCacheBust)
   const organizationJsonLd = {
@@ -143,51 +154,76 @@ export default function RootLayout({
     var current = ${JSON.stringify(deployVersion)};
     if (!current) return;
 
-    var path = String(location && location.pathname || '');
-    // Never interfere with admin/auth flows.
-    if (path === '/login' || path.indexOf('/register') === 0 || path.indexOf('/auth/') === 0 || path === '/forgot-password' || path.indexOf('/reset-password') === 0) return;
-    if (path === '/admin' || path.indexOf('/admin/') === 0) return;
+    function shouldSkipPath(path){
+      // Never interfere with admin/auth flows.
+      if (path === '/login' || path.indexOf('/register') === 0 || path.indexOf('/auth/') === 0 || path === '/forgot-password' || path.indexOf('/reset-password') === 0) return true;
+      if (path === '/admin' || path.indexOf('/admin/') === 0) return true;
+      return false;
+    }
 
-    var VERSION_KEY = 'selpic-deploy-version';
-    var VERSION_COOKIE_KEY = 'selpic_deploy_version';
-    var APPLIED_KEY = 'selpic-inline-version-applied';
-
-    // Avoid infinite reload loops: if we already applied this version in this tab, do nothing.
-    try {
-      var applied = sessionStorage.getItem(APPLIED_KEY);
-      if (applied === current) return;
-    } catch (e) {}
-
-    var previous = null;
-    try { previous = localStorage.getItem(VERSION_KEY); } catch (e) {}
-    if (!previous) {
+    function readCookieVersion(key){
       try {
-        var c = document.cookie.split(';').map(function(v){ return v.trim(); }).find(function(v){ return v.indexOf(VERSION_COOKIE_KEY+'=') === 0; });
-        if (c) previous = decodeURIComponent(c.slice(VERSION_COOKIE_KEY.length + 1));
+        var c = document.cookie.split(';').map(function(v){ return v.trim(); }).find(function(v){ return v.indexOf(key+'=') === 0; });
+        return c ? decodeURIComponent(c.slice(key.length + 1)) : null;
+      } catch (e) { return null; }
+    }
+
+    function applyGuard(){
+      var path = String(location && location.pathname || '');
+      if (shouldSkipPath(path)) return;
+
+      var VERSION_KEY = 'selpic-deploy-version';
+      var VERSION_COOKIE_KEY = 'selpic_deploy_version';
+      var APPLIED_KEY = 'selpic-inline-version-applied';
+
+      // Avoid infinite reload loops: if we already applied this version in this tab, do nothing.
+      try {
+        var applied = sessionStorage.getItem(APPLIED_KEY);
+        if (applied === current) return;
       } catch (e) {}
-    }
 
-    if (!previous || previous === current) {
-      try { localStorage.setItem(VERSION_KEY, current); } catch (e) {}
-      try { sessionStorage.setItem(APPLIED_KEY, current); } catch (e) {}
+      var previous = null;
+      try { previous = localStorage.getItem(VERSION_KEY); } catch (e) {}
+      if (!previous) previous = readCookieVersion(VERSION_COOKIE_KEY);
+
+      if (!previous || previous === current) {
+        try { localStorage.setItem(VERSION_KEY, current); } catch (e) {}
+        try { sessionStorage.setItem(APPLIED_KEY, current); } catch (e) {}
+        try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
+        return;
+      }
+
+      // Version changed: clear Selpic storefront snapshots only (do NOT localStorage.clear()).
+      try {
+        localStorage.removeItem('content-store');
+        localStorage.removeItem('selpic-store');
+        localStorage.setItem(VERSION_KEY, current);
+      } catch (e) {}
+      try {
+        sessionStorage.removeItem('selpic-cms-build-applied');
+        sessionStorage.setItem(APPLIED_KEY, current);
+      } catch (e) {}
       try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
-      return;
+
+      // Hard reload BEFORE hydration so stale HTML is less likely to paint.
+      location.replace(location.href);
     }
 
-    // Version changed: clear Selpic storefront snapshots only (do NOT localStorage.clear()).
-    try {
-      localStorage.removeItem('content-store');
-      localStorage.removeItem('selpic-store');
-      localStorage.setItem(VERSION_KEY, current);
-    } catch (e) {}
-    try {
-      sessionStorage.removeItem('selpic-cms-build-applied');
-      sessionStorage.setItem(APPLIED_KEY, current);
-    } catch (e) {}
-    try { document.cookie = VERSION_COOKIE_KEY+'='+encodeURIComponent(current)+'; path=/; max-age=31536000; samesite=lax'; } catch (e) {}
+    var path = String(location && location.pathname || '');
+    if (shouldSkipPath(path)) return;
 
-    // Hard reload BEFORE hydration so stale HTML never paints.
-    location.replace(location.href);
+    // Run once before hydration.
+    applyGuard();
+
+    // BFCache restore (Safari / Google → back/forward) can re-show stale DOM.
+    // On pageshow persisted, re-check and reload if version changed.
+    try {
+      window.addEventListener('pageshow', function(e){
+        try {
+          if (e && e.persisted) applyGuard();
+        } catch (err) {}
+      });
+    } catch (e) {}
   } catch (e) {}
 })();`,
             }}
