@@ -177,13 +177,22 @@ function StickerCustomizeContent() {
   }, [searchParams, products])
   const displayProduct = selectedProduct ?? restoredProduct
 
+  const sizeNorm = displayProduct?.size ? String(displayProduct.size).trim().toLowerCase() : ''
+  const sizeNormCompact = sizeNorm.replace(/\s+/g, '')
+  const isMedium30x13 =
+    (sizeNorm.includes('medium') || sizeNorm.includes('중형')) &&
+    /30mm[x×]13mm/.test(sizeNormCompact)
+  const supportsTwoLinesForDisplayProduct =
+    (sizeNorm.includes('extra large') || sizeNorm.includes('특대형')) ||
+    // Large (but not Extra Large)
+    ((sizeNorm.includes('large') || sizeNorm.includes('대형')) && !(sizeNorm.includes('extra large') || sizeNorm.includes('특대형'))) ||
+    // Medium only when NOT 30×13mm
+    ((sizeNorm.includes('medium') || sizeNorm.includes('중형')) && !isMedium30x13)
+
   const getCustomizationPrice = (): number => {
     if (!displayProduct) return 20.00
     let total = displayProduct.price
-    const twoLineSizesNorm = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
-    const sizeNorm = displayProduct?.size ? String(displayProduct.size).trim().toLowerCase() : ''
-    const supportsTwo = twoLineSizesNorm.includes(sizeNorm)
-    const usesTwoLines = supportsTwo && lineMode === 'two'
+    const usesTwoLines = supportsTwoLinesForDisplayProduct && lineMode === 'two'
     if (usesTwoLines) {
       const surcharge = typeof (displayProduct as { twoLineSurcharge?: number }).twoLineSurcharge === 'number'
         ? (displayProduct as { twoLineSurcharge: number }).twoLineSurcharge
@@ -380,9 +389,8 @@ function StickerCustomizeContent() {
   }
 
   const totalCells = stickerSpec.cols * stickerSpec.rows
-  // 대형·특대형·중형: 2줄(1줄=이름, 2줄=소속/전화) 지원 (size 대소문자 무시)
-  const twoLineSizeValues = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
-  const supportsTwoLines = Boolean(displayProduct?.size && twoLineSizeValues.includes(String(displayProduct.size).trim().toLowerCase()))
+  // 대형·특대형·중형(단, 30×13mm 제외): 2줄(1줄=이름, 2줄=소속/전화) 지원
+  const supportsTwoLines = supportsTwoLinesForDisplayProduct
   const twoLineMaxChars = 18
   const twoLinePhoneMaxChars = 10
   const twoLineNamePhoneMaxChars = 19
