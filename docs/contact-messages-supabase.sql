@@ -25,6 +25,26 @@ create index if not exists contact_messages_created_at_idx on public.contact_mes
 alter table public.contact_messages enable row level security;
 
 -- ------------------------------------------------------------
+-- Optional: store admin replies (Email History) in Supabase
+-- ------------------------------------------------------------
+create table if not exists public.contact_message_emails (
+  id uuid primary key default gen_random_uuid(),
+  contact_message_id uuid not null references public.contact_messages(id) on delete cascade,
+  to_email text not null,
+  subject text not null,
+  content_text text,
+  html text,
+  status text not null default 'sent',
+  template_used text,
+  attachments text,
+  sent_by uuid,
+  sent_at timestamptz not null default now()
+);
+
+create index if not exists contact_message_emails_message_id_idx
+  on public.contact_message_emails (contact_message_id, sent_at desc);
+
+-- ------------------------------------------------------------
 -- Migration: add missing columns (safe to run multiple times)
 -- ------------------------------------------------------------
 alter table public.contact_messages
@@ -72,4 +92,5 @@ alter table public.contact_messages
 
 -- Quick verification
 -- select id, name, email, category, subject, message, created_at from public.contact_messages order by created_at desc limit 5;
+-- select contact_message_id, to_email, subject, status, template_used, sent_at from public.contact_message_emails order by sent_at desc limit 10;
 

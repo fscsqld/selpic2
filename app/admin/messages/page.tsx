@@ -140,6 +140,7 @@ function AdminMessagesPageContent() {
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [showEmailHistory, setShowEmailHistory] = useState(false)
+  const [serverEmailHistory, setServerEmailHistory] = useState<EmailHistory[] | null>(null)
   const [refreshTrackingData, setRefreshTrackingData] = useState(false)
 
   // 필터링된 메시지 목록
@@ -314,6 +315,32 @@ function AdminMessagesPageContent() {
         alert('Failed to save note to server. Please try again.')
       })
     }
+  }
+
+  const loadServerEmailHistory = async (messageId: string) => {
+    const res = await fetch(`/api/admin/contact-messages/${encodeURIComponent(messageId)}/emails`, { cache: 'no-store' })
+    const json = (await res.json().catch(() => null)) as any
+    if (!res.ok || !json?.ok || !Array.isArray(json.emails)) {
+      throw new Error(json?.error || 'EMAIL_HISTORY_LOAD_FAILED')
+    }
+
+    const mapped: EmailHistory[] = json.emails.map((e: any) => {
+      return {
+        id: String(e.id || ''),
+        messageId: String(e.contact_message_id || messageId),
+        customerEmail: String(e.to_email || ''),
+        customerName: selectedMessage?.name || 'Customer',
+        subject: String(e.subject || ''),
+        content: String(e.content_text || ''),
+        sentAt: e.sent_at ? new Date(e.sent_at) : new Date(),
+        sentBy: 'Selpic Support Team',
+        templateUsed: typeof e.template_used === 'string' ? e.template_used : undefined,
+        attachments: typeof e.attachments === 'string' ? e.attachments : undefined,
+        status: (e.status === 'sent' ? 'sent' : 'failed') as any,
+      }
+    }).filter((x: EmailHistory) => Boolean(x.id))
+
+    setServerEmailHistory(mapped)
   }
 
   // Get updated tracking data for email
@@ -641,11 +668,17 @@ function AdminMessagesPageContent() {
                     </button>
                     
                     <button
-                      onClick={() => setShowEmailHistory(true)}
+                      onClick={() => {
+                        setShowEmailHistory(true)
+                        setServerEmailHistory(null)
+                        void loadServerEmailHistory(selectedMessage.id).catch(() => {
+                          // fallback to local history only
+                        })
+                      }}
                       className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                     >
                       <History className="w-4 h-4 mr-2" />
-                      Email History ({getEmailHistory(selectedMessage.id).length})
+                      Email History ({(serverEmailHistory || getEmailHistory(selectedMessage.id)).length})
                     </button>
                     
                     <select
@@ -976,7 +1009,10 @@ function AdminMessagesPageContent() {
                     Refresh Tracking
                   </button>
                   <button
-                    onClick={() => setShowEmailHistory(false)}
+                    onClick={() => {
+                      setShowEmailHistory(false)
+                      setServerEmailHistory(null)
+                    }}
                     className="text-gray-400 hover:text-gray-600"
                   >
                     ×
@@ -986,14 +1022,19 @@ function AdminMessagesPageContent() {
             </div>
             
             <div className="p-6">
-              {getEmailHistory(selectedMessage.id).length === 0 ? (
+              {serverEmailHistory === null ? (
+                <div className="text-center py-8">
+                  <Loader2 className="w-12 h-12 mx-auto mb-3 text-gray-300 animate-spin" />
+                  <p className="text-gray-500">Loading email history…</p>
+                </div>
+              ) : (serverEmailHistory || getEmailHistory(selectedMessage.id)).length === 0 ? (
                 <div className="text-center py-8">
                   <History className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-gray-500">No emails sent yet</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {getEmailHistory(selectedMessage.id).map((email, index) => {
+                  {(serverEmailHistory || getEmailHistory(selectedMessage.id)).map((email, index) => {
                     const updatedEmail = getUpdatedTrackingData(email)
                     return (
                       <div key={email.id} className="border border-gray-200 rounded-lg p-4">

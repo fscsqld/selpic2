@@ -160,6 +160,9 @@ export async function sendAdminComposeEmailAction(input: {
   attachments?: ResendAttachmentInput[]
   skipBranding?: boolean
   skipTracking?: boolean
+  contactMessageId?: string
+  contentText?: string
+  templateUsed?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requireSupabaseAdminUser()
   if (!admin) return { ok: false, error: 'UNAUTHORIZED' }
@@ -176,6 +179,30 @@ export async function sendAdminComposeEmailAction(input: {
     console.error('[sendAdminComposeEmailAction]', r.logMessage)
     return { ok: false, error: 'SEND_FAILED' }
   }
+
+  // Persist reply content for Customer Messages dashboard.
+  if (isSupabaseConfigured() && input.contactMessageId?.trim()) {
+    try {
+      const sb = getSupabaseAdmin()
+      const toFirst = Array.isArray(input.to) ? (input.to[0] || '') : input.to
+      const { error: logErr } = await sb.from('contact_message_emails').insert({
+        contact_message_id: input.contactMessageId.trim(),
+        to_email: String(toFirst || '').trim(),
+        subject: String(input.subject || '').trim(),
+        content_text: typeof input.contentText === 'string' ? input.contentText : null,
+        html: String(input.html || ''),
+        sent_by: admin.id,
+        status: 'sent',
+        template_used: typeof input.templateUsed === 'string' ? input.templateUsed : null,
+      })
+      if (logErr) {
+        console.warn('[sendAdminComposeEmailAction] failed to log email:', logErr.message)
+      }
+    } catch (e) {
+      console.warn('[sendAdminComposeEmailAction] log exception:', e)
+    }
+  }
+
   return { ok: true }
 }
 

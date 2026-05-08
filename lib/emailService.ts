@@ -166,6 +166,8 @@ export class EmailService {
     message: string
     /** When set, sent as HTML instead of escaping `message` (tracking pixel + link wrapping still applied). */
     html?: string
+    /** For admin dashboard logging (optional). */
+    templateUsed?: string
     originalSubject?: string
     submissionDate?: string
     adminName?: string
@@ -251,6 +253,9 @@ export class EmailService {
         html: trackedHtml,
         skipBranding: true,
         skipTracking: true,
+        contactMessageId: params.messageId,
+        contentText: params.message,
+        templateUsed: params.templateUsed,
         ...(attachments && attachments.length > 0 ? { attachments } : {}),
       })
 
@@ -319,6 +324,7 @@ export class EmailService {
       message: content,
       adminName: params.adminName,
       messageId: params.messageId,
+      templateUsed: template.name,
       attachments: params.attachments
     })
   }
