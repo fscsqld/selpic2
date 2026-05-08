@@ -103,17 +103,21 @@ function ContactPageContent() {
     }
 
     try {
-      // 메시지를 store에 저장
-      addMessage({
-        name: formData.name,
-        email: formData.email,
-        subject: formData.subject,
-        message: formData.message,
-        category: formData.category as any
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          category: formData.category,
+        }),
       })
-      
-      // 시뮬레이션 지연
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const json = (await res.json().catch(() => null)) as any
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'CONTACT_SUBMIT_FAILED')
+      }
       
       setNotification({
         type: 'success',

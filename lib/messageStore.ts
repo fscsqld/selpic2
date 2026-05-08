@@ -8,7 +8,7 @@ export interface ContactMessage {
   email: string
   subject: string
   message: string
-  category: 'general' | 'order' | 'technical' | 'business' | 'complaint'
+  category: 'general' | 'market_s' | 'order' | 'technical' | 'business' | 'complaint'
   status: 'new' | 'read' | 'replied' | 'closed'
   priority: 'low' | 'medium' | 'high' | 'urgent'
   createdAt: Date

@@ -54,6 +54,51 @@ function AdminMessagesPageContent() {
     searchMessages 
   } = useMessageStore()
 
+  // Load messages from Supabase (server) so admins see submissions from any device.
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/contact-messages?limit=200', { cache: 'no-store' })
+        const json = (await res.json().catch(() => null)) as any
+        if (!res.ok || !json?.ok || !Array.isArray(json.messages)) return
+        if (cancelled) return
+
+        const mapped: ContactMessage[] = json.messages.map((m: any) => {
+          const createdAt = m.created_at ? new Date(m.created_at) : new Date()
+          const readAt = m.read_at ? new Date(m.read_at) : undefined
+          const repliedAt = m.replied_at ? new Date(m.replied_at) : undefined
+          return {
+            id: String(m.id || ''),
+            name: String(m.name || ''),
+            email: String(m.email || ''),
+            subject: String(m.subject || ''),
+            message: String(m.message || ''),
+            category: (m.category || 'general') as ContactMessage['category'],
+            status: (m.status || 'new') as ContactMessage['status'],
+            priority: (m.priority || 'medium') as ContactMessage['priority'],
+            createdAt,
+            readAt,
+            repliedAt,
+            adminNotes: typeof m.admin_notes === 'string' ? m.admin_notes : undefined,
+          }
+        }).filter((m: ContactMessage) => Boolean(m.id))
+
+        // Replace local store list with server truth.
+        useMessageStore.setState({
+          messages: mapped,
+          unreadCount: mapped.filter((m) => m.status === 'new').length,
+        })
+      } catch {
+        // non-fatal: keep existing local store messages
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ContactMessage['status']>('all')
@@ -287,6 +332,7 @@ function AdminMessagesPageContent() {
   const getCategoryDisplayName = (category: ContactMessage['category']) => {
     switch (category) {
       case 'general': return t('admin.products.contactForm.categoryGeneral')
+      case 'market_s': return 'MARKET S - I want this'
       case 'order': return t('admin.products.contactForm.categoryOrder')
       case 'technical': return t('admin.products.contactForm.categoryTechnical')
       case 'business': return t('admin.products.contactForm.categoryBusiness')
@@ -387,6 +433,7 @@ function AdminMessagesPageContent() {
                 >
                   <option value="all">All Categories</option>
                   <option value="general">General</option>
+                  <option value="market_s">MARKET S</option>
                   <option value="order">Order</option>
                   <option value="technical">Technical</option>
                   <option value="business">Business</option>
