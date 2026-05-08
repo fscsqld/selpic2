@@ -54,6 +54,30 @@ function AdminMessagesPageContent() {
     searchMessages 
   } = useMessageStore()
 
+  const syncMessageToServer = async (
+    id: string,
+    patch: Partial<{ status: ContactMessage['status']; priority: ContactMessage['priority']; admin_notes: string | null }>
+  ) => {
+    const res = await fetch(`/api/admin/contact-messages/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    const json = (await res.json().catch(() => null)) as any
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || 'ADMIN_MESSAGE_UPDATE_FAILED')
+    }
+    return json?.message
+  }
+
+  const deleteMessageOnServer = async (id: string) => {
+    const res = await fetch(`/api/admin/contact-messages/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const json = (await res.json().catch(() => null)) as any
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || 'ADMIN_MESSAGE_DELETE_FAILED')
+    }
+  }
+
   // Load messages from Supabase (server) so admins see submissions from any device.
   useEffect(() => {
     let cancelled = false
@@ -168,7 +192,11 @@ function AdminMessagesPageContent() {
   const handleMessageClick = (message: ContactMessage) => {
     setSelectedMessage(message)
     if (message.status === 'new') {
+      // Optimistic local update + server sync
       markAsRead(message.id)
+      void syncMessageToServer(message.id, { status: 'read' }).catch(() => {
+        // non-fatal: keep UI responsive; server can be reloaded later
+      })
     }
     setAdminNote(message.adminNotes || '')
   }
@@ -236,6 +264,9 @@ function AdminMessagesPageContent() {
 
         addEmailToHistory(selectedMessage.id, emailHistory)
         markAsReplied(selectedMessage.id)
+        void syncMessageToServer(selectedMessage.id, { status: 'replied' }).catch(() => {
+          // non-fatal
+        })
         
         setShowReplyModal(false)
         setReplyText('')
@@ -275,8 +306,13 @@ function AdminMessagesPageContent() {
 
   const handleSaveNote = () => {
     if (selectedMessage) {
+      // Optimistic local update + server sync
       addAdminNote(selectedMessage.id, adminNote)
-      alert('Admin note saved!')
+      void syncMessageToServer(selectedMessage.id, { admin_notes: adminNote }).then(() => {
+        alert('Admin note saved!')
+      }).catch(() => {
+        alert('Failed to save note to server. Please try again.')
+      })
     }
   }
 
@@ -614,7 +650,13 @@ function AdminMessagesPageContent() {
                     
                     <select
                       value={selectedMessage.status}
-                      onChange={(e) => updateStatus(selectedMessage.id, e.target.value as ContactMessage['status'])}
+                      onChange={(e) => {
+                        const next = e.target.value as ContactMessage['status']
+                        updateStatus(selectedMessage.id, next)
+                        void syncMessageToServer(selectedMessage.id, { status: next }).catch(() => {
+                          alert('Failed to update status on server. Please try again.')
+                        })
+                      }}
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="new">New</option>
@@ -625,7 +667,13 @@ function AdminMessagesPageContent() {
                     
                     <select
                       value={selectedMessage.priority}
-                      onChange={(e) => updatePriority(selectedMessage.id, e.target.value as ContactMessage['priority'])}
+                      onChange={(e) => {
+                        const next = e.target.value as ContactMessage['priority']
+                        updatePriority(selectedMessage.id, next)
+                        void syncMessageToServer(selectedMessage.id, { priority: next }).catch(() => {
+                          alert('Failed to update priority on server. Please try again.')
+                        })
+                      }}
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="low">Low Priority</option>
@@ -635,7 +683,16 @@ function AdminMessagesPageContent() {
                     </select>
                     
                     <button
-                      onClick={() => deleteMessage(selectedMessage.id)}
+                      onClick={() => {
+                        const id = selectedMessage.id
+                        if (!confirm('Delete this message? This will remove it from the database.')) return
+                        // Optimistic local delete
+                        deleteMessage(id)
+                        setSelectedMessage(null)
+                        void deleteMessageOnServer(id).catch(() => {
+                          alert('Failed to delete from server. Please refresh and try again.')
+                        })
+                      }}
                       className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
