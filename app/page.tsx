@@ -16,12 +16,6 @@ import type { CategoryItem } from '@/lib/contentStore'
 
 type CategoryItemWithType = CategoryItem & { categoryType?: string }
 
-/**
- * SSR/hydration-safe poster for the hero.
- * Use a same-origin asset so first paint never depends on a remote image (prevents "black flash").
- */
-const HYDRATION_SAFE_HERO_POSTER_URL = '/logo.png'
-
 /** Same-origin fallbacks when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
 const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
 const LOCAL_ASSET_VERSION = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
@@ -54,9 +48,30 @@ function withAssetVersion(url: string): string {
   return `${raw}${glue}v=${encodeURIComponent(LOCAL_ASSET_VERSION)}`
 }
 
+/** Shown until CMS sync completes (or cached slides kick in); avoids fullscreen `object-cover` on the logo, which reads as broken UX. */
+function HeroCmsBootstrapPlaceholder() {
+  return (
+    <div
+      className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-100 flex items-center justify-center"
+      aria-busy="true"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_18%,rgba(56,189,248,0.14),transparent_55%)]"
+        aria-hidden
+      />
+      <div className="relative flex flex-col items-center gap-8 px-6">
+        <div className="h-[min(38vh,360px)] w-[min(92vw,640px)] max-w-xl rounded-[1.75rem] bg-white/65 shadow-md ring-1 ring-slate-200/80 backdrop-blur-sm flex flex-col items-center justify-center gap-5">
+          <Loader2 className="h-9 w-9 animate-spin text-sky-600/65" aria-hidden strokeWidth={2.25} />
+          <span className="sr-only">Loading storefront hero</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
- * `<img>` + onError chain so a failed remote poster does not leave a plain black hero (CSS `background-image` does not fire onError).
- * When every URL fails, render a plain black layer — otherwise Safari shows a broken-image glyph ("?") in the hero.
+ * `<img>` + onError chain so a failed remote poster does not leave a plain hero gap (CSS `background-image` does not fire onError).
+ * Omit full-bleed `logo.png` from the fallback chain — it looks like “wrong homepage” until real slides paint.
  */
 function HeroCoverImage({
   primarySrc,
@@ -75,17 +90,11 @@ function HeroCoverImage({
 
   const chain = useMemo(() => {
     const p = (primarySrc || '').trim()
-    const ordered = [
-      p,
-      HYDRATION_SAFE_HERO_POSTER_URL,
-      withAssetVersion('/logo.png'),
-      withAssetVersion(LOCAL_HERO_FALLBACK_URL),
-    ]
     const out: string[] = []
-    for (const u of ordered) {
-      if (u && !out.includes(u)) out.push(u)
-    }
-    return out.length > 0 ? out : [LOCAL_HERO_FALLBACK_URL]
+    if (p) out.push(p)
+    const fb = withAssetVersion(LOCAL_HERO_FALLBACK_URL)
+    if (fb && !out.includes(fb)) out.push(fb)
+    return out.length > 0 ? out : [withAssetVersion(LOCAL_HERO_FALLBACK_URL)]
   }, [primarySrc])
 
   const idx = Math.min(tier, Math.max(0, chain.length - 1))
@@ -147,9 +156,8 @@ function CategoryCoverImage({
     const p = (primarySrc || '').trim()
     const ordered = [
       p,
-      HYDRATION_SAFE_HERO_POSTER_URL,
-      withAssetVersion('/logo.png'),
       withAssetVersion(LOCAL_HERO_FALLBACK_URL),
+      withAssetVersion('/logo.png'),
     ]
     const out: string[] = []
     for (const u of ordered) {
@@ -245,11 +253,17 @@ const isValidVideoUrl = (url: string): boolean => {
 
 const ImageSlide = React.memo(({ src }: { src: string }) => {
   const s = (src || '').trim()
-  const primary =
-    !s || s.startsWith('indexeddb://') ? HYDRATION_SAFE_HERO_POSTER_URL : s
+  if (!s || s.startsWith('indexeddb://')) {
+    return (
+      <div
+        className="relative h-full w-full bg-gradient-to-br from-slate-100 via-slate-50 to-sky-100"
+        aria-hidden
+      />
+    )
+  }
   return (
     <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
-      <HeroCoverImage primarySrc={primary} />
+      <HeroCoverImage primarySrc={s} />
     </div>
   )
 })
@@ -1458,12 +1472,9 @@ export default function HomePage() {
   // Background CMS sync: no sticky text banner — thin top line + optional spinner (non-blocking).
   const showStorefrontSyncLoading = isClientMounted && !siteConfigRemoteSynced && !cmsSyncTimeout
   const showStorefrontSyncError = isClientMounted && !siteConfigRemoteSynced && cmsSyncTimeout
-  // Keep home visuals consistent with deployed CMS across localhost/LAN/tablet.
-  // If remote sync times out (offline / captive network / strict iPad policy),
-  // fall back to cached/default visuals instead of staying on a blocked shell forever.
+  // Keep CMS truth on first visits without localStorage cache; reopen the hero quickly when a persisted snapshot exists.
   const canRenderCmsVisualSections =
-    isClientMounted &&
-    (siteConfigRemoteSynced || (cmsSyncTimeout && hasPersistedCmsSnapshot))
+    isClientMounted && (siteConfigRemoteSynced || hasPersistedCmsSnapshot)
   // ✅ 상품이 없어도 홈페이지 표시 (관리자가 아직 등록 안 했거나 전부 삭제한 경우)
 
   return (
@@ -1688,9 +1699,7 @@ export default function HomePage() {
             </div>
           </>
           ) : (
-            <div className="relative h-screen w-full bg-gradient-to-br from-slate-50 via-white to-sky-50" aria-busy="true">
-              <HeroCoverImage primarySrc={HYDRATION_SAFE_HERO_POSTER_URL} />
-            </div>
+            <HeroCmsBootstrapPlaceholder />
           )}
       </section>
 
