@@ -79,6 +79,14 @@ export default function StickersPage() {
     setIsMounted(true)
   }, [])
 
+  // Storefront safety-net: first-time visitors may have empty localStorage products.
+  // Fill from published public catalog so /stickers does not show "No search results" incorrectly.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isMounted || !_hasHydrated) return
+    void import('@/lib/catalogHydration').then((m) => m.fetchPublicCatalogAndApplyIfEmpty())
+  }, [isMounted, _hasHydrated])
+
   // 🆕 상품 업데이트 감지 (Edit Product에서 이미지 변경 시 즉시 반영)
   useEffect(() => {
     if (typeof window === 'undefined') {

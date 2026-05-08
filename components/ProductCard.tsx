@@ -226,7 +226,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
 
       {/* 상품 정보 */}
       <div className="space-y-2">
-        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-pink-600 transition-colors">
+        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-pink-600 transition-colors line-clamp-2 break-words min-h-[3.25rem]">
           {productInfo.name}
         </h3>
         
