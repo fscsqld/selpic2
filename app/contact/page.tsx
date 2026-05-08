@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import { useTranslation } from '@/lib/useTranslation'
 import { useMessageStore } from '@/lib/messageStore'
@@ -8,11 +8,21 @@ import {
   MessageSquare, Send, CheckCircle, AlertCircle
 } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 
 export default function ContactPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <ContactPageContent />
+    </Suspense>
+  )
+}
+
+function ContactPageContent() {
   const { t } = useTranslation()
   const { addMessage } = useMessageStore()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,6 +36,51 @@ export default function ContactPage() {
     message: string
     show: boolean
   }>({ type: 'info', message: '', show: false })
+
+  const didApplyUrlDefaultsRef = useRef(false)
+
+  const accent = useMemo<'default' | 'market_s' | 'complaint'>(() => {
+    if (formData.category === 'market_s') return 'market_s'
+    if (formData.category === 'complaint') return 'complaint'
+    return 'default'
+  }, [formData.category])
+
+  const formAccentBorderClass =
+    accent === 'market_s'
+      ? 'border-purple-500/70 ring-1 ring-purple-500/25'
+      : accent === 'complaint'
+        ? 'border-rose-500/70 ring-1 ring-rose-500/25'
+        : 'border-gray-200'
+
+  const inputFocusRingClass =
+    accent === 'market_s'
+      ? 'focus:ring-purple-500'
+      : accent === 'complaint'
+        ? 'focus:ring-rose-500'
+        : 'focus:ring-blue-500'
+
+  const glassFieldStyle = useMemo<React.CSSProperties>(() => {
+    return {
+      backgroundColor: 'rgba(255, 255, 255, 0.7)',
+      WebkitBackdropFilter: 'blur(10px)',
+      backdropFilter: 'blur(10px)',
+    }
+  }, [])
+
+  // URL 파라미터 기반 기본값 자동 세팅:
+  // /contact?from=hot-goods&type=market_s  → inquiry type 'MARKET S - I want this'
+  useEffect(() => {
+    if (didApplyUrlDefaultsRef.current) return
+    const type = (searchParams?.get('type') || '').trim().toLowerCase()
+    if (type !== 'market_s') return
+    didApplyUrlDefaultsRef.current = true
+
+    setFormData((prev) => {
+      const next = { ...prev }
+      next.category = 'market_s'
+      return next
+    })
+  }, [searchParams])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -104,11 +159,11 @@ export default function ContactPage() {
         <div className="absolute bottom-20 right-20 w-32 h-32 bg-purple-300/20 rounded-full blur-xl animate-pulse" style={{animationDelay: '2s'}}></div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-5xl lg:text-7xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-purple-100">
-            {t('admin.products.contactTitle')}
+          <h1 className="text-5xl lg:text-7xl font-black mb-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            Contact Us
           </h1>
-          <p className="text-xl lg:text-2xl text-blue-100 mb-8 max-w-3xl mx-auto">
-            {t('admin.products.contactSubtitle')}
+          <p className="text-lg lg:text-xl text-blue-100/95 mb-8 max-w-3xl mx-auto">
+            Every voice helps shape Selpic. Questions, tips, feedback—anything is welcome.
           </p>
           
           {/* CTA Button */}
@@ -146,7 +201,7 @@ export default function ContactPage() {
       {/* Contact Form Section */}
       <section id="contact-form" className="py-20 bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white p-8 lg:p-10 rounded-2xl shadow-xl border border-gray-100">
+          <div className={`bg-white/80 backdrop-blur-md p-8 lg:p-10 rounded-2xl shadow-xl border ${formAccentBorderClass}`}>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">
                 {t('admin.products.contactForm.title')}
               </h2>
@@ -166,7 +221,8 @@ export default function ContactPage() {
                       value={formData.name}
                       onChange={handleInputChange}
                       placeholder={t('admin.products.contactForm.namePlaceholder')}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      style={glassFieldStyle}
+                      className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-offset-2 focus:border-transparent transition-all duration-200 ${inputFocusRingClass}`}
                       required
                     />
                   </div>
@@ -180,7 +236,8 @@ export default function ContactPage() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder={t('admin.products.contactForm.emailPlaceholder')}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      style={glassFieldStyle}
+                      className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-offset-2 focus:border-transparent transition-all duration-200 ${inputFocusRingClass}`}
                       required
                     />
                   </div>
@@ -194,9 +251,11 @@ export default function ContactPage() {
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    style={glassFieldStyle}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-offset-2 focus:border-transparent transition-all duration-200 ${inputFocusRingClass}`}
                   >
                     <option value="general">{t('admin.products.contactForm.categoryGeneral')}</option>
+                    <option value="market_s">MARKET S - I want this</option>
                     <option value="order">{t('admin.products.contactForm.categoryOrder')}</option>
                     <option value="technical">{t('admin.products.contactForm.categoryTechnical')}</option>
                     <option value="business">{t('admin.products.contactForm.categoryBusiness')}</option>
@@ -214,7 +273,8 @@ export default function ContactPage() {
                     value={formData.subject}
                     onChange={handleInputChange}
                     placeholder={t('admin.products.contactForm.subjectPlaceholder')}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    style={glassFieldStyle}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-offset-2 focus:border-transparent transition-all duration-200 ${inputFocusRingClass}`}
                     required
                   />
                 </div>
@@ -229,7 +289,8 @@ export default function ContactPage() {
                     onChange={handleInputChange}
                     placeholder={t('admin.products.contactForm.messagePlaceholder')}
                     rows={6}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                    style={glassFieldStyle}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-offset-2 focus:border-transparent transition-all duration-200 resize-none ${inputFocusRingClass}`}
                     required
                   ></textarea>
                 </div>
@@ -237,7 +298,7 @@ export default function ContactPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-4 px-6 rounded-lg hover:from-blue-700 hover:to-indigo-700 transform hover:scale-[1.02] transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold tracking-wide py-4 px-6 rounded-xl hover:from-indigo-700 hover:to-purple-700 transform hover:scale-[1.02] transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center">
@@ -246,7 +307,8 @@ export default function ContactPage() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center">
-                      <Send className="w-5 h-5 mr-2" />
+                      <span>Send message</span>
+                      <span className="ml-2" aria-hidden>➔</span>
                       {t('admin.products.contactForm.submit')}
                     </div>
                   )}
@@ -256,19 +318,23 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Satisfaction Guarantee Section */}
-      <section className="py-2 bg-gradient-to-br from-indigo-900 via-blue-800 to-purple-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-4xl lg:text-5xl font-bold mb-4">
+      {/* Trust & Satisfaction Footer */}
+      <section className="py-12 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div
+            className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-7 sm:p-9 text-center shadow-sm"
+          >
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
               {t('admin.products.satisfaction.title')}
             </h2>
-            <p className="text-xl text-blue-100 mb-12">
+            <p className="mt-3 text-slate-600">
               {t('admin.products.satisfaction.subtitle')}
             </p>
-            <p className="text-blue-200/90 text-[11px] whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
+            <p className="mt-3 text-slate-600">
+              We aim to respond within 24 hours.
+            </p>
+            <p className="mt-6 text-slate-500 text-[11px] whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
           </div>
-
         </div>
       </section>
 

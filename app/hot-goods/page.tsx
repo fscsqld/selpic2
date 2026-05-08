@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useContentStore } from '@/lib/contentStore'
@@ -239,6 +239,24 @@ export default function HotGoodsPage() {
     generateMarketSProducts()
   }, [products])
 
+  const hasMarketSProducts = marketSProducts.length > 0
+
+  const typingText = 'MARKET S: COMING SOON'
+  const [typed, setTyped] = useState('')
+  useEffect(() => {
+    if (hasMarketSProducts) return
+    let i = 0
+    setTyped('')
+    const t = window.setInterval(() => {
+      i += 1
+      setTyped(typingText.slice(0, i))
+      if (i >= typingText.length) {
+        window.clearInterval(t)
+      }
+    }, 55)
+    return () => window.clearInterval(t)
+  }, [hasMarketSProducts, typingText])
+
   // 실제 등록된 상품의 카테고리 목록 동적 생성
   const availableCategories = React.useMemo(() => {
     const categories = new Set<string>()
@@ -379,6 +397,72 @@ export default function HotGoodsPage() {
       PhoneCases: '📱'
     }
     return icons[category] || '🔥'
+  }
+
+  if (!hasMarketSProducts) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50">
+        <Header />
+
+        <section className="relative py-16 sm:py-20 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,rgba(112,0,255,0.12),transparent_60%)]" />
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 className="mt-6 text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-700 to-fuchsia-600">
+                {typed}
+              </span>
+              <span className="inline-block w-[0.6ch] align-baseline animate-pulse text-slate-500" aria-hidden>
+                |
+              </span>
+            </h1>
+            <p className="mt-4 text-base sm:text-lg text-slate-600">
+              We’re curating only the hottest items—coming soon.
+            </p>
+
+            <div className="mt-10 flex justify-center">
+              <div className="w-full max-w-xl rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg ring-1 ring-slate-200/80 p-6 sm:p-7 text-left">
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  Tell us what you want to see on MARKET S
+                </h2>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  Share your idea and we’ll curate better picks based on your feedback.
+                </p>
+                <div className="mt-5 flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/contact?from=hot-goods&type=market_s"
+                    className="w-full sm:w-auto btn-ux btn-ux-solid-purple"
+                  >
+                    Submit an idea
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Skeleton Grid (6) */}
+        <section className="pb-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80 overflow-hidden">
+                  <div className="h-48 bg-slate-100 animate-pulse" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 w-3/4 bg-slate-100 rounded animate-pulse" />
+                    <div className="h-3 w-full bg-slate-100 rounded animate-pulse" />
+                    <div className="h-3 w-5/6 bg-slate-100 rounded animate-pulse" />
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="h-6 w-24 bg-slate-100 rounded animate-pulse" />
+                      <div className="h-10 w-28 bg-slate-100 rounded-xl animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    )
   }
 
   return (
@@ -643,10 +727,10 @@ export default function HotGoodsPage() {
                   <button
                     onClick={() => handleAddToCart(product)}
                     disabled={isOutOfStock}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 text-sm ${
                       isOutOfStock
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-red-600 text-white hover:bg-red-700'
+                        ? 'rounded-xl bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'btn-ux btn-ux-cart'
                     }`}
                   >
                     {isOutOfStock ? 'Out of Stock' : 'Cart'}

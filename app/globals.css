@@ -106,6 +106,13 @@ body {
     @apply text-white;
   }
 
+  /* Teasing CTA (solid purple) */
+  .btn-ux-solid-purple {
+    background: #7000ff;
+    box-shadow: 0 6px 18px rgba(112, 0, 255, 0.22);
+    @apply text-white;
+  }
+
   .btn-primary {
     @apply bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-pink-600 hover:to-purple-700 transition-all duration-300;
   }
