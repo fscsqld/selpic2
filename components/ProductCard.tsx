@@ -127,23 +127,12 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
     }
   }
 
-  // 언어에 따른 상품 정보 가져오기
-  const getProductInfo = () => {
-    // 방수스티커인 경우 특별 처리
-    if (product.name.includes('방수스티커') || product.name.includes('Waterproof')) {
-      return {
-        name: t('home.products.waterproofSticker.name'),
-        description: t('home.products.waterproofSticker.description')
-      }
-    }
-    
-    return {
-      name: product.name,
-      description: product.description
-    }
+  // Product listing should reflect admin-edited fields by default.
+  // Avoid keyword-based overrides (e.g. "Waterproof") because they break future product names.
+  const productInfo = {
+    name: product.name,
+    description: product.description,
   }
-
-  const productInfo = getProductInfo()
 
   const hasDetailPage = (product as any).hasDetailPage !== false
 
@@ -226,7 +215,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
 
       {/* 상품 정보 */}
       <div className="space-y-2">
-        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-pink-600 transition-colors line-clamp-2 break-words min-h-[3.25rem]">
+        <h3 className="font-semibold text-lg text-gray-900 group-hover:text-pink-600 transition-colors line-clamp-2 break-words min-h-[3.25rem] text-center">
           {productInfo.name}
         </h3>
         
