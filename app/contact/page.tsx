@@ -309,7 +309,6 @@ function ContactPageContent() {
                     <div className="flex items-center justify-center">
                       <span>Send message</span>
                       <span className="ml-2" aria-hidden>➔</span>
-                      {t('admin.products.contactForm.submit')}
                     </div>
                   )}
                 </button>
