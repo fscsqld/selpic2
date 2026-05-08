@@ -1648,11 +1648,11 @@ function StickerCustomizeContent() {
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     onClick={handleAddToCartAndCheckout}
                     disabled={!displayProduct || isAddingToCart}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full btn-ux btn-ux-editor-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAddingToCart ? (
                       <>
@@ -1670,7 +1670,7 @@ function StickerCustomizeContent() {
                   <button
                     onClick={handleAddToCart}
                     disabled={!displayProduct}
-                    className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition-all border border-slate-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full btn-ux btn-ux-editor-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Package className="w-5 h-5" />
                     <span>Add to Cart</span>

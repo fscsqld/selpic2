@@ -67,6 +67,45 @@ body {
 
 /* Custom button styles */
 @layer components {
+  /* Unified UX button system (storefront + editor) */
+  .btn-ux {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold select-none;
+    letter-spacing: -0.02em;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+  }
+  .btn-ux:hover {
+    transform: scale(1.03);
+  }
+  .btn-ux:active {
+    transform: scale(0.97);
+  }
+  .btn-ux:focus-visible {
+    outline: 2px solid rgba(112, 0, 255, 0.35);
+    outline-offset: 2px;
+  }
+
+  /* [A] Entry stage: product list/detail CTAs */
+  .btn-ux-cta {
+    background: linear-gradient(135deg, #7000ff 0%, #ff00d6 100%);
+    box-shadow: 0 6px 18px rgba(112, 0, 255, 0.18);
+    @apply text-white;
+  }
+  .btn-ux-cart {
+    background: #1a1a1b;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    @apply text-white;
+  }
+
+  /* [B] Editor stage: bottom paired buttons */
+  .btn-ux-editor-secondary {
+    @apply bg-slate-100 text-slate-600 border border-slate-200;
+  }
+  .btn-ux-editor-primary {
+    background: #ff5c00;
+    box-shadow: 0 4px 14px rgba(255, 92, 0, 0.3);
+    @apply text-white;
+  }
+
   .btn-primary {
     @apply bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-pink-600 hover:to-purple-700 transition-all duration-300;
   }

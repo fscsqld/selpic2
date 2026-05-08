@@ -276,7 +276,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
           {requiresCustomization ? (
             <Link
               href={customizationPath}
-              className="flex-1 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-purple-600 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-1 text-center shadow-md hover:shadow-lg"
+              className="flex-1 btn-ux btn-ux-cta text-sm"
             >
               <Eye size={16} />
               <span>{t('product.customize')}</span>
@@ -284,7 +284,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
           ) : isStickersOrStamps ? (
             <button
               onClick={handleAddToCart}
-              className="flex-1 btn-primary flex items-center justify-center space-x-1"
+              className="flex-1 btn-ux btn-ux-cart text-sm"
               disabled={!product.inStock}
             >
               <ShoppingCart size={16} />
@@ -295,7 +295,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
             <>
               <Link
                 href={`/customize?product=${product.id}`}
-                className="flex-1 bg-gradient-to-r from-purple-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-purple-600 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-1 text-center shadow-md hover:shadow-lg"
+                className="flex-1 btn-ux btn-ux-cta text-sm"
               >
                 <Eye size={16} />
                 <span>{t('product.customize')}</span>
@@ -303,7 +303,7 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
               
               <button
                 onClick={handleAddToCart}
-                className="flex-1 btn-primary flex items-center justify-center space-x-1"
+                className="flex-1 btn-ux btn-ux-cart text-sm"
                 disabled={!product.inStock}
               >
                 <ShoppingCart size={16} />
