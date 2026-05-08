@@ -1339,7 +1339,7 @@ function StickerCustomizeContent() {
                         {displayProduct.name}
                       </p>
                       <p className="text-[10px] text-slate-500 -mt-1 pb-1.5 text-center px-2 leading-snug">
-                        Randomly sequenced character designs ONLY
+                        Character designs are randomly sequenced.
                       </p>
                       <div
                         style={{
@@ -1587,9 +1587,7 @@ function StickerCustomizeContent() {
                             </div>
                           </div>
                         </div>
-                        <p className="text-slate-500 text-center w-full px-1 text-[8px] sm:text-[9px] leading-tight break-words max-w-[260px] mx-auto mt-1">
-                          {actualSheetWidthMm}×{actualSheetHeightMm}mm · cell {Number(stickerSpec.widthMm.toFixed(1))}×{Number(stickerSpec.heightMm.toFixed(1))}mm · each box = 1 label
-                        </p>
+                        {/* Intentionally removed: technical sheet/cell size line to avoid confusing customers. */}
                       </div>
                     </div>
                   </>
