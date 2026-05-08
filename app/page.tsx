@@ -16,9 +16,11 @@ import type { CategoryItem } from '@/lib/contentStore'
 
 type CategoryItemWithType = CategoryItem & { categoryType?: string }
 
-/** Same backdrop as VideoSlide/ImageSlide poster shell — used until client mount so persisted CMS (video vs image) cannot diverge from SSR during hydration. */
-const HYDRATION_SAFE_HERO_POSTER_URL =
-  'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80'
+/**
+ * SSR/hydration-safe poster for the hero.
+ * Use a same-origin asset so first paint never depends on a remote image (prevents "black flash").
+ */
+const HYDRATION_SAFE_HERO_POSTER_URL = '/logo.png'
 
 /** Same-origin fallbacks when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
 const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
@@ -92,7 +94,7 @@ function HeroCoverImage({
   if (allFailed) {
     return (
       <div
-        className={`${className} bg-black`}
+        className={`${className} bg-gradient-to-br from-slate-50 via-white to-sky-50`}
         aria-hidden
       />
     )
@@ -246,7 +248,7 @@ const ImageSlide = React.memo(({ src }: { src: string }) => {
   const primary =
     !s || s.startsWith('indexeddb://') ? HYDRATION_SAFE_HERO_POSTER_URL : s
   return (
-    <div className="relative h-full w-full bg-black">
+    <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
       <HeroCoverImage primarySrc={primary} />
     </div>
   )
@@ -265,7 +267,7 @@ function computeVideoSlideSafeSrc(raw: string): string {
 }
 
 // Video Slide Component with error handling (최적화됨)
-// 학습: 동영상이 전체로 보이도록 항상 object-contain 사용. 잘림 없이 비율 유지, 여백은 bg-black으로 채움.
+// 학습: 동영상이 전체로 보이도록 항상 object-contain 사용. 잘림 없이 비율 유지, 여백은 밝은 배경으로 채움(black flash 방지).
 const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: string, fallbackImage: string, title?: string, subtitle?: string }) => {
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
@@ -374,7 +376,7 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     mediaReady && !videoError && !!actualSrc && actualSrc.trim() !== ''
   if (!canRenderVideo) {
     return (
-      <div className="relative h-full w-full bg-black">
+      <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
         <HeroCoverImage primarySrc={safeFallback} />
       </div>
     )
@@ -489,8 +491,8 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       
       {/* Loading indicator */}
       {!videoError && !videoLoaded && (
-        <div className="absolute inset-0 bg-black/20 z-20 flex items-center justify-center">
-          <div className="text-white text-sm">Loading...</div>
+        <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-20 flex items-center justify-center">
+          <div className="text-slate-700 text-sm font-medium">Loading...</div>
         </div>
       )}
     </div>
@@ -1686,7 +1688,7 @@ export default function HomePage() {
             </div>
           </>
           ) : (
-            <div className="relative h-screen w-full bg-black" aria-busy="true">
+            <div className="relative h-screen w-full bg-gradient-to-br from-slate-50 via-white to-sky-50" aria-busy="true">
               <HeroCoverImage primarySrc={HYDRATION_SAFE_HERO_POSTER_URL} />
             </div>
           )}
