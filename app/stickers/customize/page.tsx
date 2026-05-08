@@ -1335,7 +1335,12 @@ function StickerCustomizeContent() {
                         isMobilePreview && mobilePreviewMode !== 'product' ? 'hidden' : ''
                       }`}
                     >
-                      <p className="text-xs font-semibold text-slate-500 py-1.5 text-center truncate max-w-full px-2">{displayProduct.name}</p>
+                      <p className="text-xs font-semibold text-slate-700 py-1.5 text-center truncate max-w-full px-2">
+                        {displayProduct.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 -mt-1 pb-1.5 text-center px-2 leading-snug">
+                        Randomly sequenced character designs ONLY
+                      </p>
                       <div
                         style={{
                           width: fittedSheetWidth,
