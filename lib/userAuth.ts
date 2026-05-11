@@ -76,7 +76,7 @@ const DEFAULT_DEMO_USER: User = {
 // 기본 관리자 계정
 const DEFAULT_ADMIN_USER: User = {
   id: 'admin',
-  email: 'admin@selpic.com',
+  email: 'info@selpic.com.au',
   name: 'Administrator',
   phone: '0466894279',
   address: 'Mansfield QLD 4122, AU',

@@ -27,6 +27,13 @@ import Link from 'next/link'
 import { useAdminAuth } from '@/lib/adminAuth'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
+import {
+  CANONICAL_COMMUNITY_CATEGORY_ROWS,
+  mapStoredCategoryToNav,
+  navBadgeForStoredCategory,
+  canonicalRowForStoredCategory,
+  editorCategoryValue,
+} from '@/lib/community/navCategories'
 
 interface Post {
   id: number
@@ -88,12 +95,12 @@ function AdminCommunityPageContent() {
   const [editPostForm, setEditPostForm] = useState({
     title: '',
     content: '',
-    category: 'General'
+    category: 'Daily'
   })
   const [newPost, setNewPost] = useState({
     title: '',
     content: '',
-    category: 'General'
+    category: 'Daily'
   })
   const [newComment, setNewComment] = useState('')
   const [categories, setCategories] = useState<CommunityCategory[]>([])
@@ -108,18 +115,8 @@ function AdminCommunityPageContent() {
     borderColor: 'border-blue-300'
   })
 
-  // 기본 카테고리 정의
-  const defaultCategories: CommunityCategory[] = [
-    { id: 'all', name: 'All', emoji: '📋', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300', order: 0, isActive: true, isDefault: true },
-    { id: 'general', name: 'General', emoji: '💬', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300', order: 1, isActive: true, isDefault: true },
-    { id: 'design-showcase', name: 'Design Showcase', emoji: '🎨', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300', order: 2, isActive: true, isDefault: true },
-    { id: 'diy-projects', name: 'DIY Projects', emoji: '🛠️', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300', order: 3, isActive: true, isDefault: true },
-    { id: 'tips-tricks', name: 'Tips & Tricks', emoji: '💡', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300', order: 4, isActive: true, isDefault: true },
-    { id: 'questions', name: 'Questions', emoji: '❓', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300', order: 5, isActive: true, isDefault: true },
-    { id: 'events', name: 'Events', emoji: '📅', bgColor: 'bg-indigo-100', textColor: 'text-indigo-800', borderColor: 'border-indigo-300', order: 6, isActive: true, isDefault: true },
-    { id: 'off-topic', name: 'Off-Topic', emoji: '🎭', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300', order: 7, isActive: true, isDefault: true },
-    { id: 'feedback', name: 'Feedback', emoji: '💭', bgColor: 'bg-teal-100', textColor: 'text-teal-800', borderColor: 'border-teal-300', order: 8, isActive: true, isDefault: true }
-  ]
+  const defaultCategories: CommunityCategory[] =
+    CANONICAL_COMMUNITY_CATEGORY_ROWS as unknown as CommunityCategory[]
 
   // 카테고리 저장（Supabase 또는 localStorage）
   const saveCategories = useCallback(
@@ -140,8 +137,8 @@ function AdminCommunityPageContent() {
             alert(typeof data.details === 'string' ? data.details : data.error || 'Failed to save categories')
             return
           }
-          if (Array.isArray(data.categories)) {
-            setCategories(data.categories)
+          if (Array.isArray(data.categories) && data.categories.length > 0) {
+            setCategories(data.categories as CommunityCategory[])
           }
         } catch {
           alert('Failed to save categories')
@@ -154,23 +151,25 @@ function AdminCommunityPageContent() {
     [useRemoteCommunity]
   )
 
-  // 카테고리별 색상 및 이모지 (하위 호환성)
-  const getCategoryStyle = (categoryName: string) => {
-    const category = categories.find(c => c.name === categoryName)
-    if (category) {
+  /** Badge for stored category (legacy or canonical). */
+  const getCategoryStyle = (stored: string) => {
+    const row = canonicalRowForStoredCategory(stored)
+    const badge = navBadgeForStoredCategory(stored)
+    if (row) {
       return {
-        bg: category.bgColor,
-        text: category.textColor,
-        badge: category.emoji,
-        border: category.borderColor
+        bg: row.bgColor,
+        text: row.textColor,
+        badge: badge.emoji,
+        border: row.borderColor,
+        label: badge.label,
       }
     }
-    // 기본값
     return {
-      bg: 'bg-blue-100',
-      text: 'text-blue-800',
-      badge: '💬',
-      border: 'border-blue-300'
+      bg: 'bg-gray-100',
+      text: 'text-gray-800',
+      badge: badge.emoji,
+      border: 'border-gray-200',
+      label: badge.label,
     }
   }
 
@@ -198,9 +197,11 @@ function AdminCommunityPageContent() {
   // 카테고리별 게시물 수 계산
   const getPostCountByCategory = (categoryName: string) => {
     if (categoryName === 'All') {
-      return posts.filter(p => !p.hidden).length
+      return posts.filter((p) => !p.hidden).length
     }
-    return posts.filter(p => p.category === categoryName && !p.hidden).length
+    return posts.filter(
+      (p) => !p.hidden && mapStoredCategoryToNav(p.category) === categoryName
+    ).length
   }
 
   // 카테고리 추가
@@ -305,14 +306,8 @@ function AdminCommunityPageContent() {
 
     const loadLocalFallback = () => {
       try {
-        const stored = localStorage.getItem('community-categories')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (!cancelled) setCategories(parsed)
-        } else {
-          if (!cancelled) setCategories(defaultCategories)
-          localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
-        }
+        if (!cancelled) setCategories(defaultCategories)
+        localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
       } catch (error) {
         console.error('Error loading categories:', error)
         if (!cancelled) setCategories(defaultCategories)
@@ -333,7 +328,7 @@ function AdminCommunityPageContent() {
               content: 'This is a sample post for administrators to manage community content. Feel free to add, edit, or delete posts as needed.',
               likes: 24,
               comments: 5,
-              category: 'General',
+              category: 'Daily',
               pinned: true,
               hidden: false,
               reported: false,
@@ -347,7 +342,7 @@ function AdminCommunityPageContent() {
               content: 'Remember to review reported content promptly and keep the community safe.',
               likes: 18,
               comments: 3,
-              category: 'Tips & Tricks',
+              category: 'Inspired',
               pinned: false,
               hidden: false,
               reported: false,
@@ -371,7 +366,7 @@ function AdminCommunityPageContent() {
         if (res.ok && data.ok && Array.isArray(data.posts) && Array.isArray(data.categories)) {
           setUseRemoteCommunity(true)
           setPosts(data.posts)
-          setCategories(data.categories)
+          setCategories(defaultCategories)
           return
         }
       } catch {
@@ -413,7 +408,7 @@ function AdminCommunityPageContent() {
           return
         }
         setPosts((prev) => [data.post as Post, ...prev])
-        setNewPost({ title: '', content: '', category: 'General' })
+        setNewPost({ title: '', content: '', category: 'Daily' })
         setIsNewPostModalOpen(false)
         alert('Post created successfully!')
       } catch {
@@ -439,7 +434,7 @@ function AdminCommunityPageContent() {
     setPosts(updatedPosts)
     localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
     
-    setNewPost({ title: '', content: '', category: 'General' })
+    setNewPost({ title: '', content: '', category: 'Daily' })
     setIsNewPostModalOpen(false)
     alert('Post created successfully!')
   }
@@ -487,7 +482,7 @@ function AdminCommunityPageContent() {
     setEditPostForm({
       title: post.title,
       content: post.content,
-      category: post.category
+      category: editorCategoryValue(post.category),
     })
     setIsEditModalOpen(true)
   }
@@ -523,7 +518,7 @@ function AdminCommunityPageContent() {
         }
         setIsEditModalOpen(false)
         setEditingPost(null)
-        setEditPostForm({ title: '', content: '', category: 'General' })
+        setEditPostForm({ title: '', content: '', category: 'Daily' })
         alert('Post updated successfully!')
       } catch {
         alert('Network error.')
@@ -554,7 +549,7 @@ function AdminCommunityPageContent() {
 
     setIsEditModalOpen(false)
     setEditingPost(null)
-    setEditPostForm({ title: '', content: '', category: 'General' })
+    setEditPostForm({ title: '', content: '', category: 'Daily' })
     alert('Post updated successfully!')
   }
 
@@ -681,19 +676,24 @@ function AdminCommunityPageContent() {
   }
 
   // 필터링 + 정렬 + 페이지네이션
-  const filteredPosts = useMemo(() => posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.author.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === 'All' || post.category === selectedCategory
-    const notHidden = !post.hidden
-    
-    // 게시물의 카테고리가 활성화되어 있는지 확인
-    const postCategory = categories.find(c => c.name === post.category)
-    const isCategoryActive = postCategory ? postCategory.isActive : true // 카테고리를 찾을 수 없으면 기본적으로 활성으로 간주
-    
-    return matchesSearch && matchesCategory && notHidden && isCategoryActive
-  }), [posts, searchQuery, selectedCategory, categories])
+  const filteredPosts = useMemo(
+    () =>
+      posts.filter((post) => {
+        const matchesSearch =
+          post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.author.toLowerCase().includes(searchQuery.toLowerCase())
+        const nav = mapStoredCategoryToNav(post.category)
+        const matchesCategory = selectedCategory === 'All' || nav === selectedCategory
+        const notHidden = !post.hidden
+
+        const postCategory = categories.find((c) => c.name === nav || c.name === post.category)
+        const isCategoryActive = postCategory ? postCategory.isActive : true
+
+        return matchesSearch && matchesCategory && notHidden && isCategoryActive
+      }),
+    [posts, searchQuery, selectedCategory, categories]
+  )
 
   const sortedPosts = useMemo(() => {
     const base = [...filteredPosts]
@@ -909,7 +909,7 @@ function AdminCommunityPageContent() {
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${getCategoryStyle(post.category).bg} ${getCategoryStyle(post.category).text}`}>
                             <span>{getCategoryStyle(post.category).badge}</span>
-                            {post.category}
+                            {getCategoryStyle(post.category).label}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -1004,7 +1004,7 @@ function AdminCommunityPageContent() {
                     <div className="flex items-center gap-3 mb-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${getCategoryStyle(selectedPost.category).bg} ${getCategoryStyle(selectedPost.category).text}`}>
                         <span>{getCategoryStyle(selectedPost.category).badge}</span>
-                        {selectedPost.category}
+                        {getCategoryStyle(selectedPost.category).label}
                       </span>
                       <span className="text-sm text-gray-500">{selectedPost.date}</span>
                     </div>
@@ -1482,7 +1482,7 @@ function AdminCommunityPageContent() {
                     onClick={() => {
                       setIsEditModalOpen(false)
                       setEditingPost(null)
-                      setEditPostForm({ title: '', content: '', category: 'General' })
+                      setEditPostForm({ title: '', content: '', category: 'Daily' })
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
@@ -1497,9 +1497,7 @@ function AdminCommunityPageContent() {
                       Category
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {activeCategories.filter(c => c.id !== 'all').map((category) => {
-                        const style = getCategoryStyle(category.name)
-                        return (
+                      {activeCategories.filter(c => c.id !== 'all').map((category) => (
                           <button
                             key={category.id}
                             onClick={() => setEditPostForm({ ...editPostForm, category: category.name })}
@@ -1516,8 +1514,7 @@ function AdminCommunityPageContent() {
                               </div>
                             </div>
                           </button>
-                        )
-                      })}
+                      ))}
                     </div>
                   </div>
 
@@ -1568,7 +1565,7 @@ function AdminCommunityPageContent() {
                       onClick={() => {
                         setIsEditModalOpen(false)
                         setEditingPost(null)
-                        setEditPostForm({ title: '', content: '', category: 'General' })
+                        setEditPostForm({ title: '', content: '', category: 'Daily' })
                       }}
                       className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
                     >
@@ -1599,7 +1596,7 @@ function AdminCommunityPageContent() {
                   <button
                     onClick={() => {
                       setIsNewPostModalOpen(false)
-                      setNewPost({ title: '', content: '', category: 'General' })
+                      setNewPost({ title: '', content: '', category: 'Daily' })
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
@@ -1614,9 +1611,7 @@ function AdminCommunityPageContent() {
                       Category
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {activeCategories.filter(c => c.id !== 'all').map((category) => {
-                        const style = getCategoryStyle(category.name)
-                        return (
+                      {activeCategories.filter(c => c.id !== 'all').map((category) => (
                           <button
                             key={category.id}
                             onClick={() => setNewPost({ ...newPost, category: category.name })}
@@ -1633,8 +1628,7 @@ function AdminCommunityPageContent() {
                               </div>
                             </div>
                           </button>
-                        )
-                      })}
+                      ))}
                     </div>
                   </div>
 
@@ -1681,7 +1675,7 @@ function AdminCommunityPageContent() {
                     <button
                       onClick={() => {
                         setIsNewPostModalOpen(false)
-                        setNewPost({ title: '', content: '', category: 'General' })
+                        setNewPost({ title: '', content: '', category: 'Daily' })
                       }}
                       className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
                     >

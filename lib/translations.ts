@@ -921,7 +921,7 @@ export const translations = {
          subtitle: '궁금한 점이 있으시면 언제든 연락주세요',
          address: '서울특별시 강남구 테헤란로 123',
          phone: '전화번호',
-         email: 'info@selpic.com',
+         email: 'info@selpic.com.au',
          hours: '월-금: 9:00 AM - 6:00 PM',
          contactPhone: '0466-894-279'
        },
@@ -2613,7 +2613,7 @@ export const translations = {
          subtitle: 'Feel free to contact us if you have any questions',
          address: '123 Teheran-ro, Gangnam-gu, Seoul',
          phone: 'Phone',
-         email: 'info@selpic.com',
+         email: 'info@selpic.com.au',
          hours: 'Mon-Fri: 9:00 AM - 6:00 PM',
          contactPhone: '0466-894-279'
       },

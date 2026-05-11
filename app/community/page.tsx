@@ -4,8 +4,35 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
-import { MessageSquare, ThumbsUp, MessageCircle, Calendar, User, Plus, Search, X, Edit, Trash2, Shield } from 'lucide-react'
+import {
+  MessageSquare,
+  ThumbsUp,
+  MessageCircle,
+  Calendar,
+  User,
+  Plus,
+  Search,
+  X,
+  Edit,
+  Trash2,
+  Shield,
+  Sparkles,
+  HeartHandshake,
+  Scale,
+  Mail,
+  ChevronDown,
+  PartyPopper,
+} from 'lucide-react'
 import { useUserAuth } from '@/lib/userAuth'
+import {
+  COMMUNITY_NAV_CHIPS,
+  COMMUNITY_POST_CATEGORIES,
+  CANONICAL_COMMUNITY_CATEGORY_ROWS,
+  mapStoredCategoryToNav,
+  navPillClasses,
+  navBadgeForStoredCategory,
+  editorCategoryValue,
+} from '@/lib/community/navCategories'
 
 interface Post {
   id: number
@@ -71,7 +98,7 @@ const samplePosts: Post[] = [
     content: "Hey everyone! Welcome to our vibrant community space where creativity meets conversation! This is YOUR space to share ideas, connect with like-minded people, and express yourself freely. Whether you're a designer, entrepreneur, student, or just looking for interesting conversations - you belong here! Jump in, introduce yourself, and let's make this community amazing together! 💫",
     likes: 127,
     comments: 45,
-    category: "General"
+    category: "Daily"
   },
   {
     id: 2,
@@ -81,7 +108,7 @@ const samplePosts: Post[] = [
     content: "After months of learning Procreate, I finally completed my first digital artwork! It's a fantasy landscape inspired by Studio Ghibli films. The journey was challenging but so rewarding. To anyone starting their creative journey - don't give up! Every stroke teaches you something new. Would love your feedback! What should I work on next? 🌸",
     likes: 234,
     comments: 67,
-    category: "Design Showcase"
+    category: "Inspired"
   },
   {
     id: 3,
@@ -91,7 +118,7 @@ const samplePosts: Post[] = [
     content: "Tired of expensive standing desks, so I made my own! Used IKEA table legs, a countertop, and some brackets. Total cost: $50 vs $500+ for commercial ones!\n\nMaterials:\n- 4x adjustable OLOV legs ($40)\n- LINNMON tabletop ($10)\n- Corner brackets from hardware store\n\nTook 2 hours to assemble. Been using it for a month - game changer for my back! Happy to share detailed instructions if anyone's interested! 💪",
     likes: 389,
     comments: 102,
-    category: "DIY Projects"
+    category: "Inspired"
   },
   {
     id: 4,
@@ -101,7 +128,7 @@ const samplePosts: Post[] = [
     content: "Struggled with morning motivation for years. Then I discovered this simple routine:\n\n1. Make bed immediately (2 min)\n2. Drink full glass of water (30 sec)\n3. 2-minute stretch or yoga\n4. Write down 3 goals for today (30 sec)\n\nSeems small but it creates momentum! My productivity increased by 40% and I feel more focused. The key is starting TINY and being consistent. Anyone else have morning rituals that work? 🌅",
     likes: 456,
     comments: 143,
-    category: "Tips & Tricks"
+    category: "Inspired"
   },
   {
     id: 5,
@@ -111,7 +138,7 @@ const samplePosts: Post[] = [
     content: "I'm 28 and working in marketing, but my real passion is photography. I've been doing it on weekends and getting some paid gigs. My savings could cover 6 months of expenses. Part of me wants to take the leap, but I'm scared. Has anyone made this jump? How did you know it was the right time? Any advice would be incredibly helpful! 🙏",
     likes: 189,
     comments: 87,
-    category: "Questions"
+    category: "Help"
   },
   {
     id: 6,
@@ -131,7 +158,7 @@ const samplePosts: Post[] = [
     content: "Meet Charlie! Found him at the local shelter two weeks ago. He was scared and didn't trust anyone. Now he follows me everywhere, sleeps on my bed, and greets me with the biggest smile when I come home. Rescue dogs are the BEST! They know you saved them and give endless love in return. If you're thinking about getting a pet, please consider adoption! Share your pet pics below - let's flood this thread with cuteness! 🐾✨",
     likes: 542,
     comments: 178,
-    category: "Off-Topic"
+    category: "Daily"
   },
   {
     id: 8,
@@ -141,7 +168,7 @@ const samplePosts: Post[] = [
     content: "Love this community! Quick feedback: Would be awesome if we could customize our profiles with avatars, cover photos, and a short bio. It would make the community feel more personal and help us recognize regular members. Also, maybe badges for active contributors? Just some ideas to make this space even better! What does everyone think? 🎨",
     likes: 298,
     comments: 115,
-    category: "Feedback"
+    category: "Help"
   }
 ]
 
@@ -159,13 +186,14 @@ export default function CommunityPage() {
   const [newPost, setNewPost] = useState({
     title: '',
     content: '',
-    category: 'General',
+    category: 'Daily',
     author: ''
   })
   const [newComment, setNewComment] = useState('')
   const [categories, setCategories] = useState<CommunityCategory[]>([])
   /** When true, posts/categories round-trip Supabase instead of localStorage. */
   const [useRemoteCommunity, setUseRemoteCommunity] = useState(false)
+  const [legalTermsOpen, setLegalTermsOpen] = useState(false)
 
   // 사용자 정보 실시간 업데이트 감지
   useEffect(() => {
@@ -249,18 +277,8 @@ export default function CommunityPage() {
     }
   }, [user, users, currentUser])
 
-  // 기본 카테고리 정의 (Admin과 동일)
-  const defaultCategories: CommunityCategory[] = [
-    { id: 'all', name: 'All', emoji: '📋', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300', order: 0, isActive: true, isDefault: true },
-    { id: 'general', name: 'General', emoji: '💬', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300', order: 1, isActive: true, isDefault: true },
-    { id: 'design-showcase', name: 'Design Showcase', emoji: '🎨', bgColor: 'bg-purple-100', textColor: 'text-purple-800', borderColor: 'border-purple-300', order: 2, isActive: true, isDefault: true },
-    { id: 'diy-projects', name: 'DIY Projects', emoji: '🛠️', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300', order: 3, isActive: true, isDefault: true },
-    { id: 'tips-tricks', name: 'Tips & Tricks', emoji: '💡', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300', order: 4, isActive: true, isDefault: true },
-    { id: 'questions', name: 'Questions', emoji: '❓', bgColor: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-300', order: 5, isActive: true, isDefault: true },
-    { id: 'events', name: 'Events', emoji: '📅', bgColor: 'bg-indigo-100', textColor: 'text-indigo-800', borderColor: 'border-indigo-300', order: 6, isActive: true, isDefault: true },
-    { id: 'off-topic', name: 'Off-Topic', emoji: '🎭', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300', order: 7, isActive: true, isDefault: true },
-    { id: 'feedback', name: 'Feedback', emoji: '💭', bgColor: 'bg-teal-100', textColor: 'text-teal-800', borderColor: 'border-teal-300', order: 8, isActive: true, isDefault: true }
-  ]
+  const defaultCategories: CommunityCategory[] =
+    CANONICAL_COMMUNITY_CATEGORY_ROWS as unknown as CommunityCategory[]
 
   // Load community: Supabase (public API) first, otherwise localStorage + sample posts
   useEffect(() => {
@@ -268,14 +286,8 @@ export default function CommunityPage() {
 
     const loadLocalCategoriesAndPosts = () => {
       try {
-        const stored = localStorage.getItem('community-categories')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          if (!cancelled) setCategories(parsed)
-        } else {
-          if (!cancelled) setCategories(defaultCategories)
-          localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
-        }
+        if (!cancelled) setCategories(defaultCategories)
+        localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
       } catch (error) {
         console.error('Error loading categories:', error)
         if (!cancelled) setCategories(defaultCategories)
@@ -283,7 +295,7 @@ export default function CommunityPage() {
 
       try {
         const storedPosts = localStorage.getItem('community-posts')
-        const SAMPLE_VERSION = 'v2.0'
+        const SAMPLE_VERSION = 'v3.0'
         const storedVersion = localStorage.getItem('community-posts-version')
 
         if (storedVersion !== SAMPLE_VERSION) {
@@ -292,7 +304,7 @@ export default function CommunityPage() {
           localStorage.setItem('community-posts-version', SAMPLE_VERSION)
         } else if (storedPosts) {
           const parsedPosts = JSON.parse(storedPosts)
-          if (parsedPosts.length === 0 || parsedPosts.length < samplePosts.length) {
+          if (parsedPosts.length === 0) {
             if (!cancelled) setPosts(samplePosts)
             localStorage.setItem('community-posts', JSON.stringify(samplePosts))
             localStorage.setItem('community-posts-version', SAMPLE_VERSION)
@@ -308,7 +320,7 @@ export default function CommunityPage() {
         console.error('Error loading posts:', error)
         if (!cancelled) setPosts(samplePosts)
         localStorage.setItem('community-posts', JSON.stringify(samplePosts))
-        localStorage.setItem('community-posts-version', 'v2.0')
+        localStorage.setItem('community-posts-version', 'v3.0')
       }
     }
 
@@ -320,7 +332,7 @@ export default function CommunityPage() {
         if (res.ok && data.ok && Array.isArray(data.posts) && Array.isArray(data.categories)) {
           setUseRemoteCommunity(true)
           setPosts(data.posts)
-          setCategories(data.categories)
+          setCategories(defaultCategories)
           return
         }
       } catch {
@@ -342,10 +354,13 @@ export default function CommunityPage() {
     const handleStorageChange = () => {
       try {
         const stored = localStorage.getItem('community-categories')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          setCategories(parsed)
-        }
+        if (!stored) return
+        const parsed = JSON.parse(stored) as CommunityCategory[]
+        const incoming = new Set((parsed ?? []).map((c) => c.id))
+        const wanted = new Set(CANONICAL_COMMUNITY_CATEGORY_ROWS.map((r) => r.id))
+        const aligned =
+          incoming.size === wanted.size && [...wanted].every((id) => incoming.has(id))
+        setCategories(aligned ? parsed : (CANONICAL_COMMUNITY_CATEGORY_ROWS as unknown as CommunityCategory[]))
       } catch (error) {
         console.error('Error loading categories from storage:', error)
       }
@@ -360,23 +375,12 @@ export default function CommunityPage() {
     }
   }, [useRemoteCommunity])
 
-  // 활성 카테고리만 필터링
-  const activeCategories = categories.filter(c => c.isActive).sort((a, b) => a.order - b.order)
-  
-  // 카테고리 이름 배열 (하위 호환성)
-  const categoryNames = activeCategories.map(c => c.name)
-  const postCategories = activeCategories.filter(c => c.id !== 'all').map(c => c.name)
+  const postCategories = [...COMMUNITY_POST_CATEGORIES]
 
-  // 선택된 카테고리가 비활성화되었는지 확인하고 자동으로 "All"로 변경
   useEffect(() => {
-    if (selectedCategory !== 'All') {
-      const selectedCat = categories.find(c => c.name === selectedCategory)
-      if (selectedCat && !selectedCat.isActive) {
-        console.log('Selected category is inactive, switching to All')
-        setSelectedCategory('All')
-      }
-    }
-  }, [categories, selectedCategory])
+    if (selectedCategory === 'All') return
+    if (!COMMUNITY_NAV_CHIPS.some((c) => c.name === selectedCategory)) setSelectedCategory('All')
+  }, [selectedCategory])
 
   // 샘플 게시물 리셋 함수 (local-only; server-backed board uses admin tools)
   const resetToSamplePosts = () => {
@@ -385,39 +389,20 @@ export default function CommunityPage() {
       console.log('=== Resetting to Sample Posts ===')
       setPosts(samplePosts)
       localStorage.setItem('community-posts', JSON.stringify(samplePosts))
-      localStorage.setItem('community-posts-version', 'v2.0')
+      localStorage.setItem('community-posts-version', 'v3.0')
       alert('Sample posts have been restored!')
     }
   }
 
   // 관리자 확인 (이메일 기반)
-  const isAdmin = user?.email === 'admin@selpic.com'
+  const isAdmin = user?.email === 'info@selpic.com.au'
 
-  // 카테고리별 색상 및 이모지 (localStorage에서 로드한 카테고리 사용)
-  const getCategoryStyle = (categoryName: string) => {
-    const category = categories.find(c => c.name === categoryName)
-    if (category) {
-      // bgColor를 gradient로 변환 (예: bg-blue-100 -> from-blue-100 to-blue-200)
-      const baseColor = category.bgColor.replace('bg-', '').replace('-100', '')
-      return {
-        bg: `from-${baseColor}-100 to-${baseColor}-200`,
-        text: category.textColor,
-        emoji: category.emoji
-      }
-    }
-    // 기본값 (하위 호환성)
-    const styles: Record<string, { bg: string; text: string; emoji: string }> = {
-      'General': { bg: 'from-blue-100 to-cyan-100', text: 'text-blue-700', emoji: '💬' },
-      'Design Showcase': { bg: 'from-purple-100 to-pink-100', text: 'text-purple-700', emoji: '🎨' },
-      'DIY Projects': { bg: 'from-green-100 to-emerald-100', text: 'text-green-700', emoji: '🛠️' },
-      'Tips & Tricks': { bg: 'from-yellow-100 to-orange-100', text: 'text-orange-700', emoji: '💡' },
-      'Questions': { bg: 'from-red-100 to-pink-100', text: 'text-red-700', emoji: '❓' },
-      'Events': { bg: 'from-indigo-100 to-purple-100', text: 'text-indigo-700', emoji: '📅' },
-      'Off-Topic': { bg: 'from-gray-100 to-slate-100', text: 'text-gray-700', emoji: '🎭' },
-      'Feedback': { bg: 'from-teal-100 to-cyan-100', text: 'text-teal-700', emoji: '💭' }
-    }
-    return styles[categoryName] || styles['General']
+  const navChipClasses = (stored: string) => {
+    const { label } = navBadgeForStoredCategory(stored)
+    return navPillClasses(label === 'All' ? 'Daily' : label)
   }
+
+  const navChipMeta = (stored: string) => navBadgeForStoredCategory(stored)
 
   // 게시물이 변경될 때마다 localStorage에 저장 (local-only)
   useEffect(() => {
@@ -439,20 +424,21 @@ export default function CommunityPage() {
     }
   }, [isLoggedIn, user])
 
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.content.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    // 선택된 카테고리 확인
-    const matchesCategory = selectedCategory === 'All' || post.category === selectedCategory
-    
-    // 게시물의 카테고리가 활성화되어 있는지 확인
-    const postCategory = categories.find(c => c.name === post.category)
-    const isCategoryActive = postCategory ? postCategory.isActive : true // 카테고리를 찾을 수 없으면 기본적으로 활성으로 간주
+  const filteredPosts = posts.filter((post) => {
+    const q = searchQuery.toLowerCase()
+    const matchesSearch =
+      post.title.toLowerCase().includes(q) || post.content.toLowerCase().includes(q)
+    const nav = mapStoredCategoryToNav(post.category)
+    const matchesCategory = selectedCategory === 'All' || nav === selectedCategory
     const notHidden = !post.hidden
-
-    return matchesSearch && matchesCategory && isCategoryActive && notHidden
+    return matchesSearch && matchesCategory && notHidden
   })
+
+  const searchActive = Boolean(searchQuery.trim())
+  const globalEmptyBoard = filteredPosts.length === 0 && posts.length === 0
+  const searchEmptyBoard = filteredPosts.length === 0 && posts.length > 0 && searchActive
+  const categoryEmptyBoard =
+    filteredPosts.length === 0 && posts.length > 0 && !searchActive && selectedCategory !== 'All'
 
   // 사용자 글쓰기 권한 확인 함수 (currentUser 사용)
   const checkPostingPermission = (): { allowed: boolean; reason?: string } => {
@@ -526,11 +512,17 @@ export default function CommunityPage() {
       return
     }
 
+    const topicDefault =
+      selectedCategory !== 'All' &&
+      (COMMUNITY_POST_CATEGORIES as readonly string[]).includes(selectedCategory)
+        ? selectedCategory
+        : 'Daily'
+
     setEditingPost(null)
     setNewPost({ 
       title: '', 
       content: '', 
-      category: 'General', 
+      category: topicDefault, 
       author: userToUse.name || userToUse.email 
     })
     setIsModalOpen(true)
@@ -554,7 +546,7 @@ export default function CommunityPage() {
     setNewPost({
       title: post.title,
       content: post.content,
-      category: post.category,
+      category: editorCategoryValue(post.category),
       author: post.author
     })
     setIsModalOpen(true)
@@ -634,7 +626,7 @@ export default function CommunityPage() {
         return
       }
 
-      setNewPost({ title: '', content: '', category: 'General', author: user.name || user.email })
+      setNewPost({ title: '', content: '', category: 'Daily', author: user.name || user.email })
       setEditingPost(null)
       setIsModalOpen(false)
       return
@@ -672,7 +664,7 @@ export default function CommunityPage() {
       alert('Post created successfully!')
     }
 
-    setNewPost({ title: '', content: '', category: 'General', author: user.name || user.email })
+    setNewPost({ title: '', content: '', category: 'Daily', author: user.name || user.email })
     setEditingPost(null)
     setIsModalOpen(false)
   }
@@ -884,164 +876,206 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-blue-50">
       <Header />
       
       {/* Hero Section */}
-      <section className="pt-32 pb-16 px-4">
+      <section className="relative pt-28 pb-12 px-4 bg-gradient-to-b from-purple-50 via-white to-blue-50/80">
         <div className="max-w-7xl mx-auto text-center">
-          <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full mb-6">
-            <MessageSquare className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-white/80 shadow-sm border border-purple-100/80 mb-6">
+            <MessageSquare className="w-8 h-8 text-[#7000FF]" aria-hidden />
           </div>
-          <h1 className="text-5xl lg:text-6xl font-bold font-playfair tracking-wider mb-6 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
+          <h1 className="text-5xl sm:text-6xl font-black tracking-tight text-gray-900 mb-3">
             Selpic N
           </h1>
-          <p className="text-xl text-gray-600 mb-4 max-w-2xl mx-auto">
-            Your Space to Connect, Share, and Inspire
+          <p className="text-5xl font-black tracking-tight text-gray-900 max-w-4xl mx-auto leading-[1.1] mb-5">
+            Connect.{' '}
+            <span className="text-[#7000FF]">Share.</span>{' '}
+            Inspire.
           </p>
-          <p className="text-base text-gray-500 max-w-3xl mx-auto">
-            Join our vibrant community where people share life experiences, creative projects, helpful tips, and meaningful conversations. From career advice to DIY projects, from pet stories to productivity hacks - this is your space to be yourself and connect with amazing people! 💫✨
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            A welcoming space for stories, projects, tips, and conversation. Be yourself and meet people who love making
+            things as much as you do.
           </p>
           
-          {/* Community Guidelines Notice */}
-          <div className="max-w-4xl mx-auto mb-8">
-            <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-purple-100">
-              <div className="flex items-start gap-3 mb-4">
-                <Shield className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Community Guidelines & Legal Notice</h3>
-                  <p className="text-sm text-gray-700 mb-3">
-                    This board is a free communication space for customers to share information and experiences. 
-                    Please use it responsibly and respect others.
-                  </p>
+          {/* Community guidelines — compact icon cards */}
+          <div className="max-w-4xl mx-auto mt-10 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-left">
+              <div className="rounded-2xl bg-white/90 border border-purple-100/80 p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center mb-3">
+                  <HeartHandshake className="w-5 h-5 text-rose-500" aria-hidden />
                 </div>
-              </div>
-
-              {/* Legal Warnings */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-red-50 rounded-xl p-4 border-2 border-red-200">
-                  <h4 className="font-bold text-red-900 mb-2 text-sm flex items-center gap-2">
-                    <span>⚠️</span> Prohibited Content
-                  </h4>
-                  <ul className="text-xs text-red-800 space-y-1">
-                    <li>• Defamation or false information</li>
-                    <li>• Hate speech or discrimination</li>
-                    <li>• Violence or threats</li>
-                    <li>• Adult or sexual content</li>
-                    <li>• Illegal activities or drug-related content</li>
-                    <li>• Copyright infringement</li>
-                    <li>• Personal information exposure</li>
-                    <li>• Commercial spam or advertisements</li>
-                  </ul>
-                </div>
-
-                <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
-                  <h4 className="font-bold text-blue-900 mb-2 text-sm flex items-center gap-2">
-                    <span>⚖️</span> Legal Responsibilities
-                  </h4>
-                  <ul className="text-xs text-blue-800 space-y-1">
-                    <li>• Authors are responsible for their posts</li>
-                    <li>• Defamation may result in civil/criminal liability</li>
-                    <li>• Copyright violations are subject to legal action</li>
-                    <li>• Platform is not liable for user content</li>
-                    <li>• Violations may lead to account suspension</li>
-                    <li>• Law enforcement may request user information</li>
-                    <li>• Posts may be deleted without notice</li>
-                    <li>• Repeated violations result in permanent ban</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Additional Notice */}
-              <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-xs text-yellow-900">
-                  <strong>⚠️ Important:</strong> All posts are subject to monitoring. Content violating laws or 
-                  community guidelines will be immediately removed. Serious violations will be reported to authorities. 
-                  By posting, you agree to these terms and accept full responsibility for your content.
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Be kind</h3>
+                <p className="text-xs text-gray-600 leading-snug">
+                  Respect others. No harassment, hate, or personal attacks.
                 </p>
               </div>
-
-              {/* Contact for Issues */}
-              <div className="mt-4 text-center">
-                <p className="text-xs text-gray-600">
-                  Report inappropriate content: <a href="mailto:admin@selpic.com" className="text-purple-600 font-semibold hover:underline">admin@selpic.com</a>
+              <div className="rounded-2xl bg-white/90 border border-purple-100/80 p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-3">
+                  <Shield className="w-5 h-5 text-amber-600" aria-hidden />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Keep it safe</h3>
+                <p className="text-xs text-gray-600 leading-snug">
+                  No violence, illegal activity, scams, spam, or adult content.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/90 border border-purple-100/80 p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center mb-3">
+                  <Sparkles className="w-5 h-5 text-[#7000FF]" aria-hidden />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Own your words</h3>
+                <p className="text-xs text-gray-600 leading-snug">
+                  You are responsible for what you post. Respect copyright and privacy.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/90 border border-purple-100/80 p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center mb-3">
+                  <Mail className="w-5 h-5 text-sky-600" aria-hidden />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Need help?</h3>
+                <p className="text-xs text-gray-600 leading-snug">
+                  Report issues to{' '}
+                  <a href="mailto:info@selpic.com.au" className="text-[#7000FF] font-medium hover:underline">
+                    info@selpic.com.au
+                  </a>
+                  .
                 </p>
               </div>
             </div>
+
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setLegalTermsOpen((o) => !o)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-[#7000FF] bg-white border border-[#7000FF]/25 hover:bg-[#7000FF]/5 transition-colors"
+              >
+                <Scale className="w-4 h-4" aria-hidden />
+                Terms &amp; legal notice
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${legalTermsOpen ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </button>
+              {legalTermsOpen && (
+                <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white/95 p-4 text-left text-xs text-gray-600 space-y-3 shadow-sm">
+                  <p>
+                    This board is a space for customers to share information and experiences. Content may be moderated;
+                    posts that break the law or these guidelines may be removed. Serious cases may be reported to
+                    authorities.
+                  </p>
+                  <p className="text-gray-500">
+                    By posting, you agree you are responsible for your content. The platform is not liable for user
+                    posts. Violations may lead to suspension or a permanent ban.
+                  </p>
+                  <p>
+                    <Link href="/terms" className="text-[#7000FF] font-semibold hover:underline">
+                      View full Terms &amp; Conditions
+                    </Link>
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] sm:text-xs text-gray-400 max-w-xl">
+                Legal notice: use of this community is subject to our site terms and applicable law. Monitoring may
+                apply to keep the space safe.
+              </p>
+            </div>
           </div>
           
-          {/* Search and New Post */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
-            <div className="relative w-full sm:w-96">
+          {/* Search */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6">
+            <div className="relative w-full max-w-md sm:w-96">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search posts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
+                className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[#7000FF] focus:outline-none transition-all focus:ring-2 focus:ring-[#7000FF]/20"
               />
             </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={handleOpenNewPost}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl"
+            {isAdmin && !useRemoteCommunity && (
+              <button
+                type="button"
+                onClick={resetToSamplePosts}
+                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl text-sm"
+                title="Reset to sample posts (local board only)"
               >
-                <Plus className="w-5 h-5" />
-                New Post
+                🔄 Reset
               </button>
-              {isAdmin && !useRemoteCommunity && (
-                <button 
-                  onClick={resetToSamplePosts}
-                  className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl text-sm"
-                  title="Reset to sample posts (local board only)"
-                >
-                  🔄 Reset
-                </button>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* User Status */}
-          <div className="flex items-center justify-center gap-2 text-sm">
-            {isLoggedIn && user ? (
-              <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md">
-                <User className="w-4 h-4 text-purple-600" />
-                <span className="text-gray-700">Welcome, <span className="font-semibold">{user.name || user.email}</span></span>
+          {/* User welcome (logged in only — posting uses FAB +) */}
+          {isLoggedIn && user && (
+            <div className="flex items-center justify-center gap-2 text-sm mb-5">
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full shadow-sm border border-gray-100">
+                <User className="w-4 h-4 text-purple-600" aria-hidden />
+                <span className="text-gray-700">
+                  Welcome, <span className="font-semibold">{user.name || user.email}</span>
+                </span>
                 {isAdmin && (
-                  <span className="ml-2 px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs rounded-full flex items-center gap-1">
-                    <Shield className="w-3 h-3" />
+                  <span className="ml-1 px-2 py-0.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs rounded-full inline-flex items-center gap-1">
+                    <Shield className="w-3 h-3" aria-hidden />
                     Admin
                   </span>
                 )}
               </div>
-            ) : (
-              <div className="px-4 py-2 bg-white rounded-full shadow-md text-gray-600">
-                Please <Link href="/login" className="text-purple-600 font-semibold hover:underline">login</Link> to post
+            </div>
+          )}
+
+          {/* Category chips: horizontal scroll + compose FAB */}
+          <div className="w-full max-w-5xl mx-auto pt-1">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="no-scrollbar flex min-w-0 flex-1 snap-x snap-mandatory scroll-smooth gap-2 overflow-x-auto overflow-y-hidden py-2 pl-1 pr-1"
+                role="tablist"
+                aria-label="Post categories"
+              >
+                {COMMUNITY_NAV_CHIPS.map((category) => {
+                  const selected = selectedCategory === category.name
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setSelectedCategory(category.name)}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className={[
+                        'snap-start shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold',
+                        'flex items-center space-x-2',
+                        'transition-all duration-200 ease-out motion-reduce:transition-none',
+                        'touch-manipulation select-none',
+                        selected
+                          ? 'scale-105 bg-[#7000FF] text-white shadow-lg shadow-[#7000FF]/35'
+                          : 'scale-100 border border-transparent bg-white/40 text-gray-600 backdrop-blur-sm hover:border-gray-200/80 hover:bg-white/70 hover:scale-105 hover:shadow-md active:scale-[1.02]',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7000FF]/40 focus-visible:ring-offset-2',
+                      ].join(' ')}
+                    >
+                      <span aria-hidden>{category.emoji}</span>
+                      <span>{category.name}</span>
+                    </button>
+                  )
+                })}
               </div>
-            )}
+              {/* Floating-style compose (+): next to chip strip on desktop; stacks on narrow screens */}
+              <button
+                type="button"
+                onClick={handleOpenNewPost}
+                className="shrink-0 flex h-12 w-12 items-center justify-center rounded-full bg-[#7000FF] text-white shadow-lg shadow-[#7000FF]/35 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7000FF] focus-visible:ring-offset-2"
+                aria-label={isLoggedIn ? 'Create new post' : 'Log in to create a post'}
+                title={isLoggedIn ? 'New post' : 'Log in to post'}
+              >
+                <Plus className="w-6 h-6" strokeWidth={2.5} aria-hidden />
+              </button>
+            </div>
           </div>
 
-          {/* Category Filter */}
-          <div className="flex flex-wrap gap-3 justify-center">
-            {activeCategories.map((category) => {
-              const style = getCategoryStyle(category.name)
-              return (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.name)}
-                  className={`px-6 py-2 rounded-full font-medium transition-all flex items-center gap-2 ${
-                    selectedCategory === category.name
-                      ? `bg-gradient-to-r ${style.bg} ${style.text} shadow-lg`
-                      : 'bg-white text-gray-600 hover:bg-gray-50 border-2 border-gray-200'
-                  }`}
-                >
-                  <span>{category.emoji}</span>
-                  <span>{category.name}</span>
-                </button>
-              )
-            })}
-          </div>
+          {!isLoggedIn && (
+            <p className="text-center text-xs text-gray-500 mt-2">
+              Tap <span className="font-semibold text-[#7000FF]">+</span> to log in and write a post.
+            </p>
+          )}
         </div>
       </section>
 
@@ -1058,9 +1092,11 @@ export default function CommunityPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-3 py-1 bg-gradient-to-r ${getCategoryStyle(post.category).bg} ${getCategoryStyle(post.category).text} rounded-full text-sm font-medium flex items-center gap-1.5`}>
-                        <span>{getCategoryStyle(post.category).emoji}</span>
-                        {post.category}
+                      <span
+                        className={`px-3 py-1 bg-gradient-to-r ${navChipClasses(post.category).bg} ${navChipClasses(post.category).text} rounded-full text-sm font-medium inline-flex items-center gap-2`}
+                      >
+                        <span aria-hidden>{navChipMeta(post.category).emoji}</span>
+                        {navChipMeta(post.category).label}
                       </span>
                       <span className="text-gray-400 text-sm">•</span>
                       <div className="flex items-center gap-2 text-gray-500 text-sm">
@@ -1123,9 +1159,84 @@ export default function CommunityPage() {
           </div>
 
           {filteredPosts.length === 0 && (
-            <div className="text-center py-20">
-              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl text-gray-500">No posts found</p>
+            <div className="text-center py-16 px-4">
+              <div className="max-w-md mx-auto rounded-3xl bg-gradient-to-br from-violet-50 via-white to-sky-50 border border-purple-100/80 p-10 shadow-inner">
+                {searchEmptyBoard && (
+                  <>
+                    <MessageSquare className="w-14 h-14 text-gray-300 mx-auto mb-4" aria-hidden />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">No matching posts</h3>
+                    <p className="text-sm text-gray-600 mb-6">Try a different search term or pick another topic.</p>
+                  </>
+                )}
+                {categoryEmptyBoard && (
+                  <>
+                    <div className="flex justify-center gap-3 mb-5">
+                      <div className="w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center border border-purple-50">
+                        <Sparkles className="w-7 h-7 text-[#7000FF]" aria-hidden />
+                      </div>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                      No stories in {selectedCategory} yet
+                    </h3>
+                    <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6">
+                      Nothing here yet — want to be the first to share your story?
+                      <span aria-hidden> ✨</span>
+                    </p>
+                    {isLoggedIn ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNewPost()}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#7000FF] text-white text-sm font-semibold hover:bg-[#5c00d4] transition-colors shadow-md"
+                      >
+                        <Plus className="w-4 h-4" aria-hidden />
+                        Start a post in {selectedCategory}
+                      </button>
+                    ) : (
+                      <Link
+                        href="/login"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#7000FF] text-white text-sm font-semibold hover:bg-[#5c00d4] transition-colors shadow-md"
+                      >
+                        Log in to post in {selectedCategory}
+                      </Link>
+                    )}
+                  </>
+                )}
+                {globalEmptyBoard && (
+                  <>
+                    <div className="flex justify-center gap-3 mb-5">
+                      <div className="w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center border border-purple-50">
+                        <PartyPopper className="w-7 h-7 text-amber-500" aria-hidden />
+                      </div>
+                      <div className="w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center border border-purple-50 -mt-2">
+                        <Sparkles className="w-7 h-7 text-[#7000FF]" aria-hidden />
+                      </div>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                      No threads yet — you could be first!
+                    </h3>
+                    <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6">
+                      Welcome to Selpic N — drop a hello, share a project, or ask for advice and start the timeline.
+                    </p>
+                    {isLoggedIn ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNewPost()}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#7000FF] text-white text-sm font-semibold hover:bg-[#5c00d4] transition-colors shadow-md"
+                      >
+                        <Plus className="w-4 h-4" aria-hidden />
+                        Write the first post
+                      </button>
+                    ) : (
+                      <Link
+                        href="/login"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#7000FF] text-white text-sm font-semibold hover:bg-[#5c00d4] transition-colors shadow-md"
+                      >
+                        Log in to start the first post
+                      </Link>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1279,9 +1390,11 @@ export default function CommunityPage() {
               {/* Post Header */}
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <span className={`px-3 py-1 bg-gradient-to-r ${getCategoryStyle(selectedPost.category).bg} ${getCategoryStyle(selectedPost.category).text} rounded-full text-sm font-medium flex items-center gap-1.5`}>
-                    <span>{getCategoryStyle(selectedPost.category).emoji}</span>
-                    {selectedPost.category}
+                  <span
+                    className={`px-3 py-1 bg-gradient-to-r ${navChipClasses(selectedPost.category).bg} ${navChipClasses(selectedPost.category).text} rounded-full text-sm font-medium inline-flex items-center gap-2`}
+                  >
+                    <span aria-hidden>{navChipMeta(selectedPost.category).emoji}</span>
+                    {navChipMeta(selectedPost.category).label}
                   </span>
                   <div className="flex items-center gap-2 text-gray-500 text-sm">
                     <Calendar className="w-4 h-4" />
