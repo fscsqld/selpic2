@@ -30,9 +30,17 @@ const bannedKeywords = [
   'torrent',
 ]
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Whole-word match only — avoids false positives (e.g. "skill" contains "kill"). */
 export function hasBannedCommunityContent(text: string): boolean {
   const lower = text.toLowerCase()
-  return bannedKeywords.some((k) => lower.includes(k))
+  return bannedKeywords.some((k) => {
+    const re = new RegExp(`\\b${escapeRegex(k)}\\b`, 'i')
+    return re.test(lower)
+  })
 }
 
 export function sanitizeCommunityText(input: unknown, maxLen: number): string | null {
