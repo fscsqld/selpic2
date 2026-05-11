@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   MessageCircle, 
@@ -97,6 +97,7 @@ function AdminCommunityPageContent() {
   })
   const [newComment, setNewComment] = useState('')
   const [categories, setCategories] = useState<CommunityCategory[]>([])
+  const [useRemoteCommunity, setUseRemoteCommunity] = useState(false)
   const [isCategoryManageModalOpen, setIsCategoryManageModalOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null)
   const [newCategoryForm, setNewCategoryForm] = useState({
@@ -120,32 +121,38 @@ function AdminCommunityPageContent() {
     { id: 'feedback', name: 'Feedback', emoji: '💭', bgColor: 'bg-teal-100', textColor: 'text-teal-800', borderColor: 'border-teal-300', order: 8, isActive: true, isDefault: true }
   ]
 
-  // 카테고리 로드
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('community-categories')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        setCategories(parsed)
-      } else {
-        setCategories(defaultCategories)
-        localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
-      }
-    } catch (error) {
-      console.error('Error loading categories:', error)
-      setCategories(defaultCategories)
-    }
-  }, [])
+  // 카테고리 저장（Supabase 또는 localStorage）
+  const saveCategories = useCallback(
+    async (newCategories: CommunityCategory[]) => {
+      const sortedCategories = [...newCategories].sort((a, b) => a.order - b.order)
+      setCategories(sortedCategories)
 
-  // 카테고리 저장
-  const saveCategories = (newCategories: CommunityCategory[]) => {
-    console.log('Saving categories:', newCategories)
-    // 새 배열을 생성하여 React가 변경을 감지하도록 함
-    const sortedCategories = [...newCategories].sort((a, b) => a.order - b.order)
-    setCategories(sortedCategories)
-    localStorage.setItem('community-categories', JSON.stringify(sortedCategories))
-    console.log('Categories saved and state updated. New categories count:', sortedCategories.length)
-  }
+      if (useRemoteCommunity) {
+        try {
+          const res = await fetch('/api/admin/community/categories', {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categories: sortedCategories }),
+          })
+          const data = await res.json()
+          if (!res.ok || !data.ok) {
+            alert(typeof data.details === 'string' ? data.details : data.error || 'Failed to save categories')
+            return
+          }
+          if (Array.isArray(data.categories)) {
+            setCategories(data.categories)
+          }
+        } catch {
+          alert('Failed to save categories')
+        }
+        return
+      }
+
+      localStorage.setItem('community-categories', JSON.stringify(sortedCategories))
+    },
+    [useRemoteCommunity]
+  )
 
   // 카테고리별 색상 및 이모지 (하위 호환성)
   const getCategoryStyle = (categoryName: string) => {
@@ -214,7 +221,7 @@ function AdminCommunityPageContent() {
       isDefault: false
     }
     const updated = [...categories, newCategory]
-    saveCategories(updated)
+    void saveCategories(updated)
     setNewCategoryForm({
       name: '',
       emoji: '💬',
@@ -237,7 +244,7 @@ function AdminCommunityPageContent() {
       c.id === editingCategory.id ? { ...editingCategory } : c
     )
     console.log('Updated categories array:', updated)
-    saveCategories(updated)
+    void saveCategories(updated)
     setEditingCategory(null)
     alert('Category updated successfully!')
   }
@@ -251,7 +258,7 @@ function AdminCommunityPageContent() {
     }
     if (confirm('Are you sure you want to delete this category? Posts in this category will not be deleted.')) {
       const updated = categories.filter(c => c.id !== id)
-      saveCategories(updated)
+      void saveCategories(updated)
       alert('Category deleted successfully!')
     }
   }
@@ -282,9 +289,7 @@ function AdminCommunityPageContent() {
     
     console.log('Updated categories:', updated)
     
-    // 상태 업데이트 - 직접 setCategories 호출
-    setCategories([...updated])
-    localStorage.setItem('community-categories', JSON.stringify(updated))
+    void saveCategories(updated)
     
     // 편집 중인 카테고리라면 상태도 업데이트
     if (editingCategory && editingCategory.id === id) {
@@ -294,60 +299,126 @@ function AdminCommunityPageContent() {
     console.log('Category toggled successfully')
   }
 
-  // localStorage에서 게시물 불러오기
+  // 게시글 + 카테고리: Supabase(admin) 우선, 실패 시 localStorage
   useEffect(() => {
-    console.log('=== Admin: Loading Posts from Storage ===')
-    try {
-      const storedPosts = localStorage.getItem('community-posts')
-      if (storedPosts) {
-        const parsedPosts = JSON.parse(storedPosts)
-        console.log('Admin loaded posts:', parsedPosts.length)
-        setPosts(parsedPosts)
-      } else {
-        console.log('Admin: No stored posts found')
-        const samplePosts: Post[] = [
-          {
-            id: 1,
-            title: 'Welcome to the Admin Community Board',
-            author: 'Admin',
-            date: new Date().toISOString(),
-            content: 'This is a sample post for administrators to manage community content. Feel free to add, edit, or delete posts as needed.',
-            likes: 24,
-            comments: 5,
-            category: 'General',
-            pinned: true,
-            hidden: false,
-            reported: false,
-            postComments: []
-          },
-          {
-            id: 2,
-            title: 'Tips for Managing User Content',
-            author: 'Moderator',
-            date: new Date().toISOString(),
-            content: 'Remember to review reported content promptly and keep the community safe. You can use the Edit and Delete buttons to manage posts.',
-            likes: 18,
-            comments: 3,
-            category: 'Tips & Tricks',
-            pinned: false,
-            hidden: false,
-            reported: false,
-            postComments: []
-          }
-        ]
-        setPosts(samplePosts)
-        localStorage.setItem('community-posts', JSON.stringify(samplePosts))
+    let cancelled = false
+
+    const loadLocalFallback = () => {
+      try {
+        const stored = localStorage.getItem('community-categories')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (!cancelled) setCategories(parsed)
+        } else {
+          if (!cancelled) setCategories(defaultCategories)
+          localStorage.setItem('community-categories', JSON.stringify(defaultCategories))
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error)
+        if (!cancelled) setCategories(defaultCategories)
       }
-    } catch (error) {
-      console.error('Admin: Error loading posts:', error)
-      setPosts([])
+
+      try {
+        const storedPosts = localStorage.getItem('community-posts')
+        if (storedPosts) {
+          const parsedPosts = JSON.parse(storedPosts)
+          if (!cancelled) setPosts(parsedPosts)
+        } else {
+          const samplePosts: Post[] = [
+            {
+              id: 1,
+              title: 'Welcome to the Admin Community Board',
+              author: 'Admin',
+              date: new Date().toISOString(),
+              content: 'This is a sample post for administrators to manage community content. Feel free to add, edit, or delete posts as needed.',
+              likes: 24,
+              comments: 5,
+              category: 'General',
+              pinned: true,
+              hidden: false,
+              reported: false,
+              postComments: [],
+            },
+            {
+              id: 2,
+              title: 'Tips for Managing User Content',
+              author: 'Moderator',
+              date: new Date().toISOString(),
+              content: 'Remember to review reported content promptly and keep the community safe.',
+              likes: 18,
+              comments: 3,
+              category: 'Tips & Tricks',
+              pinned: false,
+              hidden: false,
+              reported: false,
+              postComments: [],
+            },
+          ]
+          if (!cancelled) setPosts(samplePosts)
+          localStorage.setItem('community-posts', JSON.stringify(samplePosts))
+        }
+      } catch (error) {
+        console.error('Admin: Error loading posts:', error)
+        if (!cancelled) setPosts([])
+      }
+    }
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/admin/community/data', { cache: 'no-store', credentials: 'include' })
+        const data = await res.json()
+        if (cancelled) return
+        if (res.ok && data.ok && Array.isArray(data.posts) && Array.isArray(data.categories)) {
+          setUseRemoteCommunity(true)
+          setPosts(data.posts)
+          setCategories(data.categories)
+          return
+        }
+      } catch {
+        /* local fallback */
+      }
+      if (!cancelled) loadLocalFallback()
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
   // 새 게시물 작성
-  const handleCreatePost = () => {
+  const handleCreatePost = async () => {
     if (!newPost.title.trim() || !newPost.content.trim()) {
       alert('Please fill in both title and content')
+      return
+    }
+
+    const authorLabel = `Admin (${adminUser?.username})`
+
+    if (useRemoteCommunity) {
+      try {
+        const res = await fetch('/api/admin/community/posts', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newPost.title.trim(),
+            content: newPost.content.trim(),
+            category: newPost.category,
+            author: authorLabel,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          alert(data.error === 'MODERATION_REJECT' ? 'Content violates moderation rules.' : 'Failed to create post.')
+          return
+        }
+        setPosts((prev) => [data.post as Post, ...prev])
+        setNewPost({ title: '', content: '', category: 'General' })
+        setIsNewPostModalOpen(false)
+        alert('Post created successfully!')
+      } catch {
+        alert('Network error.')
+      }
       return
     }
 
@@ -355,7 +426,7 @@ function AdminCommunityPageContent() {
     const post: Post = {
       id: newId,
       title: newPost.title,
-      author: `Admin (${adminUser?.username})`,
+      author: authorLabel,
       date: new Date().toISOString().split('T')[0],
       content: newPost.content,
       likes: 0,
@@ -374,14 +445,34 @@ function AdminCommunityPageContent() {
   }
 
   // 게시물 삭제
-  const handleDeletePost = (postId: number) => {
-    if (confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
-      const updatedPosts = posts.filter(p => p.id !== postId)
-      setPosts(updatedPosts)
-      localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
-      alert('Post deleted successfully!')
-      setIsViewModalOpen(false)
+  const handleDeletePost = async (postId: number) => {
+    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) return
+
+    if (useRemoteCommunity) {
+      try {
+        const res = await fetch(`/api/admin/community/posts/${postId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          alert('Failed to delete post.')
+          return
+        }
+        setPosts((prev) => prev.filter((p) => p.id !== postId))
+        alert('Post deleted successfully!')
+        setIsViewModalOpen(false)
+      } catch {
+        alert('Network error.')
+      }
+      return
     }
+
+    const updatedPosts = posts.filter(p => p.id !== postId)
+    setPosts(updatedPosts)
+    localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
+    alert('Post deleted successfully!')
+    setIsViewModalOpen(false)
   }
 
   // 게시물 보기
@@ -402,9 +493,41 @@ function AdminCommunityPageContent() {
   }
 
   // 게시물 업데이트
-  const handleUpdatePost = () => {
+  const handleUpdatePost = async () => {
     if (!editingPost || !editPostForm.title.trim() || !editPostForm.content.trim()) {
       alert('Please fill in both title and content')
+      return
+    }
+
+    if (useRemoteCommunity) {
+      try {
+        const res = await fetch(`/api/admin/community/posts/${editingPost.id}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: editPostForm.title.trim(),
+            content: editPostForm.content.trim(),
+            category: editPostForm.category,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          alert('Failed to update post.')
+          return
+        }
+        const updated = data.post as Post
+        setPosts((prev) => prev.map((p) => (p.id === editingPost.id ? updated : p)))
+        if (selectedPost && selectedPost.id === editingPost.id) {
+          setSelectedPost(updated)
+        }
+        setIsEditModalOpen(false)
+        setEditingPost(null)
+        setEditPostForm({ title: '', content: '', category: 'General' })
+        alert('Post updated successfully!')
+      } catch {
+        alert('Network error.')
+      }
       return
     }
 
@@ -421,15 +544,14 @@ function AdminCommunityPageContent() {
 
     setPosts(updatedPosts)
     localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
-    
-    // View 모달이 열려있고 같은 게시물이면 업데이트
+
     if (selectedPost && selectedPost.id === editingPost.id) {
       const updatedPost = updatedPosts.find(p => p.id === editingPost.id)
       if (updatedPost) {
         setSelectedPost(updatedPost)
       }
     }
-    
+
     setIsEditModalOpen(false)
     setEditingPost(null)
     setEditPostForm({ title: '', content: '', category: 'General' })
@@ -437,9 +559,36 @@ function AdminCommunityPageContent() {
   }
 
   // 댓글 추가
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!selectedPost || !newComment.trim()) {
       alert('Please enter a comment')
+      return
+    }
+
+    if (useRemoteCommunity) {
+      try {
+        const res = await fetch(`/api/admin/community/posts/${selectedPost.id}/comments`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: newComment.trim(),
+            author: `Admin (${adminUser?.username})`,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          alert('Failed to add comment.')
+          return
+        }
+        const updated = data.post as Post
+        setPosts((prev) => prev.map((p) => (p.id === selectedPost.id ? updated : p)))
+        setSelectedPost(updated)
+        setNewComment('')
+        alert('Comment added successfully!')
+      } catch {
+        alert('Network error.')
+      }
       return
     }
 
@@ -465,46 +614,70 @@ function AdminCommunityPageContent() {
 
     setPosts(updatedPosts)
     localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
-    
-    // Update selected post to reflect new comment
+
     setSelectedPost({
       ...selectedPost,
       postComments: [...(selectedPost.postComments || []), comment],
       comments: (selectedPost.postComments?.length || 0) + 1
     })
-    
+
     setNewComment('')
     alert('Comment added successfully!')
   }
 
   // 댓글 삭제
-  const handleDeleteComment = (commentId: number) => {
+  const handleDeleteComment = async (commentId: number) => {
     if (!selectedPost) return
-    
-    if (confirm('Are you sure you want to delete this comment?')) {
-      const updatedPosts = posts.map(p => {
-        if (p.id === selectedPost.id) {
-          const updatedComments = (p.postComments || []).filter(c => c.id !== commentId)
-          return {
-            ...p,
-            postComments: updatedComments,
-            comments: updatedComments.length
-          }
-        }
-        return p
-      })
 
-      setPosts(updatedPosts)
-      localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
-      
-      // Update selected post
-      const updatedPost = updatedPosts.find(p => p.id === selectedPost.id)
-      if (updatedPost) {
-        setSelectedPost(updatedPost)
+    if (!confirm('Are you sure you want to delete this comment?')) return
+
+    if (useRemoteCommunity) {
+      try {
+        const res = await fetch(
+          `/api/admin/community/posts/${selectedPost.id}/comments/${commentId}`,
+          { method: 'DELETE', credentials: 'include' }
+        )
+        const data = await res.json()
+        if (!res.ok || !data.ok) {
+          alert('Failed to delete comment.')
+          return
+        }
+        const nextComments = (selectedPost.postComments || []).filter((c) => c.id !== commentId)
+        const patched: Post = {
+          ...selectedPost,
+          postComments: nextComments,
+          comments: nextComments.length,
+        }
+        setPosts((prev) => prev.map((p) => (p.id === selectedPost.id ? patched : p)))
+        setSelectedPost(patched)
+        alert('Comment deleted successfully!')
+      } catch {
+        alert('Network error.')
       }
-      
-      alert('Comment deleted successfully!')
+      return
     }
+
+    const updatedPosts = posts.map(p => {
+      if (p.id === selectedPost.id) {
+        const updatedComments = (p.postComments || []).filter(c => c.id !== commentId)
+        return {
+          ...p,
+          postComments: updatedComments,
+          comments: updatedComments.length
+        }
+      }
+      return p
+    })
+
+    setPosts(updatedPosts)
+    localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
+
+    const updatedPost = updatedPosts.find(p => p.id === selectedPost.id)
+    if (updatedPost) {
+      setSelectedPost(updatedPost)
+    }
+
+    alert('Comment deleted successfully!')
   }
 
   // 필터링 + 정렬 + 페이지네이션
