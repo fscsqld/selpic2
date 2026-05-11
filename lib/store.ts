@@ -2426,10 +2426,38 @@ export const useStore = create<Store>()(
             console.log(`Newsletter sent successfully to ${successCount} recipients`)
           }
           
-          // 발송 이력 저장
+          // Persist campaign to Supabase (admin API) when running in the browser
+          let persistedId: string | undefined
+          if (typeof window !== 'undefined') {
+            try {
+              const res = await fetch('/api/admin/newsletter/campaigns', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  subject: campaign.subject,
+                  message: campaign.message,
+                  type: campaign.type,
+                  sent_by: campaign.sentBy,
+                  recipient_count: targetSubscribers.length,
+                  success_count: successCount,
+                  failed_count: failedCount,
+                  status,
+                  recipient_ids: campaign.recipientIds ?? null,
+                }),
+              })
+              const j = (await res.json().catch(() => null)) as { ok?: boolean; id?: string }
+              if (res.ok && j?.ok && j?.id) {
+                persistedId = String(j.id)
+              }
+            } catch {
+              // non-fatal: keep local history only
+            }
+          }
+
           const newCampaign: NewsletterCampaign = {
             ...campaign,
-            id: `campaign-${Date.now()}`,
+            id: persistedId || `campaign-${Date.now()}`,
             sentAt: new Date().toISOString(),
             status: status,
             recipientCount: targetSubscribers.length,
@@ -2446,10 +2474,35 @@ export const useStore = create<Store>()(
         } catch (error) {
           console.error('Failed to send newsletter campaign:', error)
           
-          // 실패 이력 저장
+          let failedPersistedId: string | undefined
+          if (typeof window !== 'undefined') {
+            try {
+              const res = await fetch('/api/admin/newsletter/campaigns', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  subject: campaign.subject,
+                  message: campaign.message,
+                  type: campaign.type,
+                  sent_by: campaign.sentBy,
+                  recipient_count: targetSubscribers.length,
+                  success_count: 0,
+                  failed_count: targetSubscribers.length,
+                  status: 'failed',
+                  recipient_ids: campaign.recipientIds ?? null,
+                }),
+              })
+              const j = (await res.json().catch(() => null)) as { ok?: boolean; id?: string }
+              if (res.ok && j?.ok && j?.id) failedPersistedId = String(j.id)
+            } catch {
+              /* ignore */
+            }
+          }
+
           const failedCampaign: NewsletterCampaign = {
             ...campaign,
-            id: `campaign-${Date.now()}`,
+            id: failedPersistedId || `campaign-${Date.now()}`,
             sentAt: new Date().toISOString(),
             status: 'failed',
             recipientCount: targetSubscribers.length,

@@ -137,6 +137,70 @@ export default function NewsletterManagementPage() {
     }
   }, [currentPage, totalPages])
 
+  // Load subscribers + campaign history from Supabase (authoritative for admins).
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const [subRes, campRes] = await Promise.all([
+          fetch('/api/admin/newsletter/subscribers?limit=5000', { cache: 'no-store', credentials: 'include' }),
+          fetch('/api/admin/newsletter/campaigns?limit=500', { cache: 'no-store', credentials: 'include' }),
+        ])
+        const subJson = (await subRes.json().catch(() => null)) as any
+        const campJson = (await campRes.json().catch(() => null)) as any
+        if (cancelled) return
+
+        if (subRes.ok && subJson?.ok && Array.isArray(subJson.subscribers)) {
+          const mapped: NewsletterSubscriber[] = subJson.subscribers.map((r: Record<string, unknown>) => ({
+            id: String(r.id ?? ''),
+            email: String(r.email ?? ''),
+            subscribedAt: typeof r.subscribed_at === 'string' ? r.subscribed_at : new Date().toISOString(),
+            isActive: Boolean(r.is_active),
+            unsubscribedAt: typeof r.unsubscribed_at === 'string' ? r.unsubscribed_at : undefined,
+          })).filter((s: NewsletterSubscriber) => Boolean(s.id && s.email))
+
+          useStore.setState({ newsletterSubscribers: mapped })
+        }
+
+        if (campRes.ok && campJson?.ok && Array.isArray(campJson.campaigns)) {
+          const mapped: NewsletterCampaign[] = campJson.campaigns.map((r: Record<string, unknown>) => ({
+            id: String(r.id ?? ''),
+            subject: String(r.subject ?? ''),
+            message: String(r.message ?? ''),
+            type: (() => {
+              const t = String(r.type || 'general')
+              const allowed: NewsletterCampaign['type'][] = [
+                'promotion',
+                'announcement',
+                'event',
+                'newsletter',
+                'general',
+              ]
+              return (allowed as string[]).includes(t) ? (t as NewsletterCampaign['type']) : 'general'
+            })(),
+            sentAt: typeof r.sent_at === 'string' ? r.sent_at : new Date().toISOString(),
+            sentBy: String(r.sent_by ?? 'Admin'),
+            recipientCount: Number(r.recipient_count ?? 0),
+            recipientIds: Array.isArray(r.recipient_ids)
+              ? (r.recipient_ids as string[])
+              : undefined,
+            status: (String(r.status || 'sent') as NewsletterCampaign['status']) || 'sent',
+            successCount: r.success_count !== undefined && r.success_count !== null ? Number(r.success_count) : undefined,
+            failedCount: r.failed_count !== undefined && r.failed_count !== null ? Number(r.failed_count) : undefined,
+          })).filter((c: NewsletterCampaign) => Boolean(c.id))
+
+          useStore.setState({ newsletterCampaigns: mapped })
+        }
+      } catch {
+        /* non-fatal */
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // 템플릿 선택 핸들러
   const handleSelectTemplate = (templateId: string) => {
     const template = getNewsletterTemplate(templateId)
@@ -318,20 +382,56 @@ export default function NewsletterManagementPage() {
   }
 
   // 구독자 삭제 핸들러
-  const handleDeleteSubscriber = (id: string, email: string) => {
-    if (confirm(`Are you sure you want to delete ${email} from the newsletter subscribers?`)) {
+  const handleDeleteSubscriber = async (id: string, email: string) => {
+    if (!confirm(`Are you sure you want to delete ${email} from the newsletter subscribers?`)) return
+    try {
+      const res = await fetch(`/api/admin/newsletter/subscribers/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const json = (await res.json().catch(() => null)) as { ok?: boolean }
+      if (!res.ok || !json?.ok) {
+        setMessage('Failed to delete subscriber from server.')
+        setTimeout(() => setMessage(''), 4000)
+        return
+      }
       deleteNewsletterSubscriber(id)
       setMessage('Subscriber deleted successfully.')
       setTimeout(() => setMessage(''), 3000)
+    } catch {
+      setMessage('Failed to delete subscriber.')
+      setTimeout(() => setMessage(''), 4000)
     }
   }
 
   // 구독 취소 핸들러
-  const handleUnsubscribe = (email: string) => {
-    if (confirm(`Are you sure you want to unsubscribe ${email}?`)) {
+  const handleUnsubscribe = async (email: string) => {
+    if (!confirm(`Are you sure you want to unsubscribe ${email}?`)) return
+    const sub = newsletterSubscribers.find((s) => s.email.toLowerCase() === email.toLowerCase())
+    if (!sub) {
+      setMessage('Subscriber not found.')
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+    try {
+      const res = await fetch(`/api/admin/newsletter/subscribers/${encodeURIComponent(sub.id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ is_active: false }),
+      })
+      const json = (await res.json().catch(() => null)) as { ok?: boolean }
+      if (!res.ok || !json?.ok) {
+        setMessage('Failed to update subscriber.')
+        setTimeout(() => setMessage(''), 4000)
+        return
+      }
       unsubscribeFromNewsletter(email)
       setMessage('Subscriber unsubscribed successfully.')
       setTimeout(() => setMessage(''), 3000)
+    } catch {
+      setMessage('Failed to unsubscribe.')
+      setTimeout(() => setMessage(''), 4000)
     }
   }
 
@@ -793,11 +893,27 @@ export default function NewsletterManagementPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <button
                               onClick={() => {
-                                if (confirm('Are you sure you want to delete this campaign record?')) {
-                                  deleteNewsletterCampaign(campaign.id)
-                                  setMessage('Campaign record deleted successfully.')
-                                  setTimeout(() => setMessage(''), 3000)
-                                }
+                                void (async () => {
+                                  if (!confirm('Are you sure you want to delete this campaign record?')) return
+                                  try {
+                                    const res = await fetch(
+                                      `/api/admin/newsletter/campaigns/${encodeURIComponent(campaign.id)}`,
+                                      { method: 'DELETE', credentials: 'include' }
+                                    )
+                                    const json = (await res.json().catch(() => null)) as { ok?: boolean }
+                                    if (!res.ok || !json?.ok) {
+                                      setMessage('Failed to delete campaign record.')
+                                      setTimeout(() => setMessage(''), 4000)
+                                      return
+                                    }
+                                    deleteNewsletterCampaign(campaign.id)
+                                    setMessage('Campaign record deleted successfully.')
+                                    setTimeout(() => setMessage(''), 3000)
+                                  } catch {
+                                    setMessage('Failed to delete campaign record.')
+                                    setTimeout(() => setMessage(''), 4000)
+                                  }
+                                })()
                               }}
                               className="text-red-600 hover:text-red-900"
                               title="Delete"

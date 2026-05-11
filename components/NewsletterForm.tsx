@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useStore } from '@/lib/store'
 
 type NewsletterStatus = 'idle' | 'loading' | 'success' | 'error'
 
@@ -13,7 +12,6 @@ const baseInputClasses = 'w-full px-4 py-2.5 rounded-md text-sm focus:outline-no
 const baseButtonClasses = 'w-full bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors duration-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed'
 
 export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps) {
-  const { subscribeToNewsletter } = useStore()
   const [newsletterEmail, setNewsletterEmail] = useState('')
   const [newsletterStatus, setNewsletterStatus] = useState<NewsletterStatus>('idle')
   const [newsletterMessage, setNewsletterMessage] = useState('')
@@ -50,19 +48,6 @@ export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps
       if (!res.ok) {
         setNewsletterStatus('error')
         setNewsletterMessage(data?.message || 'Something went wrong. Please try again.')
-        setTimeout(() => {
-          setNewsletterStatus('idle')
-          setNewsletterMessage('')
-        }, 3000)
-        return
-      }
-
-      // API 호출 성공 후 Store에 저장
-      const success = subscribeToNewsletter(newsletterEmail)
-      if (!success) {
-        // 이미 구독 중인 경우 (API에서는 중복 체크를 했지만, 혹시 모를 경우를 대비)
-        setNewsletterStatus('error')
-        setNewsletterMessage('This email is already subscribed.')
         setTimeout(() => {
           setNewsletterStatus('idle')
           setNewsletterMessage('')

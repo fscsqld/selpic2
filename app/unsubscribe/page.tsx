@@ -1,18 +1,15 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { useStore } from '@/lib/store'
+import { useSearchParams } from 'next/navigation'
 import { Mail, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 function UnsubscribeContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const { unsubscribeFromNewsletter, newsletterSubscribers } = useStore()
-  
+
   const email = searchParams.get('email')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'not-found'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -22,25 +19,16 @@ function UnsubscribeContent() {
       return
     }
 
-    // 이메일이 구독자 목록에 있는지 확인
-    const subscriber = newsletterSubscribers.find(
-      sub => sub.email.toLowerCase() === email.toLowerCase()
-    )
-
-    if (!subscriber) {
-      setStatus('not-found')
-      setMessage('This email is not subscribed to our newsletter.')
-      return
-    }
-
-    if (!subscriber.isActive) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
       setStatus('error')
-      setMessage('This email is already unsubscribed.')
+      setMessage('Invalid email address.')
       return
     }
 
     setStatus('idle')
-  }, [email, newsletterSubscribers])
+    setMessage('')
+  }, [email])
 
   const handleUnsubscribe = async () => {
     if (!email) return
@@ -49,16 +37,24 @@ function UnsubscribeContent() {
       setStatus('loading')
       setMessage('')
 
-      // Store에서 구독 취소
-      const success = unsubscribeFromNewsletter(email)
+      const res = await fetch('/api/newsletter/unsubscribe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      })
+      const data = (await res.json().catch(() => null)) as { success?: boolean; message?: string }
 
-      if (success) {
-        setStatus('success')
-        setMessage('You have been successfully unsubscribed from our newsletter.')
-      } else {
+      if (!res.ok || !data?.success) {
         setStatus('error')
-        setMessage('Failed to unsubscribe. Please try again or contact support.')
+        setMessage(data?.message || 'Failed to unsubscribe. Please try again or contact support.')
+        return
       }
+
+      setStatus('success')
+      setMessage(
+        data.message ||
+          'You have been successfully unsubscribed from our newsletter.'
+      )
     } catch (error) {
       console.error('Unsubscribe error:', error)
       setStatus('error')
@@ -171,26 +167,6 @@ function UnsubscribeContent() {
                 Return to Homepage
               </Link>
             </div>
-          </div>
-        )}
-
-        {status === 'not-found' && (
-          <div className="text-center py-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-100 rounded-full mb-4">
-              <AlertCircle className="w-8 h-8 text-yellow-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Not Subscribed
-            </h2>
-            <p className="text-sm text-gray-600 mb-6">
-              {message}
-            </p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-            >
-              Return to Homepage
-            </Link>
           </div>
         )}
 

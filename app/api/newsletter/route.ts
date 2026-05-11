@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBranding'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
 const RATE_LIMIT_MAX = 5
@@ -10,9 +11,10 @@ type RateEntry = {
   windowStart: number
 }
 
-// In-memory stores (resets on server restart). Replace with persistent storage in production.
 const rateLimitMap = new Map<string, RateEntry>()
-const subscribedEmails = new Set<string>()
+
+// Legacy: only used when Supabase is not configured (local dev)
+const legacySubscribedEmails = new Set<string>()
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const resendApiKey = process.env.RESEND_API_KEY
@@ -50,6 +52,47 @@ const checkRateLimit = (ip: string): boolean => {
   return true
 }
 
+async function persistSubscriberToSupabase(normalizedEmail: string): Promise<'created' | 'reactivated' | 'duplicate'> {
+  const admin = getSupabaseAdmin()
+  const { data: existing, error: selErr } = await admin
+    .from('newsletter_subscribers')
+    .select('id,is_active')
+    .eq('email', normalizedEmail)
+    .maybeSingle()
+
+  if (selErr) {
+    throw new Error(selErr.message)
+  }
+
+  const now = new Date().toISOString()
+
+  if (existing) {
+    if (existing.is_active) {
+      return 'duplicate'
+    }
+    const { error: upErr } = await admin
+      .from('newsletter_subscribers')
+      .update({
+        is_active: true,
+        subscribed_at: now,
+        unsubscribed_at: null,
+        source: 'website',
+      })
+      .eq('id', existing.id)
+    if (upErr) throw new Error(upErr.message)
+    return 'reactivated'
+  }
+
+  const { error: insErr } = await admin.from('newsletter_subscribers').insert({
+    email: normalizedEmail,
+    is_active: true,
+    subscribed_at: now,
+    source: 'website',
+  })
+  if (insErr) throw new Error(insErr.message)
+  return 'created'
+}
+
 export async function POST(req: Request) {
   try {
     const ip = getClientIp(req)
@@ -67,12 +110,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Please enter a valid email address.' }, { status: 400 })
     }
 
-    const normalizedEmail = email.toLowerCase()
-    if (subscribedEmails.has(normalizedEmail)) {
-      return NextResponse.json({ success: false, message: 'This email is already subscribed.' }, { status: 409 })
-    }
+    const normalizedEmail = email.toLowerCase().trim()
 
-    subscribedEmails.add(normalizedEmail)
+    if (isSupabaseConfigured()) {
+      try {
+        const outcome = await persistSubscriberToSupabase(normalizedEmail)
+        if (outcome === 'duplicate') {
+          return NextResponse.json(
+            { success: false, message: 'This email is already subscribed.' },
+            { status: 409 }
+          )
+        }
+      } catch (e) {
+        console.error('[newsletter] Supabase persist failed:', e)
+        return NextResponse.json({ success: false, message: 'Something went wrong. Please try again.' }, { status: 500 })
+      }
+    } else {
+      if (legacySubscribedEmails.has(normalizedEmail)) {
+        return NextResponse.json(
+          { success: false, message: 'This email is already subscribed.' },
+          { status: 409 }
+        )
+      }
+      legacySubscribedEmails.add(normalizedEmail)
+    }
 
     // Send welcome/confirmation email via Resend (skips if not configured)
     if (resendClient) {
@@ -84,7 +145,7 @@ export async function POST(req: Request) {
           from: resendFrom,
           to: normalizedEmail,
           subject: 'Thanks for subscribing to Selpic updates',
-          html: welcomeHtml
+          html: welcomeHtml,
         })
       } catch (emailError) {
         console.error('Resend send error:', emailError)
@@ -100,4 +161,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: 'Something went wrong. Please try again.' }, { status: 500 })
   }
 }
-
