@@ -2595,7 +2595,7 @@ export default function ContentManagementPage() {
                     />
                     <QuickEditCard
                       title="Contact Email"
-                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Contact Email')?.content || 'support@selpic.com.au'}
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Contact Email')?.content || 'info@selpic.com.au'}
                       placeholder="Enter contact email"
                       type="text"
                       description="Contact email for refund inquiries"
@@ -3222,7 +3222,7 @@ export default function ContentManagementPage() {
                     />
                     <QuickEditCard
                       title="Contact Phone"
-                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Phone')?.content || '+61 0466894279'}
+                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Phone')?.content || '+61 466 894 279'}
                       placeholder="Enter contact phone"
                       type="text"
                       description="Contact phone number"
@@ -3236,7 +3236,7 @@ export default function ContentManagementPage() {
                     />
                     <QuickEditCard
                       title="Contact Address"
-                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Address')?.content || 'Harvest St, Mansfield QLD 4122'}
+                      value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Address')?.content || '7 Harvest St, Mansfield QLD 4122, Australia'}
                       placeholder="Enter contact address"
                       type="text"
                       description="Contact physical address"
@@ -3856,7 +3856,7 @@ export default function ContentManagementPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <QuickEditCard
                       title="Contact Email"
-                      value={contentItems.find(item => item.section === 'terms' && item.title === 'Contact Email')?.content || 'legal@selpic.com'}
+                      value={contentItems.find(item => item.section === 'terms' && item.title === 'Contact Email')?.content || 'info@selpic.com.au'}
                       placeholder="Enter contact email"
                       type="text"
                       description="Contact email address"

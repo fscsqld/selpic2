@@ -7,7 +7,7 @@ import NewsletterForm from '@/components/NewsletterForm'
 import { HeaderLogoImage } from '@/components/Header'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { TRANSACTIONAL_EMAIL_SIGNATURE_NAME } from '@/lib/transactionalEmailBranding'
-import { COMPANY_LEGAL_LINE, EMAIL_CONFIDENTIALITY_NOTICE } from '@/lib/companyLegal'
+import { COMPANY_CONTACT, COMPANY_LEGAL_LINE, EMAIL_CONFIDENTIALITY_NOTICE } from '@/lib/companyLegal'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
 
@@ -149,12 +149,12 @@ export default function Footer() {
             <p className="text-sm text-gray-800 mb-1">Kind Regards,</p>
             <p className="text-sm font-bold tracking-wide text-gray-900 mb-4">{TRANSACTIONAL_EMAIL_SIGNATURE_NAME}</p>
             <div className="mt-3 space-y-1 text-sm text-gray-700">
-              <p>M: 0466 894 279</p>
-              <p>A: 7 Harvest St, Mansfield QLD 4122, Australia</p>
+              <p>M: {COMPANY_CONTACT.phone}</p>
+              <p>A: {COMPANY_CONTACT.address}</p>
               <p>
                 E:{' '}
-                <a href="mailto:info@selpic.com.au" className="text-indigo-600 hover:underline break-all">
-                  info@selpic.com.au
+                <a href={`mailto:${COMPANY_CONTACT.email}`} className="text-indigo-600 hover:underline break-all">
+                  {COMPANY_CONTACT.email}
                 </a>
                 {' '}
                 | W:{' '}

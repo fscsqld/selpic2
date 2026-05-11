@@ -43,7 +43,7 @@ const result = await emailjs.send(
     subject: params.subject,
     message: trackedContent,
     from_name: params.adminName || 'SELPIC Support Team',
-    reply_to: 'support@selpic.com'
+    reply_to: 'info@selpic.com.au'
   }
 )
 ```

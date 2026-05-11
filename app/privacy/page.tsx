@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
-import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { COMPANY_CONTACT, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import { createPolicyContentGetter, PRIVACY_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function PrivacyPolicy() {
@@ -282,9 +282,9 @@ export default function PrivacyPolicy() {
               </p>
             )}
             <div className="space-y-1 text-gray-700">
-              <p><strong>Email:</strong> {getContent('Contact Email') || 'info@selpic.com.au'}</p>
-              <p><strong>Phone:</strong> {getContent('Contact Phone') || '+61 0466894279'}</p>
-              <p><strong>Address:</strong> {getContent('Contact Address') || 'Harvest St, Mansfield QLD 4122'}</p>
+              <p><strong>Email:</strong> {getContent('Contact Email') || COMPANY_CONTACT.email}</p>
+              <p><strong>Phone:</strong> {getContent('Contact Phone') || COMPANY_CONTACT.phone}</p>
+              <p><strong>Address:</strong> {getContent('Contact Address') || COMPANY_CONTACT.address}</p>
               <p className="text-[11px] text-gray-600 pt-2 whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
             </div>
           </div>

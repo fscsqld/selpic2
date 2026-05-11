@@ -3,10 +3,16 @@
  * (order confirmation, shipping, receipt, admin-sent documents, message replies, etc.).
  */
 
-import { COMPANY_LOGO_URL, EMAIL_CONFIDENTIALITY_NOTICE } from '@/lib/companyLegal'
+import {
+  COMPANY_CONTACT,
+  COMPANY_DOMAIN,
+  COMPANY_LOGO_URL,
+  COMPANY_WEBSITE_URL,
+  EMAIL_CONFIDENTIALITY_NOTICE,
+} from '@/lib/companyLegal'
 
-export const DEFAULT_PUBLIC_SITE_URL = 'https://selpic.com.au'
-const WEBSITE_DISPLAY = 'selpic.com.au'
+export const DEFAULT_PUBLIC_SITE_URL = COMPANY_WEBSITE_URL
+const WEBSITE_DISPLAY = COMPANY_DOMAIN
 
 /** When dev uses localhost, mail clients cannot load `http://localhost/...` images — use this HTTPS base for email assets. */
 const DEFAULT_EMAIL_ASSET_BASE = DEFAULT_PUBLIC_SITE_URL
@@ -91,9 +97,9 @@ export function buildTransactionalEmailSignaturePlainText(): string {
   return `Kind Regards,
 
 ${TRANSACTIONAL_EMAIL_SIGNATURE_NAME}
-M: 0466 894 279
-A: 7 Harvest St, Mansfield QLD 4122, Australia
-E: info@selpic.com.au | W: ${WEBSITE_DISPLAY}`
+M: ${COMPANY_CONTACT.phone}
+A: ${COMPANY_CONTACT.address}
+E: ${COMPANY_CONTACT.email} | W: ${WEBSITE_DISPLAY}`
 }
 
 /** Appends signature + confidentiality to plain-text bodies. */
@@ -105,7 +111,7 @@ export function appendTransactionalEmailBrandingPlainText(body: string): string 
 
 /** HTML fragment: Kind Regards, name, contact lines (no logo image, to avoid broken/blocked images in mail clients). */
 export function buildTransactionalEmailSignatureHtml(logoAbsoluteUrl: string): string {
-  const siteUrl = DEFAULT_PUBLIC_SITE_URL
+  const siteUrl = COMPANY_WEBSITE_URL
   // Table-based layout is more consistent across email clients (especially Outlook).
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border-top:1px solid #eee;border-collapse:collapse;">
@@ -113,9 +119,9 @@ export function buildTransactionalEmailSignatureHtml(logoAbsoluteUrl: string): s
       <td style="padding-top:20px;">
         <p style="margin:0 0 8px;padding:0;color:#111;line-height:1.4;">Kind Regards,</p>
         <p style="margin:0 0 16px;padding:0;font-weight:700;letter-spacing:0.02em;line-height:1.4;">${escHtml(TRANSACTIONAL_EMAIL_SIGNATURE_NAME)}</p>
-        <p style="margin:8px 0 0;padding:0;font-size:14px;color:#333;line-height:1.4;">M: 0466 894 279</p>
-        <p style="margin:4px 0;padding:0;font-size:14px;color:#333;line-height:1.4;">A: 7 Harvest St, Mansfield QLD 4122, Australia</p>
-        <p style="margin:4px 0;padding:0;font-size:14px;color:#333;line-height:1.4;">E: <a href="mailto:info@selpic.com.au" style="color:#4f46e5;text-decoration:none;">info@selpic.com.au</a> | W: <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;">${WEBSITE_DISPLAY}</a></p>
+        <p style="margin:8px 0 0;padding:0;font-size:14px;color:#333;line-height:1.4;">M: ${escHtml(COMPANY_CONTACT.phone)}</p>
+        <p style="margin:4px 0;padding:0;font-size:14px;color:#333;line-height:1.4;">A: ${escHtml(COMPANY_CONTACT.address)}</p>
+        <p style="margin:4px 0;padding:0;font-size:14px;color:#333;line-height:1.4;">E: <a href="mailto:${COMPANY_CONTACT.email}" style="color:#4f46e5;text-decoration:none;">${escHtml(COMPANY_CONTACT.email)}</a> | W: <a href="${escHtml(siteUrl)}" style="color:#4f46e5;text-decoration:none;">${escHtml(WEBSITE_DISPLAY)}</a></p>
       </td>
     </tr>
   </table>`

@@ -68,6 +68,8 @@ export const TERMS_TITLE_ALIASES: Record<string, string> = {
   'Order Processing 목록': 'Order Processing List',
   'Payment Terms 제목': 'Payment Terms Title',
   'Payment Terms 목록': 'Payment Terms List',
+  'Official Store and Marketplaces 제목': 'Official Store and Marketplaces Title',
+  'Official Store and Marketplaces 내용': 'Official Store and Marketplaces Content',
   'Intellectual Property 제목': 'Intellectual Property Title',
   'SELPIC Rights 제목': 'Selpic Rights Title',
   'SELPIC Rights 내용': 'Selpic Rights Content',

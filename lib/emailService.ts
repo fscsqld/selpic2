@@ -62,7 +62,7 @@ Your inquiry: {{originalSubject}}
 
 Our team is looking into your request and will provide you with detailed information about your order shortly. You can also track your order status on our website using your order number.
 
-If you need immediate assistance, please contact our customer service team at support@selpic.com.
+If you need immediate assistance, please contact us at info@selpic.com.au.
 
 Best regards,
 Selpic Order Management Team`,

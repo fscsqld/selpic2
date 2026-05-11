@@ -45,6 +45,8 @@ interface Post {
   category: string
   /** When true, post stays at top (server sort + client) and uses official card styling. */
   pinned?: boolean
+  /** Moderation / soft-hide from public list when supported by API. */
+  hidden?: boolean
   postComments?: Comment[]
 }
 

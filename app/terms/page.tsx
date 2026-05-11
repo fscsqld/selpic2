@@ -6,7 +6,7 @@ import { FileText, Scale, AlertTriangle, CheckCircle, XCircle } from 'lucide-rea
 import Link from 'next/link'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
-import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { COMPANY_CONTACT, COMPANY_LEGAL_LINE, COMPANY_WEBSITE_URL } from '@/lib/companyLegal'
 import { createPolicyContentGetter, TERMS_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function TermsAndConditions() {
@@ -17,7 +17,6 @@ export default function TermsAndConditions() {
     setMounted(true)
   }, [])
 
-  // Terms and Conditions 섹션의 콘텐츠 가져오기
   const termsContent = getActiveContentBySection('terms')
   
   const getContent = createPolicyContentGetter(termsContent, TERMS_TITLE_ALIASES)
@@ -148,6 +147,15 @@ export default function TermsAndConditions() {
                     <li key={4}>Refunds processed within 5-10 business days</li>
                   ]}
                 </ul>
+              </div>
+              <div className="border-t border-gray-100 pt-4 mt-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  {getContent('Official Store and Marketplaces 제목') || 'Official store and third-party marketplaces'}
+                </h3>
+                <p className="text-gray-700 leading-relaxed">
+                  {getContent('Official Store and Marketplaces 내용') ||
+                    `Prices on our official store (${COMPANY_WEBSITE_URL}) may differ from listings on external marketplaces (for example Etsy) due to platform fees and channel-specific promotions. The Best Price Guarantee and Selpic N community benefits apply exclusively to orders placed directly on our official website.`}
+                </p>
               </div>
             </div>
           </div>
@@ -286,9 +294,9 @@ export default function TermsAndConditions() {
               {getContent('Contact Information 설명') || 'If you have any questions about these Terms and Conditions, please contact us:'}
             </p>
             <div className="space-y-2 text-gray-700">
-              <p><strong>Email:</strong> {getContent('Contact Email') || 'info@selpic.com.au'}</p>
-              <p><strong>Phone:</strong> {getContent('Contact Phone') || '(61) 0466-894-279'}</p>
-              <p><strong>Address:</strong> {getContent('Contact Address') || '123 Sticker Street, Design City, DC 12345'}</p>
+              <p><strong>Email:</strong> {getContent('Contact Email') || COMPANY_CONTACT.email}</p>
+              <p><strong>Phone:</strong> {getContent('Contact Phone') || COMPANY_CONTACT.phone}</p>
+              <p><strong>Address:</strong> {getContent('Contact Address') || COMPANY_CONTACT.address}</p>
               <p className="text-[11px] text-gray-600 pt-2 whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
             </div>
           </div>

@@ -1890,6 +1890,9 @@ export default function HomePage() {
               {String(COMPANY_CONTACT.address || '').replace(/Address:\s*/i, '')}
             </p>
             <p className="text-gray-500 text-[11px] whitespace-nowrap">
+              Phone: {COMPANY_CONTACT.phone}
+            </p>
+            <p className="text-gray-500 text-[11px] whitespace-nowrap">
               Email: {COMPANY_CONTACT.email}
             </p>
           </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
-import { COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
+import { COMPANY_CONTACT, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import { createPolicyContentGetter, REFUND_TITLE_ALIASES } from '@/lib/policyPageContent'
 
 export default function RefundPage() {
@@ -96,7 +96,7 @@ export default function RefundPage() {
 				</section>
 				<div className="rounded-lg border border-gray-200 p-4 bg-gray-50 text-sm text-slate-700">
 					<h2 className="font-semibold text-slate-900 mb-2">{getContent('Contact Title') || 'Contact'}</h2>
-					<p>Email: {getContent('Contact Email') || 'support@selpic.com.au'}</p>
+					<p>Email: {getContent('Contact Email') || COMPANY_CONTACT.email}</p>
 					<p>{getContent('Contact Hours') || 'Customer Service Hours: Mon–Fri 10am–5pm (Closed on weekends/public holidays)'}</p>
 					<p className="text-slate-600 text-[11px] mt-2 whitespace-pre-line">{COMPANY_LEGAL_LINE}</p>
 				</div>
