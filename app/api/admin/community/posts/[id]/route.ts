@@ -57,6 +57,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     patch.category = cat
   }
 
+  if (body.author !== undefined) {
+    const a = sanitizeCommunityText(body.author, 200)
+    if (!a) return NextResponse.json({ ok: false, error: 'VALIDATION_ERROR' }, { status: 400 })
+    patch.author_display = a
+  }
+
   if (typeof body.pinned === 'boolean') patch.pinned = body.pinned
   if (typeof body.hidden === 'boolean') patch.hidden = body.hidden
   if (typeof body.reported === 'boolean') patch.reported = body.reported

@@ -112,9 +112,9 @@ export function buildPostsWithComments(
       comments: pcs.length,
       category: p.category,
       postComments: pcs,
+      pinned: !!p.pinned,
     }
     if (options.includeModeration) {
-      base.pinned = !!p.pinned
       base.hidden = !!p.hidden
       base.reported = !!p.reported
     }

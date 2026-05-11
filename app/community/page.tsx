@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
@@ -43,7 +43,39 @@ interface Post {
   likes: number
   comments: number
   category: string
+  /** When true, post stays at top (server sort + client) and uses official card styling. */
+  pinned?: boolean
   postComments?: Comment[]
+}
+
+/** Subtle repeating “sticker sheet” motif (#7000FF); parent uses opacity-10. */
+const COMMUNITY_OFFICIAL_STICKER_PATTERN =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cg fill='%237000FF'%3E%3Ccircle cx='14' cy='16' r='8'/%3E%3Crect x='34' y='10' width='14' height='14' rx='3'/%3E%3Ccircle cx='58' cy='22' r='7'/%3E%3Crect x='12' y='38' width='12' height='16' rx='2'/%3E%3Ccircle cx='44' cy='48' r='9'/%3E%3Crect x='56' y='46' width='10' height='12' rx='2'/%3E%3C/g%3E%3C/svg%3E"
+
+function OfficialStickerPatternBg() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 rounded-[inherit] bg-repeat opacity-10"
+      style={{
+        backgroundImage: `url("${COMMUNITY_OFFICIAL_STICKER_PATTERN}")`,
+        backgroundSize: '72px 72px',
+      }}
+      aria-hidden
+    />
+  )
+}
+
+/** If no post is pinned, pin the lowest-id post (typical “first” welcome thread). */
+function normalizeCommunityPostsForPin(raw: Post[]): { posts: Post[]; changed: boolean } {
+  if (!Array.isArray(raw) || raw.length === 0) return { posts: raw, changed: false }
+  const mapped = raw.map((p) => ({ ...p, pinned: !!p.pinned }))
+  if (mapped.some((p) => p.pinned)) {
+    const changed = JSON.stringify(raw) !== JSON.stringify(mapped)
+    return { posts: mapped, changed }
+  }
+  const minId = Math.min(...mapped.map((p) => p.id))
+  const next = mapped.map((p) => ({ ...p, pinned: p.id === minId }))
+  return { posts: next, changed: true }
 }
 
 interface Comment {
@@ -98,7 +130,8 @@ const samplePosts: Post[] = [
     content: "Hey everyone! Welcome to our vibrant community space where creativity meets conversation! This is YOUR space to share ideas, connect with like-minded people, and express yourself freely. Whether you're a designer, entrepreneur, student, or just looking for interesting conversations - you belong here! Jump in, introduce yourself, and let's make this community amazing together! 💫",
     likes: 127,
     comments: 45,
-    category: "Daily"
+    category: "Daily",
+    pinned: true,
   },
   {
     id: 2,
@@ -108,7 +141,8 @@ const samplePosts: Post[] = [
     content: "After months of learning Procreate, I finally completed my first digital artwork! It's a fantasy landscape inspired by Studio Ghibli films. The journey was challenging but so rewarding. To anyone starting their creative journey - don't give up! Every stroke teaches you something new. Would love your feedback! What should I work on next? 🌸",
     likes: 234,
     comments: 67,
-    category: "Inspired"
+    category: "Inspired",
+    pinned: false,
   },
   {
     id: 3,
@@ -118,7 +152,8 @@ const samplePosts: Post[] = [
     content: "Tired of expensive standing desks, so I made my own! Used IKEA table legs, a countertop, and some brackets. Total cost: $50 vs $500+ for commercial ones!\n\nMaterials:\n- 4x adjustable OLOV legs ($40)\n- LINNMON tabletop ($10)\n- Corner brackets from hardware store\n\nTook 2 hours to assemble. Been using it for a month - game changer for my back! Happy to share detailed instructions if anyone's interested! 💪",
     likes: 389,
     comments: 102,
-    category: "Inspired"
+    category: "Inspired",
+    pinned: false,
   },
   {
     id: 4,
@@ -128,7 +163,8 @@ const samplePosts: Post[] = [
     content: "Struggled with morning motivation for years. Then I discovered this simple routine:\n\n1. Make bed immediately (2 min)\n2. Drink full glass of water (30 sec)\n3. 2-minute stretch or yoga\n4. Write down 3 goals for today (30 sec)\n\nSeems small but it creates momentum! My productivity increased by 40% and I feel more focused. The key is starting TINY and being consistent. Anyone else have morning rituals that work? 🌅",
     likes: 456,
     comments: 143,
-    category: "Inspired"
+    category: "Inspired",
+    pinned: false,
   },
   {
     id: 5,
@@ -138,7 +174,8 @@ const samplePosts: Post[] = [
     content: "I'm 28 and working in marketing, but my real passion is photography. I've been doing it on weekends and getting some paid gigs. My savings could cover 6 months of expenses. Part of me wants to take the leap, but I'm scared. Has anyone made this jump? How did you know it was the right time? Any advice would be incredibly helpful! 🙏",
     likes: 189,
     comments: 87,
-    category: "Help"
+    category: "Help",
+    pinned: false,
   },
   {
     id: 6,
@@ -148,7 +185,8 @@ const samplePosts: Post[] = [
     content: "Let's meet IRL! 🎉\n\nWhen: Saturday, October 20th, 2-5 PM\nWhere: Riverside Cafe (downtown)\nWho: Anyone interested in design, creativity, or just good conversation!\n\nAgenda:\n• Casual networking\n• Lightning talks (5 min each - volunteer!)\n• Creative brainstorming sessions\n• Photo ops & fun!\n\nFREE coffee for first 20 people! Drop a comment if you're coming so we can reserve enough space. Can't wait to meet you all! 🌟",
     likes: 167,
     comments: 94,
-    category: "Events"
+    category: "Events",
+    pinned: false,
   },
   {
     id: 7,
@@ -158,7 +196,8 @@ const samplePosts: Post[] = [
     content: "Meet Charlie! Found him at the local shelter two weeks ago. He was scared and didn't trust anyone. Now he follows me everywhere, sleeps on my bed, and greets me with the biggest smile when I come home. Rescue dogs are the BEST! They know you saved them and give endless love in return. If you're thinking about getting a pet, please consider adoption! Share your pet pics below - let's flood this thread with cuteness! 🐾✨",
     likes: 542,
     comments: 178,
-    category: "Daily"
+    category: "Daily",
+    pinned: false,
   },
   {
     id: 8,
@@ -168,8 +207,9 @@ const samplePosts: Post[] = [
     content: "Love this community! Quick feedback: Would be awesome if we could customize our profiles with avatars, cover photos, and a short bio. It would make the community feel more personal and help us recognize regular members. Also, maybe badges for active contributors? Just some ideas to make this space even better! What does everyone think? 🎨",
     likes: 298,
     comments: 115,
-    category: "Help"
-  }
+    category: "Help",
+    pinned: false,
+  },
 ]
 
 export default function CommunityPage() {
@@ -309,7 +349,15 @@ export default function CommunityPage() {
             localStorage.setItem('community-posts', JSON.stringify(samplePosts))
             localStorage.setItem('community-posts-version', SAMPLE_VERSION)
           } else {
-            if (!cancelled) setPosts(parsedPosts)
+            const { posts: norm, changed } = normalizeCommunityPostsForPin(parsedPosts as Post[])
+            if (!cancelled) setPosts(norm)
+            if (changed) {
+              try {
+                localStorage.setItem('community-posts', JSON.stringify(norm))
+              } catch {
+                /* ignore */
+              }
+            }
           }
         } else {
           if (!cancelled) setPosts(samplePosts)
@@ -439,6 +487,17 @@ export default function CommunityPage() {
   const searchEmptyBoard = filteredPosts.length === 0 && posts.length > 0 && searchActive
   const categoryEmptyBoard =
     filteredPosts.length === 0 && posts.length > 0 && !searchActive && selectedCategory !== 'All'
+
+  const orderedFilteredPosts = useMemo(() => {
+    const arr = [...filteredPosts]
+    arr.sort((a, b) => {
+      const pa = a.pinned ? 1 : 0
+      const pb = b.pinned ? 1 : 0
+      if (pb !== pa) return pb - pa
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+    return arr
+  }, [filteredPosts])
 
   // 사용자 글쓰기 권한 확인 함수 (currentUser 사용)
   const checkPostingPermission = (): { allowed: boolean; reason?: string } => {
@@ -654,7 +713,8 @@ export default function CommunityPage() {
         content: newPost.content,
         likes: 0,
         comments: 0,
-        category: newPost.category
+        category: newPost.category,
+        pinned: false,
       }
       const updatedPosts = [post, ...posts]
       console.log('Creating new post with ID:', newId)
@@ -1083,13 +1143,19 @@ export default function CommunityPage() {
       <section className="pb-20 px-4">
         <div className="max-w-5xl mx-auto">
           <div className="space-y-6">
-            {filteredPosts.map((post) => (
+            {orderedFilteredPosts.map((post) => (
               <div
                 key={post.id}
                 onClick={() => handleViewPost(post)}
-                className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all cursor-pointer border-2 border-transparent hover:border-purple-200"
+                className={[
+                  'relative overflow-hidden rounded-2xl p-6 shadow-lg transition-all cursor-pointer',
+                  post.pinned
+                    ? 'border-2 border-[#7000FF] bg-purple-50 hover:shadow-xl'
+                    : 'border-2 border-transparent bg-white hover:border-purple-200 hover:shadow-xl',
+                ].join(' ')}
               >
-                <div className="flex items-start justify-between mb-4">
+                {post.pinned && <OfficialStickerPatternBg />}
+                <div className="relative z-[1] flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <span
@@ -1104,9 +1170,16 @@ export default function CommunityPage() {
                         {post.date}
                       </div>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2 hover:text-purple-600 transition-colors">
-                      {post.title}
-                    </h3>
+                    <div className="mb-2 flex flex-wrap items-start gap-2">
+                      {post.pinned && (
+                        <span className="mt-1 shrink-0 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide text-white bg-purple-600">
+                          [OFFICIAL]
+                        </span>
+                      )}
+                      <h3 className="min-w-0 flex-1 text-2xl font-bold text-gray-900 hover:text-purple-600 transition-colors">
+                        {post.title}
+                      </h3>
+                    </div>
                     <p className="text-gray-600 mb-4">
                       {post.content}
                     </p>
@@ -1369,8 +1442,22 @@ export default function CommunityPage() {
       {/* View Post Modal with Comments */}
       {isViewModalOpen && selectedPost && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-6 flex items-center justify-between z-10">
+          <div
+            className={[
+              'relative max-w-4xl w-full max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl',
+              selectedPost.pinned
+                ? 'border-2 border-[#7000FF] bg-purple-50'
+                : 'bg-white',
+            ].join(' ')}
+          >
+            {selectedPost.pinned && <OfficialStickerPatternBg />}
+            <div className="relative z-[1] max-h-[90vh] overflow-y-auto">
+            <div
+              className={[
+                'sticky top-0 border-b border-gray-200 px-8 py-6 flex items-center justify-between z-10 backdrop-blur-sm',
+                selectedPost.pinned ? 'bg-purple-50/95' : 'bg-white',
+              ].join(' ')}
+            >
               <div className="flex items-center gap-3">
                 <MessageCircle className="w-6 h-6 text-purple-600" />
                 <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
@@ -1401,7 +1488,14 @@ export default function CommunityPage() {
                     {selectedPost.date}
                   </div>
                 </div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
+                <div className="mb-4 flex flex-wrap items-start gap-2">
+                  {selectedPost.pinned && (
+                    <span className="mt-1.5 shrink-0 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide text-white bg-purple-600">
+                      [OFFICIAL]
+                    </span>
+                  )}
+                  <h2 className="min-w-0 flex-1 text-3xl font-bold text-gray-900">{selectedPost.title}</h2>
+                </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <User className="w-4 h-4" />
                   <span className="text-sm font-medium">{selectedPost.author}</span>
@@ -1531,6 +1625,7 @@ export default function CommunityPage() {
                   </button>
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>

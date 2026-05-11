@@ -95,12 +95,15 @@ function AdminCommunityPageContent() {
   const [editPostForm, setEditPostForm] = useState({
     title: '',
     content: '',
-    category: 'Daily'
+    category: 'Daily',
+    pinned: false,
+    author: '',
   })
   const [newPost, setNewPost] = useState({
     title: '',
     content: '',
-    category: 'Daily'
+    category: 'Daily',
+    pinned: false,
   })
   const [newComment, setNewComment] = useState('')
   const [categories, setCategories] = useState<CommunityCategory[]>([])
@@ -387,7 +390,7 @@ function AdminCommunityPageContent() {
       return
     }
 
-    const authorLabel = `Admin (${adminUser?.username})`
+    const authorLabel = 'Admin'
 
     if (useRemoteCommunity) {
       try {
@@ -400,6 +403,7 @@ function AdminCommunityPageContent() {
             content: newPost.content.trim(),
             category: newPost.category,
             author: authorLabel,
+            pinned: newPost.pinned,
           }),
         })
         const data = await res.json()
@@ -408,7 +412,7 @@ function AdminCommunityPageContent() {
           return
         }
         setPosts((prev) => [data.post as Post, ...prev])
-        setNewPost({ title: '', content: '', category: 'Daily' })
+        setNewPost({ title: '', content: '', category: 'Daily', pinned: false })
         setIsNewPostModalOpen(false)
         alert('Post created successfully!')
       } catch {
@@ -427,6 +431,7 @@ function AdminCommunityPageContent() {
       likes: 0,
       comments: 0,
       category: newPost.category,
+      pinned: newPost.pinned,
       postComments: []
     }
 
@@ -434,7 +439,7 @@ function AdminCommunityPageContent() {
     setPosts(updatedPosts)
     localStorage.setItem('community-posts', JSON.stringify(updatedPosts))
     
-    setNewPost({ title: '', content: '', category: 'Daily' })
+    setNewPost({ title: '', content: '', category: 'Daily', pinned: false })
     setIsNewPostModalOpen(false)
     alert('Post created successfully!')
   }
@@ -483,6 +488,8 @@ function AdminCommunityPageContent() {
       title: post.title,
       content: post.content,
       category: editorCategoryValue(post.category),
+      pinned: !!post.pinned,
+      author: post.author,
     })
     setIsEditModalOpen(true)
   }
@@ -504,6 +511,8 @@ function AdminCommunityPageContent() {
             title: editPostForm.title.trim(),
             content: editPostForm.content.trim(),
             category: editPostForm.category,
+            pinned: editPostForm.pinned,
+            author: editPostForm.author.trim(),
           }),
         })
         const data = await res.json()
@@ -518,7 +527,7 @@ function AdminCommunityPageContent() {
         }
         setIsEditModalOpen(false)
         setEditingPost(null)
-        setEditPostForm({ title: '', content: '', category: 'Daily' })
+        setEditPostForm({ title: '', content: '', category: 'Daily', pinned: false, author: '' })
         alert('Post updated successfully!')
       } catch {
         alert('Network error.')
@@ -532,7 +541,9 @@ function AdminCommunityPageContent() {
             ...p,
             title: editPostForm.title,
             content: editPostForm.content,
-            category: editPostForm.category
+            category: editPostForm.category,
+            pinned: editPostForm.pinned,
+            author: editPostForm.author.trim() || p.author,
           }
         : p
     )
@@ -549,7 +560,7 @@ function AdminCommunityPageContent() {
 
     setIsEditModalOpen(false)
     setEditingPost(null)
-    setEditPostForm({ title: '', content: '', category: 'Daily' })
+    setEditPostForm({ title: '', content: '', category: 'Daily', pinned: false, author: '' })
     alert('Post updated successfully!')
   }
 
@@ -1482,7 +1493,7 @@ function AdminCommunityPageContent() {
                     onClick={() => {
                       setIsEditModalOpen(false)
                       setEditingPost(null)
-                      setEditPostForm({ title: '', content: '', category: 'Daily' })
+                      setEditPostForm({ title: '', content: '', category: 'Daily', pinned: false, author: '' })
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
@@ -1532,6 +1543,22 @@ function AdminCommunityPageContent() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Author (shown on storefront)
+                    </label>
+                    <input
+                      type="text"
+                      value={editPostForm.author}
+                      onChange={(e) => setEditPostForm({ ...editPostForm, author: e.target.value })}
+                      placeholder="e.g. Admin"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Use this to fix legacy labels like Admin (username) — set to Admin if you prefer.
+                    </p>
+                  </div>
+
                   {/* Content Input */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -1546,12 +1573,31 @@ function AdminCommunityPageContent() {
                     />
                   </div>
 
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-gray-200 bg-gray-50/80 p-4">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                      checked={editPostForm.pinned}
+                      onChange={(e) => setEditPostForm({ ...editPostForm, pinned: e.target.checked })}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">Pin to top of community</span>
+                      <span className="mt-1 block text-xs text-gray-600">
+                        Pinned posts appear first on the storefront with the official highlight. Multiple pins are
+                        allowed; they sort by date within the pinned group.
+                      </span>
+                    </span>
+                  </label>
+
                   {/* Post Info */}
                   <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
                     <div className="flex items-center gap-2 text-blue-900">
                       <Shield className="w-5 h-5" />
                       <span className="text-sm font-medium">
-                        Editing post by: <span className="font-bold">{editingPost.author}</span>
+                        Editing post by:{' '}
+                        <span className="font-bold">
+                          {editingPost.author.replace(/\s*\([^)]*\)\s*$/, '').trim()}
+                        </span>
                       </span>
                     </div>
                     <div className="text-xs text-blue-700 mt-2">
@@ -1565,7 +1611,7 @@ function AdminCommunityPageContent() {
                       onClick={() => {
                         setIsEditModalOpen(false)
                         setEditingPost(null)
-                        setEditPostForm({ title: '', content: '', category: 'Daily' })
+                        setEditPostForm({ title: '', content: '', category: 'Daily', pinned: false, author: '' })
                       }}
                       className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
                     >
@@ -1596,7 +1642,7 @@ function AdminCommunityPageContent() {
                   <button
                     onClick={() => {
                       setIsNewPostModalOpen(false)
-                      setNewPost({ title: '', content: '', category: 'Daily' })
+                      setNewPost({ title: '', content: '', category: 'Daily', pinned: false })
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
@@ -1660,12 +1706,28 @@ function AdminCommunityPageContent() {
                     />
                   </div>
 
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-gray-200 bg-gray-50/80 p-4">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                      checked={newPost.pinned}
+                      onChange={(e) => setNewPost({ ...newPost, pinned: e.target.checked })}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">Pin to top of community</span>
+                      <span className="mt-1 block text-xs text-gray-600">
+                        Pinned posts appear first on the storefront with the official highlight. Multiple pins are
+                        allowed; they sort by date within the pinned group.
+                      </span>
+                    </span>
+                  </label>
+
                   {/* Author Info */}
                   <div className="bg-cyan-50 rounded-xl p-4 border-2 border-cyan-200">
                     <div className="flex items-center gap-2 text-cyan-900">
                       <Shield className="w-5 h-5" />
                       <span className="text-sm font-medium">
-                        Posting as: <span className="font-bold">Admin ({adminUser?.username})</span>
+                        Posting as: <span className="font-bold">Admin</span>
                       </span>
                     </div>
                   </div>
@@ -1675,7 +1737,7 @@ function AdminCommunityPageContent() {
                     <button
                       onClick={() => {
                         setIsNewPostModalOpen(false)
-                        setNewPost({ title: '', content: '', category: 'Daily' })
+                        setNewPost({ title: '', content: '', category: 'Daily', pinned: false })
                       }}
                       className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
                     >
