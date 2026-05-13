@@ -2,12 +2,13 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import NextImage from 'next/image'
 import { useStore, Product } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { useContentStore } from '@/lib/contentStore'
 import { getStickerFonts, getEffectiveFont, type FontConfig } from '@/lib/fontList'
-import { Type, Palette, Package, X, Gamepad2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Type, Palette, Package, X, Gamepad2, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import Header from '@/components/Header'
 import CustomDesignStudioPreview from '@/components/CustomDesignStudioPreview'
 import { isStampsCheckoutEnabled } from '@/lib/stampsCommerce'
@@ -22,6 +23,8 @@ export default function CustomDesignPage() {
 }
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
+/** Static print guide: official AU school fonts (Fonts 1–5); matches Font 1–5 in the menu (Sticker Customization parity) */
+const AU_SCHOOL_FONT_GUIDE_IMAGE = '/images/guides/australian-school-fonts-black-print.png'
 const NAME_MAX_LETTERS = 9
 const DEFAULT_TWO_LINE_SURCHARGE = 2
 const twoLineMaxChars = 18
@@ -44,6 +47,8 @@ function CustomDesignContent() {
   const [categoryFilter, setCategoryFilter] = useState<'Stamps' | 'Stickers'>('Stickers')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isFontGuideOpen, setIsFontGuideOpen] = useState(false)
+  const [isOfficialSchoolFontGuideOpen, setIsOfficialSchoolFontGuideOpen] = useState(false)
+  const [isOfficialFontGuideLightboxOpen, setIsOfficialFontGuideLightboxOpen] = useState(false)
   const [lineMode, setLineMode] = useState<'single' | 'two'>('single')
   const [twoLineFormat, setTwoLineFormat] = useState<'affiliation-name' | 'name-phone'>('affiliation-name')
   // Double-line 전용 입력 상태 (Option 1/2 공통: 소속/이름/전화 분리)
@@ -101,6 +106,28 @@ function CustomDesignContent() {
       localStorage.setItem('selpic-custom-design-name', customText)
     }
   }, [customText])
+
+  // Official font guide lightbox: Esc to close, lock body scroll while open
+  useEffect(() => {
+    if (!isOfficialFontGuideLightboxOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOfficialFontGuideLightboxOpen(false)
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isOfficialFontGuideLightboxOpen])
+
+  useEffect(() => {
+    if (categoryFilter !== 'Stickers') {
+      setIsOfficialFontGuideLightboxOpen(false)
+      setIsOfficialSchoolFontGuideOpen(false)
+    }
+  }, [categoryFilter])
 
   const getCustomizationPrice = (): number => {
     if (!selectedProduct) return 20.00
@@ -835,9 +862,56 @@ function CustomDesignContent() {
                 </select>
               </div>
 
+              {categoryFilter === 'Stickers' && (
+                <>
+                  {/* Official Australian school fonts — static print guide (Sticker Customization parity) */}
+                  <div className="bg-blue-900/50 rounded-lg border border-blue-700/60 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setIsOfficialSchoolFontGuideOpen((open) => !open)}
+                      className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-sm font-semibold text-slate-300 hover:bg-blue-800/50 transition-colors"
+                    >
+                      <span className="flex items-center gap-2 text-left min-w-0">
+                        <BookOpen className="w-4 h-4 shrink-0 text-sky-300" aria-hidden />
+                        <span>View official Australian school fonts guide (black print)</span>
+                      </span>
+                      {isOfficialSchoolFontGuideOpen ? (
+                        <ChevronUp className="w-4 h-4 shrink-0" aria-hidden />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 shrink-0" aria-hidden />
+                      )}
+                    </button>
+                    {isOfficialSchoolFontGuideOpen && (
+                      <div className="px-3 pb-3 space-y-2">
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          Pick the foundation font that matches your child&apos;s state or territory. Rows 1–5 on this sheet align with Font 1–5 in the menu above. Fonts 6–7 are extra styles (for example Korean-friendly options).
+                        </p>
+                        <p className="text-xs text-slate-500">Tap the image for a larger view.</p>
+                        <button
+                          type="button"
+                          onClick={() => setIsOfficialFontGuideLightboxOpen(true)}
+                          className="group w-full rounded-lg overflow-hidden border border-slate-600/80 bg-slate-900/40 text-left ring-offset-2 ring-offset-slate-950 transition hover:border-sky-500/50 hover:ring-2 hover:ring-sky-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                          aria-label="Open enlarged official school fonts guide"
+                        >
+                          <NextImage
+                            src={AU_SCHOOL_FONT_GUIDE_IMAGE}
+                            alt="Official Australian school fonts for black-print labels: Queensland (Andika) through Tasmania, with sample text for each font."
+                            width={900}
+                            height={1200}
+                            className="w-full h-auto transition group-hover:opacity-95"
+                            sizes="(max-width: 768px) 100vw, 360px"
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Font Style Guide Accordion */}
               <div className="bg-blue-900/50 rounded-lg border border-blue-700/60 overflow-hidden">
                 <button
+                  type="button"
                   onClick={() => setIsFontGuideOpen(!isFontGuideOpen)}
                   className="w-full px-3 py-2.5 flex items-center justify-between text-sm font-semibold text-slate-300 hover:bg-blue-800/50 transition-colors"
                 >
@@ -972,6 +1046,45 @@ function CustomDesignContent() {
         </div>
       </div>
       </div>
+
+      {isOfficialFontGuideLightboxOpen && categoryFilter === 'Stickers' && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-design-official-font-guide-lightbox-heading"
+          onClick={() => setIsOfficialFontGuideLightboxOpen(false)}
+        >
+          <div
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 bg-slate-800/90 px-3 py-2">
+              <p id="custom-design-official-font-guide-lightbox-heading" className="text-sm font-medium text-slate-200 pr-2">
+                Official Australian school fonts (black print)
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsOfficialFontGuideLightboxOpen(false)}
+                className="rounded-lg p-2 text-slate-300 hover:bg-slate-700 hover:text-white shrink-0"
+                aria-label="Close enlarged guide"
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto p-2 sm:p-4">
+              <NextImage
+                src={AU_SCHOOL_FONT_GUIDE_IMAGE}
+                alt="Enlarged: official Australian school fonts guide for black-print name labels by state."
+                width={1200}
+                height={1600}
+                className="mx-auto h-auto max-h-[82vh] w-full object-contain"
+                sizes="(max-width: 1024px) 96vw, 1024px"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
