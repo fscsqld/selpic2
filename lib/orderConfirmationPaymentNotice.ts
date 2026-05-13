@@ -3,7 +3,9 @@
  * Bank: pending until deposit verified. Stripe: receipt + internal processing.
  */
 
-export type OrderPaymentMethod = 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'
+export type OrderPaymentMethod = 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
+
+const MARKETPLACE = `Thank you for your order! This order was placed through an external marketplace (e.g. Etsy). Processing and shipping follow the same SELPIC workflow; you may also receive separate messages from the marketplace.`
 
 const BANK = `Thank you for your order! Your order status will remain "Pending" until we verify your bank transfer. This usually takes 1–2 business days depending on your bank. We will start creating your stickers as soon as the payment is confirmed.`
 
@@ -19,6 +21,8 @@ export function getOrderConfirmationPaymentNotice(paymentMethod: string | undefi
       return BANK
     case 'stripe':
       return STRIPE
+    case 'marketplace':
+      return MARKETPLACE
     case 'cash':
       return CASH
     case 'card':

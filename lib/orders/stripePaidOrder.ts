@@ -1,6 +1,7 @@
 import { getStripe } from '@/lib/stripe'
 import { parseOrderDraftFromMetadata } from '@/lib/stripeCheckoutMetadata'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import type Stripe from 'stripe'
 import type { OrderRecord } from '@/lib/store'
 
@@ -53,6 +54,7 @@ export function draftToPersistedOrder(orderDraft: OrderDraft, stripeCheckoutSess
     createdAtIso: new Date().toISOString(),
     ...orderDraft,
     stripeCheckoutSessionId,
+    platformSource: 'website',
   }
   return normalizeLedgerOrder(base)
 }
@@ -75,8 +77,7 @@ export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, 
 
   const { error: insErr } = await sb.from('orders').insert({
     id: order.id,
-    stripe_checkout_session_id: stripeCheckoutSessionId,
-    payload: order,
+    ...buildOrdersTableUpdate(order),
   })
 
   if (insErr) {

@@ -1,0 +1,47 @@
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { generateOauthState, generatePkcePair } from '@/lib/integrations/etsy/etsyOAuth'
+import { getEtsyClientId, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
+import { ETSY_OAUTH_SCOPES } from '@/lib/integrations/etsy/etsyOAuthConfig'
+
+const STATE = 'etsy_oauth_state'
+const VERIFIER = 'etsy_pkce_verifier'
+
+export async function GET() {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const clientId = getEtsyClientId()
+  const redirectUri = getEtsyOAuthRedirectUri()
+  if (!clientId || !redirectUri) {
+    return NextResponse.json(
+      {
+        error:
+          'Missing ETSY_CLIENT_ID (or legacy ETSY_API_KEY) or ETSY_OAUTH_REDIRECT_URI. Set both to match your Etsy app registration.',
+      },
+      { status: 503 }
+    )
+  }
+
+  const state = generateOauthState()
+  const { verifier, challenge } = generatePkcePair()
+  const jar = await cookies()
+  const secure = process.env.NODE_ENV === 'production'
+  jar.set(STATE, state, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 600 })
+  jar.set(VERIFIER, verifier, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 600 })
+
+  const scope = encodeURIComponent(ETSY_OAUTH_SCOPES)
+  const url =
+    `https://www.etsy.com/oauth/connect?response_type=code` +
+    `&client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${scope}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&code_challenge=${encodeURIComponent(challenge)}` +
+    `&code_challenge_method=S256`
+
+  return NextResponse.redirect(url)
+}

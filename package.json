@@ -38,6 +38,7 @@
     "autoprefixer": "^10.0.1",
     "baseline-browser-mapping": "^2.10.20",
     "browser-image-compression": "^2.0.2",
+    "bwip-js": "^4.10.1",
     "caniuse-lite": "^1.0.30001788",
     "clsx": "^2.0.0",
     "framer-motion": "^10.18.0",

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
 import OrderTracking from '@/components/OrderTracking'
 import OrderEmailConfirmation from '@/components/OrderEmailConfirmation'
-import { useStore } from '@/lib/store'
+import { useStore, ORDER_PLATFORM_LABEL } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useTranslation } from '@/lib/useTranslation'
 import { getColorName } from '@/lib/colorUtils'
@@ -16,6 +16,7 @@ import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSi
 import Link from 'next/link'
 // ✅ 회계 장부 자동 기록 통합 (재시도 로직 포함)
 import { recordOrderToAccountingAsyncWithRetry } from '@/apps/accounting-sandbox/src/features/transactions/order-approval-integration-retry'
+import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 
 export default function AdminOrderDetailPage() {
   const params = useParams<{ orderId: string }>()
@@ -38,6 +39,7 @@ export default function AdminOrderDetailPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showCustomerMessage, setShowCustomerMessage] = useState(false)
   const [isSendingReceipt, setIsSendingReceipt] = useState(false)
+  const [ausPostLabelBusy, setAusPostLabelBusy] = useState(false)
   const [ledgerReady, setLedgerReady] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
 
@@ -765,6 +767,112 @@ Selpic Team`
                 onUpdateStatus={handleUpdateDeliveryStatus}
               />
 
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-red-600" />
+                  AusPost shipping label
+                </h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Generates a printable PDF (Standard Letter layout) with sender, recipient, personalization, declared
+                  weight, and a Code 128 barcode (order id until AusPost tracking is connected). Not an official AusPost
+                  API label — use for packing and post office counter until live Digital API is enabled.
+                </p>
+                {isClickAndCollect ? (
+                  <p className="text-sm text-gray-500">Click &amp; Collect — postal label not required.</p>
+                ) : (
+                  <>
+                    {order.ausPostShippingLabel?.status === 'created' ? (
+                      <p className="text-sm text-green-700 mb-3">
+                        Label on file
+                        {order.ausPostShippingLabel.updatedAtIso
+                          ? ` · updated ${new Date(order.ausPostShippingLabel.updatedAtIso).toLocaleString()}`
+                          : ''}
+                        .
+                      </p>
+                    ) : (
+                      <p className="text-sm text-amber-800 mb-3">Not generated yet.</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={ausPostLabelBusy}
+                        onClick={async () => {
+                          if (!order) return
+                          setAusPostLabelBusy(true)
+                          try {
+                            const r = await openInternalShippingLabelPdf(order.id, {
+                              force: false,
+                              onOrderMerged: (o) => mergeOrdersFromServer([o]),
+                            })
+                            if (!r.ok) alert(r.error || 'Failed to generate label.')
+                          } finally {
+                            setAusPostLabelBusy(false)
+                          }
+                        }}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+                      >
+                        {order.ausPostShippingLabel?.status === 'created' ? 'Open label (PDF)' : 'Generate label (PDF)'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ausPostLabelBusy || order.ausPostShippingLabel?.status !== 'created'}
+                        onClick={async () => {
+                          if (!order) return
+                          setAusPostLabelBusy(true)
+                          try {
+                            const r = await openInternalShippingLabelPdf(order.id, {
+                              force: true,
+                              onOrderMerged: (o) => mergeOrdersFromServer([o]),
+                            })
+                            if (!r.ok) alert(r.error || 'Failed to regenerate label.')
+                          } finally {
+                            setAusPostLabelBusy(false)
+                          }
+                        }}
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-800 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ausPostLabelBusy || order.ausPostShippingLabel?.status !== 'created'}
+                        onClick={async () => {
+                          if (!order) return
+                          setAusPostLabelBusy(true)
+                          try {
+                            const res = await fetch(
+                              `/api/admin/shipping/auspost/label?orderId=${encodeURIComponent(order.id)}`,
+                              { credentials: 'same-origin' }
+                            )
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}))
+                              alert(typeof data.error === 'string' ? data.error : 'Download failed.')
+                              return
+                            }
+                            const blob = await res.blob()
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `shipping-label-${order.id.replace(/[^a-zA-Z0-9_-]+/g, '')}.pdf`
+                            a.click()
+                            window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+                          } finally {
+                            setAusPostLabelBusy(false)
+                          }
+                        }}
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-800 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3">
+                      PDFs are generated on the server and stored in the order ledger metadata. Regenerate after address or
+                      personalization changes.
+                    </p>
+                  </>
+                )}
+              </div>
+
               {/* Order Email Confirmation */}
               <OrderEmailConfirmation 
                 order={order}
@@ -818,6 +926,18 @@ Selpic Team`
                   Order Summary
                 </h2>
                 <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Platform:</span>
+                    <span className="font-medium">
+                      {ORDER_PLATFORM_LABEL[order.platformSource ?? 'website']}
+                    </span>
+                  </div>
+                  {order.externalOrderKey ? (
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>External key:</span>
+                      <span className="font-mono break-all text-right max-w-[60%]">{order.externalOrderKey}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal:</span>
                     <span className="font-medium">${order.subtotal.toFixed(2)}</span>

@@ -5,7 +5,6 @@ import { COMPANY_LEGAL, getCompanyBrandName } from './companyLegal'
 import { scheduleCatalogSyncToServer } from './catalogSyncScheduler'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
-import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 import {
   buildOrderConfirmationEmailPlainText,
   buildOrderConfirmationEmailSubject,
@@ -95,6 +94,18 @@ export type OrderStatus =
   /** Admin/accounting approval step (e.g. before processing) */
   | 'approved'
 
+/** Sales channel for unified order management (DB column `platform_source` mirrors this). */
+export type OrderPlatformSource = 'website' | 'etsy' | 'ebay' | 'amazon'
+
+export const ORDER_PLATFORM_SOURCES: OrderPlatformSource[] = ['website', 'etsy', 'ebay', 'amazon']
+
+export const ORDER_PLATFORM_LABEL: Record<OrderPlatformSource, string> = {
+  website: 'Website',
+  etsy: 'Etsy',
+  ebay: 'eBay',
+  amazon: 'Amazon',
+}
+
 export interface OrderItemSnapshot {
   productId: string
   name: string
@@ -107,6 +118,12 @@ export interface OrderItemSnapshot {
   image: string
   quantity: number
   customizations: Record<string, string>
+  /** Mass per sellable unit (kg), for shipping labels; optional until catalog or admin sets it. */
+  weightKg?: number
+  /** Etsy / marketplace buyer-entered personalization (merged text). */
+  buyerPersonalization?: string
+  /** Structured prompts → answers when the marketplace provides them. */
+  personalizationResponses?: Array<{ label: string; value: string; promptId?: string }>
   category?: string
   subcategory?: string
   brand?: string
@@ -127,9 +144,32 @@ export interface OrderItemSnapshot {
   isBundle?: boolean
 }
 
+/** AusPost label metadata on the order (internal PDF until live Digital API is wired). */
+export interface AusPostShippingLabelMeta {
+  status: 'created' | 'failed'
+  /** `internal` = SELPIC-generated PDF; `live` = AusPost Digital API when wired. Legacy payloads may still say `mock` (treated as internal). */
+  mode: 'internal' | 'live' | 'mock'
+  labelUrl?: string
+  shipmentId?: string
+  trackingNumber?: string
+  lastError?: string
+  createdAtIso?: string
+  updatedAtIso?: string
+}
+
 export interface OrderRecord {
   id: string
   createdAtIso: string
+  /** Origin channel; defaults to website when omitted in legacy payloads. */
+  platformSource?: OrderPlatformSource
+  /** Dedupe key in DB, e.g. `etsy:123456789`. */
+  externalOrderKey?: string
+  /** Extra ids for support / re-sync (optional). */
+  marketplaceSource?: {
+    etsyReceiptId?: number
+    etsyShopId?: number
+    lastImportedAtIso?: string
+  }
   items: OrderItemSnapshot[]
   subtotal: number
   shippingPrice: number
@@ -145,7 +185,7 @@ export interface OrderRecord {
   total: number
   shippingOptionId: string
   shippingOptionName?: string
-  paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'
+  paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
   paymentMethodName?: string
   status: OrderStatus
   customer: {
@@ -182,6 +222,10 @@ export interface OrderRecord {
     }>
     notes?: string
   }
+  /** Optional declared total shipping mass (kg); when set, overrides summed line-item weights on labels. */
+  declaredShippingWeightKg?: number
+  /** AusPost shipping label (admin): internal PDF by default; live API optional later. */
+  ausPostShippingLabel?: AusPostShippingLabelMeta
   // 이메일 확인 관련
   emailConfirmation?: {
     sent: boolean
@@ -1513,15 +1557,18 @@ export const useStore = create<Store>()(
               closing: template.email.closing
             }
 
-            const pdfFile = await renderReactPreviewToPdfFile({
-              reactElement: React.createElement(OrderConfirmationTemplate as any, {
-                order: pdfOrder,
-                company,
-                template: templateProps
-              }),
-              filename: `Order-Confirmation-${order.id}.pdf`
-            })
-            if (pdfFile) attachments.push(pdfFile)
+            if (typeof window !== 'undefined') {
+              const { renderReactPreviewToPdfFile } = await import('@/lib/previewPdf')
+              const pdfFile = await renderReactPreviewToPdfFile({
+                reactElement: React.createElement(OrderConfirmationTemplate as any, {
+                  order: pdfOrder,
+                  company,
+                  template: templateProps
+                }),
+                filename: `Order-Confirmation-${order.id}.pdf`
+              })
+              if (pdfFile) attachments.push(pdfFile)
+            }
           } catch (e) {
             console.warn('Failed to generate Order Confirmation PDF attachment:', e)
           }
@@ -1816,13 +1863,16 @@ export const useStore = create<Store>()(
             // OrderReceipt doesn't accept company props today; it reads COMPANY_LEGAL/CONTACT directly.
             void company
 
-            const pdfFile = await renderReactPreviewToPdfFile({
-              reactElement: React.createElement(OrderReceipt as any, {
-                order: pdfOrder
-              }),
-              filename: `Receipt-${order.id}.pdf`
-            })
-            if (pdfFile) attachments.push(pdfFile)
+            if (typeof window !== 'undefined') {
+              const { renderReactPreviewToPdfFile } = await import('@/lib/previewPdf')
+              const pdfFile = await renderReactPreviewToPdfFile({
+                reactElement: React.createElement(OrderReceipt as any, {
+                  order: pdfOrder
+                }),
+                filename: `Receipt-${order.id}.pdf`
+              })
+              if (pdfFile) attachments.push(pdfFile)
+            }
           } catch (e) {
             console.warn('Failed to generate Receipt PDF attachment:', e)
           }

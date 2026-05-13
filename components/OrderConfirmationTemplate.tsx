@@ -28,7 +28,7 @@ interface OrderConfirmationTemplateProps {
     total: number
     discount?: number
     createdAtIso: string
-    paymentMethod?: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe'
+    paymentMethod?: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
   }
   company?: {
     name?: string

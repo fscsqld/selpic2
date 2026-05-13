@@ -2,12 +2,14 @@
 
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { useStore } from '@/lib/store'
+import { useStore, ORDER_PLATFORM_LABEL, type OrderPlatformSource, type OrderStatus } from '@/lib/store'
+import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2 } from 'lucide-react'
 import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
+import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -23,6 +25,7 @@ const paymentMethodColors: Record<string, string> = {
   card: 'bg-blue-100 text-blue-800',
   paypal: 'bg-sky-100 text-sky-800',
   cash: 'bg-amber-100 text-amber-800',
+  marketplace: 'bg-fuchsia-100 text-fuchsia-800',
 }
 
 export default function AdminOrdersPage() {
@@ -31,6 +34,7 @@ export default function AdminOrdersPage() {
 
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [chimeUnlocked, setChimeUnlocked] = useState(false)
+  const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
 
   const syncOrdersFromSupabase = useCallback(async () => {
     try {
@@ -117,6 +121,7 @@ export default function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [shippingFilter, setShippingFilter] = useState<string>('')
   const [paymentFilter, setPaymentFilter] = useState<string>('')
+  const [platformFilter, setPlatformFilter] = useState<string>('')
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [minTotal, setMinTotal] = useState<string>('')
@@ -174,7 +179,7 @@ export default function AdminOrdersPage() {
   )
 
   const persistStatusToLedger = useCallback(
-    async (orderId: string, status: 'approved' | 'paid' | 'processing' | 'shipped' | 'cancelled') => {
+    async (orderId: string, status: OrderStatus) => {
       const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
         method: 'PATCH',
         credentials: 'same-origin',
@@ -193,7 +198,7 @@ export default function AdminOrdersPage() {
   )
 
   const applyStatusChange = useCallback(
-    async (orderId: string, status: 'approved' | 'paid' | 'processing' | 'shipped' | 'cancelled') => {
+    async (orderId: string, status: OrderStatus) => {
       // Keep existing local side effects (emails/grade updates), then persist to server ledger.
       updateOrderStatus(orderId, status, performedBy)
       try {
@@ -255,13 +260,15 @@ export default function AdminOrdersPage() {
           order: '주문',
           customer: '고객',
           items: '항목',
+          personalization: '개인화(이름 등)',
           total: '합계',
           payment: '결제수단',
           shipping: '배송',
           status: '상태',
           actions: '작업',
           followUp: '처리',
-          subtotal: '소계'
+          subtotal: '소계',
+          shippingLabel: '배송 라벨',
         },
         markPaid: '입금확인 → Paid',
         confirmMarkPaid: '이 주문의 입금을 확인하고 상태를 Paid로 변경할까요?',
@@ -329,13 +336,15 @@ export default function AdminOrdersPage() {
           order: 'Order',
           customer: 'Customer',
           items: 'Items',
+          personalization: 'Personalization',
           total: 'Total',
           payment: 'Payment',
           shipping: 'Shipping',
           status: 'Status',
           actions: 'Actions',
           followUp: 'Follow-up',
-          subtotal: 'Subtotal'
+          subtotal: 'Subtotal',
+          shippingLabel: 'Label',
         },
         markPaid: 'Confirm Deposit → Paid',
         confirmMarkPaid: 'Confirm this deposit and set order status to Paid?',
@@ -380,7 +389,8 @@ export default function AdminOrdersPage() {
           ? o.shippingPrice === 0
           : o.shippingOptionId === shippingFilter
       const matchPayment = !paymentFilter || o.paymentMethod === paymentFilter
-      
+      const plat = (o.platformSource || 'website') as OrderPlatformSource
+      const matchPlatform = !platformFilter || plat === platformFilter
       const orderDate = new Date(o.createdAtIso)
       const fromDate = dateFrom ? new Date(dateFrom) : null
       const toDate = dateTo ? new Date(dateTo + 'T23:59:59') : null
@@ -395,7 +405,7 @@ export default function AdminOrdersPage() {
       const matchVip = !vipFilter || (vipFilter === 'with' && o.vipGradeCode !== undefined) || (vipFilter === 'without' && o.vipGradeCode === undefined)
       const matchPromo = !promoFilter || (promoFilter === 'with' && o.promoCode) || (promoFilter === 'without' && !o.promoCode)
       
-      return matchQuery && matchStatus && matchShipping && matchPayment && matchDateFrom && matchDateTo && matchMinTotal && matchMaxTotal && matchVip && matchPromo
+      return matchQuery && matchStatus && matchShipping && matchPayment && matchPlatform && matchDateFrom && matchDateTo && matchMinTotal && matchMaxTotal && matchVip && matchPromo
     })
     
     return filteredOrders.sort((a, b) => {
@@ -403,7 +413,7 @@ export default function AdminOrdersPage() {
       const bTime = new Date(b.createdAtIso).getTime()
       return sortDesc ? bTime - aTime : aTime - bTime
     })
-  }, [orders, query, statusFilter, shippingFilter, paymentFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc])
+  }, [orders, query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc])
 
   // 페이지네이션 계산
   const totalPages = useMemo(() => {
@@ -413,7 +423,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     // 필터가 바뀌면 첫 페이지로 이동
     setCurrentPage(1)
-  }, [query, statusFilter, shippingFilter, paymentFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc, pageSize])
+  }, [query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc, pageSize])
 
   useEffect(() => {
     // 현재 페이지가 범위를 벗어나면 조정
@@ -471,6 +481,7 @@ export default function AdminOrdersPage() {
     setStatusFilter('')
     setShippingFilter('')
     setPaymentFilter('')
+    setPlatformFilter('')
     setDateFrom('')
     setDateTo('')
     setMinTotal('')
@@ -815,6 +826,7 @@ export default function AdminOrdersPage() {
   const getPaymentMethodLabel = (order: any) => {
     const method = String(order?.paymentMethod || '').toLowerCase()
     if (method === 'stripe') return 'Stripe'
+    if (method === 'marketplace') return String(order?.paymentMethodName || 'Marketplace').trim() || 'Marketplace'
     if (method === 'bank') return T.bank
     if (method === 'card') return T.card
     if (method === 'paypal') return T.paypal
@@ -1069,6 +1081,23 @@ export default function AdminOrdersPage() {
                     <option value="paypal">{T.paypal}</option>
                     <option value="bank">{T.bank}</option>
                     <option value="cash">{T.cash}</option>
+                    <option value="stripe">Stripe</option>
+                    <option value="marketplace">Marketplace (Etsy, …)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                  <select
+                    value={platformFilter}
+                    onChange={(e) => setPlatformFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">All platforms</option>
+                    {(Object.keys(ORDER_PLATFORM_LABEL) as OrderPlatformSource[]).map((k) => (
+                      <option key={k} value={k}>
+                        {ORDER_PLATFORM_LABEL[k]}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1147,19 +1176,29 @@ export default function AdminOrdersPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.order}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.customer}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.items}</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200 max-w-[14rem]">
+                      {T.table.personalization}
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.actions}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.followUp}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.total}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.payment}</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.status}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">{T.table.shippingLabel}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paginated.map(order => (
+                  {paginated.map((order) => {
+                    const plat = orderPlatformBadge(order)
+                    const pers = summarizeOrderPersonalization(order)
+                    return (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm border-r border-gray-100"><input type="checkbox" checked={!!selected[order.id]} onChange={e => toggleOne(order.id, e.target.checked)} /></td>
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className={plat.className}>{plat.text}</span>
+                        </div>
                         <div className="font-medium text-gray-900">{order.id}</div>
                         <div className="text-gray-500">{new Date(order.createdAtIso).toLocaleString()}</div>
                       </td>
@@ -1194,6 +1233,12 @@ export default function AdminOrdersPage() {
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td
+                        className="px-6 py-4 text-sm border-r border-gray-100 max-w-[14rem] align-top"
+                        title={pers === '—' ? undefined : pers}
+                      >
+                        <p className="text-xs text-gray-800 line-clamp-3 whitespace-pre-wrap break-words">{pers}</p>
                       </td>
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
                         <div className="flex gap-1">
@@ -1240,8 +1285,22 @@ export default function AdminOrdersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="space-y-2">
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status]}`}>{order.status}</span>
+                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={order.status}
+                            onChange={(e) => {
+                              void applyStatusChange(order.id, e.target.value as OrderStatus)
+                            }}
+                            className="w-full text-xs border border-gray-300 rounded-md px-2 py-1.5 bg-white text-gray-900"
+                            aria-label="Order status"
+                          >
+                            <option value="pending">{T.pending}</option>
+                            <option value="paid">{T.paid}</option>
+                            <option value="approved">{T.approved}</option>
+                            <option value="processing">{T.processing}</option>
+                            <option value="shipped">{T.shipped}</option>
+                            <option value="cancelled">{T.cancelled}</option>
+                          </select>
                           {String(order.paymentMethod || '').toLowerCase() === 'bank' && order.status === 'pending' && (
                             <button
                               type="button"
@@ -1250,14 +1309,14 @@ export default function AdminOrdersPage() {
                                   void applyStatusChange(order.id, 'paid')
                                 }
                               }}
-                              className="block text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                              className="block w-full text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
                             >
                               {T.markPaid}
                             </button>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm">
+                      <td className="px-6 py-4 text-sm border-r border-gray-100">
                         {order.emailConfirmation ? (
                           <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${
@@ -1270,11 +1329,41 @@ export default function AdminOrdersPage() {
                           <span className="text-xs text-gray-400">Not sent</span>
                         )}
                       </td>
+                      <td className="px-6 py-4 text-sm align-top">
+                        <button
+                          type="button"
+                          disabled={!!shippingLabelBusyId}
+                          title="Open shipping label PDF (Standard Letter layout)"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void (async () => {
+                              setShippingLabelBusyId(order.id)
+                              try {
+                                const r = await openInternalShippingLabelPdf(order.id, {
+                                  onOrderMerged: (o) => mergeOrdersFromServer([o]),
+                                })
+                                if (!r.ok) window.alert(r.error || 'Failed to open label')
+                              } finally {
+                                setShippingLabelBusyId(null)
+                              }
+                            })()
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 whitespace-nowrap disabled:opacity-50"
+                        >
+                          {shippingLabelBusyId === order.id ? (
+                            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                          ) : (
+                            <Printer className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          Print label
+                        </button>
+                      </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={12} className="px-6 py-12 text-center text-gray-500">
                         <div className="flex items-center justify-center gap-2">
                           <Clock size={18} /> {T.noOrders}
                         </div>

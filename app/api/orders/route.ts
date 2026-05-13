@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
 import type { OrderRecord } from '@/lib/store'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
+import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 
 /**
  * List orders from Supabase (server ledger). Requires Supabase Auth session with admin JWT claims.
@@ -22,7 +22,7 @@ export async function GET(_req: Request) {
     const sb = getSupabaseAdmin()
     const { data, error } = await sb
       .from('orders')
-      .select('payload,created_at')
+      .select('payload,created_at,platform_source,external_order_key')
       .order('created_at', { ascending: false })
       .limit(500)
 
@@ -32,7 +32,7 @@ export async function GET(_req: Request) {
     }
 
     const orders = (data || [])
-      .map((row) => normalizeLedgerOrder(row.payload as OrderRecord))
+      .map((row) => hydrateLedgerOrder(row as Parameters<typeof hydrateLedgerOrder>[0]))
       .filter(Boolean)
 
     return NextResponse.json({ orders })

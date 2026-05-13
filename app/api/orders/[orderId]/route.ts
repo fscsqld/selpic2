@@ -4,10 +4,12 @@ import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
 import type { OrderRecord, OrderStatus } from '@/lib/store'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
+import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
+import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 
 type RouteContext = { params: Promise<{ orderId: string }> }
 
-const PATCHABLE_STATUSES: OrderStatus[] = ['approved', 'paid', 'processing', 'shipped', 'cancelled']
+const PATCHABLE_STATUSES: OrderStatus[] = ['pending', 'approved', 'paid', 'processing', 'shipped', 'cancelled']
 
 /** Single order from Supabase ledger (admin only). */
 export async function GET(_request: Request, context: RouteContext) {
@@ -27,7 +29,11 @@ export async function GET(_request: Request, context: RouteContext) {
 
   try {
     const sb = getSupabaseAdmin()
-    const { data, error } = await sb.from('orders').select('payload').eq('id', orderId.trim()).maybeSingle()
+    const { data, error } = await sb
+      .from('orders')
+      .select('payload,platform_source,external_order_key')
+      .eq('id', orderId.trim())
+      .maybeSingle()
 
     if (error) {
       logAndSafeMessage('orders/orderId GET', error)
@@ -37,7 +43,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const order = normalizeLedgerOrder(data.payload as OrderRecord)
+    const order = hydrateLedgerOrder(data as Parameters<typeof hydrateLedgerOrder>[0])
     return NextResponse.json({ order })
   } catch (e) {
     logAndSafeMessage('orders/orderId GET catch', e)
@@ -82,7 +88,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const sb = getSupabaseAdmin()
     const { data: row, error: selErr } = await sb
       .from('orders')
-      .select('payload')
+      .select('payload,platform_source,external_order_key')
       .eq('id', orderId.trim())
       .maybeSingle()
 
@@ -94,7 +100,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Order not found in ledger' }, { status: 404 })
     }
 
-    const previous = row.payload as OrderRecord
+    const previous = hydrateLedgerOrder(row as Parameters<typeof hydrateLedgerOrder>[0])
     if (previous.status === nextStatus) {
       const order = normalizeLedgerOrder(previous)
       return NextResponse.json({ order })
@@ -121,7 +127,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       auditLog: [...(previous.auditLog || []), auditEntry],
     })
 
-    const { error: upErr } = await sb.from('orders').update({ payload: updated }).eq('id', orderId.trim())
+    const { error: upErr } = await sb
+      .from('orders')
+      .update(buildOrdersTableUpdate(updated))
+      .eq('id', orderId.trim())
 
     if (upErr) {
       logAndSafeMessage('orders/orderId PATCH update', upErr)
@@ -163,14 +172,14 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Missing order payload' }, { status: 400 })
   }
 
-  const sanitized = normalizeLedgerOrder(incoming)
-  if (!sanitized.id || sanitized.id !== orderId.trim()) {
-    return NextResponse.json({ error: 'Order id mismatch' }, { status: 400 })
-  }
+    const sanitized = normalizeLedgerOrder(incoming)
+    if (!sanitized.id || sanitized.id !== orderId.trim()) {
+      return NextResponse.json({ error: 'Order id mismatch' }, { status: 400 })
+    }
 
-  try {
-    const sb = getSupabaseAdmin()
-    const { error } = await sb.from('orders').update({ payload: sanitized }).eq('id', orderId.trim())
+    try {
+      const sb = getSupabaseAdmin()
+      const { error } = await sb.from('orders').update(buildOrdersTableUpdate(sanitized)).eq('id', orderId.trim())
     if (error) {
       logAndSafeMessage('orders/orderId PUT update', error)
       return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })

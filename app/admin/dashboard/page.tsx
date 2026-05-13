@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useMessageStore } from '@/lib/messageStore'
@@ -27,10 +27,17 @@ import {
   Calculator,
   Receipt,
   BookOpen,
-  Building2
+  Building2,
+  Plug,
+  Printer,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
+import type { OrderRecord, OrderStatus } from '@/lib/store'
+import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { formatCurrency } from '@/lib/formatUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useUserAuth } from '@/lib/userAuth'
@@ -38,10 +45,28 @@ import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminOrderNotification from '@/components/AdminOrderNotification'
 import { useSalesGoals } from '@/lib/salesGoals'
+import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+
+const DASH_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  paid: 'bg-blue-100 text-blue-800',
+  approved: 'bg-cyan-100 text-cyan-900',
+  processing: 'bg-purple-100 text-purple-800',
+  shipped: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+}
 
 export default function AdminDashboard() {
   const [isComponentReady, setIsComponentReady] = useState(false)
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
+  const [dashboardOrderDetailId, setDashboardOrderDetailId] = useState<string | null>(null)
+  const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
+  const [etsyBanner, setEtsyBanner] = useState<string | null>(null)
+  const [etsyConn, setEtsyConn] = useState<{ connected: boolean; shopName?: string | null; shopId?: string } | null>(
+    null
+  )
+  const [etsySyncBusy, setEtsySyncBusy] = useState(false)
+  const etsyPostOAuthSyncRan = useRef(false)
   
   const { adminUser, logout } = useAdminAuth()
   const {
@@ -53,6 +78,7 @@ export default function AdminDashboard() {
     refreshProducts,
     refreshOrdersFromStorage,
     mergeOrdersFromServer,
+    updateOrderStatus,
   } = useStore()
   const { users } = useUserAuth()
   const { unreadCount } = useMessageStore()
@@ -194,6 +220,56 @@ export default function AdminDashboard() {
     [orders]
   )
 
+  const performedBy = adminUser?.username || 'admin'
+
+  const persistStatusToLedger = useCallback(
+    async (orderId: string, status: OrderStatus) => {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, performedBy }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Failed to persist order status.')
+      }
+      if (data.order) {
+        mergeOrdersFromServer([data.order])
+      }
+    },
+    [mergeOrdersFromServer, performedBy]
+  )
+
+  const applyDashboardStatusChange = useCallback(
+    async (orderId: string, status: OrderStatus) => {
+      updateOrderStatus(orderId, status, performedBy)
+      try {
+        await persistStatusToLedger(orderId, status)
+      } catch (e) {
+        void syncOrdersFromSupabase()
+        alert(e instanceof Error ? e.message : 'Failed to save status')
+      }
+    },
+    [performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus]
+  )
+
+  const dashboardRecentSlice = useMemo(
+    () =>
+      [...orders]
+        .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
+        .slice(0, 25),
+    [orders]
+  )
+
+  const dashboardDetailOrder: OrderRecord | null = useMemo(
+    () =>
+      dashboardOrderDetailId
+        ? orders.find((o) => o.id === dashboardOrderDetailId) ?? null
+        : null,
+    [orders, dashboardOrderDetailId]
+  )
+
   // 시간대별 인사말
   const getGreeting = () => {
     const hour = new Date().getHours()
@@ -250,6 +326,75 @@ export default function AdminDashboard() {
     if (adminUser.role === 'super_admin') return true
     return adminUser.permissions.includes(permission)
   }, [adminUser])
+
+  useEffect(() => {
+    if (!isComponentReady || !adminUser || !hasPermission('orders:read')) return
+    void fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && typeof d.connected === 'boolean') {
+          setEtsyConn({ connected: d.connected, shopName: d.shopName, shopId: d.shopId })
+        }
+      })
+      .catch(() => setEtsyConn({ connected: false }))
+  }, [isComponentReady, adminUser, hasPermission])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isComponentReady) return
+    const sp = new URLSearchParams(window.location.search)
+    const etsy = sp.get('etsy')
+    if (!etsy) return
+
+    const stripOAuthParams = () => {
+      const u = new URL(window.location.href)
+      ;['etsy', 'detail', 'reason'].forEach((k) => u.searchParams.delete(k))
+      const q = u.searchParams.toString()
+      window.history.replaceState({}, '', u.pathname + (q ? `?${q}` : ''))
+    }
+
+    if (etsy === 'connected') {
+      if (!etsyPostOAuthSyncRan.current) {
+        etsyPostOAuthSyncRan.current = true
+        void (async () => {
+          try {
+            const res = await fetch('/api/admin/integrations/etsy/sync', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sinceDays: 90, openOnly: true }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+              setEtsyBanner(
+                `Etsy connected. Imported ${data.imported ?? 0} open paid receipt(s) (${data.scanned ?? 0} scanned).`
+              )
+            } else {
+              setEtsyBanner(
+                `Etsy connected, but sync failed: ${typeof data.error === 'string' ? data.error : 'Unknown error'}`
+              )
+            }
+          } catch {
+            setEtsyBanner('Etsy connected, but the sync request failed.')
+          } finally {
+            await syncOrdersFromSupabase()
+            stripOAuthParams()
+          }
+        })()
+      } else {
+        stripOAuthParams()
+      }
+      return
+    }
+
+    if (etsy === 'denied') setEtsyBanner('Etsy authorization was cancelled or denied.')
+    else if (etsy === 'invalid_state') setEtsyBanner('OAuth state mismatch — try connecting again.')
+    else if (etsy === 'error') {
+      const d = sp.get('detail')
+      setEtsyBanner(d ? `Etsy error: ${decodeURIComponent(d)}` : 'Etsy connection failed.')
+    } else if (etsy === 'missing_env') setEtsyBanner('Server missing Etsy OAuth environment variables.')
+    else if (etsy === 'no_db') setEtsyBanner('Supabase is not configured.')
+    stripOAuthParams()
+  }, [isComponentReady, syncOrdersFromSupabase])
 
   // Helper function to check if admin is accounting manager
   const isAccountingManager = useCallback((): boolean => {
@@ -328,6 +473,14 @@ export default function AdminDashboard() {
       icon: ShoppingCart,
       href: '/admin/orders',
       color: 'bg-orange-500',
+      requiredPermission: 'orders:read'
+    },
+    {
+      title: 'Integrations',
+      description: 'Etsy OAuth and multi-channel order import',
+      icon: Plug,
+      href: '/admin/integrations',
+      color: 'bg-rose-500',
       requiredPermission: 'orders:read'
     },
     {
@@ -653,6 +806,218 @@ export default function AdminDashboard() {
             )}
           </div>
 
+          {hasPermission('orders:read') && (
+            <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6 mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <Plug className="h-5 w-5 text-orange-600" aria-hidden />
+                  <h3 className="text-lg font-semibold text-gray-900">Etsy shop</h3>
+                </div>
+                <Link
+                  href="/admin/integrations"
+                  className="text-sm font-medium text-orange-700 hover:text-orange-900 shrink-0"
+                >
+                  Integration details →
+                </Link>
+              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Connect with OAuth 2.0 (PKCE). After you approve access, you return here and we import{' '}
+                <strong>paid receipts that are not yet shipped</strong> (open for fulfillment) into the same order
+                ledger as your website — including personalization and shipping address for labels.
+              </p>
+              {etsyBanner && (
+                <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                  {etsyBanner}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 mb-3 text-sm">
+                {etsyConn?.connected ? (
+                  <span className="text-green-700 font-medium">
+                    Connected{etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}
+                    {etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}
+                  </span>
+                ) : (
+                  <span className="text-amber-800">Not connected</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = '/api/admin/integrations/etsy/oauth/start'
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Connect Etsy shop
+                </button>
+                <button
+                  type="button"
+                  disabled={!etsyConn?.connected || etsySyncBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setEtsySyncBusy(true)
+                      setEtsyBanner(null)
+                      try {
+                        const res = await fetch('/api/admin/integrations/etsy/sync', {
+                          method: 'POST',
+                          credentials: 'same-origin',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ sinceDays: 90, openOnly: true }),
+                        })
+                        const data = await res.json().catch(() => ({}))
+                        if (!res.ok) {
+                          setEtsyBanner(typeof data.error === 'string' ? data.error : 'Sync failed.')
+                          return
+                        }
+                        setEtsyBanner(
+                          `Imported ${data.imported ?? 0} open paid receipt(s) (${data.scanned ?? 0} scanned, last ${data.sinceDays ?? 90} days).`
+                        )
+                        await syncOrdersFromSupabase()
+                      } finally {
+                        setEtsySyncBusy(false)
+                      }
+                    })()
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${etsySyncBusy ? 'animate-spin' : ''}`} />
+                  {etsySyncBusy ? 'Syncing…' : 'Sync open orders from Etsy'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-indigo-600" aria-hidden />
+                  Unified orders
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Website and Etsy (and future channels) in one list. Click a row for a quick summary, or open the full order page.
+                </p>
+              </div>
+              <Link href="/admin/orders" className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0">
+                Full orders page →
+              </Link>
+            </div>
+            {dashboardRecentSlice.length === 0 ? (
+              <p className="text-sm text-gray-500">No orders in the ledger yet.</p>
+            ) : (
+              <div className="overflow-x-auto border border-gray-100 rounded-lg">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-gray-600">
+                      <th className="px-3 py-2 font-medium">Source</th>
+                      <th className="px-3 py-2 font-medium">Order</th>
+                      <th className="px-3 py-2 font-medium">Customer</th>
+                      <th className="px-3 py-2 font-medium max-w-[12rem]">Personalization</th>
+                      <th className="px-3 py-2 font-medium">Total</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashboardRecentSlice.map((o) => {
+                      const plat = orderPlatformBadge(o)
+                      const pers = summarizeOrderPersonalization(o, 160)
+                      return (
+                        <tr
+                          key={o.id}
+                          className="border-t border-gray-100 hover:bg-indigo-50/40 cursor-pointer"
+                          onClick={() => setDashboardOrderDetailId(o.id)}
+                        >
+                          <td className="px-3 py-2 align-top">
+                            <span className={plat.className}>{plat.text}</span>
+                          </td>
+                          <td className="px-3 py-2 align-top font-mono text-xs whitespace-nowrap">{o.id}</td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="font-medium text-gray-900">{o.customer?.name || '—'}</div>
+                            <div className="text-xs text-gray-500 truncate max-w-[10rem]">{o.customer?.email}</div>
+                          </td>
+                          <td
+                            className="px-3 py-2 align-top max-w-[12rem] text-xs text-gray-800"
+                            title={pers === '—' ? undefined : pers}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="line-clamp-2 whitespace-pre-wrap break-words">{pers}</span>
+                          </td>
+                          <td className="px-3 py-2 align-top whitespace-nowrap">
+                            {formatCurrency(o.total || 0, currency)}
+                          </td>
+                          <td className="px-3 py-2 align-top" onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={o.status}
+                              onChange={(e) => {
+                                void applyDashboardStatusChange(o.id, e.target.value as OrderStatus)
+                              }}
+                              className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white max-w-[9rem]"
+                              aria-label="Order status"
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="paid">Paid</option>
+                              <option value="approved">Approved</option>
+                              <option value="processing">Processing</option>
+                              <option value="shipped">Shipped</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 align-top text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-wrap justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setDashboardOrderDetailId(o.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-xs text-gray-800 hover:bg-gray-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Quick view
+                              </button>
+                              <Link
+                                href={`/admin/orders/${o.id}`}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs hover:bg-indigo-100"
+                              >
+                                Open
+                              </Link>
+                              <button
+                                type="button"
+                                disabled={!!shippingLabelBusyId}
+                                title="Open shipping label PDF"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  void (async () => {
+                                    setShippingLabelBusyId(o.id)
+                                    try {
+                                      const r = await openInternalShippingLabelPdf(o.id, {
+                                        onOrderMerged: (ord) => mergeOrdersFromServer([ord]),
+                                      })
+                                      if (!r.ok) window.alert(r.error || 'Failed to open label')
+                                    } finally {
+                                      setShippingLabelBusyId(null)
+                                    }
+                                  })()
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                {shippingLabelBusyId === o.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Printer className="h-3.5 w-3.5" />
+                                )}
+                                Label
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* 빠른 액션 */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.sections.quickActions')}</h3>
@@ -794,6 +1159,119 @@ export default function AdminDashboard() {
               ))}
             </div>
           </div>
+
+        {dashboardDetailOrder && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setDashboardOrderDetailId(null)}
+            role="presentation"
+          >
+            <div
+              className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dash-order-modal-title"
+            >
+              <button
+                type="button"
+                onClick={() => setDashboardOrderDetailId(null)}
+                className="absolute top-3 right-3 p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              {(() => {
+                const o = dashboardDetailOrder
+                const plat = orderPlatformBadge(o)
+                const pers = summarizeOrderPersonalization(o, 2000)
+                return (
+                  <>
+                    <h2 id="dash-order-modal-title" className="text-lg font-semibold text-gray-900 pr-10 mb-3">
+                      Order summary
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                      <span className={plat.className}>{plat.text}</span>
+                      <span className="text-xs font-mono text-gray-600">{o.id}</span>
+                    </div>
+                    <div className="space-y-3 text-sm text-gray-700">
+                      <p>
+                        <span className="font-medium text-gray-900">Customer: </span>
+                        {o.customer?.name} · {o.customer?.email}
+                      </p>
+                      <p>
+                        <span className="font-medium text-gray-900">Status: </span>
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ml-1 ${DASH_STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-800'}`}
+                        >
+                          {o.status}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="font-medium text-gray-900">Total: </span>
+                        {formatCurrency(o.total || 0, currency)}
+                      </p>
+                      <div>
+                        <span className="font-medium text-gray-900 block mb-1">Personalization</span>
+                        <p className="text-xs whitespace-pre-wrap bg-gray-50 border border-gray-100 rounded-lg p-3 text-gray-800">
+                          {pers}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-900 block mb-1">Items</span>
+                        <ul className="text-xs space-y-1 list-disc pl-4">
+                          {o.items.slice(0, 8).map((it, i) => (
+                            <li key={i}>
+                              {it.name} ×{it.quantity}
+                            </li>
+                          ))}
+                          {o.items.length > 8 && <li>+{o.items.length - 8} more</li>}
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="mt-6 flex flex-wrap gap-2">
+                      <Link
+                        href={`/admin/orders/${o.id}`}
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                        onClick={() => setDashboardOrderDetailId(null)}
+                      >
+                        Open full order page
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={!!shippingLabelBusyId}
+                        title="Open shipping label PDF"
+                        onClick={() => {
+                          void (async () => {
+                            if (!dashboardDetailOrder) return
+                            setShippingLabelBusyId(dashboardDetailOrder.id)
+                            try {
+                              const r = await openInternalShippingLabelPdf(dashboardDetailOrder.id, {
+                                onOrderMerged: (ord) => mergeOrdersFromServer([ord]),
+                              })
+                              if (!r.ok) window.alert(r.error || 'Failed to open label')
+                            } finally {
+                              setShippingLabelBusyId(null)
+                            }
+                          })()
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-800 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {shippingLabelBusyId === dashboardDetailOrder.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Printer className="h-4 w-4" />
+                        )}
+                        Print shipping label
+                      </button>
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+
         </main>
       </div>
     </AdminRoute>

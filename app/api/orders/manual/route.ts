@@ -4,6 +4,7 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
+import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -118,12 +119,13 @@ export async function POST(req: Request) {
       status: 'pending',
       paymentMethod: 'bank',
       paymentMethodName: sanitizedDraft.paymentMethodName || 'Bank Transfer',
+      platformSource: 'website',
     }
 
     const sb = getSupabaseAdmin()
     const { error } = await sb.from('orders').insert({
       id: order.id,
-      payload: order,
+      ...buildOrdersTableUpdate(order),
     })
     if (error) {
       throw new Error(error.message)

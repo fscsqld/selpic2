@@ -5,6 +5,7 @@ import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { sendEmailViaResendServer, type ResendAttachmentInput } from '@/lib/email/resendServer'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
+import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import type { OrderRecord } from '@/lib/store'
 import {
   buildOrderConfirmationEmailHtml,
@@ -94,7 +95,7 @@ async function markConfirmationSentInLedger(orderId: string): Promise<void> {
         lastAttempt: now,
       },
     }
-    const { error: upErr } = await sb.from('orders').update({ payload: next }).eq('id', orderId)
+    const { error: upErr } = await sb.from('orders').update(buildOrdersTableUpdate(next)).eq('id', orderId)
     if (upErr) {
       console.warn('[emails] markConfirmationSentInLedger failed:', upErr.message)
     }
@@ -118,7 +119,7 @@ async function markReceiptSentInLedger(orderId: string): Promise<void> {
         sentAt: now,
       },
     }
-    const { error: upErr } = await sb.from('orders').update({ payload: next }).eq('id', orderId)
+    const { error: upErr } = await sb.from('orders').update(buildOrdersTableUpdate(next)).eq('id', orderId)
     if (upErr) {
       console.warn('[emails] markReceiptSentInLedger failed:', upErr.message)
     }
