@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+build
+coverage
+public
+*.min.js
+apps/accounting-sandbox/node_modules
+clear-storage.js

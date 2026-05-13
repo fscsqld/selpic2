@@ -29,12 +29,12 @@ export default function BulkPermissionManager({
   const [operation, setOperation] = useState<'add' | 'remove' | 'replace'>('add')
   const [isLoading, setIsLoading] = useState(false)
 
-  if (!isOpen) return null
-
-  // 선택된 관리자 목록
+  // 선택된 관리자 목록 (hooks must run before any conditional return)
   const selectedAdminList = useMemo(() => {
-    return adminUsers.filter(admin => selectedAdmins.has(admin.username))
+    return adminUsers.filter((admin) => selectedAdmins.has(admin.username))
   }, [adminUsers, selectedAdmins])
+
+  if (!isOpen) return null
 
   // 전체 선택/해제
   const toggleSelectAll = () => {

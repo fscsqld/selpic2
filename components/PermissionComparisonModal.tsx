@@ -21,22 +21,20 @@ export default function PermissionComparisonModal({
 }: PermissionComparisonModalProps) {
   const [syncDirection, setSyncDirection] = useState<'1to2' | '2to1' | null>(null)
 
-  if (!isOpen) return null
-
-  // 공통 권한
+  // 공통 권한 (hooks must run before any conditional return)
   const commonPermissions = useMemo(() => {
-    return admin1.permissions.filter(p => admin2.permissions.includes(p))
+    return admin1.permissions.filter((p) => admin2.permissions.includes(p))
   }, [admin1.permissions, admin2.permissions])
 
-  // admin1만 가진 권한
   const onlyAdmin1 = useMemo(() => {
-    return admin1.permissions.filter(p => !admin2.permissions.includes(p))
+    return admin1.permissions.filter((p) => !admin2.permissions.includes(p))
   }, [admin1.permissions, admin2.permissions])
 
-  // admin2만 가진 권한
   const onlyAdmin2 = useMemo(() => {
-    return admin2.permissions.filter(p => !admin1.permissions.includes(p))
+    return admin2.permissions.filter((p) => !admin1.permissions.includes(p))
   }, [admin1.permissions, admin2.permissions])
+
+  if (!isOpen) return null
 
   // 권한을 카테고리별로 그룹화
   const groupByCategory = (permissions: string[]) => {

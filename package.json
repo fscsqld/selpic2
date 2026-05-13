@@ -17,7 +17,7 @@
     "build": "next build --webpack",
     "start": "next start --port 3005",
     "start:3001": "next start --port 3005",
-    "lint": "next lint",
+    "lint": "eslint .",
     "clean": "node scripts/clean.mjs",
     "redev": "npm run clean && node --max-old-space-size=8192 node_modules/next/dist/bin/next dev --webpack --port 3005 --hostname 0.0.0.0",
     "reset": "npm run clean && npm install && npm run dev",

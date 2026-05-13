@@ -111,12 +111,7 @@ export default function DynamicSubcategoryPage() {
     return false
   })
 
-  // 서브카테고리 정보도 없고 상품도 없으면 404
-  if (isMounted && contentHydrated && !subcategoryInfo && subcategoryProducts.length === 0) {
-    return notFound()
-  }
-  
-  // 디버깅 로그 (개발 환경에서만)
+  // 디버깅 로그 (개발 환경에서만) — must run before any conditional return (hooks rules)
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       console.log('🔍 [SubcategoryPage] 필터링 정보:', {
@@ -124,15 +119,20 @@ export default function DynamicSubcategoryPage() {
         subcategoryInfoTitle: subcategoryInfo?.title,
         subcategoryInfoLinkUrl: subcategoryInfo?.linkUrl,
         totalProducts: products.length,
-        stickersProducts: products.filter(p => p.category === 'Stickers').length,
+        stickersProducts: products.filter((p) => p.category === 'Stickers').length,
         filteredProducts: subcategoryProducts.length,
         productSubcategories: products
-          .filter(p => p.category === 'Stickers' && p.subcategory)
-          .map(p => p.subcategory)
-          .filter((v, i, a) => a.indexOf(v) === i) // 중복 제거
+          .filter((p) => p.category === 'Stickers' && p.subcategory)
+          .map((p) => p.subcategory)
+          .filter((v, i, a) => a.indexOf(v) === i),
       })
     }
   }, [subcategorySlug, subcategoryInfo, products, subcategoryProducts])
+
+  // 서브카테고리 정보도 없고 상품도 없으면 404
+  if (isMounted && contentHydrated && !subcategoryInfo && subcategoryProducts.length === 0) {
+    return notFound()
+  }
 
   const pageTitle = subcategoryInfo?.pageTitle || `${subcategoryInfo?.title || subcategorySlug} Stickers`
   const productsCountText = _hasHydrated ? `${subcategoryProducts.length} products` : '...'
