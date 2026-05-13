@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Tag, X, Eye, EyeOff, Calendar, Percent, DollarSign, Users, ShoppingCart, Clock } from 'lucide-react'
+import { Plus, Edit, Trash2, Tag, X, Eye, EyeOff, Calendar, Percent, DollarSign, Users, ShoppingCart, Clock, Gamepad2, RefreshCw } from 'lucide-react'
 import { useContentStore, PromoCode } from '@/lib/contentStore'
 import { useStore } from '@/lib/store'
 
@@ -24,6 +24,52 @@ export default function PromoCodeManager() {
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCode, setEditingCode] = useState<PromoCode | null>(null)
+
+  type TetrisPromoRow = {
+    id: string
+    code: string
+    source: string
+    score: number | null
+    level: number | null
+    client_ip: string | null
+    created_at: string
+  }
+  const [tetrisRows, setTetrisRows] = useState<TetrisPromoRow[]>([])
+  const [tetrisLoading, setTetrisLoading] = useState(false)
+  const [tetrisError, setTetrisError] = useState<string | null>(null)
+
+  const loadTetrisServerLog = async () => {
+    setTetrisLoading(true)
+    setTetrisError(null)
+    try {
+      const res = await fetch('/api/admin/game-promo-codes?limit=200', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        setTetrisRows([])
+        setTetrisError(
+          typeof data?.details === 'string'
+            ? data.details
+            : typeof data?.error === 'string'
+              ? data.error
+              : 'Failed to load server log'
+        )
+        return
+      }
+      setTetrisRows(Array.isArray(data.rows) ? data.rows : [])
+    } catch {
+      setTetrisRows([])
+      setTetrisError('Network error')
+    } finally {
+      setTetrisLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadTetrisServerLog()
+  }, [])
 
   const openModal = (code?: PromoCode) => {
     if (code) {
@@ -136,6 +182,64 @@ export default function PromoCodeManager() {
             {scheduledPromoCodes.length}
           </div>
         </div>
+      </div>
+
+      {/* Tetris final-level codes: server log (Supabase) — independent of CMS promo list */}
+      <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Gamepad2 className="w-5 h-5 text-purple-600" aria-hidden />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Tetris reward codes (server log)</h3>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Codes issued when a player clears level 5 are logged here after the storefront syncs them. Run{' '}
+                <code className="text-xs bg-white px-1 rounded border">docs/game-promo-codes-supabase.sql</code> in
+                Supabase if this section shows an error.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadTetrisServerLog()}
+            disabled={tetrisLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${tetrisLoading ? 'animate-spin' : ''}`} aria-hidden />
+            Refresh
+          </button>
+        </div>
+        {tetrisError && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">{tetrisError}</p>
+        )}
+        {!tetrisError && tetrisRows.length === 0 && !tetrisLoading && (
+          <p className="text-sm text-gray-500">No rows yet, or Supabase is not configured.</p>
+        )}
+        {tetrisRows.length > 0 && (
+          <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-100 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                <tr>
+                  <th className="px-3 py-2">Code</th>
+                  <th className="px-3 py-2">Level</th>
+                  <th className="px-3 py-2">Score</th>
+                  <th className="px-3 py-2">Issued (UTC)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tetrisRows.map((row) => (
+                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50/80">
+                    <td className="px-3 py-2 font-mono font-medium text-gray-900">{row.code}</td>
+                    <td className="px-3 py-2 text-gray-700">{row.level ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-700">{row.score ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                      {row.created_at ? new Date(row.created_at).toISOString().slice(0, 19).replace('T', ' ') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Promo Codes List */}

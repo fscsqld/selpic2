@@ -56,6 +56,18 @@ export default function GamePromoCodeSync() {
           isActive: true,
         })
 
+        const registerBody = {
+          code: pending.code,
+          source: typeof pending.source === 'string' ? pending.source : 'game_level_5',
+          score: typeof pending.score === 'number' ? pending.score : undefined,
+          level: typeof pending.level === 'number' ? pending.level : undefined,
+        }
+        void fetch('/api/game/promo-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(registerBody),
+        }).catch(() => {})
+
         // 추가 완료 후 pending 키 삭제
         localStorage.removeItem('selpic-game-promo-pending')
         console.log('✅ Game promo code added to contentStore:', pending.code)

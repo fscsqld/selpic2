@@ -577,7 +577,7 @@ function CustomDesignContent() {
                       🎮 Play Selpic TETRIS & Win Rewards!
                     </p>
                     <p className="text-[10px] font-bold text-yellow-400 whitespace-nowrap overflow-hidden text-ellipsis">
-                      Complete all 5 levels to unlock exclusive promo codes and get up to 15% discount on your order!
+                      Complete all 5 levels to unlock a promo code: 10% off (max $15), min. cart $30 — one use per customer.
                     </p>
                     <p className="text-slate-400 text-[10px] mt-1.5 italic">
                       Your custom name will appear in the game blocks!
