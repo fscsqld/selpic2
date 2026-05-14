@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server'
 import type { OrderRecord } from '@/lib/store'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { sanitizeStorefrontBankOrderDraft, type BankOrderDraft } from '@/lib/orders/sanitizeStorefrontBankOrderDraft'
 
+/**
+ * Storefront bank-transfer checkout: same catalog/total validation as admin manual orders,
+ * but no Supabase admin session required (insert uses service_role).
+ */
 export async function POST(req: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized — registry admin session required.' }, { status: 401 })
-  }
-
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Order database not configured.' }, { status: 503 })
   }
@@ -46,7 +44,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, order })
   } catch (e) {
-    logAndSafeMessage('orders/manual POST', e)
+    logAndSafeMessage('orders/checkout-bank POST', e)
     return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
   }
 }

@@ -899,7 +899,7 @@ export default function CheckoutPage() {
 
       if (paymentMethod === 'bank') {
         const orderData = buildOrderPayload('default')
-        const res = await fetch('/api/orders/manual', {
+        const res = await fetch('/api/orders/checkout-bank', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           cache: 'no-store',
