@@ -46,10 +46,33 @@ function readCustomizationString(cust: Record<string, unknown>, key: string): st
   return typeof raw === 'string' ? raw.trim() : ''
 }
 
+/** Map pure black hex (and the word black) to English label for packing slips. */
+function formatColorValueForLabel(value: string): string {
+  const v = value.trim()
+  if (!v) return v
+  if (/^black$/i.test(v)) return 'Black'
+  const noSpace = v.replace(/\s/g, '').toLowerCase()
+  if (noSpace === 'rgb(0,0,0)' || noSpace === 'rgba(0,0,0,1)' || noSpace === 'rgba(0,0,0,255)') return 'Black'
+  const compact = noSpace
+  if (!compact.startsWith('#')) return v
+  let hex = compact.slice(1)
+  if (hex.length === 3) {
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  } else if (hex.length === 8) {
+    hex = hex.slice(0, 6)
+  }
+  if (hex.length === 6 && /^[0-9a-f]+$/.test(hex) && hex === '000000') return 'Black'
+  return v
+}
+
 /** `key: value` on one line (label PDF). */
 function pushLabeledValue(lines: string[], key: string, value: string) {
   if (!value) return
-  lines.push(`${key}: ${value}`)
+  const display = key === 'color' ? formatColorValueForLabel(value) : value
+  lines.push(`${key}: ${display}`)
 }
 
 /**
