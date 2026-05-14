@@ -18,31 +18,73 @@ export function orderPlatformBadge(order: OrderRecord): { text: string; classNam
   }
 }
 
-/** One focal personalization string per line item (Etsy + website customizations). */
+/** Known storefront / admin keys (values: trim-only; never alter customer letter case). */
+const FIXED_PERSONALIZATION_KEYS = [
+  'Name',
+  'name',
+  'Child name',
+  'Child Name',
+  'Baby name',
+  'Text',
+  'text',
+  'Line 1',
+  'Line 2',
+] as const
+
+/** Set/bundle line text: `sticker_0_text`, `item1_text`, etc. */
+const SET_OR_BUNDLE_TEXT_KEY_RE = /^(sticker_\d+_text|item\d+_text)$/
+
+function pushUniquePersonalizationLine(parts: string[], line: string) {
+  const t = line.trim()
+  if (!t) return
+  if (!parts.includes(t)) parts.push(t)
+}
+
+/** Per line item: marketplace + website customizations (trim only on values; case preserved). */
 export function collectOrderPersonalizationParts(order: OrderRecord): string[] {
   const parts: string[] = []
   for (const it of order.items || []) {
     const name = String(it.name || 'Item').trim()
-    if (it.buyerPersonalization?.trim()) {
-      parts.push(`${name}: ${it.buyerPersonalization.trim()}`)
+    const bp = typeof it.buyerPersonalization === 'string' ? it.buyerPersonalization.trim() : ''
+    if (bp) {
+      parts.push(`${name}: ${bp}`)
       continue
     }
-    const etsyPers = it.customizations?.['Etsy personalization']?.trim()
+    const etsyRaw = it.customizations?.['Etsy personalization']
+    const etsyPers = typeof etsyRaw === 'string' ? etsyRaw.trim() : ''
     if (etsyPers) {
       parts.push(`${name}: ${etsyPers}`)
       continue
     }
     if (it.personalizationResponses?.length) {
-      const txt = it.personalizationResponses.map((r) => `${r.label}: ${r.value}`).join('; ')
+      const txt = it.personalizationResponses
+        .map((r) => {
+          const v = typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim()
+          return `${r.label}: ${v}`
+        })
+        .join('; ')
       if (txt.trim()) parts.push(`${name}: ${txt.trim()}`)
       continue
     }
-    const keys = ['Name', 'name', 'Child name', 'Child Name', 'Baby name', 'Text', 'Line 1', 'Line 2']
-    for (const k of keys) {
-      const v = it.customizations?.[k]?.trim()
-      if (v) {
-        parts.push(`${name}: ${v}`)
-        break
+
+    const cust = it.customizations
+    if (cust && typeof cust === 'object') {
+      for (const k of FIXED_PERSONALIZATION_KEYS) {
+        const raw = cust[k as string]
+        if (typeof raw !== 'string') continue
+        const v = raw.trim()
+        if (!v) continue
+        pushUniquePersonalizationLine(parts, `${name}: ${v}`)
+      }
+      const dynamicKeys = Object.keys(cust)
+        .filter((k) => SET_OR_BUNDLE_TEXT_KEY_RE.test(k))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      for (const k of dynamicKeys) {
+        const raw = cust[k]
+        if (typeof raw !== 'string') continue
+        const v = raw.trim()
+        if (!v) continue
+        pushUniquePersonalizationLine(parts, `${name}: ${v}`)
       }
     }
   }
