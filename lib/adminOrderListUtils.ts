@@ -19,17 +19,18 @@ export function orderPlatformBadge(order: OrderRecord): { text: string; classNam
 }
 
 /** Known storefront / admin keys (values: trim-only; never alter customer letter case). */
-const FIXED_PERSONALIZATION_KEYS = [
+const OTHER_PERSONALIZATION_KEYS = [
   'Name',
   'name',
   'Child name',
   'Child Name',
   'Baby name',
-  'Text',
-  'text',
   'Line 1',
   'Line 2',
 ] as const
+
+/** Typical sticker sheet fields — order matches packing slip expectations. */
+const PRIMARY_DISPLAY_KEYS = ['font', 'size', 'text', 'Text', 'color'] as const
 
 /** Set/bundle line text: `sticker_0_text`, `item1_text`, etc. */
 const SET_OR_BUNDLE_TEXT_KEY_RE = /^(sticker_\d+_text|item\d+_text)$/
@@ -38,6 +39,49 @@ function pushUniquePersonalizationLine(parts: string[], line: string) {
   const t = line.trim()
   if (!t) return
   if (!parts.includes(t)) parts.push(t)
+}
+
+function readCustomizationString(cust: Record<string, unknown>, key: string): string {
+  const raw = cust[key]
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+/** `key:` then value on the next line (label PDF friendly). */
+function pushLabeledValue(lines: string[], key: string, value: string) {
+  if (!value) return
+  lines.push(`${key}:`)
+  lines.push(value)
+}
+
+/**
+ * Storefront `customizations` → multi-line block: product name, then font/size/text/color, etc.
+ * Only trim(); never change customer spelling/case.
+ */
+function collectStorefrontCustomizationBlock(name: string, cust: Record<string, unknown>): string | null {
+  const lines: string[] = [name]
+  let hasText = false
+  for (const k of PRIMARY_DISPLAY_KEYS) {
+    if (k === 'Text') {
+      if (hasText) continue
+    }
+    const v = readCustomizationString(cust, k)
+    if (!v) continue
+    if (k === 'text' || k === 'Text') hasText = true
+    pushLabeledValue(lines, k, v)
+  }
+  for (const k of OTHER_PERSONALIZATION_KEYS) {
+    const v = readCustomizationString(cust, k)
+    pushLabeledValue(lines, k, v)
+  }
+  const dynamicKeys = Object.keys(cust)
+    .filter((k) => SET_OR_BUNDLE_TEXT_KEY_RE.test(k))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  for (const k of dynamicKeys) {
+    const v = readCustomizationString(cust, k)
+    pushLabeledValue(lines, k, v)
+  }
+  if (lines.length <= 1) return null
+  return lines.join('\n')
 }
 
 /** Per line item: marketplace + website customizations (trim only on values; case preserved). */
@@ -68,24 +112,9 @@ export function collectOrderPersonalizationParts(order: OrderRecord): string[] {
     }
 
     const cust = it.customizations
-    if (cust && typeof cust === 'object') {
-      for (const k of FIXED_PERSONALIZATION_KEYS) {
-        const raw = cust[k as string]
-        if (typeof raw !== 'string') continue
-        const v = raw.trim()
-        if (!v) continue
-        pushUniquePersonalizationLine(parts, `${name}: ${v}`)
-      }
-      const dynamicKeys = Object.keys(cust)
-        .filter((k) => SET_OR_BUNDLE_TEXT_KEY_RE.test(k))
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      for (const k of dynamicKeys) {
-        const raw = cust[k]
-        if (typeof raw !== 'string') continue
-        const v = raw.trim()
-        if (!v) continue
-        pushUniquePersonalizationLine(parts, `${name}: ${v}`)
-      }
+    if (cust && typeof cust === 'object' && !Array.isArray(cust)) {
+      const block = collectStorefrontCustomizationBlock(name, cust as Record<string, unknown>)
+      if (block) pushUniquePersonalizationLine(parts, block)
     }
   }
   return parts
