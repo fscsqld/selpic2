@@ -84,18 +84,23 @@ export default function AdminOrdersPage() {
     }
   }, [mergeOrdersFromServer])
 
-  // localStorage + Supabase ledger; poll so new Stripe orders appear without manual refresh
+  // Supabase ledger first — avoid refreshOrdersFromStorage() overwriting in-memory orders with stale
+  // localStorage before mergeOrdersFromServer persists (previously queueMicrotask-only LS write).
   useEffect(() => {
-    refreshOrdersFromStorage()
-    syncOrdersFromSupabase()
+    void (async () => {
+      await syncOrdersFromSupabase()
+      refreshOrdersFromStorage()
+    })()
     const pollMs = autoRefreshInterval > 0 ? autoRefreshInterval : 15000
     const id = window.setInterval(() => {
-      syncOrdersFromSupabase()
+      void syncOrdersFromSupabase()
     }, pollMs)
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        refreshOrdersFromStorage()
-        syncOrdersFromSupabase()
+        void (async () => {
+          await syncOrdersFromSupabase()
+          refreshOrdersFromStorage()
+        })()
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -403,16 +408,19 @@ export default function AdminOrdersPage() {
 
   const filtered = useMemo(() => {
     let filteredOrders = orders.filter(o => {
+      const c = o.customer
       const tQuery = query.trim().toLowerCase()
       const queryDigitsRaw = (query.match(/\d+/g) || []).join('')
       const queryDigits = queryDigitsRaw.replace(/^\+?61/, '0')
-      const customerPhoneDigitsRaw = (o.customer.phone || '').replace(/\D/g, '')
+      const customerPhoneDigitsRaw = (c?.phone || '').replace(/\D/g, '')
       const customerPhoneDigits = customerPhoneDigitsRaw.replace(/^\+?61/, '0')
       const matchPhone = queryDigits.length > 0 && customerPhoneDigits.includes(queryDigits)
+      const email = (c?.email || '').toLowerCase()
+      const name = (c?.name || '').toLowerCase()
       const matchQuery = !tQuery ||
         o.id.toLowerCase().includes(tQuery) ||
-        o.customer.email.toLowerCase().includes(tQuery) ||
-        o.customer.name.toLowerCase().includes(tQuery) ||
+        email.includes(tQuery) ||
+        name.includes(tQuery) ||
         matchPhone
       
       const matchStatus = !statusFilter || o.status === statusFilter

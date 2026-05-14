@@ -783,24 +783,24 @@ export const useStore = create<Store>()(
         set({ orders: merged })
 
         if (typeof window !== 'undefined') {
-          queueMicrotask(() => {
-            try {
-              const raw = localStorage.getItem('selpic-store')
-              if (raw) {
-                const parsed = JSON.parse(raw) as { state?: { orders?: OrderRecord[] }; orders?: OrderRecord[] }
-                const ord = get().orders
-                if (parsed && typeof parsed === 'object') {
-                  if (parsed.state && typeof parsed.state === 'object') {
-                    ;(parsed.state as { orders: OrderRecord[] }).orders = ord
-                  } else {
-                    ;(parsed as { orders: OrderRecord[] }).orders = ord
-                  }
-                  localStorage.setItem('selpic-store', JSON.stringify(parsed))
+          try {
+            const raw = localStorage.getItem('selpic-store')
+            if (raw) {
+              const parsed = JSON.parse(raw) as { state?: { orders?: OrderRecord[] }; orders?: OrderRecord[] }
+              const ord = get().orders
+              if (parsed && typeof parsed === 'object') {
+                if (parsed.state && typeof parsed.state === 'object') {
+                  ;(parsed.state as { orders: OrderRecord[] }).orders = ord
+                } else {
+                  ;(parsed as { orders: OrderRecord[] }).orders = ord
                 }
+                localStorage.setItem('selpic-store', JSON.stringify(parsed))
               }
-            } catch (e) {
-              console.warn('[Store] mergeOrdersFromServer: localStorage sync failed:', e)
             }
+          } catch (e) {
+            console.warn('[Store] mergeOrdersFromServer: localStorage sync failed:', e)
+          }
+          queueMicrotask(() => {
             window.dispatchEvent(new CustomEvent('selpic-store-orders-updated', { detail: { source: 'server' } }))
           })
         }

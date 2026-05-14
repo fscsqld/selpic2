@@ -146,16 +146,20 @@ export default function AdminDashboard() {
   /** Same ledger merge as /admin/orders so bank-transfer counts include Supabase-backed orders. */
   useEffect(() => {
     if (typeof window === 'undefined' || !_hasHydrated) return
-    refreshOrdersFromStorage()
-    syncOrdersFromSupabase()
+    void (async () => {
+      await syncOrdersFromSupabase()
+      refreshOrdersFromStorage()
+    })()
     const pollMs = autoRefreshInterval > 0 ? autoRefreshInterval : 15000
     const id = window.setInterval(() => {
-      syncOrdersFromSupabase()
+      void syncOrdersFromSupabase()
     }, pollMs)
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        refreshOrdersFromStorage()
-        syncOrdersFromSupabase()
+        void (async () => {
+          await syncOrdersFromSupabase()
+          refreshOrdersFromStorage()
+        })()
       }
     }
     document.addEventListener('visibilitychange', onVisible)
