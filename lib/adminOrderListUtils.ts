@@ -46,11 +46,10 @@ function readCustomizationString(cust: Record<string, unknown>, key: string): st
   return typeof raw === 'string' ? raw.trim() : ''
 }
 
-/** `key:` then value on the next line (label PDF friendly). */
+/** `key: value` on one line (label PDF). */
 function pushLabeledValue(lines: string[], key: string, value: string) {
   if (!value) return
-  lines.push(`${key}:`)
-  lines.push(value)
+  lines.push(`${key}: ${value}`)
 }
 
 /**
