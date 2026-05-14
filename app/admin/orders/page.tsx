@@ -10,7 +10,6 @@ import Link from 'next/link'
 import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2, Store } from 'lucide-react'
 import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
-import { MOCK_ETSY_ORDER_ROWS, mockEtsyStatusLabel } from '@/lib/admin/mockEtsyOrdersPreview'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 
 const statusColors: Record<string, string> = {
@@ -60,6 +59,8 @@ export default function AdminOrdersPage() {
         name: p.name,
         price: Number(p.price) || 0,
         image: typeof p.image === 'string' ? p.image : '',
+        size: typeof p.size === 'string' ? p.size : undefined,
+        twoLineSurcharge: typeof p.twoLineSurcharge === 'number' ? p.twoLineSurcharge : undefined,
       })),
     [products]
   )
@@ -880,7 +881,7 @@ export default function AdminOrdersPage() {
           showLanguageSelector={false}
         />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-white px-4 py-3 shadow-sm">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow">
@@ -923,71 +924,6 @@ export default function AdminOrdersPage() {
                 <Plus className="h-4 w-4" aria-hidden />
                 {isKo ? '주문 수동 추가' : 'Add order manually'}
               </button>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/80 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900">
-                  {isKo ? '샘플 Etsy 주문 (미리보기)' : 'Sample Etsy orders (preview)'}
-                </h2>
-                <p className="text-xs text-gray-500">
-                  {isKo ? 'DB에 저장되지 않습니다. 실제 연동 후 Sync로 대체됩니다.' : 'Not stored — placeholder rows until live import.'}
-                </p>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-white text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '주문번호' : 'Order #'}</th>
-                    <th className="whitespace-nowrap px-4 py-3">Etsy</th>
-                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '고객명' : 'Customer'}</th>
-                    <th className="min-w-[12rem] px-4 py-3">{isKo ? '상품명' : 'Product'}</th>
-                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '주문일자' : 'Date'}</th>
-                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '상태' : 'Status'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {MOCK_ETSY_ORDER_ROWS.map((row) => (
-                    <tr key={row.orderNo} className="hover:bg-gray-50/80">
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-900">{row.orderNo}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#F56400] text-xs font-bold text-white shadow-sm"
-                          title="Etsy"
-                          aria-label="Etsy"
-                        >
-                          E
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">{row.customerName}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.productName}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-gray-600">{row.orderedAt}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            row.status === 'paid'
-                              ? 'bg-blue-100 text-blue-800'
-                              : row.status === 'processing'
-                                ? 'bg-purple-100 text-purple-800'
-                                : 'bg-green-100 text-green-800'
-                          }`}
-                        >
-                          {isKo
-                            ? row.status === 'paid'
-                              ? '결제완료'
-                              : row.status === 'processing'
-                                ? '준비중'
-                                : '배송됨'
-                            : mockEtsyStatusLabel(row.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         </div>

@@ -38,7 +38,9 @@ async function sanitizeAndValidateManualOrderDraft(orderDraft: OrderDraft): Prom
     if (!Number.isFinite(baseUnitPrice) || baseUnitPrice < 0) {
       throw new Error(`Invalid catalog price for product: ${productId}`)
     }
-    const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, catalogProduct)
+    const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, {
+      size: (item.customizations?.size && String(item.customizations.size).trim()) || (catalogProduct as { size?: string }).size,
+    })
     const unitPrice = Number((baseUnitPrice + surchargePerUnit).toFixed(2))
     const unitCents = audCents(unitPrice)
     itemsSubtotalCents += unitCents * qty
