@@ -15,6 +15,8 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
   const { currentSessionId, isSessionValid, updateActivity } = useAdminSession()
   const router = useRouter()
   const [hasHydrated, setHasHydrated] = useState(false)
+  /** null = checking; true = allowed (or no Supabase session / no public env — legacy path). */
+  const [registryAccessOk, setRegistryAccessOk] = useState<boolean | null>(null)
 
   // Wait for persisted admin auth to hydrate before deciding
   useEffect(() => {
@@ -120,6 +122,51 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     checkPermissions()
   }, [checkPermissions])
 
+  // When Supabase is configured and the user has a browser session, require registry + JWT (server-side gate).
+  useEffect(() => {
+    if (!hasHydrated || !isLoggedIn) return
+    const skip =
+      !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+    if (skip) {
+      setRegistryAccessOk(true)
+      return
+    }
+
+    let cancelled = false
+    setRegistryAccessOk(null)
+    ;(async () => {
+      try {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+        const supabase = createSupabaseBrowserClient()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (cancelled) return
+        if (!session?.access_token) {
+          setRegistryAccessOk(true)
+          return
+        }
+        const r = await fetch('/api/admin/registry-access', { credentials: 'same-origin' })
+        if (cancelled) return
+        if (!r.ok) {
+          logout()
+          router.replace('/admin/login')
+          return
+        }
+        setRegistryAccessOk(true)
+      } catch {
+        if (!cancelled) {
+          logout()
+          router.replace('/admin/login')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasHydrated, isLoggedIn, logout, router])
+
   // Keep JWT app_metadata in sync with admin_email_registry (permissions / role updates).
   useEffect(() => {
     if (!hasHydrated || !isLoggedIn) return
@@ -209,6 +256,17 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">인증 확인 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (registryAccessOk !== true) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading…</p>
         </div>
       </div>
     )

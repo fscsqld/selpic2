@@ -59,7 +59,7 @@ export async function postSupabasePasswordSignInBridge(
       return {
         outcome: 'roster_blocked',
         error:
-          'This email is not on the active admin roster. Add it under Admin Management (by email) first.',
+          'This account is not on the active admin email registry (admin or super_admin). Ask a super admin to add your email under Administrator settings.',
       }
     }
   } catch {

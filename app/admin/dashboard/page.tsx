@@ -33,6 +33,7 @@ import {
   Loader2,
   ExternalLink,
   RefreshCw,
+  Shield,
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
@@ -540,6 +541,14 @@ export default function AdminDashboard() {
       href: '/admin/community',
       color: 'bg-cyan-500',
       requiredPermission: 'community:read'
+    },
+    {
+      title: 'Administrator settings',
+      description: 'Admin email registry: add staff, roles, and permissions',
+      icon: Shield,
+      href: '/admin/administrator-settings',
+      color: 'bg-slate-600',
+      requiredPermission: 'admin:manage',
     },
     {
       title: t('admin.settings.title'),

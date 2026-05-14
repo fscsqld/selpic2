@@ -7,9 +7,11 @@ import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOr
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2, Store } from 'lucide-react'
 import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+import { MOCK_ETSY_ORDER_ROWS, mockEtsyStatusLabel } from '@/lib/admin/mockEtsyOrdersPreview'
+import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -29,8 +31,38 @@ const paymentMethodColors: Record<string, string> = {
 }
 
 export default function AdminOrdersPage() {
-  const { orders, updateOrderStatus, deleteOrder, updateOrderCustomer, updateOrderAddress, updateOrderItems, updateOrderDiscounts, updateOrderShipping, recalculateOrderTotal, addOrderNote, updateOrderNote, deleteOrderNote, defaultPageSize, refreshOrdersFromStorage, mergeOrdersFromServer, autoRefreshInterval } = useStore()
+  const {
+    orders,
+    products,
+    updateOrderStatus,
+    deleteOrder,
+    updateOrderCustomer,
+    updateOrderAddress,
+    updateOrderItems,
+    updateOrderDiscounts,
+    updateOrderShipping,
+    recalculateOrderTotal,
+    addOrderNote,
+    updateOrderNote,
+    deleteOrderNote,
+    defaultPageSize,
+    refreshOrdersFromStorage,
+    mergeOrdersFromServer,
+    autoRefreshInterval,
+  } = useStore()
   const { adminUser } = useAdminAuth()
+
+  const [manualModalOpen, setManualModalOpen] = useState(false)
+  const manualCatalog = useMemo(
+    () =>
+      products.map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        price: Number(p.price) || 0,
+        image: typeof p.image === 'string' ? p.image : '',
+      })),
+    [products]
+  )
 
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [chimeUnlocked, setChimeUnlocked] = useState(false)
@@ -846,6 +878,128 @@ export default function AdminOrdersPage() {
           backLabel={T.dashboard}
           showHomepageLink={false}
           showLanguageSelector={false}
+        />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-white px-4 py-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow">
+                <Store className="h-5 w-5" aria-hidden />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">Etsy shop</p>
+                <p className="text-sm text-gray-600">
+                  {isKo
+                    ? 'Etsy API 승인 전까지 OAuth 연결은 보류됩니다. 승인 후 Integrations에서 연결하세요.'
+                    : 'OAuth connection stays paused until Etsy approves the app. Use Integrations for the live flow.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  window.alert(
+                    isKo
+                      ? 'Etsy 판매자 앱 승인 대기 중입니다. 승인되면 Integrations에서 샵을 연결할 수 있습니다.'
+                      : 'Etsy seller app approval is pending. You will be able to connect your shop from Integrations once approved.'
+                  )
+                }
+                className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-900 shadow-sm hover:bg-violet-50"
+              >
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded bg-[#F56400] text-[10px] font-bold leading-none text-white"
+                  aria-hidden
+                >
+                  E
+                </span>
+                {isKo ? 'Etsy 샵 연결하기' : 'Connect Etsy shop'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                {isKo ? '주문 수동 추가' : 'Add order manually'}
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/80 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  {isKo ? '샘플 Etsy 주문 (미리보기)' : 'Sample Etsy orders (preview)'}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  {isKo ? 'DB에 저장되지 않습니다. 실제 연동 후 Sync로 대체됩니다.' : 'Not stored — placeholder rows until live import.'}
+                </p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-white text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '주문번호' : 'Order #'}</th>
+                    <th className="whitespace-nowrap px-4 py-3">Etsy</th>
+                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '고객명' : 'Customer'}</th>
+                    <th className="min-w-[12rem] px-4 py-3">{isKo ? '상품명' : 'Product'}</th>
+                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '주문일자' : 'Date'}</th>
+                    <th className="whitespace-nowrap px-4 py-3">{isKo ? '상태' : 'Status'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {MOCK_ETSY_ORDER_ROWS.map((row) => (
+                    <tr key={row.orderNo} className="hover:bg-gray-50/80">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-900">{row.orderNo}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#F56400] text-xs font-bold text-white shadow-sm"
+                          title="Etsy"
+                          aria-label="Etsy"
+                        >
+                          E
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">{row.customerName}</td>
+                      <td className="px-4 py-3 text-gray-700">{row.productName}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-600">{row.orderedAt}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            row.status === 'paid'
+                              ? 'bg-blue-100 text-blue-800'
+                              : row.status === 'processing'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-green-100 text-green-800'
+                          }`}
+                        >
+                          {isKo
+                            ? row.status === 'paid'
+                              ? '결제완료'
+                              : row.status === 'processing'
+                                ? '준비중'
+                                : '배송됨'
+                            : mockEtsyStatusLabel(row.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <ManualOrderCreateModal
+          open={manualModalOpen}
+          onClose={() => setManualModalOpen(false)}
+          products={manualCatalog}
+          onCreated={(order) => {
+            mergeOrdersFromServer([order])
+            void syncOrdersFromSupabase()
+          }}
         />
 
         {!chimeUnlocked && (

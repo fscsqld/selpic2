@@ -28,6 +28,27 @@ export default function AdminLoginPage() {
 
     const enforceAccess = async () => {
       if (useAdminAuth.getState().isLoggedIn) {
+        const hasSupabase = hasUsableSupabaseBrowserEnv()
+        if (hasSupabase) {
+          try {
+            const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+            const { data } = await createSupabaseBrowserClient().auth.getSession()
+            if (cancelled) return
+            if (data.session) {
+              const r = await fetch(`${window.location.origin}/api/admin/registry-access`, {
+                credentials: 'same-origin',
+              })
+              if (cancelled) return
+              if (!r.ok) {
+                useAdminAuth.getState().logout()
+                return
+              }
+            }
+          } catch {
+            if (!cancelled) useAdminAuth.getState().logout()
+            return
+          }
+        }
         router.replace('/admin/dashboard')
         return
       }
@@ -38,15 +59,36 @@ export default function AdminLoginPage() {
         try {
           const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
           const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
+          const { mapSupabaseUserToAdminUser } = await import('@/lib/supabase/mapSupabaseAdminUser')
+          const { syncAdminRegistryWithSession } = await import('@/lib/supabase/syncAdminRegistryClient')
           const supabase = createSupabaseBrowserClient()
           const { data } = await supabase.auth.getSession()
           if (cancelled) return
           if (data.session?.user) {
-            if (userHasAdminAccess(data.session.user)) {
-              router.replace('/admin/dashboard')
-            } else {
+            if (!userHasAdminAccess(data.session.user)) {
               router.replace('/')
+              return
             }
+            await syncAdminRegistryWithSession(supabase, data.session.access_token)
+            const { data: after } = await supabase.auth.getSession()
+            const sess = after.session ?? data.session
+            if (cancelled || !sess?.user) return
+            if (!userHasAdminAccess(sess.user)) {
+              router.replace('/')
+              return
+            }
+            const accessRes = await fetch(`${window.location.origin}/api/admin/registry-access`, {
+              credentials: 'same-origin',
+            })
+            if (cancelled) return
+            if (!accessRes.ok) {
+              await supabase.auth.signOut()
+              useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
+              return
+            }
+            const mapped = mapSupabaseUserToAdminUser(sess.user)
+            useAdminAuth.setState({ isLoggedIn: true, adminUser: mapped })
+            router.replace('/admin/dashboard')
             return
           }
         } catch {
