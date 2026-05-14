@@ -11,6 +11,7 @@ import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, A
 import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
+import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -52,6 +53,7 @@ export default function AdminOrdersPage() {
   const { adminUser } = useAdminAuth()
 
   const [manualModalOpen, setManualModalOpen] = useState(false)
+  const [quickShipModalOpen, setQuickShipModalOpen] = useState(false)
   const manualCatalog = useMemo(
     () =>
       products.map((p) => ({
@@ -926,6 +928,14 @@ export default function AdminOrdersPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setQuickShipModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm hover:bg-emerald-50"
+              >
+                <Printer className="h-4 w-4" aria-hidden />
+                {isKo ? '빠른 발송 라벨' : 'Quick ship label'}
+              </button>
+              <button
+                type="button"
                 onClick={() => setManualModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
               >
@@ -935,6 +945,15 @@ export default function AdminOrdersPage() {
             </div>
           </div>
         </div>
+
+        <QuickShipLabelModal
+          open={quickShipModalOpen}
+          onClose={() => setQuickShipModalOpen(false)}
+          mergeOrdersFromServer={mergeOrdersFromServer}
+          onCreated={() => {
+            void syncOrdersFromSupabase()
+          }}
+        />
 
         <ManualOrderCreateModal
           open={manualModalOpen}

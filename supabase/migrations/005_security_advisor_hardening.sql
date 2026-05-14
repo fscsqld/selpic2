@@ -5,6 +5,8 @@
 -- -----------------------------------------------------------------------------
 -- NON-SQL (Supabase Dashboard) — auth_leaked_password_protection
 -- -----------------------------------------------------------------------------
+-- Deferred until outbound email is integrated (password reset / security notices).
+-- When SMTP is ready, enable in Dashboard:
 -- 1. Open Supabase Dashboard → your project.
 -- 2. Go to: Authentication → Providers (or Authentication → Settings, depending on UI version).
 -- 3. Find "Password strength" / "Leaked password protection" (HaveIBeenPwned).
@@ -15,7 +17,8 @@
 -- BEHAVIOR CHANGES (read before apply)
 -- -----------------------------------------------------------------------------
 -- • site_configs: anon can SELECT only. INSERT/UPDATE/DELETE require Supabase Auth JWT whose email
---   appears in admin_email_registry with role admin|super_admin and is_active = true.
+--   appears in admin_email_registry with role admin|super_admin and is_active = true (checked via
+--   private.is_registry_staff(); not exposed on PostgREST rpc — keep schema `private` off API "Exposed schemas").
 -- • orders: PostgREST clients using the anon key can no longer INSERT. authenticated may INSERT/SELECT
 --   rows where payload.customer.email matches JWT email (server routes use service_role and bypass RLS).
 -- • storage.objects: removes broad policies named like Allow-All-Storage-Access%; authenticated may
@@ -26,12 +29,23 @@ begin;
 
 -- ---------------------------------------------------------------------------
 -- 1) Helper: staff check against admin_email_registry (SECURITY DEFINER)
+--    Lives in schema `private` so PostgREST does not advertise /rpc/is_registry_staff.
+--    EXECUTE is granted to authenticated for RLS policy evaluation only; anon has no EXECUTE/USAGE.
 -- ---------------------------------------------------------------------------
 do $outer$
 begin
   if to_regclass('public.admin_email_registry') is not null then
     execute $ddl$
-      create or replace function public.is_registry_staff()
+      create schema if not exists private;
+      comment on schema private is 'Internal SQL helpers; omit from Supabase API "Exposed schemas" to avoid rpc exposure.';
+
+      revoke all on schema private from public;
+      revoke all on schema private from anon;
+      grant usage on schema private to postgres;
+      grant usage on schema private to service_role;
+      grant usage on schema private to authenticated;
+
+      create or replace function private.is_registry_staff()
       returns boolean
       language sql
       stable
@@ -47,8 +61,11 @@ begin
         );
       $body$;
 
-      revoke all on function public.is_registry_staff() from public;
-      grant execute on function public.is_registry_staff() to anon, authenticated, service_role;
+      revoke all on function private.is_registry_staff() from public;
+      revoke execute on function private.is_registry_staff() from anon;
+      grant execute on function private.is_registry_staff() to authenticated, service_role;
+
+      drop function if exists public.is_registry_staff();
     $ddl$;
   end if;
 end
@@ -67,9 +84,9 @@ begin
     select 1
     from pg_proc p
     join pg_namespace n on p.pronamespace = n.oid
-    where n.nspname = 'public' and p.proname = 'is_registry_staff'
+    where n.nspname = 'private' and p.proname = 'is_registry_staff'
   ) then
-    raise notice '005_security_advisor_hardening: skipped site_configs write policies (public.is_registry_staff missing — apply 002 first).';
+    raise notice '005_security_advisor_hardening: skipped site_configs write policies (private.is_registry_staff missing — apply 002 first).';
     return;
   end if;
 
@@ -86,7 +103,7 @@ begin
       on public.site_configs
       for insert
       to authenticated
-      with check (public.is_registry_staff());
+      with check (private.is_registry_staff());
   $p$;
 
   execute $p$
@@ -94,8 +111,8 @@ begin
       on public.site_configs
       for update
       to authenticated
-      using (public.is_registry_staff())
-      with check (public.is_registry_staff());
+      using (private.is_registry_staff())
+      with check (private.is_registry_staff());
   $p$;
 
   execute $p$
@@ -103,7 +120,7 @@ begin
       on public.site_configs
       for delete
       to authenticated
-      using (public.is_registry_staff());
+      using (private.is_registry_staff());
   $p$;
 
   -- Open writes from the anonymous role are no longer allowed (CMS must use staff Supabase session).
