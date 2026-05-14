@@ -1,7 +1,4 @@
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
-
-/** Must match the public bucket name in Supabase Storage. */
-export const SELPIC_CONTENTS_BUCKET = 'selpic-contents'
+export { SELPIC_CONTENTS_BUCKET } from '@/lib/selpicStorageBucket'
 
 export function sanitizeStorageFileName(name: string): string {
   const base = name.split(/[/\\]/).pop() || 'file'
@@ -15,29 +12,39 @@ export function buildSelpicStoragePath(folder: string, fileId: string, fileName:
 }
 
 /**
- * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
- * Upload to Supabase Storage (public bucket) and return the public URL for use in site_configs / content items.
- * Requires an authenticated Supabase session if bucket policies require auth.
+ * Upload to Supabase Storage (public bucket) via server (service role).
+ * Avoids browser RLS on `storage.objects` (see migration 005) and works with a normal admin cookie session.
  */
 export async function uploadToSelpicContents(
   path: string,
   body: File | Blob,
   contentType?: string
 ): Promise<string> {
-  const supabase = createSupabaseBrowserClient()
+  if (typeof window === 'undefined') {
+    throw new Error('uploadToSelpicContents is browser-only.')
+  }
+
   const ct =
     contentType ||
     (body instanceof File && body.type ? body.type : 'application/octet-stream')
 
-  const { error } = await supabase.storage.from(SELPIC_CONTENTS_BUCKET).upload(path, body, {
-    contentType: ct,
-    upsert: true,
+  const formData = new FormData()
+  formData.set('path', path)
+  formData.set('file', body)
+  formData.set('contentType', ct)
+
+  const res = await fetch('/api/admin/selpic-contents/upload', {
+    method: 'POST',
+    body: formData,
+    credentials: 'same-origin',
   })
 
-  if (error) {
-    throw new Error(error.message || 'Storage upload failed')
+  const json = (await res.json().catch(() => ({}))) as { publicUrl?: string; error?: string }
+  if (!res.ok) {
+    throw new Error(json.error || res.statusText || 'Storage upload failed')
   }
-
-  const { data } = supabase.storage.from(SELPIC_CONTENTS_BUCKET).getPublicUrl(path)
-  return data.publicUrl
+  if (!json.publicUrl) {
+    throw new Error('Storage upload failed: missing publicUrl')
+  }
+  return json.publicUrl
 }

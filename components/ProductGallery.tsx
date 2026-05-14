@@ -10,6 +10,29 @@ function isValidFallbackUrl(url: unknown): url is string {
   return typeof url === 'string' && url.trim() !== '' && url !== 'undefined' && !url.startsWith('undefined')
 }
 
+/** Rows not on the server snapshot yet (blob/data) or very recent HTTPS uploads before snapshot refresh. */
+function isLikelyPendingClientOnlyMedia(f: {
+  url?: string
+  webpUrl?: string
+  uploadedAt?: unknown
+}): boolean {
+  const urls = [f.url, f.webpUrl].filter(Boolean) as string[]
+  if (urls.length === 0) return true
+  const blobLike = urls.some(
+    (u) =>
+      u.startsWith('blob:') || u.startsWith('data:') || u.startsWith('indexeddb:') || u.startsWith('indexeddb://')
+  )
+  if (blobLike) return true
+  const t =
+    typeof f.uploadedAt === 'string'
+      ? new Date(f.uploadedAt).getTime()
+      : f.uploadedAt instanceof Date
+        ? f.uploadedAt.getTime()
+        : 0
+  if (!Number.isFinite(t) || t <= 0) return false
+  return Date.now() - t < 15 * 60 * 1000
+}
+
 interface ProductGalleryProps {
   productId: string
   className?: string
@@ -148,14 +171,16 @@ export default function ProductGallery({
   }, [productId, bumpRemoteRefresh])
 
   /**
-   * Prefer server snapshot for all visitors, but merge in this browser's not-yet-synced rows
-   * (same IDs as admin flow) so local + deployed stay usable until POST /api/media/products succeeds.
+   * Prefer server snapshot, then merge only client rows that are plausibly not yet on the server.
+   * Without the filter, stale persisted `media-store` could re-append HTTPS assets the server list no longer includes.
    */
   const mergedProductMedia = useMemo(() => {
     if (!productId) return []
     if (!remoteLoaded) return productMedia
     const remoteIds = new Set(remoteProductMedia.map((f: { id?: string }) => String(f?.id ?? '')))
-    const localOnly = productMedia.filter((f) => f.id && !remoteIds.has(String(f.id)))
+    const localOnly = productMedia.filter(
+      (f) => f.id && !remoteIds.has(String(f.id)) && isLikelyPendingClientOnlyMedia(f)
+    )
     const combined = [...remoteProductMedia, ...localOnly]
     return combined.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   }, [productId, remoteLoaded, remoteProductMedia, productMedia])

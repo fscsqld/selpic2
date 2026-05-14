@@ -108,12 +108,22 @@ function ImageManagementPageContent() {
       .join('||')
   }, [])
 
-  /** Keep entries that exist only in the browser until POST /api/media/products succeeds. */
+  /**
+   * Merge `/api/media/public` into the editor store without undoing local deletes.
+   * Old behavior `[...remote, ...pendingOnly]` re-applied every server row whenever the server
+   * snapshot was stale, so a delete could disappear locally and the next POST re-published removed assets.
+   * New behavior: membership follows `local` order; server rows hydrate fields for ids still present;
+   * ids only on the client stay until POST succeeds.
+   */
   const mergeRemoteWithLocalPending = useCallback((remote: MediaFile[], local: MediaFile[]): MediaFile[] => {
-    const remoteIds = new Set(remote.map((f) => f.id))
-    const pendingOnly = local.filter((f) => !remoteIds.has(f.id))
-    if (pendingOnly.length === 0) return remote
-    return [...remote, ...pendingOnly]
+    const remoteById = new Map(remote.map((f) => [f.id, f]))
+    if (local.length === 0) {
+      return remote
+    }
+    return local.map((f) => {
+      const r = remoteById.get(f.id)
+      return (r ? { ...r, ...f } : f) as MediaFile
+    })
   }, [])
 
   const syncMediaFromServer = useCallback(async (force = false): Promise<boolean> => {
