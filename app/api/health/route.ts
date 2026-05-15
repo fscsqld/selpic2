@@ -22,6 +22,8 @@ export async function GET() {
         // Vercel populates these when deployed from Git.
         gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
         gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || null,
+        gitCommitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE || null,
+        vercelDeploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
       },
       supabase: {
         hasPublicEnv: hasUsableSupabaseBrowserEnv(),
