@@ -19,12 +19,36 @@ async function etsyJson<T>(path: string, accessToken: string, apiKey: string): P
 
 export type EtsyListResponse<T> = { count?: number; results?: T[] }
 
+/**
+ * GET /users/{user_id}/shops returns a single Shop object (OpenAPI: getShopByOwnerUserId),
+ * not a paginated `{ results }` envelope. Normalize so callers always see `results`.
+ */
+function normalizeShopsListBody(body: Record<string, unknown>): EtsyListResponse<Record<string, unknown>> {
+  const r = body.results
+  if (Array.isArray(r)) {
+    return {
+      count: typeof body.count === 'number' ? body.count : r.length,
+      results: r as Record<string, unknown>[],
+    }
+  }
+  const shopId = body.shop_id ?? body.shopId
+  if (shopId != null && String(shopId).trim() !== '') {
+    return { count: 1, results: [body] }
+  }
+  return { count: 0, results: [] }
+}
+
 export async function fetchUserShops(
   etsyUserId: string,
   accessToken: string,
   apiKey: string
 ): Promise<EtsyListResponse<Record<string, unknown>>> {
-  return etsyJson(`/users/${encodeURIComponent(etsyUserId)}/shops`, accessToken, apiKey)
+  const raw = await etsyJson<Record<string, unknown>>(
+    `/users/${encodeURIComponent(etsyUserId)}/shops`,
+    accessToken,
+    apiKey
+  )
+  return normalizeShopsListBody(raw)
 }
 
 export async function fetchShopReceipts(

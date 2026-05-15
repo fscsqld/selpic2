@@ -75,16 +75,20 @@ export async function GET(request: Request) {
     const shopsBody = await fetchUserShops(userId, tokens.access_token, getEtsyOpenApiXApiKey())
     const shops = Array.isArray(shopsBody.results) ? shopsBody.results : []
     const preferred = process.env.ETSY_SHOP_ID?.trim()
+    const shopIdOf = (s: Record<string, unknown>) => String(s.shop_id ?? s.shopId ?? '')
     const shop =
-      (preferred
-        ? shops.find((s) => String((s as Record<string, unknown>).shop_id) === preferred)
-        : undefined) || shops[0]
+      (preferred ? shops.find((s) => shopIdOf(s as Record<string, unknown>) === preferred) : undefined) || shops[0]
     if (!shop || typeof shop !== 'object') {
       throw new Error('No Etsy shops returned for this account.')
     }
     const so = shop as Record<string, unknown>
-    const shopId = String(so.shop_id ?? '')
-    const shopName = typeof so.shop_name === 'string' ? so.shop_name : null
+    const shopId = shopIdOf(so)
+    const shopName =
+      typeof so.shop_name === 'string'
+        ? so.shop_name
+        : typeof so.shopName === 'string'
+          ? so.shopName
+          : null
     if (!shopId) throw new Error('Missing shop_id from Etsy.')
 
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString()
