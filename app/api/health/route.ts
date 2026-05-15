@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isCronSecretConfigured } from '@/lib/env/cronSecret'
 import { hasUsableSupabaseBrowserEnv, readRawSupabasePublicEnv } from '@/lib/supabase/publicEnv'
 
 /**
@@ -28,6 +29,11 @@ export async function GET() {
       supabase: {
         hasPublicEnv: hasUsableSupabaseBrowserEnv(),
         origin: supabaseOrigin,
+      },
+      cron: {
+        /** Runtime only — missing value does not fail `next build`. */
+        secretConfigured: isCronSecretConfigured(),
+        etsySyncPath: '/api/cron/etsy-sync',
       },
     },
     { headers: { 'Cache-Control': 'no-store' } }
