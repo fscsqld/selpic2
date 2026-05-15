@@ -27,12 +27,16 @@ export async function getValidEtsyAccessToken(): Promise<{
   if (Date.now() > expires - 5 * 60 * 1000) {
     const refreshed = await refreshEtsyAccessToken(clientId, row.refresh_token, clientSecret)
     const expiresAt = new Date(Date.now() + (refreshed.expires_in || 3600) * 1000).toISOString()
+    const nextRefresh =
+      typeof refreshed.refresh_token === 'string' && refreshed.refresh_token.trim() !== ''
+        ? refreshed.refresh_token
+        : row.refresh_token
     await upsertEtsyConnection({
       shop_id: row.shop_id,
       shop_name: row.shop_name,
       etsy_user_id: row.etsy_user_id,
       access_token: refreshed.access_token,
-      refresh_token: refreshed.refresh_token,
+      refresh_token: nextRefresh,
       expires_at: expiresAt,
     })
     return {
