@@ -11,6 +11,9 @@ const RESET_QUERY_KEY = 'resetCache'
 /**
  * Prevent stale storefront state across devices after deployments.
  * When deploy version changes, clear cached CMS snapshot and force a reload.
+ *
+ * Also runs under `admin` URLs (except the admin login page): those routes were
+ * skipped before, so browsers could keep old `_next/static` chunks after deploy.
  */
 export default function StorefrontDeployVersionGuard() {
   const pathname = usePathname()
@@ -123,7 +126,6 @@ export default function StorefrontDeployVersionGuard() {
   // React 19 hydration on localhost and caused removeChild NotFoundError. iOS may show one stale frame.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (pathname === '/admin' || pathname.startsWith('/admin/')) return
 
     /** Avoid full-document reload during sign-in / auth — was interrupting login & showing confusing failures. */
     const skipHardReload =
@@ -131,7 +133,9 @@ export default function StorefrontDeployVersionGuard() {
       pathname.startsWith('/register') ||
       pathname.startsWith('/auth/') ||
       pathname === '/forgot-password' ||
-      pathname.startsWith('/reset-password')
+      pathname.startsWith('/reset-password') ||
+      pathname === '/admin/login' ||
+      pathname.startsWith('/admin/login/')
 
     const envVersion = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
     const runtimeBuildId = readRuntimeBuildId()
