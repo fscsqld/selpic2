@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Product } from '@/lib/store'
+import { useMediaStore } from '@/lib/mediaStore'
 import { Store, ExternalLink } from 'lucide-react'
 
 function defaultMarkupFromEnv(): number {
@@ -12,6 +13,27 @@ function defaultMarkupFromEnv(): number {
 
 type EtsyStatus = { connected: boolean; shopId?: string; shopName?: string | null }
 
+type PricingMode = 'markup_percent' | 'fixed_price'
+
+function collectImageUrls(product: Product): string[] {
+  const raw: string[] = []
+  const push = (u?: string | null) => {
+    if (u && typeof u === 'string' && u.trim()) raw.push(u.trim())
+  }
+  push(product.image)
+  push(product.fallbackImage)
+  const gallery = useMediaStore
+    .getState()
+    .getMediaFilesByProduct(product.id)
+    .filter((f) => f.type === 'image')
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  for (const f of gallery) {
+    if (f.webpUrl) push(f.webpUrl)
+    push(f.url)
+  }
+  return [...new Set(raw)]
+}
+
 export default function ProductEtsyAdminPanel({
   product,
   onSaveListingId,
@@ -21,14 +43,22 @@ export default function ProductEtsyAdminPanel({
 }) {
   const [adminGate, setAdminGate] = useState<'loading' | 'no' | 'yes'>('loading')
   const [etsy, setEtsy] = useState<EtsyStatus | null>(null)
+  const [pricingMode, setPricingMode] = useState<PricingMode>('markup_percent')
   const [markupPercent, setMarkupPercent] = useState(defaultMarkupFromEnv)
+  const [fixedEtsyPrice, setFixedEtsyPrice] = useState<string>(() => product.price.toFixed(2))
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
+  const imageUrls = useMemo(() => collectImageUrls(product), [product])
+
   const etsyPricePreview = useMemo(() => {
+    if (pricingMode === 'fixed_price') {
+      const n = Number(fixedEtsyPrice)
+      return Number.isFinite(n) ? Math.round(n * 100) / 100 : null
+    }
     const p = product.price * (1 + markupPercent / 100)
     return Math.round(p * 100) / 100
-  }, [product.price, markupPercent])
+  }, [product.price, markupPercent, pricingMode, fixedEtsyPrice])
 
   const load = useCallback(async () => {
     setAdminGate('loading')
@@ -54,16 +84,43 @@ export default function ProductEtsyAdminPanel({
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (pricingMode === 'fixed_price') {
+      setFixedEtsyPrice((prev) => {
+        const n = Number(prev)
+        if (!Number.isFinite(n) || n <= 0) return product.price.toFixed(2)
+        return prev
+      })
+    }
+  }, [pricingMode, product.price])
+
   if (adminGate !== 'yes' || !etsy?.connected) {
     return null
   }
+
+  const assetBaseUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}` : undefined
 
   const publish = async (mode: 'create' | 'update') => {
     setBusy(true)
     setMessage(null)
     try {
+      let fixed: number | undefined
+      if (pricingMode === 'fixed_price') {
+        fixed = Number(fixedEtsyPrice)
+        if (!Number.isFinite(fixed) || fixed < 0.2) {
+          setMessage('Enter a fixed Etsy price of at least 0.20 (shop currency).')
+          setBusy(false)
+          return
+        }
+      }
+
       const payload = {
-        markupPercent,
+        pricingMode,
+        markupPercent: pricingMode === 'markup_percent' ? markupPercent : undefined,
+        fixedEtsyPrice: pricingMode === 'fixed_price' ? fixed : undefined,
+        assetBaseUrl,
+        imageUrls,
         product: {
           id: product.id,
           name: product.name,
@@ -72,6 +129,8 @@ export default function ProductEtsyAdminPanel({
           price: product.price,
           stockQuantity: product.stockQuantity,
           inStock: product.inStock,
+          image: product.image,
+          fallbackImage: product.fallbackImage,
         },
       }
       const res = await fetch('/api/admin/integrations/etsy/listings', {
@@ -93,10 +152,20 @@ export default function ProductEtsyAdminPanel({
       if (mode === 'create' && listingId) {
         onSaveListingId(listingId)
       }
+      const uploaded = typeof data.uploadedImages === 'number' ? data.uploadedImages : 0
+      const attempted = typeof data.imageUrlsAttempted === 'number' ? data.imageUrlsAttempted : 0
+      const imgErrs = Array.isArray(data.imageUploadErrors) ? (data.imageUploadErrors as string[]) : []
+      let extra = ''
+      if (mode === 'create') {
+        extra = ` Images uploaded: ${uploaded}/${attempted}.`
+        if (imgErrs.length > 0) {
+          extra += ` Some images failed (see first errors): ${imgErrs.slice(0, 2).join(' | ')}`
+        }
+      }
       setMessage(
         mode === 'create'
-          ? `Draft listing created (ID ${listingId ?? '—'}). Add images and publish in Etsy Shop Manager.`
-          : 'Etsy listing updated with current product data and markup.'
+          ? `Draft listing created (ID ${listingId ?? '—'}).${extra} Open Etsy to review and publish.`
+          : 'Etsy listing updated (title, description, price, quantity).'
       )
     } finally {
       setBusy(false)
@@ -110,23 +179,70 @@ export default function ProductEtsyAdminPanel({
         Etsy (admin)
       </div>
       <p className="text-sm text-amber-900/90 mb-3">
-        Shop {etsy.shopName ? `${etsy.shopName} ` : ''}(ID {etsy.shopId}). Site price ${product.price.toFixed(2)} → Etsy
-        draft unit price <strong>${etsyPricePreview.toFixed(2)}</strong> with current markup.
+        Shop {etsy.shopName ? `${etsy.shopName} ` : ''}(ID {etsy.shopId}). Site catalogue price{' '}
+        <strong>${product.price.toFixed(2)}</strong>
+        {etsyPricePreview != null ? (
+          <>
+            {' '}
+            → Etsy draft unit price <strong>${etsyPricePreview.toFixed(2)}</strong>
+          </>
+        ) : null}
+        . {imageUrls.length} image URL(s) will be sent with &quot;Create Etsy draft&quot; (max 10).
       </p>
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <label className="text-sm text-amber-950 flex items-center gap-2">
-          Markup %
+
+      <fieldset className="mb-3 space-y-2 text-sm text-amber-950">
+        <legend className="font-medium text-amber-900 mb-1">Etsy price</legend>
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            value={markupPercent}
-            onChange={(e) => setMarkupPercent(Number(e.target.value))}
-            className="w-24 rounded border border-amber-300 px-2 py-1 text-gray-900"
+            type="radio"
+            name="etsy-price-mode"
+            checked={pricingMode === 'markup_percent'}
+            onChange={() => setPricingMode('markup_percent')}
           />
+          Markup on site price (%)
         </label>
-      </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="radio"
+            name="etsy-price-mode"
+            checked={pricingMode === 'fixed_price'}
+            onChange={() => setPricingMode('fixed_price')}
+          />
+          Fixed Etsy unit price (USD / shop currency)
+        </label>
+      </fieldset>
+
+      {pricingMode === 'markup_percent' ? (
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <label className="text-sm text-amber-950 flex items-center gap-2">
+            Markup %
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={markupPercent}
+              onChange={(e) => setMarkupPercent(Number(e.target.value))}
+              className="w-24 rounded border border-amber-300 px-2 py-1 text-gray-900"
+            />
+          </label>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <label className="text-sm text-amber-950 flex items-center gap-2">
+            Fixed price
+            <input
+              type="number"
+              min={0.2}
+              step={0.01}
+              value={fixedEtsyPrice}
+              onChange={(e) => setFixedEtsyPrice(e.target.value)}
+              className="w-32 rounded border border-amber-300 px-2 py-1 text-gray-900"
+            />
+          </label>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -155,12 +271,16 @@ export default function ProductEtsyAdminPanel({
           </a>
         ) : null}
       </div>
-      {message ? <p className="mt-3 text-sm text-amber-950">{message}</p> : null}
+      {message ? <p className="mt-3 text-sm text-amber-950 whitespace-pre-wrap">{message}</p> : null}
       <p className="mt-3 text-xs text-amber-900/80">
-        Requires <code className="rounded bg-amber-100/80 px-1">ETSY_DEFAULT_TAXONOMY_ID</code> and Etsy shipping/return
-        policies (auto-detected from your shop unless overridden by env). OAuth must include the{' '}
-        <code className="rounded bg-amber-100/80 px-1">listings_w</code> scope — reconnect from Admin → Integrations if
-        publish fails with 403.
+        Set <code className="rounded bg-amber-100/80 px-1">ETSY_DEFAULT_TAXONOMY_ID</code> in Vercel (seller taxonomy{' '}
+        <strong>leaf</strong> id). Find candidates:{' '}
+        <code className="rounded bg-amber-100/80 px-1">
+          GET /api/admin/integrations/etsy/taxonomy/nodes?q=sticker
+        </code>{' '}
+        while logged in as admin — see <code className="rounded bg-amber-100/80 px-1">docs/etsy-listing-env.md</code>.
+        Shipping and return policies default from your Etsy shop when env overrides are unset. OAuth needs{' '}
+        <code className="rounded bg-amber-100/80 px-1">listings_w</code>.
       </p>
     </div>
   )

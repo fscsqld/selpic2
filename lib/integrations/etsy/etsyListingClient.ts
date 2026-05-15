@@ -20,6 +20,25 @@ export function etsyPriceFromSitePrice(sitePrice: number, markupPercent: number)
   return Math.round(p * 100) / 100
 }
 
+export type EtsyListingPricingMode = 'markup_percent' | 'fixed_price'
+
+export function resolveEtsyListingUnitPrice(params: {
+  sitePrice: number
+  pricingMode: EtsyListingPricingMode
+  markupPercent?: number
+  fixedEtsyPrice?: number
+}): number {
+  if (params.pricingMode === 'fixed_price') {
+    const p = params.fixedEtsyPrice
+    if (typeof p !== 'number' || !Number.isFinite(p) || p < 0.2) {
+      throw new Error('Fixed Etsy price must be a number at least 0.20 (shop currency).')
+    }
+    return Math.round(p * 100) / 100
+  }
+  const m = clampMarkup(params.markupPercent, defaultMarkupPercent())
+  return etsyPriceFromSitePrice(params.sitePrice, m)
+}
+
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s
   return s.slice(0, max - 1).trimEnd() + '...'
@@ -32,11 +51,17 @@ export async function createEtsyDraftPhysicalListing(params: {
   title: string
   description: string
   sitePrice: number
+  pricingMode: EtsyListingPricingMode
   markupPercent?: number
+  fixedEtsyPrice?: number
   quantity: number
 }): Promise<{ listingId: string }> {
-  const markup = clampMarkup(params.markupPercent, defaultMarkupPercent())
-  const price = etsyPriceFromSitePrice(params.sitePrice, markup)
+  const price = resolveEtsyListingUnitPrice({
+    sitePrice: params.sitePrice,
+    pricingMode: params.pricingMode,
+    markupPercent: params.markupPercent,
+    fixedEtsyPrice: params.fixedEtsyPrice,
+  })
   const taxonomyId = getRequiredEtsyTaxonomyId()
   const { shippingProfileId, returnPolicyId } = await resolveListingPolicyIds(
     params.shopId,
@@ -77,11 +102,17 @@ export async function updateEtsyListingFromSiteProduct(params: {
   title: string
   description: string
   sitePrice: number
+  pricingMode: EtsyListingPricingMode
   markupPercent?: number
+  fixedEtsyPrice?: number
   quantity?: number
 }): Promise<void> {
-  const markup = clampMarkup(params.markupPercent, defaultMarkupPercent())
-  const price = etsyPriceFromSitePrice(params.sitePrice, markup)
+  const price = resolveEtsyListingUnitPrice({
+    sitePrice: params.sitePrice,
+    pricingMode: params.pricingMode,
+    markupPercent: params.markupPercent,
+    fixedEtsyPrice: params.fixedEtsyPrice,
+  })
   const form = new URLSearchParams()
   form.set('title', truncate(params.title.replace(/\s+/g, ' ').trim(), 140))
   form.set('description', truncate(params.description.trim() || params.title, 65000))

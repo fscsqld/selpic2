@@ -39,12 +39,22 @@ export async function resolveListingPolicyIds(
   if (!shippingProfileId) {
     const sp = await fetchShopShippingProfiles(shopId, accessToken, apiKey)
     const rows = (Array.isArray(sp.results) ? sp.results : []) as Record<string, unknown>[]
-    shippingProfileId = pickFirstNumericId(rows, ['shipping_profile_id', 'shippingProfileId'])
+    const active = rows.filter((r) => {
+      const del = r.is_deleted ?? r.isDeleted ?? r.deleted
+      return del !== true && del !== 1 && del !== 'true'
+    })
+    const pickRows = active.length > 0 ? active : rows
+    shippingProfileId = pickFirstNumericId(pickRows, ['shipping_profile_id', 'shippingProfileId'])
   }
   if (!returnPolicyId) {
     const rp = await fetchShopReturnPolicies(shopId, accessToken, apiKey)
     const rows = (Array.isArray(rp.results) ? rp.results : []) as Record<string, unknown>[]
-    returnPolicyId = pickFirstNumericId(rows, ['return_policy_id', 'returnPolicyId'])
+    const active = rows.filter((r) => {
+      const del = r.is_deleted ?? r.isDeleted ?? r.deleted
+      return del !== true && del !== 1 && del !== 'true'
+    })
+    const pickRows = active.length > 0 ? active : rows
+    returnPolicyId = pickFirstNumericId(pickRows, ['return_policy_id', 'returnPolicyId'])
   }
 
   if (!shippingProfileId) {

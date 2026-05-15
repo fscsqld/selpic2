@@ -4,8 +4,10 @@ import { getValidEtsyAccessToken } from '@/lib/integrations/etsy/etsyAccessToken
 import {
   createEtsyDraftPhysicalListing,
   updateEtsyListingFromSiteProduct,
-  etsyPriceFromSitePrice,
+  resolveEtsyListingUnitPrice,
+  type EtsyListingPricingMode,
 } from '@/lib/integrations/etsy/etsyListingClient'
+import { uploadListingImagesFromUrls } from '@/lib/integrations/etsy/etsyListingImageUpload'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 
 export const runtime = 'nodejs'
@@ -18,6 +20,8 @@ type ProductPayload = {
   stockQuantity?: number
   inStock?: boolean
   detailDescription?: string
+  image?: string
+  fallbackImage?: string
 }
 
 function clampMarkup(percent: unknown, fallback: number): number {
@@ -46,9 +50,41 @@ function buildDescription(product: ProductPayload): string {
   return parts.join('\n\n').trim() || product.name
 }
 
+function resolveAssetUrl(url: string, assetBaseUrl: string | undefined): string {
+  const u = url.trim()
+  if (!u) return u
+  if (u.startsWith('data:') || u.startsWith('http://') || u.startsWith('https://')) return u
+  if (u.startsWith('//')) return `https:${u}`
+  const base = (
+    assetBaseUrl ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    ''
+  ).replace(/\/$/, '')
+  if (u.startsWith('/') && base) return `${base}${u}`
+  return u
+}
+
+function collectImageUrls(
+  product: ProductPayload,
+  extra: string[] | undefined,
+  assetBaseUrl: string | undefined
+): string[] {
+  const raw: string[] = []
+  if (product.image) raw.push(product.image)
+  if (product.fallbackImage) raw.push(product.fallbackImage)
+  if (Array.isArray(extra)) raw.push(...extra)
+  const resolved = raw.map((x) => resolveAssetUrl(String(x), assetBaseUrl)).filter(Boolean)
+  return [...new Set(resolved)]
+}
+
+function parsePricingMode(body: { pricingMode?: unknown }): EtsyListingPricingMode {
+  return body.pricingMode === 'fixed_price' ? 'fixed_price' : 'markup_percent'
+}
+
 /**
- * POST — create Etsy draft listing from storefront product fields.
- * PATCH — update title/description/price (with markup) / quantity on an existing listing.
+ * POST — create Etsy draft listing from storefront product fields + upload listing images.
+ * PATCH — update title/description/price / quantity (same pricing rules).
  */
 export async function POST(request: Request) {
   const admin = await requireSupabaseAdminUser()
@@ -58,7 +94,11 @@ export async function POST(request: Request) {
 
   let body: {
     product?: ProductPayload
+    pricingMode?: EtsyListingPricingMode
     markupPercent?: number
+    fixedEtsyPrice?: number
+    imageUrls?: string[]
+    assetBaseUrl?: string
   }
   try {
     body = (await request.json()) as typeof body
@@ -71,7 +111,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Expected { product: { name, price, ... } }' }, { status: 400 })
   }
 
+  const pricingMode = parsePricingMode(body)
   const markup = clampMarkup(body.markupPercent, defaultMarkup())
+  if (pricingMode === 'fixed_price') {
+    if (typeof body.fixedEtsyPrice !== 'number' || !Number.isFinite(body.fixedEtsyPrice)) {
+      return NextResponse.json(
+        { error: 'When pricingMode is "fixed_price", pass a numeric fixedEtsyPrice (e.g. 19.99).' },
+        { status: 400 }
+      )
+    }
+  }
+
   const qty = quantityFromProduct(product)
   if (qty < 1) {
     return NextResponse.json(
@@ -91,18 +141,47 @@ export async function POST(request: Request) {
       title: product.name,
       description: desc,
       sitePrice: product.price,
+      pricingMode,
       markupPercent: markup,
+      fixedEtsyPrice: body.fixedEtsyPrice,
       quantity: qty,
     })
 
-    const etsyUnitPrice = etsyPriceFromSitePrice(product.price, markup)
+    const etsyUnitPrice = resolveEtsyListingUnitPrice({
+      sitePrice: product.price,
+      pricingMode,
+      markupPercent: markup,
+      fixedEtsyPrice: body.fixedEtsyPrice,
+    })
+
+    const urls = collectImageUrls(product, body.imageUrls, body.assetBaseUrl?.trim())
+    let uploadedImages = 0
+    const imageUploadErrors: string[] = []
+    if (urls.length > 0) {
+      const up = await uploadListingImagesFromUrls({
+        shopId,
+        listingId,
+        accessToken,
+        apiKey,
+        imageUrls: urls,
+        productName: product.name,
+      })
+      uploadedImages = up.uploaded
+      imageUploadErrors.push(...up.errors)
+    }
+
     return NextResponse.json({
       ok: true,
       listingId,
       shopId,
-      markupPercent: markup,
+      pricingMode,
+      markupPercent: pricingMode === 'markup_percent' ? markup : undefined,
+      fixedEtsyPrice: pricingMode === 'fixed_price' ? body.fixedEtsyPrice : undefined,
       sitePrice: product.price,
       etsyDraftUnitPrice: etsyUnitPrice,
+      uploadedImages,
+      imageUrlsAttempted: urls.length,
+      imageUploadErrors,
     })
   } catch (e) {
     logAndSafeMessage('etsy listings POST', e)
@@ -120,7 +199,9 @@ export async function PATCH(request: Request) {
   let body: {
     listingId?: string
     product?: ProductPayload
+    pricingMode?: EtsyListingPricingMode
     markupPercent?: number
+    fixedEtsyPrice?: number
   }
   try {
     body = (await request.json()) as typeof body
@@ -137,7 +218,17 @@ export async function PATCH(request: Request) {
     )
   }
 
+  const pricingMode = parsePricingMode(body)
   const markup = clampMarkup(body.markupPercent, defaultMarkup())
+  if (pricingMode === 'fixed_price') {
+    if (typeof body.fixedEtsyPrice !== 'number' || !Number.isFinite(body.fixedEtsyPrice)) {
+      return NextResponse.json(
+        { error: 'When pricingMode is "fixed_price", pass a numeric fixedEtsyPrice (e.g. 19.99).' },
+        { status: 400 }
+      )
+    }
+  }
+
   const qty = quantityFromProduct(product)
 
   try {
@@ -152,16 +243,26 @@ export async function PATCH(request: Request) {
       title: product.name,
       description: desc,
       sitePrice: product.price,
+      pricingMode,
       markupPercent: markup,
+      fixedEtsyPrice: body.fixedEtsyPrice,
       quantity: qty >= 1 ? qty : undefined,
     })
 
-    const etsyUnitPrice = etsyPriceFromSitePrice(product.price, markup)
+    const etsyUnitPrice = resolveEtsyListingUnitPrice({
+      sitePrice: product.price,
+      pricingMode,
+      markupPercent: markup,
+      fixedEtsyPrice: body.fixedEtsyPrice,
+    })
+
     return NextResponse.json({
       ok: true,
       listingId,
       shopId,
-      markupPercent: markup,
+      pricingMode,
+      markupPercent: pricingMode === 'markup_percent' ? markup : undefined,
+      fixedEtsyPrice: pricingMode === 'fixed_price' ? body.fixedEtsyPrice : undefined,
       sitePrice: product.price,
       etsyUnitPrice,
     })

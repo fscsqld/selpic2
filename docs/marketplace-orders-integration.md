@@ -65,7 +65,9 @@ REST calls use **`Authorization: Bearer <access_token>`** and **`x-api-key: <KEY
 
 - Admin-only panel on **`/products/[id]`** when signed in with Supabase admin and Etsy is connected. Creates a **draft** physical listing or **PATCH**es an existing listing linked via `etsyListingId` on the product.
 - Server env: **`ETSY_DEFAULT_TAXONOMY_ID`** (seller taxonomy leaf). Shipping profile and return policy default to the **first** returned by Etsy for the shop unless **`ETSY_DEFAULT_SHIPPING_PROFILE_ID`** / **`ETSY_DEFAULT_RETURN_POLICY_ID`** are set.
-- **Markup:** optional `markupPercent` in the API body; defaults from **`ETSY_LISTING_MARKUP_DEFAULT_PERCENT`** (server) and **`NEXT_PUBLIC_ETSY_LISTING_MARKUP_DEFAULT`** (browser field default).
+- **Markup:** `pricingMode` `markup_percent` (with `markupPercent`) or `fixed_price` (with `fixedEtsyPrice`). Defaults from **`ETSY_LISTING_MARKUP_DEFAULT_PERCENT`** (server) and **`NEXT_PUBLIC_ETSY_LISTING_MARKUP_DEFAULT`** (browser field default).
+- **Images:** After draft creation, the server uploads storefront + media-library images (max 10) via Etsy `uploadListingImage`. Relative image paths are resolved with `assetBaseUrl` / `NEXT_PUBLIC_SITE_URL`.
+- **Taxonomy discovery:** `GET /api/admin/integrations/etsy/taxonomy/nodes?q=...` (admin session) — see **`docs/etsy-listing-env.md`** for choosing `ETSY_DEFAULT_TAXONOMY_ID`.
 
 ### 6) Personalization → SELPIC fields
 
