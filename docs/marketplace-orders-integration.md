@@ -32,7 +32,8 @@ Adding **eBay** later: implement `lib/orderSources/ebay/*`, register in `registr
 | `ETSY_CLIENT_ID` | App **Keystring** (`client_id` for OAuth + `x-api-key` on API calls). Legacy alias: `ETSY_API_KEY`. |
 | `ETSY_CLIENT_SECRET` | **Shared secret** — token exchange/refresh and **`x-api-key`** as `KEYSTRING:SHARED_SECRET` on REST calls. Server only. |
 | `ETSY_OAUTH_REDIRECT_URI` | Full callback URL (must match Etsy app settings). |
-| `ETSY_OAUTH_EXTRA_SCOPES` | Optional — space-separated extra OAuth scopes (e.g. `listings_w` or `listings_r listings_w`). Default connect flow only requests order-sync scopes; add this **after** Etsy allows listing APIs on your app, then reconnect. |
+| `ETSY_OAUTH_INCLUDE_LISTING_SCOPES` | Set to `true` only when you want listing-related scopes on the OAuth token. If unset/false, `ETSY_OAUTH_EXTRA_SCOPES` is ignored (Connect stays order-sync only). |
+| `ETSY_OAUTH_EXTRA_SCOPES` | Space-separated extra scopes (e.g. `listings_w`). Used **only when** `ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true`, then reconnect. |
 | `ETSY_SHOP_ID` | Optional — pin one shop when the seller has multiple shops. |
 | `NEXT_PUBLIC_SITE_URL` | Site base for emails/SEO; OAuth callback uses the **request origin** for local ports; resolves relative `/…` listing image URLs when the client does not send `assetBaseUrl`. |
 
@@ -51,9 +52,9 @@ to your public site origin. Example:
 `https://selpic.com.au/api/admin/integrations/etsy/oauth/callback`  
 Register that **full URL** in the Etsy app and set the same value as `ETSY_OAUTH_REDIRECT_URI`.
 
-**Scopes requested** (authorize URL): by default **`shops_r`**, **`transactions_r`**, **`address_r`** — enough for shop + receipt import. Listing create/update needs **`listings_w`** (and optionally **`listings_r`**); those are **not** requested by default so **Connect Etsy** can succeed on Personal Access apps that block broader scopes until Etsy approves listing access.
+**Scopes requested** (authorize URL): by default **`shops_r`**, **`transactions_r`**, **`address_r`** — enough for shop + receipt import. **`listings_w`** / **`listings_r`** are added only when **`ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true`** and **`ETSY_OAUTH_EXTRA_SCOPES`** is set; otherwise **`ETSY_OAUTH_EXTRA_SCOPES` alone is ignored** so Connect stays order-sync only.
 
-Set **`ETSY_OAUTH_EXTRA_SCOPES`** (space-separated, e.g. `listings_w`) in Vercel, redeploy, then **Connect Etsy** again. Any time you change that env value, reconnect so the stored token includes the new scopes.
+Set **`ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true`** and **`ETSY_OAUTH_EXTRA_SCOPES`** (e.g. `listings_w`) in Vercel, redeploy, then **Connect Etsy** again. Any time you change those env values, reconnect so the stored token includes the new scopes.
 
 REST calls use **`Authorization: Bearer <access_token>`** and **`x-api-key: <KEYSTRING>:<SHARED_SECRET>`** (from `ETSY_CLIENT_ID` + `ETSY_CLIENT_SECRET`).
 

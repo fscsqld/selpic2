@@ -99,6 +99,7 @@ export default function AdminIntegrationsPage() {
                 OAuth defaults to order-sync scopes only (<code className="text-xs">shops_r</code>,{' '}
                 <code className="text-xs">transactions_r</code>, <code className="text-xs">address_r</code>) so{' '}
                 <strong>Connect Etsy</strong> works on Personal Access apps. To create drafts from a product page, set{' '}
+                <code className="text-xs">ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true</code> and{' '}
                 <code className="text-xs">ETSY_OAUTH_EXTRA_SCOPES</code> (e.g. <code className="text-xs">listings_w</code>
                 ), redeploy, then connect again.
               </li>

@@ -13,14 +13,19 @@ export const ETSY_OAUTH_CALLBACK_PATH = '/api/admin/integrations/etsy/oauth/call
  * `shops_r`, `transactions_r`, `address_r`. This avoids requesting listing write scopes
  * that can keep OAuth stuck on “app approval is pending” for some apps.
  *
- * **After Etsy approves listing access:** set env `ETSY_OAUTH_EXTRA_SCOPES` (space-separated),
- * e.g. `listings_r listings_w`, redeploy, then **Connect Etsy** again so the token includes them.
+ * **Listing scopes (`listings_w`, etc.):** ignored unless `ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true`.
+ * When true, merges env `ETSY_OAUTH_EXTRA_SCOPES` (space-separated), redeploy, then **Connect Etsy** again.
  *
  * Re-authorize whenever this list changes.
  */
 const DEFAULT_OAUTH_SCOPES = ['shops_r', 'transactions_r', 'address_r'] as const
 
 export function getEtsyOAuthScopes(): string {
+  const includeListing =
+    process.env.ETSY_OAUTH_INCLUDE_LISTING_SCOPES?.trim().toLowerCase() === 'true'
+  if (!includeListing) {
+    return [...DEFAULT_OAUTH_SCOPES].join(' ')
+  }
   const extra = process.env.ETSY_OAUTH_EXTRA_SCOPES?.trim()
   const parts = extra ? extra.split(/\s+/).filter(Boolean) : []
   const merged = [...DEFAULT_OAUTH_SCOPES, ...parts]

@@ -40,5 +40,12 @@ jobs:
             echo "VERCEL_DEPLOY_HOOK_URL secret is not set — skipping (see workflow header comments)."
             exit 0
           fi
-          curl -fsSL -X POST "${HOOK_URL}"
-          echo "Vercel deploy hook triggered OK."
+          code=$(curl -sS -o /tmp/vercel-hook-body.txt -w "%{http_code}" -X POST "${HOOK_URL}")
+          echo "Deploy hook HTTP status: ${code}"
+          echo "Response (first 400 chars):"
+          head -c 400 /tmp/vercel-hook-body.txt || true
+          echo ""
+          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+            echo "::warning::Unexpected HTTP status (Vercel hooks often return 201)."
+          fi
+          echo "Vercel deploy hook POST finished."
