@@ -31,6 +31,16 @@ If the search returns too few rows, try a shorter `q` or omit `q` (response can 
 
 There is **no single universal** "name sticker" id: search the taxonomy API with terms you actually use (`name sticker`, `custom label`, `paper sticker`, etc.) and select the leaf that Etsy shows for your intended listing type.
 
+### One-command local suggestions (uses `.env.local`)
+
+From the repo root (with `ETSY_CLIENT_ID` and `ETSY_CLIENT_SECRET` in `.env.local`):
+
+```bash
+npm run etsy:taxonomy
+```
+
+This prints ranked taxonomy **ids and paths** aligned with SELPIC’s storefront (stickers / name labels). Copy one **numeric `id`** into Vercel as `ETSY_DEFAULT_TAXONOMY_ID`.
+
 ## Optional overrides
 
 | Variable | When to set |

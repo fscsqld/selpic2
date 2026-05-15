@@ -25,6 +25,7 @@
     "test": "echo \"No tests specified\" && exit 0",
     "verify:ledger": "node scripts/verify-order-ledger.mjs",
     "grant:admin": "node scripts/grant-supabase-admin.mjs",
+    "etsy:taxonomy": "node scripts/print-etsy-taxonomy-suggestions.mjs",
     "generate-report": "node scripts/generate-report.js"
   },
   "dependencies": {
