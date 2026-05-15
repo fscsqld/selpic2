@@ -1,21 +1,5 @@
-# Optional: forces a new Vercel **Production** build from the **latest `main` commit**
-# on every push — avoids staying stuck on an old commit when someone uses Vercel’s
-# “Redeploy” on an ancient deployment (same SHA like 325857f forever).
-#
-# Setup (one-time):
-# 1. Vercel → your Project → Settings → Git → **Deploy Hooks** → Create Hook
-#    - Branch: **main**
-#    - Name: e.g. `github-main-push`
-# 2. Copy the hook URL.
-# 3. GitHub → this repo → Settings → Secrets and variables → Actions → **New repository secret**
-#    - Name: `VERCEL_DEPLOY_HOOK_URL`
-#    - Value: the URL from step 1.
-#
-# If the secret is missing, this workflow is a no-op (does not fail CI).
-#
-# Note: If Vercel’s native “Git push auto-deploy” already works, you may get **two**
-# builds per push (native + hook). In that case, either remove this workflow or
-# disable auto-deploy in Vercel and keep only the hook.
+# Optional: POST to Vercel Deploy Hook on every push to `main`.
+# Secret: GitHub repo → Settings → Actions → `VERCEL_DEPLOY_HOOK_URL` (hook URL from Vercel → Settings → Git → Deploy Hooks, branch `main`).
 
 name: Vercel deploy hook (main)
 
@@ -35,17 +19,9 @@ jobs:
         env:
           HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         run: |
-          set -euo pipefail
-          if [ -z "${HOOK_URL}" ]; then
-            echo "VERCEL_DEPLOY_HOOK_URL secret is not set — skipping (see workflow header comments)."
+          if [ -z "${HOOK_URL:-}" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL unset — skip."
             exit 0
           fi
-          code=$(curl -sS -o /tmp/vercel-hook-body.txt -w "%{http_code}" -X POST "${HOOK_URL}")
-          echo "Deploy hook HTTP status: ${code}"
-          echo "Response (first 400 chars):"
-          head -c 400 /tmp/vercel-hook-body.txt || true
-          echo ""
-          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
-            echo "::warning::Unexpected HTTP status (Vercel hooks often return 201)."
-          fi
-          echo "Vercel deploy hook POST finished."
+          curl -fsSL -X POST "${HOOK_URL}"
+          echo "Hook POST done."

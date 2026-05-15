@@ -1,6 +1,6 @@
 # Etsy draft listings — environment variables and taxonomy
 
-This app can create **draft** physical listings on Etsy from the storefront product detail page (`/products/[id]`, admin-only panel). Drafts need a valid **seller taxonomy leaf** id, Etsy **shipping** and **return** policies (auto-detected from your shop by default), and **`listings_w`** on the OAuth token (see **OAuth scope** below — enable via `ETSY_OAUTH_INCLUDE_LISTING_SCOPES` + `ETSY_OAUTH_EXTRA_SCOPES` + reconnect).
+This app can create **draft** physical listings on Etsy from the storefront product detail page (`/products/[id]`, admin-only panel). Drafts need a valid **seller taxonomy leaf** id, Etsy **shipping** and **return** policies (auto-detected from your shop by default), and **`listings_w`** on the OAuth token. **Connect** in this repo currently requests **order-only** scopes; listing drafts from SELPIC need a code change to request `listings_w` and a fresh Connect when Etsy allows it.
 
 ## Required (Vercel + local if you test locally)
 
@@ -9,8 +9,6 @@ This app can create **draft** physical listings on Etsy from the storefront prod
 | `ETSY_CLIENT_ID` | App keystring (`client_id` + `x-api-key` left side). |
 | `ETSY_CLIENT_SECRET` | Shared secret — `x-api-key` must be `KEYSTRING:SHARED_SECRET`. |
 | `ETSY_OAUTH_REDIRECT_URI` | Full HTTPS callback URL registered on the Etsy app. |
-| `ETSY_OAUTH_INCLUDE_LISTING_SCOPES` | Set **`true`** when you are ready to request listing scopes on Connect. |
-| `ETSY_OAUTH_EXTRA_SCOPES` | e.g. **`listings_w`** (and optionally **`listings_r`**). Ignored unless **INCLUDE** is `true`. Required before **Create Etsy draft** works. |
 | `ETSY_DEFAULT_TAXONOMY_ID` | **Numeric seller taxonomy leaf id** used for every draft created from SELPIC. Must be a **leaf** node that matches your product type (e.g. stickers, decals). |
 
 Etsy **owns** the taxonomy tree; ids can vary by Etsy version and region. **Do not copy a random id from the internet** — pick one that matches your shop and category.
@@ -73,7 +71,7 @@ Relative paths (`/images/...`) are resolved with `assetBaseUrl` from the browser
 
 ## OAuth scope
 
-- **Default OAuth** (no extra env): `shops_r`, `transactions_r`, `address_r` — order import only; avoids listing scopes that can block authorization on some apps.
-- **Drafts + images:** set **`ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true`** and **`ETSY_OAUTH_EXTRA_SCOPES=listings_w`** (space-separated; add **`listings_r`** only if you need read listing APIs), redeploy, then **Admin → Integrations → Connect Etsy** again so Supabase stores a token with **`listings_w`**.
+- **Default OAuth (Connect):** `shops_r`, `transactions_r`, `address_r` only — fixed in `getEtsyOAuthScopes()` (no env toggles).
+- **Drafts + images:** need **`listings_w`** on the token; extend OAuth scope logic in code and reconnect when Etsy allows listing scopes for your app.
 
 Etsy’s scope strings **`listings_r`** / **`listings_w`** match the [Open API v3 authentication docs](https://developer.etsy.com/documentation/essentials/authentication); they are not misspelled. Whether your app can use them without a separate Etsy review depends on your app’s status on Etsy’s side.

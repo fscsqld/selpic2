@@ -279,11 +279,8 @@ export default function ProductEtsyAdminPanel({
           GET /api/admin/integrations/etsy/taxonomy/nodes?q=sticker
         </code>{' '}
         while logged in as admin — see <code className="rounded bg-amber-100/80 px-1">docs/etsy-listing-env.md</code>.
-        Shipping and return policies default from your Etsy shop when env overrides are unset. Drafts require{' '}
-        <code className="rounded bg-amber-100/80 px-1">listings_w</code> on the token: set{' '}
-        <code className="rounded bg-amber-100/80 px-1">ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true</code> and{' '}
-        <code className="rounded bg-amber-100/80 px-1">ETSY_OAUTH_EXTRA_SCOPES=listings_w</code> in Vercel, redeploy, then{' '}
-        <strong>Connect Etsy</strong> again.
+        Shipping and return policies default from your Etsy shop when env overrides are unset. Drafts need{' '}
+        <code className="rounded bg-amber-100/80 px-1">listings_w</code> on the Etsy token; Connect currently uses order-only scopes until listing OAuth is enabled in code and Etsy allows it.
       </p>
     </div>
   )

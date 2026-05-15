@@ -93,7 +93,7 @@ function augmentListingApiErrorMessage(message: string): string {
     lower.includes('permission denied') ||
     lower.includes('unauthorized')
   if (!likelyAuth) return message
-  return `${message} If this is listing create/update: set ETSY_OAUTH_INCLUDE_LISTING_SCOPES=true and ETSY_OAUTH_EXTRA_SCOPES=listings_w (optionally add listings_r), redeploy, then Admin → Integrations → Connect Etsy again.`
+  return `${message} Listing create needs listings_w on the Etsy token; Connect currently uses order-only scopes — adjust server OAuth scopes when Etsy allows listing access, then reconnect.`
 }
 
 /**
