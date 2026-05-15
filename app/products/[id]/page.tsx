@@ -12,7 +12,6 @@ import { useUserAuth } from '@/lib/userAuth'
 import Image from 'next/image'
 import ProductGallery from '@/components/ProductGallery'
 import ProductDetailJsonLd from '@/components/ProductDetailJsonLd'
-import ProductEtsyAdminPanel from '@/components/ProductEtsyAdminPanel'
 import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
 export default function ProductDetailPage() {
@@ -487,13 +486,6 @@ export default function ProductDetailPage() {
                 </p>
               )}
             </div>
-
-            <ProductEtsyAdminPanel
-              product={product}
-              onSaveListingId={(listingId) => {
-                updateProduct({ ...product, etsyListingId: listingId })
-              }}
-            />
 
           </div>
         </div>
