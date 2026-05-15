@@ -7,7 +7,13 @@ import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOr
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2, Store } from 'lucide-react'
+import { CheckCircle2, XCircle, Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, DollarSign, Package, CreditCard, User, History, FileText, Save, Plus, Send, Loader2, Volume2, Store, RefreshCw, ExternalLink } from 'lucide-react'
+import {
+  formatEtsySyncSuccessMessage,
+  runEtsyOrderSync,
+  startEtsyOAuth,
+} from '@/lib/admin/etsyAdminUi'
+import { useEtsyOAuthReturn } from '@/components/admin/useEtsyOAuthReturn'
 import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
@@ -75,34 +81,38 @@ export default function AdminOrdersPage() {
     shopName?: string | null
     shopId?: string
   } | null>(null)
+  const [etsyBanner, setEtsyBanner] = useState<string | null>(null)
+  const [etsySyncBusy, setEtsySyncBusy] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    void fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
-      .then(async (res) => {
-        if (!res.ok) return { connected: false as const }
-        const data = (await res.json().catch(() => ({}))) as {
-          connected?: boolean
-          shopName?: string | null
-          shopId?: string
-        }
-        if (typeof data.connected !== 'boolean') return { connected: false as const }
-        return {
-          connected: data.connected,
-          shopName: data.shopName,
-          shopId: data.shopId,
-        }
+  const refreshEtsyStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
+      if (!res.ok) {
+        setEtsyConn({ connected: false })
+        return
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        connected?: boolean
+        shopName?: string | null
+        shopId?: string
+      }
+      if (typeof data.connected !== 'boolean') {
+        setEtsyConn({ connected: false })
+        return
+      }
+      setEtsyConn({
+        connected: data.connected,
+        shopName: data.shopName,
+        shopId: data.shopId,
       })
-      .then((d) => {
-        if (!cancelled) setEtsyConn(d)
-      })
-      .catch(() => {
-        if (!cancelled) setEtsyConn({ connected: false })
-      })
-    return () => {
-      cancelled = true
+    } catch {
+      setEtsyConn({ connected: false })
     }
   }, [])
+
+  useEffect(() => {
+    void refreshEtsyStatus()
+  }, [refreshEtsyStatus])
 
   const syncOrdersFromSupabase = useCallback(async () => {
     try {
@@ -118,6 +128,15 @@ export default function AdminOrdersPage() {
       setLedgerSynced(true)
     }
   }, [mergeOrdersFromServer])
+
+  useEtsyOAuthReturn({
+    enabled: true,
+    onBanner: setEtsyBanner,
+    afterConnected: async () => {
+      await refreshEtsyStatus()
+      await syncOrdersFromSupabase()
+    },
+  })
 
   // Supabase ledger first — avoid refreshOrdersFromStorage() overwriting in-memory orders with stale
   // localStorage before mergeOrdersFromServer persists (previously queueMicrotask-only LS write).
@@ -939,37 +958,69 @@ export default function AdminOrdersPage() {
                       : 'Checking Etsy connection…'
                     : etsyConn.connected
                       ? isKo
-                        ? `연결됨${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}. Etsy 주문 가져오기는 대시보드 또는 Integrations에서 Sync를 사용하세요.`
-                        : `Connected${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}. Pull Etsy orders with Sync on the Dashboard or Integrations.`
+                        ? `연결됨${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}.`
+                        : `Connected${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}.`
                       : isKo
-                        ? 'Etsy 샵이 아직 연결되지 않았습니다. 아래 버튼으로 OAuth를 시작하거나 Integrations 페이지를 사용하세요. Etsy OAuth 화면에서 “승인 대기”가 보이면 Etsy 개발자 콘솔의 앱 상태를 확인하세요. 기본 연결은 주문용 스코프만 요청합니다(권한 과다 표시는 이 문구의 원인이 아닙니다).'
-                        : 'No Etsy shop linked yet. Use the button below to start OAuth, or open Integrations. If Etsy’s OAuth page shows “approval pending”, check your app status in the Etsy developer console—by default we only request order-sync scopes, so this banner is not from “too many scopes”.'}
+                        ? 'Etsy 샵이 연결되지 않았습니다.'
+                        : 'Etsy shop is not connected.'}
                 </p>
-                {etsyConn && !etsyConn.connected ? (
-                  <p className="mt-1 text-xs text-violet-800/90">
-                    <Link href="/admin/integrations" className="font-medium underline hover:text-violet-950">
-                      {isKo ? 'Integrations 열기' : 'Open Integrations'}
-                    </Link>
-                  </p>
-                ) : null}
+                <p className="mt-1 text-xs text-violet-800/90">
+                  <Link href="/admin/integrations" className="font-medium underline hover:text-violet-950">
+                    {isKo ? 'Integrations (연결·설정)' : 'Integrations (connect & settings)'}
+                  </Link>
+                </p>
               </div>
             </div>
+            {etsyBanner ? (
+              <div className="w-full rounded-lg border border-violet-200 bg-white/80 px-3 py-2 text-sm text-gray-800">
+                {etsyBanner}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = '/api/admin/integrations/etsy/oauth/start'
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-900 shadow-sm hover:bg-violet-50"
-              >
-                <span
-                  className="flex h-6 w-6 items-center justify-center rounded bg-[#F56400] text-[10px] font-bold leading-none text-white"
-                  aria-hidden
+              {etsyConn?.connected ? (
+                <button
+                  type="button"
+                  disabled={etsySyncBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setEtsySyncBusy(true)
+                      setEtsyBanner(null)
+                      try {
+                        const result = await runEtsyOrderSync()
+                        if (!result.ok) {
+                          setEtsyBanner(result.error ?? 'Sync failed.')
+                          return
+                        }
+                        setEtsyBanner(
+                          formatEtsySyncSuccessMessage(result.imported, result.scanned, result.sinceDays)
+                        )
+                        await syncOrdersFromSupabase()
+                      } finally {
+                        setEtsySyncBusy(false)
+                      }
+                    })()
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
                 >
-                  E
-                </span>
-                {isKo ? 'Etsy 샵 연결하기' : 'Connect Etsy shop'}
-              </button>
+                  <RefreshCw className={`h-4 w-4 ${etsySyncBusy ? 'animate-spin' : ''}`} aria-hidden />
+                  {etsySyncBusy
+                    ? isKo
+                      ? '가져오는 중…'
+                      : 'Syncing…'
+                    : isKo
+                      ? 'Etsy 주문 가져오기'
+                      : 'Sync Etsy orders'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startEtsyOAuth('/admin/orders')}
+                  className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-900 shadow-sm hover:bg-violet-50"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden />
+                  {isKo ? 'Etsy 샵 연결하기' : 'Connect Etsy shop'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setQuickShipModalOpen(true)}

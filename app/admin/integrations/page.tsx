@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { Plug, RefreshCw, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react'
+import { startEtsyOAuth, formatEtsySyncSuccessMessage, runEtsyOrderSync } from '@/lib/admin/etsyAdminUi'
+import { useEtsyOAuthReturn } from '@/components/admin/useEtsyOAuthReturn'
 
 export default function AdminIntegrationsPage() {
   const [status, setStatus] = useState<{ connected: boolean; shopName?: string | null; shopId?: string } | null>(null)
@@ -21,42 +23,25 @@ export default function AdminIntegrationsPage() {
   }, [])
 
   useEffect(() => {
-    loadStatus()
-    const sp = new URLSearchParams(window.location.search)
-    const etsy = sp.get('etsy')
-    if (etsy === 'connected') setMessage('Etsy connected successfully.')
-    if (etsy === 'denied') setMessage('Etsy authorization was cancelled or denied.')
-    if (etsy === 'invalid_state') setMessage('OAuth state mismatch — try connecting again.')
-    if (etsy === 'error') {
-      const d = sp.get('detail')
-      setMessage(d ? `Etsy error: ${decodeURIComponent(d)}` : 'Etsy connection failed.')
-    }
-    if (etsy === 'missing_env') setMessage('Server missing Etsy OAuth environment variables.')
-    if (etsy === 'missing_secret')
-      setMessage('Server missing ETSY_CLIENT_SECRET — Open API needs x-api-key as KEYSTRING:SHARED_SECRET.')
-    if (etsy === 'no_db') setMessage('Supabase is not configured.')
+    void loadStatus()
   }, [loadStatus])
 
-  const startOAuth = () => {
-    window.location.href = '/api/admin/integrations/etsy/oauth/start'
-  }
+  useEtsyOAuthReturn({
+    enabled: true,
+    onBanner: setMessage,
+    afterConnected: loadStatus,
+  })
 
   const runSync = async () => {
     setSyncing(true)
     setMessage(null)
     try {
-      const res = await fetch('/api/admin/integrations/etsy/sync', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sinceDays: 90, openOnly: true }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setMessage(typeof data.error === 'string' ? data.error : 'Sync failed.')
+      const result = await runEtsyOrderSync()
+      if (!result.ok) {
+        setMessage(result.error ?? 'Sync failed.')
         return
       }
-      setMessage(`Synced ${data.imported ?? 0} orders (${data.scanned ?? 0} receipts scanned).`)
+      setMessage(formatEtsySyncSuccessMessage(result.imported, result.scanned, result.sinceDays))
       await loadStatus()
     } finally {
       setSyncing(false)
@@ -82,10 +67,10 @@ export default function AdminIntegrationsPage() {
               Etsy Open API v3
             </h2>
             <p className="text-sm text-gray-600 mb-4">
-              Connect your Etsy seller account (OAuth 2.0 + PKCE). After approval you return to the admin dashboard;
-              you can also manage the connection here. Sync imports paid receipts that are not yet shipped (open for
-              fulfillment), maps <code className="text-xs">formatted_address</code> for shipping labels, and maps
-              personalization into each line item.
+              Connect your Etsy seller account (OAuth 2.0 + PKCE). After approval you return to this page (or the page
+              where you started Connect). Sync imports paid receipts that are not yet shipped (open for fulfillment),
+              maps <code className="text-xs">formatted_address</code> for shipping labels, and maps personalization
+              into each line item.
             </p>
             <ul className="text-sm text-gray-600 list-disc pl-5 space-y-1 mb-4">
               <li>
@@ -128,24 +113,35 @@ export default function AdminIntegrationsPage() {
                   Not connected
                 </span>
               )}
-              <button
-                type="button"
-                onClick={startOAuth}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Connect Etsy
-              </button>
+              {!status?.connected ? (
+                <button
+                  type="button"
+                  onClick={() => startEtsyOAuth('/admin/integrations')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Connect Etsy
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startEtsyOAuth('/admin/integrations')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-orange-300 bg-white text-sm font-medium text-orange-900 hover:bg-orange-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Reconnect Etsy
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!status?.connected || syncing}
-                onClick={runSync}
+                onClick={() => void runSync()}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
                 {syncing ? 'Syncing…' : 'Sync Etsy orders'}
               </button>
-              <button type="button" onClick={loadStatus} className="text-sm text-blue-600 hover:underline">
+              <button type="button" onClick={() => void loadStatus()} className="text-sm text-blue-600 hover:underline">
                 Refresh status
               </button>
             </div>

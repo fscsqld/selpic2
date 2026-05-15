@@ -47,6 +47,12 @@ import { useTranslation } from '@/lib/useTranslation'
 import AdminOrderNotification from '@/components/AdminOrderNotification'
 import { useSalesGoals } from '@/lib/salesGoals'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+import {
+  formatEtsySyncSuccessMessage,
+  runEtsyOrderSync,
+  startEtsyOAuth,
+} from '@/lib/admin/etsyAdminUi'
+import { useEtsyOAuthReturn } from '@/components/admin/useEtsyOAuthReturn'
 
 const DASH_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -67,8 +73,7 @@ export default function AdminDashboard() {
     null
   )
   const [etsySyncBusy, setEtsySyncBusy] = useState(false)
-  const etsyPostOAuthSyncRan = useRef(false)
-  
+
   const { adminUser, logout } = useAdminAuth()
   const {
     products,
@@ -332,76 +337,31 @@ export default function AdminDashboard() {
     return adminUser.permissions.includes(permission)
   }, [adminUser])
 
+  const refreshEtsyStatus = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
+      const d = await r.json()
+      if (d && typeof d.connected === 'boolean') {
+        setEtsyConn({ connected: d.connected, shopName: d.shopName, shopId: d.shopId })
+      }
+    } catch {
+      setEtsyConn({ connected: false })
+    }
+  }, [])
+
   useEffect(() => {
     if (!isComponentReady || !adminUser || !hasPermission('orders:read')) return
-    void fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d && typeof d.connected === 'boolean') {
-          setEtsyConn({ connected: d.connected, shopName: d.shopName, shopId: d.shopId })
-        }
-      })
-      .catch(() => setEtsyConn({ connected: false }))
-  }, [isComponentReady, adminUser, hasPermission])
+    void refreshEtsyStatus()
+  }, [isComponentReady, adminUser, hasPermission, refreshEtsyStatus])
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !isComponentReady) return
-    const sp = new URLSearchParams(window.location.search)
-    const etsy = sp.get('etsy')
-    if (!etsy) return
-
-    const stripOAuthParams = () => {
-      const u = new URL(window.location.href)
-      ;['etsy', 'detail', 'reason'].forEach((k) => u.searchParams.delete(k))
-      const q = u.searchParams.toString()
-      window.history.replaceState({}, '', u.pathname + (q ? `?${q}` : ''))
-    }
-
-    if (etsy === 'connected') {
-      if (!etsyPostOAuthSyncRan.current) {
-        etsyPostOAuthSyncRan.current = true
-        void (async () => {
-          try {
-            const res = await fetch('/api/admin/integrations/etsy/sync', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sinceDays: 90, openOnly: true }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (res.ok) {
-              setEtsyBanner(
-                `Etsy connected. Imported ${data.imported ?? 0} open paid receipt(s) (${data.scanned ?? 0} scanned).`
-              )
-            } else {
-              setEtsyBanner(
-                `Etsy connected, but sync failed: ${typeof data.error === 'string' ? data.error : 'Unknown error'}`
-              )
-            }
-          } catch {
-            setEtsyBanner('Etsy connected, but the sync request failed.')
-          } finally {
-            await syncOrdersFromSupabase()
-            stripOAuthParams()
-          }
-        })()
-      } else {
-        stripOAuthParams()
-      }
-      return
-    }
-
-    if (etsy === 'denied') setEtsyBanner('Etsy authorization was cancelled or denied.')
-    else if (etsy === 'invalid_state') setEtsyBanner('OAuth state mismatch — try connecting again.')
-    else if (etsy === 'error') {
-      const d = sp.get('detail')
-      setEtsyBanner(d ? `Etsy error: ${decodeURIComponent(d)}` : 'Etsy connection failed.')
-    } else if (etsy === 'missing_env') setEtsyBanner('Server missing Etsy OAuth environment variables.')
-    else if (etsy === 'missing_secret')
-      setEtsyBanner('Server missing ETSY_CLIENT_SECRET — Open API needs x-api-key as KEYSTRING:SHARED_SECRET.')
-    else if (etsy === 'no_db') setEtsyBanner('Supabase is not configured.')
-    stripOAuthParams()
-  }, [isComponentReady, syncOrdersFromSupabase])
+  useEtsyOAuthReturn({
+    enabled: isComponentReady && !!adminUser && hasPermission('orders:read'),
+    onBanner: setEtsyBanner,
+    afterConnected: async () => {
+      await refreshEtsyStatus()
+      await syncOrdersFromSupabase()
+    },
+  })
 
   // Helper function to check if admin is accounting manager
   const isAccountingManager = useCallback((): boolean => {
@@ -836,9 +796,11 @@ export default function AdminDashboard() {
                 </Link>
               </div>
               <p className="text-sm text-gray-600 mb-3">
-                Connect with OAuth 2.0 (PKCE). After you approve access, you return here and we import{' '}
-                <strong>paid receipts that are not yet shipped</strong> (open for fulfillment) into the same order
-                ledger as your website — including personalization and shipping address for labels.
+                Pull Etsy orders into the same ledger as your website. Connection and env setup live in{' '}
+                <Link href="/admin/integrations" className="font-medium text-orange-700 hover:text-orange-900">
+                  Integrations
+                </Link>
+                .
               </p>
               {etsyBanner && (
                 <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
@@ -856,49 +818,44 @@ export default function AdminDashboard() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = '/api/admin/integrations/etsy/oauth/start'
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Connect Etsy shop
-                </button>
-                <button
-                  type="button"
-                  disabled={!etsyConn?.connected || etsySyncBusy}
-                  onClick={() => {
-                    void (async () => {
-                      setEtsySyncBusy(true)
-                      setEtsyBanner(null)
-                      try {
-                        const res = await fetch('/api/admin/integrations/etsy/sync', {
-                          method: 'POST',
-                          credentials: 'same-origin',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ sinceDays: 90, openOnly: true }),
-                        })
-                        const data = await res.json().catch(() => ({}))
-                        if (!res.ok) {
-                          setEtsyBanner(typeof data.error === 'string' ? data.error : 'Sync failed.')
-                          return
+                {!etsyConn?.connected ? (
+                  <button
+                    type="button"
+                    onClick={() => startEtsyOAuth('/admin/dashboard')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Connect Etsy shop
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={etsySyncBusy}
+                    onClick={() => {
+                      void (async () => {
+                        setEtsySyncBusy(true)
+                        setEtsyBanner(null)
+                        try {
+                          const result = await runEtsyOrderSync()
+                          if (!result.ok) {
+                            setEtsyBanner(result.error ?? 'Sync failed.')
+                            return
+                          }
+                          setEtsyBanner(
+                            formatEtsySyncSuccessMessage(result.imported, result.scanned, result.sinceDays)
+                          )
+                          await syncOrdersFromSupabase()
+                        } finally {
+                          setEtsySyncBusy(false)
                         }
-                        setEtsyBanner(
-                          `Imported ${data.imported ?? 0} open paid receipt(s) (${data.scanned ?? 0} scanned, last ${data.sinceDays ?? 90} days).`
-                        )
-                        await syncOrdersFromSupabase()
-                      } finally {
-                        setEtsySyncBusy(false)
-                      }
-                    })()
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${etsySyncBusy ? 'animate-spin' : ''}`} />
-                  {etsySyncBusy ? 'Syncing…' : 'Sync open orders from Etsy'}
-                </button>
+                      })()
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${etsySyncBusy ? 'animate-spin' : ''}`} />
+                    {etsySyncBusy ? 'Syncing…' : 'Sync open orders from Etsy'}
+                  </button>
+                )}
               </div>
             </div>
           )}
