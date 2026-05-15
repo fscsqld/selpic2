@@ -7,7 +7,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Vercel Cron (GET every 10 minutes). Set `CRON_SECRET` in the project; Vercel sends `Authorization: Bearer <CRON_SECRET>`.
+ * Scheduled Etsy receipt import (GET). Requires `CRON_SECRET`; callers must send `Authorization: Bearer <CRON_SECRET>`.
+ * Not wired in vercel.json on Hobby (sub-daily crons fail deploy). Use external scheduler, Vercel Pro crons, or Admin → Sync.
  * @see https://vercel.com/docs/cron-jobs
  */
 export async function GET(request: Request) {

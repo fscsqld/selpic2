@@ -101,9 +101,11 @@ export default function AdminIntegrationsPage() {
                 <code className="text-xs">address_r</code>.
               </li>
               <li>
-                Automated order import: set <code className="text-xs">CRON_SECRET</code> in Vercel (Project → Settings →
-                Environment Variables). Cron calls <code className="text-xs">GET /api/cron/etsy-sync</code> every 10 minutes
-                (see <code className="text-xs">vercel.json</code>).
+                Optional automated import: set <code className="text-xs">CRON_SECRET</code> in Vercel, then call{' '}
+                <code className="text-xs">GET /api/cron/etsy-sync</code> with{' '}
+                <code className="text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code> from an external scheduler (Vercel
+                Hobby cannot use 10-minute <code className="text-xs">vercel.json</code> crons). Use{' '}
+                <strong>Sync Etsy orders</strong> below for manual import anytime.
               </li>
             </ul>
 
