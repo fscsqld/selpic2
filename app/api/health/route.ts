@@ -5,6 +5,7 @@ import { hasUsableSupabaseBrowserEnv, readRawSupabasePublicEnv } from '@/lib/sup
 /**
  * GET /api/health — 로컬에서 Next 서버가 살아 있는지 빠르게 확인할 때 사용
  */
+// deploy-trigger: no functional change — forces a new Git commit for Vercel/GitHub sync
 export async function GET() {
   const { url } = readRawSupabasePublicEnv()
   let supabaseOrigin: string | null = null
