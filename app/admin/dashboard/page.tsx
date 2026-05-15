@@ -397,6 +397,8 @@ export default function AdminDashboard() {
       const d = sp.get('detail')
       setEtsyBanner(d ? `Etsy error: ${decodeURIComponent(d)}` : 'Etsy connection failed.')
     } else if (etsy === 'missing_env') setEtsyBanner('Server missing Etsy OAuth environment variables.')
+    else if (etsy === 'missing_secret')
+      setEtsyBanner('Server missing ETSY_CLIENT_SECRET — Open API needs x-api-key as KEYSTRING:SHARED_SECRET.')
     else if (etsy === 'no_db') setEtsyBanner('Supabase is not configured.')
     stripOAuthParams()
   }, [isComponentReady, syncOrdersFromSupabase])

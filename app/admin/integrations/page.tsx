@@ -32,6 +32,8 @@ export default function AdminIntegrationsPage() {
       setMessage(d ? `Etsy error: ${decodeURIComponent(d)}` : 'Etsy connection failed.')
     }
     if (etsy === 'missing_env') setMessage('Server missing Etsy OAuth environment variables.')
+    if (etsy === 'missing_secret')
+      setMessage('Server missing ETSY_CLIENT_SECRET — Open API needs x-api-key as KEYSTRING:SHARED_SECRET.')
     if (etsy === 'no_db') setMessage('Supabase is not configured.')
   }, [loadStatus])
 

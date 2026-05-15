@@ -9,7 +9,7 @@ import {
 import { fetchUserShops } from '@/lib/integrations/etsy/etsyOrdersClient'
 import { upsertEtsyConnection } from '@/lib/integrations/etsy/etsyConnectionStore'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
-import { getEtsyClientId, getEtsyClientSecret, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
+import { getEtsyClientId, getEtsyClientSecret, getEtsyOAuthRedirectUri, getEtsyOpenApiXApiKey } from '@/lib/integrations/etsy/etsyEnv'
 
 const STATE = 'etsy_oauth_state'
 const VERIFIER = 'etsy_pkce_verifier'
@@ -55,6 +55,9 @@ export async function GET(request: Request) {
   if (!clientId || !redirectUri) {
     return redirectToAdminDashboard(request, { etsy: 'missing_env' })
   }
+  if (!clientSecret?.trim()) {
+    return redirectToAdminDashboard(request, { etsy: 'missing_secret' })
+  }
 
   try {
     const tokens = await exchangeEtsyAuthorizationCode({
@@ -69,7 +72,7 @@ export async function GET(request: Request) {
       throw new Error('Could not parse Etsy user id from access token.')
     }
 
-    const shopsBody = await fetchUserShops(userId, tokens.access_token, clientId)
+    const shopsBody = await fetchUserShops(userId, tokens.access_token, getEtsyOpenApiXApiKey())
     const shops = Array.isArray(shopsBody.results) ? shopsBody.results : []
     const preferred = process.env.ETSY_SHOP_ID?.trim()
     const shop =

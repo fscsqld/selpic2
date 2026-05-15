@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { generateOauthState, generatePkcePair } from '@/lib/integrations/etsy/etsyOAuth'
-import { getEtsyClientId, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
+import { getEtsyClientId, getEtsyClientSecret, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
 import { ETSY_OAUTH_SCOPES } from '@/lib/integrations/etsy/etsyOAuthConfig'
 
 const STATE = 'etsy_oauth_state'
@@ -21,6 +21,15 @@ export async function GET() {
       {
         error:
           'Missing ETSY_CLIENT_ID (or legacy ETSY_API_KEY) or ETSY_OAUTH_REDIRECT_URI. Set both to match your Etsy app registration.',
+      },
+      { status: 503 }
+    )
+  }
+  if (!getEtsyClientSecret()?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          'Missing ETSY_CLIENT_SECRET. Etsy Open API v3 requires x-api-key as KEYSTRING:SHARED_SECRET — add the Shared secret from Your Etsy apps.',
       },
       { status: 503 }
     )
