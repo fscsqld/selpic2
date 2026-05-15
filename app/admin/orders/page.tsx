@@ -70,6 +70,39 @@ export default function AdminOrdersPage() {
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [chimeUnlocked, setChimeUnlocked] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
+  const [etsyConn, setEtsyConn] = useState<{
+    connected: boolean
+    shopName?: string | null
+    shopId?: string
+  } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/admin/integrations/etsy/status', { credentials: 'same-origin' })
+      .then(async (res) => {
+        if (!res.ok) return { connected: false as const }
+        const data = (await res.json().catch(() => ({}))) as {
+          connected?: boolean
+          shopName?: string | null
+          shopId?: string
+        }
+        if (typeof data.connected !== 'boolean') return { connected: false as const }
+        return {
+          connected: data.connected,
+          shopName: data.shopName,
+          shopId: data.shopId,
+        }
+      })
+      .then((d) => {
+        if (!cancelled) setEtsyConn(d)
+      })
+      .catch(() => {
+        if (!cancelled) setEtsyConn({ connected: false })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const syncOrdersFromSupabase = useCallback(async () => {
     try {
@@ -900,22 +933,33 @@ export default function AdminOrdersPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">Etsy shop</p>
                 <p className="text-sm text-gray-600">
-                  {isKo
-                    ? 'Etsy API 승인 전까지 OAuth 연결은 보류됩니다. 승인 후 Integrations에서 연결하세요.'
-                    : 'OAuth connection stays paused until Etsy approves the app. Use Integrations for the live flow.'}
+                  {etsyConn === null
+                    ? isKo
+                      ? 'Etsy 연결 상태를 확인하는 중…'
+                      : 'Checking Etsy connection…'
+                    : etsyConn.connected
+                      ? isKo
+                        ? `연결됨${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}. Etsy 주문 가져오기는 대시보드 또는 Integrations에서 Sync를 사용하세요.`
+                        : `Connected${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}${etsyConn.shopId ? ` (shop ${etsyConn.shopId})` : ''}. Pull Etsy orders with Sync on the Dashboard or Integrations.`
+                      : isKo
+                        ? 'Etsy 샵이 아직 연결되지 않았습니다. 아래 버튼으로 OAuth를 시작하거나 Integrations 페이지를 사용하세요. Etsy OAuth 화면에서 “승인 대기”가 보이면 Etsy 개발자 콘솔의 앱 상태를 확인하세요. 기본 연결은 주문용 스코프만 요청합니다(권한 과다 표시는 이 문구의 원인이 아닙니다).'
+                        : 'No Etsy shop linked yet. Use the button below to start OAuth, or open Integrations. If Etsy’s OAuth page shows “approval pending”, check your app status in the Etsy developer console—by default we only request order-sync scopes, so this banner is not from “too many scopes”.'}
                 </p>
+                {etsyConn && !etsyConn.connected ? (
+                  <p className="mt-1 text-xs text-violet-800/90">
+                    <Link href="/admin/integrations" className="font-medium underline hover:text-violet-950">
+                      {isKo ? 'Integrations 열기' : 'Open Integrations'}
+                    </Link>
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  window.alert(
-                    isKo
-                      ? 'Etsy 판매자 앱 승인 대기 중입니다. 승인되면 Integrations에서 샵을 연결할 수 있습니다.'
-                      : 'Etsy seller app approval is pending. You will be able to connect your shop from Integrations once approved.'
-                  )
-                }
+                onClick={() => {
+                  window.location.href = '/api/admin/integrations/etsy/oauth/start'
+                }}
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-900 shadow-sm hover:bg-violet-50"
               >
                 <span

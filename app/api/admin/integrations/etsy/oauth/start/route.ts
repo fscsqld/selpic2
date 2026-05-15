@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { generateOauthState, generatePkcePair } from '@/lib/integrations/etsy/etsyOAuth'
 import { getEtsyClientId, getEtsyClientSecret, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
-import { ETSY_OAUTH_SCOPES } from '@/lib/integrations/etsy/etsyOAuthConfig'
+import { getEtsyOAuthScopes } from '@/lib/integrations/etsy/etsyOAuthConfig'
 
 const STATE = 'etsy_oauth_state'
 const VERIFIER = 'etsy_pkce_verifier'
@@ -42,7 +42,7 @@ export async function GET() {
   jar.set(STATE, state, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 600 })
   jar.set(VERIFIER, verifier, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 600 })
 
-  const scope = encodeURIComponent(ETSY_OAUTH_SCOPES)
+  const scope = encodeURIComponent(getEtsyOAuthScopes())
   const url =
     `https://www.etsy.com/oauth/connect?response_type=code` +
     `&client_id=${encodeURIComponent(clientId)}` +

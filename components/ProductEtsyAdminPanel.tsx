@@ -279,8 +279,10 @@ export default function ProductEtsyAdminPanel({
           GET /api/admin/integrations/etsy/taxonomy/nodes?q=sticker
         </code>{' '}
         while logged in as admin — see <code className="rounded bg-amber-100/80 px-1">docs/etsy-listing-env.md</code>.
-        Shipping and return policies default from your Etsy shop when env overrides are unset. OAuth needs{' '}
-        <code className="rounded bg-amber-100/80 px-1">listings_w</code>.
+        Shipping and return policies default from your Etsy shop when env overrides are unset. Drafts require{' '}
+        <code className="rounded bg-amber-100/80 px-1">listings_w</code> on the token: set{' '}
+        <code className="rounded bg-amber-100/80 px-1">ETSY_OAUTH_EXTRA_SCOPES=listings_w</code> in Vercel, redeploy, then{' '}
+        <strong>Connect Etsy</strong> again.
       </p>
     </div>
   )

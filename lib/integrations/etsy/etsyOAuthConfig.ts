@@ -7,16 +7,25 @@
 export const ETSY_OAUTH_CALLBACK_PATH = '/api/admin/integrations/etsy/oauth/callback' as const
 
 /**
- * Space-separated scopes for seller dashboard: shop, receipts/transactions, buyer addresses, listings.
- * Re-authorize after changing this list.
+ * Scopes requested on **Connect Etsy** (OAuth authorize URL).
+ *
+ * **Default (Personal Access / pending approval):** only what order import needs:
+ * `shops_r`, `transactions_r`, `address_r`. This avoids requesting listing write scopes
+ * that can keep OAuth stuck on “app approval is pending” for some apps.
+ *
+ * **After Etsy approves listing access:** set env `ETSY_OAUTH_EXTRA_SCOPES` (space-separated),
+ * e.g. `listings_r listings_w`, redeploy, then **Connect Etsy** again so the token includes them.
+ *
+ * Re-authorize whenever this list changes.
  */
-export const ETSY_OAUTH_SCOPES = [
-  'shops_r',
-  'transactions_r',
-  'address_r',
-  'listings_r',
-  'listings_w',
-].join(' ')
+const DEFAULT_OAUTH_SCOPES = ['shops_r', 'transactions_r', 'address_r'] as const
+
+export function getEtsyOAuthScopes(): string {
+  const extra = process.env.ETSY_OAUTH_EXTRA_SCOPES?.trim()
+  const parts = extra ? extra.split(/\s+/).filter(Boolean) : []
+  const merged = [...DEFAULT_OAUTH_SCOPES, ...parts]
+  return [...new Set(merged)].join(' ')
+}
 
 /** Official token endpoint from Etsy OpenAPI spec (override with `ETSY_OAUTH_TOKEN_URL` if needed). */
 export const ETSY_OAUTH_TOKEN_URL_DEFAULT = 'https://openapi.etsy.com/v3/public/oauth/token'

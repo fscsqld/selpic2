@@ -82,6 +82,20 @@ function parsePricingMode(body: { pricingMode?: unknown }): EtsyListingPricingMo
   return body.pricingMode === 'fixed_price' ? 'fixed_price' : 'markup_percent'
 }
 
+/** Etsy 403 / scope errors — append operator hint (minimal scopes OAuth by default). */
+function augmentListingApiErrorMessage(message: string): string {
+  const lower = message.toLowerCase()
+  const likelyAuth =
+    /\b403\b/.test(message) ||
+    lower.includes('forbidden') ||
+    lower.includes('insufficient_scope') ||
+    lower.includes('not authorized') ||
+    lower.includes('permission denied') ||
+    lower.includes('unauthorized')
+  if (!likelyAuth) return message
+  return `${message} If this is listing create/update: add env ETSY_OAUTH_EXTRA_SCOPES=listings_w (optionally listings_r), redeploy, then Admin → Integrations → Connect Etsy again.`
+}
+
 /**
  * POST — create Etsy draft listing from storefront product fields + upload listing images.
  * PATCH — update title/description/price / quantity (same pricing rules).
@@ -186,7 +200,7 @@ export async function POST(request: Request) {
   } catch (e) {
     logAndSafeMessage('etsy listings POST', e)
     const msg = e instanceof Error ? e.message : SAFE_API_ERROR_MESSAGE
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ error: augmentListingApiErrorMessage(msg) }, { status: 500 })
   }
 }
 
@@ -269,6 +283,6 @@ export async function PATCH(request: Request) {
   } catch (e) {
     logAndSafeMessage('etsy listings PATCH', e)
     const msg = e instanceof Error ? e.message : SAFE_API_ERROR_MESSAGE
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ error: augmentListingApiErrorMessage(msg) }, { status: 500 })
   }
 }
