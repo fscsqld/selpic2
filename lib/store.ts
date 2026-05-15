@@ -61,6 +61,8 @@ export interface Product {
   reviews?: number
   /** Catalog sync / public API merge timestamp (ISO string). */
   updatedAt?: string
+  /** Linked Etsy listing id after admin publishes from product detail (optional). */
+  etsyListingId?: string
 }
 
 export interface BundleItem {

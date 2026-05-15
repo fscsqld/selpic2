@@ -2,7 +2,7 @@ import 'server-only'
 
 const BASE = 'https://openapi.etsy.com/v3/application'
 
-async function etsyJson<T>(path: string, accessToken: string, apiKey: string): Promise<T> {
+export async function etsyJson<T>(path: string, accessToken: string, apiKey: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -15,6 +15,52 @@ async function etsyJson<T>(path: string, accessToken: string, apiKey: string): P
     throw new Error(`Etsy API ${res.status}: ${text.slice(0, 400)}`)
   }
   return JSON.parse(text) as T
+}
+
+export async function etsyFormPostJson<T>(
+  path: string,
+  body: URLSearchParams,
+  accessToken: string,
+  apiKey: string
+): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-api-key': apiKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+    cache: 'no-store',
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Etsy API ${res.status}: ${text.slice(0, 500)}`)
+  }
+  return (text ? JSON.parse(text) : {}) as T
+}
+
+export async function etsyFormPatchJson<T>(
+  path: string,
+  body: URLSearchParams,
+  accessToken: string,
+  apiKey: string
+): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'x-api-key': apiKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+    cache: 'no-store',
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`Etsy API ${res.status}: ${text.slice(0, 500)}`)
+  }
+  return (text ? JSON.parse(text) : {}) as T
 }
 
 export type EtsyListResponse<T> = { count?: number; results?: T[] }
@@ -68,4 +114,24 @@ export async function fetchShopReceipt(
   apiKey: string
 ): Promise<Record<string, unknown>> {
   return etsyJson(`/shops/${encodeURIComponent(String(shopId))}/receipts/${receiptId}`, accessToken, apiKey)
+}
+
+export async function fetchShopShippingProfiles(
+  shopId: string | number,
+  accessToken: string,
+  apiKey: string
+): Promise<EtsyListResponse<Record<string, unknown>>> {
+  return etsyJson(
+    `/shops/${encodeURIComponent(String(shopId))}/shipping-profiles?limit=25`,
+    accessToken,
+    apiKey
+  )
+}
+
+export async function fetchShopReturnPolicies(
+  shopId: string | number,
+  accessToken: string,
+  apiKey: string
+): Promise<EtsyListResponse<Record<string, unknown>>> {
+  return etsyJson(`/shops/${encodeURIComponent(String(shopId))}/policies/return?limit=25`, accessToken, apiKey)
 }

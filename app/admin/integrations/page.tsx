@@ -95,6 +95,15 @@ export default function AdminIntegrationsPage() {
                 in Supabase.
               </li>
               <li>Etsy requires HTTPS callback URLs registered on the app; use a tunnel for local OAuth if needed.</li>
+              <li>
+                Publishing listings from the storefront product page uses the <code className="text-xs">listings_w</code>{' '}
+                scope. If draft create returns 403, click <strong>Connect Etsy</strong> again to re-authorize.
+              </li>
+              <li>
+                Automated order import: set <code className="text-xs">CRON_SECRET</code> in Vercel (Project → Settings →
+                Environment Variables). Cron calls <code className="text-xs">GET /api/cron/etsy-sync</code> every 10 minutes
+                (see <code className="text-xs">vercel.json</code>).
+              </li>
             </ul>
 
             {message && (

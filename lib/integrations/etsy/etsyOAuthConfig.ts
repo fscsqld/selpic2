@@ -15,6 +15,7 @@ export const ETSY_OAUTH_SCOPES = [
   'transactions_r',
   'address_r',
   'listings_r',
+  'listings_w',
 ].join(' ')
 
 /** Official token endpoint from Etsy OpenAPI spec (override with `ETSY_OAUTH_TOKEN_URL` if needed). */
