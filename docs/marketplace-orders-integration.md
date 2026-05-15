@@ -57,7 +57,7 @@ REST calls use **`Authorization: Bearer <access_token>`** and **`x-api-key: <KEY
 ### 4) Import orders
 
 - Admin UI: **Dashboard → Etsy shop** or **Integrations** → **Sync** (calls `POST /api/admin/integrations/etsy/sync`).
-- **Vercel Cron:** `GET /api/cron/etsy-sync` every **10 minutes** (see `vercel.json`). Set **`CRON_SECRET`** in Vercel; the handler requires `Authorization: Bearer <CRON_SECRET>`. If Etsy is not connected, the run returns `{ "skipped": true }` with HTTP 200.
+- **Automated sync:** `GET /api/cron/etsy-sync` with `Authorization: Bearer <CRON_SECRET>`. Use **Admin → Sync** manually, or an external scheduler (Vercel Hobby does not allow `*/10` in `vercel.json` crons — use Pro or GitHub Actions cron). If Etsy is not connected, the run returns `{ "skipped": true }` with HTTP 200.
 - Default import: **paid** receipts with **`was_shipped=false`** (open for fulfillment), last **90** days (override with `sinceDays`, max 180). Set JSON body `{ "openOnly": false }` to include shipped receipts.
 
 ### 5) Publish / update listings (storefront product page)

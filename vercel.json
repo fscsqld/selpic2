@@ -1,11 +1,5 @@
 {
   "installCommand": "npm install --legacy-peer-deps",
-  "crons": [
-    {
-      "path": "/api/cron/etsy-sync",
-      "schedule": "*/10 * * * *"
-    }
-  ],
   "redirects": [
     {
       "source": "/:path*",
