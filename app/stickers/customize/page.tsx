@@ -10,6 +10,7 @@ import { useContentStore } from '@/lib/contentStore'
 import { Type, Palette, Package, ShoppingCart, ArrowRight, ChevronDown, ChevronUp, X, AlertCircle, Minus, Plus, BookOpen } from 'lucide-react'
 import Header from '@/components/Header'
 import { getStickerFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
+import { resolveStickerSheetLayout, sheetContentDimensionsMm } from '@/lib/stickerSheetLayout'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -352,61 +353,24 @@ function StickerCustomizeContent() {
       }
     : { id: 'medium', name: 'Medium', price: 20.00 }
 
-  // ✅ 관리자가 상품 등록 시 치수(가로·세로·열·행·간격)를 입력한 경우 그 값을 기본으로 사용.
-  const useProductStickerDims =
-    displayProduct &&
-    typeof (displayProduct as any).stickerWidthMm === 'number' &&
-    typeof (displayProduct as any).stickerHeightMm === 'number' &&
-    typeof (displayProduct as any).stickerCols === 'number' &&
-    typeof (displayProduct as any).stickerRows === 'number'
-  const productGapMm = typeof (displayProduct as any)?.stickerGapMm === 'number' ? (displayProduct as any).stickerGapMm : 2
+  const stickerLayoutInput = displayProduct
+    ? {
+        size: displayProduct.size,
+        subcategory: displayProduct.subcategory,
+        stickerWidthMm: (displayProduct as { stickerWidthMm?: number }).stickerWidthMm,
+        stickerHeightMm: (displayProduct as { stickerHeightMm?: number }).stickerHeightMm,
+        stickerCols: (displayProduct as { stickerCols?: number }).stickerCols,
+        stickerRows: (displayProduct as { stickerRows?: number }).stickerRows,
+        stickerGapMm: (displayProduct as { stickerGapMm?: number }).stickerGapMm,
+      }
+    : null
+  const stickerSpec = resolveStickerSheetLayout(stickerLayoutInput)
+  const { contentWidthMm, contentHeightMm } = sheetContentDimensionsMm(stickerSpec)
 
-  // 시트지 크기는 동일(약 96×138mm), 라벨 개수·배치만 다름. cols×rows에 따라 셀 크기 역산.
-  // 중형 홀로그램: 30mm×15mm per label (3×8 = 24 labels). 특대형 2×6, 대형 2×8, 소형 4×12, 원형 3×4.
-  const NAME_LABEL_SPEC = {
-    'Extra Large': { cols: 2, rows: 6, gapMm: 2 },   // 12 labels
-    'Large': { cols: 2, rows: 8, gapMm: 2 },         // 16 labels
-    'Medium': { cols: 3, rows: 8, gapMm: 2 },       // 24 labels, 30×15mm
-    'Small': { cols: 4, rows: 12, gapMm: 2 },       // 48 labels
-    'Round': { cols: 3, rows: 4, gapMm: 2 },       // 12 labels
-    'Mixed': { cols: 2, rows: 6, gapMm: 2 },      // 혼합형: 동일 시트 크기, 시트 내 혼합 레이아웃 → 추후 상세 설정
-    '혼합형': { cols: 2, rows: 6, gapMm: 2 },      // Mixed와 동일
-    'Two Line': { cols: 2, rows: 6, gapMm: 2 },   // 두 줄: 1줄=이름, 2줄=소속 표기 (레이아웃·입력 UI 추후 구현)
-    '두줄': { cols: 2, rows: 6, gapMm: 2 }        // Two Line과 동일, "이름 + 소속" 네임스티커
-  } as const
-  const rawSpec = displayProduct?.size && NAME_LABEL_SPEC[displayProduct.size as keyof typeof NAME_LABEL_SPEC]
-    ? NAME_LABEL_SPEC[displayProduct.size as keyof typeof NAME_LABEL_SPEC]
-    : NAME_LABEL_SPEC['Medium']
-  const STANDARD_CONTENT_WIDTH_MM = 92
-  const STANDARD_CONTENT_HEIGHT_MM = 136
   const normalizedSize = String(displayProduct?.size || '').trim().toLowerCase()
   const isExtraLargeSheet = normalizedSize.includes('extra large') || normalizedSize.includes('특대형')
   const isLargeSheet = (normalizedSize.includes('large') || normalizedSize.includes('대형')) && !isExtraLargeSheet
   const isMediumSheet = normalizedSize.includes('medium') || normalizedSize.includes('중형')
-
-  let contentWidthMm: number
-  let contentHeightMm: number
-  let stickerSpec: { cols: number; rows: number; gapMm: number; widthMm: number; heightMm: number }
-
-  if (useProductStickerDims && displayProduct) {
-    const w = (displayProduct as any).stickerWidthMm
-    const h = (displayProduct as any).stickerHeightMm
-    const cols = (displayProduct as any).stickerCols
-    const rows = (displayProduct as any).stickerRows
-    const gapMm = productGapMm
-    contentWidthMm = w * cols + gapMm * (cols - 1)
-    contentHeightMm = h * rows + gapMm * (rows - 1)
-    stickerSpec = { cols, rows, gapMm, widthMm: w, heightMm: h }
-  } else {
-    // Medium (중형 홀로그램): 30×15mm per label; Large: 45×15mm 등 프리셋 기준
-    contentWidthMm = isMediumSheet ? 94 : STANDARD_CONTENT_WIDTH_MM
-    // 중형 3×8 시트: 셀 높이 15mm → contentHeight = 15*8 + 2*7 = 134
-    contentHeightMm = isLargeSheet ? 134 : (isMediumSheet ? 134 : STANDARD_CONTENT_HEIGHT_MM)
-    let widthMm = (contentWidthMm - (rawSpec.cols - 1) * rawSpec.gapMm) / rawSpec.cols
-    let heightMm = (contentHeightMm - (rawSpec.rows - 1) * rawSpec.gapMm) / rawSpec.rows
-    if (isLargeSheet) heightMm = 15
-    stickerSpec = { ...rawSpec, widthMm, heightMm }
-  }
 
   const totalCells = stickerSpec.cols * stickerSpec.rows
   // 대형·특대형·중형(단, 30×13mm 제외): 2줄(1줄=이름, 2줄=소속/전화) 지원

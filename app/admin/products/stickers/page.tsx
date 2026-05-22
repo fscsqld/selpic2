@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
 import AdminProductHeader from '@/components/AdminProductHeader'
 import ProductImageUpload from '@/components/ProductImageUpload'
+import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 
 interface StickerFormData {
   id: string
@@ -314,15 +315,6 @@ export default function StickersPage() {
     }
   }
 
-  // Preset dimensions per size so customize page shows correct grid/cell size
-  const STICKER_SIZE_PRESETS: Record<string, { w: number; h: number; cols: number; rows: number }> = {
-    'Small': { w: 22, h: 9, cols: 4, rows: 12 },
-    'Medium': { w: 30, h: 13, cols: 3, rows: 8 },
-    'Large': { w: 46, h: 15, cols: 2, rows: 8 },
-    'Extra Large': { w: 45, h: 21, cols: 2, rows: 6 },
-    'Round': { w: 28, h: 28, cols: 3, rows: 4 }
-  }
-
   // Handle input field changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -332,14 +324,25 @@ export default function StickersPage() {
         [name]: type === 'number' ? parseFloat(String(value)) || 0 :
                   type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
       }
-      // When Size changes, auto-fill sticker dimensions from preset so customize preview matches
-      if (name === 'size' && value && STICKER_SIZE_PRESETS[value as string]) {
-        const preset = STICKER_SIZE_PRESETS[value as string]
-        next.stickerWidthMm = preset.w
-        next.stickerHeightMm = preset.h
-        next.stickerCols = preset.cols
-        next.stickerRows = preset.rows
-        next.stickerGapMm = prev.stickerGapMm ?? 2
+      // Size + subcategory → sticker mm/cols/rows (Premium 30×13mm = 3×9, Basic 30×13mm = 3×8)
+      if (name === 'size' && typeof value === 'string' && value.trim()) {
+        const preset = stickerPresetForAdminForm(value, next.subcategory || '')
+        next.stickerWidthMm = preset.stickerWidthMm
+        next.stickerHeightMm = preset.stickerHeightMm
+        next.stickerCols = preset.stickerCols
+        next.stickerRows = preset.stickerRows
+        next.stickerGapMm = preset.stickerGapMm ?? prev.stickerGapMm ?? 2
+      }
+      if (name === 'subcategory' && typeof value === 'string') {
+        const size = next.size || ''
+        if (size.trim()) {
+          const preset = stickerPresetForAdminForm(size, value)
+          next.stickerWidthMm = preset.stickerWidthMm
+          next.stickerHeightMm = preset.stickerHeightMm
+          next.stickerCols = preset.stickerCols
+          next.stickerRows = preset.stickerRows
+          next.stickerGapMm = preset.stickerGapMm ?? next.stickerGapMm ?? 2
+        }
       }
       if (name === 'subcategory') {
         if (isStationeryEssentialsSubcategory(value)) {
