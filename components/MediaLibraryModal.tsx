@@ -180,7 +180,13 @@ export default function MediaLibraryModal({
           : file.url!
         : ''
 
-    const finalUrl = https || legacy || blob
+    if (legacy && !https) {
+      alert(
+        `No Supabase URL for "${file.name}". Re-upload in Image Management (or Product Image upload) so the file is stored in cloud storage.`
+      )
+      return
+    }
+    const finalUrl = https || blob
     if (!finalUrl) {
       alert(
         `No stable URL for "${file.name}". Re-upload this asset in Image Management so it is stored in Supabase Storage.`

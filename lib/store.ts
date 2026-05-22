@@ -2135,6 +2135,12 @@ export const useStore = create<Store>()(
         } else if (typeof (existing as any).reviews === 'number') {
           sanitized.reviews = (existing as any).reviews
         }
+        if ('image' in product && typeof product.image === 'string') {
+          sanitized.image = product.image
+        }
+        if ('fallbackImage' in product && typeof (product as any).fallbackImage === 'string') {
+          sanitized.fallbackImage = (product as any).fallbackImage
+        }
         set({
           products: products.map(p => p.id === product.id ? sanitized : p)
         })

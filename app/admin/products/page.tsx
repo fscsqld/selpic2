@@ -8,6 +8,7 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import MediaUpload from '@/components/MediaUpload'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminRoute from '@/components/AdminRoute'
+import { catalogImagePersistError } from '@/lib/catalogRecordSanitize'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -443,6 +444,17 @@ function AdminProductsPageContent() {
       stickerSheetQuantity: isStationeryEssentials
         ? undefined
         : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+    }
+
+    const imagePersistErr = catalogImagePersistError(normalizedFormData.image)
+    if (imagePersistErr) {
+      showNotification('error', imagePersistErr)
+      return
+    }
+    const fallbackPersistErr = catalogImagePersistError(normalizedFormData.fallbackImage)
+    if (fallbackPersistErr) {
+      showNotification('error', `Fallback image: ${fallbackPersistErr}`)
+      return
     }
 
     try {

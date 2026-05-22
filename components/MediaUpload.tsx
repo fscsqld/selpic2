@@ -30,7 +30,9 @@ export default function MediaUpload({
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { addMediaFileWithData } = useMediaStore()
+  /** Must use Supabase https URL — catalog sync drops data: and indexeddb:// */
   const requiresSharedCloudAsset =
+    usage === 'product-media' ||
     usage === 'category-bg' ||
     usage === 'hero-banner' ||
     usage === 'subcategory-card' ||
@@ -196,10 +198,14 @@ export default function MediaUpload({
           setTimeout(() => setUploadSuccess(false), 3000)
           return
         } catch (supabaseErr) {
-          console.warn('MediaUpload: Supabase upload failed, falling back to IndexedDB:', supabaseErr)
+          const msg =
+            supabaseErr instanceof Error ? supabaseErr.message : String(supabaseErr)
+          console.warn('MediaUpload: Supabase upload failed:', msg)
           if (requiresSharedCloudAsset) {
             setUploadError(
-              'Cloud upload failed for this shared section. Check Supabase Storage bucket policies and try again.'
+              usage === 'product-media'
+                ? `Product image upload failed: ${msg}. Sign in as admin, confirm SUPABASE_SERVICE_ROLE_KEY on the server, and try again.`
+                : `Cloud upload failed. Check Supabase Storage (selpic-contents) and admin sign-in, then try again. (${msg})`
             )
             return
           }

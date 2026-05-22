@@ -18,6 +18,24 @@ export function publicCatalogImageUrl(image?: string): string | undefined {
   return undefined
 }
 
+/** True when image will survive catalog sync (https, /path — not data: or indexeddb://). */
+export function isPersistableCatalogImageUrl(image?: string): boolean {
+  return !!publicCatalogImageUrl(image)
+}
+
+/** User-facing message when admin saves a product image that catalog sync will drop. */
+export function catalogImagePersistError(image?: string): string | null {
+  const img = (image || '').trim()
+  if (!img || isPersistableCatalogImageUrl(img)) return null
+  if (img.startsWith('indexeddb://')) {
+    return 'Image is only on this browser (indexeddb://). Upload again while signed in as admin so it saves to Supabase (https URL).'
+  }
+  if (img.startsWith('data:')) {
+    return 'Base64 images are not saved to the server catalog. Upload the file again to get a public https URL.'
+  }
+  return 'Product image must be a public URL (https://… or /images/…). Re-upload the image.'
+}
+
 function snapshotInStock(p: Product): boolean {
   const stockQty = typeof p.stockQuantity === 'number' ? Math.max(0, p.stockQuantity) : undefined
   if (typeof stockQty === 'number') return stockQty > 0

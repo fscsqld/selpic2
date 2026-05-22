@@ -6,6 +6,7 @@ import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle } from 'lu
 import AdminProductHeader from '@/components/AdminProductHeader'
 import MediaUpload from '@/components/MediaUpload'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
+import { catalogImagePersistError } from '@/lib/catalogRecordSanitize'
 
 interface StickerFormData {
   id: string
@@ -228,6 +229,12 @@ export default function StickersPage() {
     
     if (!formData.subcategory) {
       showNotification('error', 'Please select a sticker subcategory.')
+      return
+    }
+
+    const imagePersistErr = catalogImagePersistError(formData.image)
+    if (imagePersistErr) {
+      showNotification('error', imagePersistErr)
       return
     }
     
