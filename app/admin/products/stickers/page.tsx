@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, Search, X, CheckCircle, AlertCircle } from 'lucide-react'
 import AdminProductHeader from '@/components/AdminProductHeader'
-import ProductImageUpload from '@/components/ProductImageUpload'
+import MediaUpload from '@/components/MediaUpload'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 
 interface StickerFormData {
@@ -827,11 +827,14 @@ export default function StickersPage() {
                     </label>
                   </div>
 
-                  {/* Image upload */}
+                  {/* Image upload — Supabase URL required (base64 is stripped on catalog sync) */}
                   <div className="md:col-span-2">
-                    <ProductImageUpload
-                      currentImage={formData.image}
-                      onImageChange={(imageUrl) => setFormData(prev => ({ ...prev, image: imageUrl }))}
+                    <MediaUpload
+                      type="image"
+                      currentUrl={formData.image}
+                      usage="product-media"
+                      onUpload={(_file, url) => setFormData((prev) => ({ ...prev, image: url }))}
+                      onRemove={() => setFormData((prev) => ({ ...prev, image: '' }))}
                     />
                   </div>
 
