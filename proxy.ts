@@ -103,12 +103,27 @@ function applyDocumentCacheBust(response: NextResponse, request: NextRequest) {
   }
 }
 
+/** Routes that POST multipart bodies — must not run Supabase proxy (breaks req.formData in App Router). */
+function isMultipartUploadApi(path: string, method: string): boolean {
+  if (method !== 'POST') return false
+  return (
+    path === '/api/admin/selpic-contents/upload' ||
+    path.startsWith('/api/bespoke-requests/')
+  )
+}
+
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
+  const path = request.nextUrl.pathname
   const protoHeader = request.headers.get('x-forwarded-proto')
   const hostHeader = request.headers.get('host') || ''
   const isHttps = url.protocol === 'https:' || protoHeader === 'https'
   const isLocal = isLocalHost(url.hostname) || hostHeader.includes('localhost')
+
+  if (isMultipartUploadApi(path, request.method)) {
+    const response = NextResponse.next()
+    return applyProductionSecurityHeaders(response, isLocal)
+  }
 
   const canonicalRedirect = maybeCanonicalHostRedirect(request)
   if (canonicalRedirect) {
@@ -120,7 +135,6 @@ export async function proxy(request: NextRequest) {
     return applyProductionSecurityHeaders(NextResponse.redirect(url, 308), isLocal)
   }
 
-  const path = request.nextUrl.pathname
   const resetParam = request.nextUrl.searchParams.get('resetCache')
   const wantsReset =
     resetParam === '1' ||
@@ -189,5 +203,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api/admin/selpic-contents/upload).*)',
+  ],
 }

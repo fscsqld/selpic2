@@ -3,6 +3,9 @@ import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SELPIC_CONTENTS_BUCKET } from '@/lib/selpicStorageBucket'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 /** Align with typical Supabase object limits; Vercel body limits may apply first. */
 const MAX_BYTES = 80 * 1024 * 1024
 
@@ -24,11 +27,26 @@ export async function POST(req: Request) {
     )
   }
 
+  const requestContentType = req.headers.get('content-type') || ''
+  if (!requestContentType.toLowerCase().includes('multipart/form-data')) {
+    return NextResponse.json(
+      { error: 'Expected multipart/form-data upload' },
+      { status: 400 }
+    )
+  }
+
   let formData: FormData
   try {
     formData = await req.formData()
-  } catch {
-    return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 })
+  } catch (err) {
+    console.error('[admin/selpic-contents/upload] formData parse failed:', err)
+    return NextResponse.json(
+      {
+        error:
+          'Could not read upload body. Retry the upload; if this persists, use a smaller image or contact support.',
+      },
+      { status: 400 }
+    )
   }
 
   const path = String(formData.get('path') || '').trim()

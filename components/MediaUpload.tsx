@@ -204,8 +204,8 @@ export default function MediaUpload({
           if (requiresSharedCloudAsset) {
             setUploadError(
               usage === 'product-media'
-                ? `Product image upload failed: ${msg}. Sign in as admin, confirm SUPABASE_SERVICE_ROLE_KEY on the server, and try again.`
-                : `Cloud upload failed. Check Supabase Storage (selpic-contents) and admin sign-in, then try again. (${msg})`
+                ? `Product image upload failed: ${msg}`
+                : `Cloud upload failed: ${msg}`
             )
             return
           }
