@@ -26,6 +26,8 @@ interface PhoneCaseFormData {
   isNew?: boolean
   isPopular?: boolean
   isBestSeller?: boolean
+  isLimitedEdition?: boolean
+  limitedEditionText?: string
   stockQuantity?: number
   safetyStock?: number
   incomingStock?: number
@@ -79,6 +81,8 @@ export default function PhoneCaseManager() {
     isNew: false,
     isPopular: false,
     isBestSeller: false,
+    isLimitedEdition: false,
+    limitedEditionText: '',
     stockQuantity: 0,
     safetyStock: 5,
     incomingStock: 0,
@@ -118,6 +122,8 @@ export default function PhoneCaseManager() {
         isNew: product.isNew || false,
         isPopular: product.isPopular || false,
         isBestSeller: product.isBestSeller || false,
+        isLimitedEdition: !!(product as any).isLimitedEdition,
+        limitedEditionText: (product as any).limitedEditionText || '',
         stockQuantity: (product as any).stockQuantity ?? 0,
         safetyStock: (product as any).safetyStock ?? 5,
         incomingStock: (product as any).incomingStock ?? 0,
@@ -148,6 +154,8 @@ export default function PhoneCaseManager() {
         isNew: false,
         isPopular: false,
         isBestSeller: false,
+        isLimitedEdition: false,
+        limitedEditionText: '',
         stockQuantity: 0,
         safetyStock: 5,
         incomingStock: 0,
@@ -184,6 +192,8 @@ export default function PhoneCaseManager() {
       isNew: false,
       isPopular: false,
       isBestSeller: false,
+      isLimitedEdition: false,
+      limitedEditionText: '',
       stockQuantity: 0,
       safetyStock: 5,
       incomingStock: 0,
@@ -814,7 +824,7 @@ export default function PhoneCaseManager() {
                 </div>
 
                 {/* Product status */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -849,6 +859,18 @@ export default function PhoneCaseManager() {
                     />
                     <label className="ml-2 block text-sm text-gray-900">
                       {t('admin.products.isPopularLabel')}
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="isLimitedEdition"
+                      checked={!!formData.isLimitedEdition}
+                      onChange={handleCheckboxChange}
+                      className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.products.isLimitedEditionLabel')}
                     </label>
                   </div>
                 </div>

@@ -11,6 +11,7 @@ import { Type, Palette, Package, ShoppingCart, ArrowRight, ChevronDown, ChevronU
 import Header from '@/components/Header'
 import { getStickerFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
 import { resolveStickerSheetLayout, sheetContentDimensionsMm } from '@/lib/stickerSheetLayout'
+import { isMixedLabelsProduct } from '@/lib/mixedLabelsProduct'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -197,6 +198,13 @@ function StickerCustomizeContent() {
     return products.find(p => p.id === id && p.category === 'Stickers') ?? null
   }, [searchParams, products])
   const displayProduct = selectedProduct ?? restoredProduct
+
+  useEffect(() => {
+    if (!isMounted || !displayProduct) return
+    if (!isMixedLabelsProduct(displayProduct)) return
+    const id = encodeURIComponent(displayProduct.id)
+    router.replace(`/stickers/customize/mixed?product=${id}`)
+  }, [isMounted, displayProduct, router])
 
   const sizeNorm = displayProduct?.size ? String(displayProduct.size).trim().toLowerCase() : ''
   const sizeNormCompact = sizeNorm.replace(/\s+/g, '')

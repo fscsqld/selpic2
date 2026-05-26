@@ -14,6 +14,11 @@ import {
   useContentStore
 } from '@/lib/contentStore'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
+import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
+import {
+  getCartCustomizationDisplayEntries,
+  isMixedLabelsCartCustomizations,
+} from '@/lib/mixedLabelsCartDisplay'
 
 export default function CartPage() {
   const router = useRouter()
@@ -194,18 +199,11 @@ export default function CartPage() {
     }
     
     return validCart.reduce((total, item) => {
-      const price = typeof item.product?.price === 'number' && !isNaN(item.product.price) 
-        ? item.product.price 
-        : 0
       const quantity = typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0
         ? item.quantity 
         : 0
-      
-      const itemTotal = price * quantity
-      const surchargePerUnit = getSurchargePerUnit(item.customizations, item.product)
-      const additionalCost = surchargePerUnit * quantity
-      
-      return total + itemTotal + additionalCost
+      const unitPrice = getStorefrontLineUnitPrice(item.product, item.customizations)
+      return total + unitPrice * quantity
     }, 0)
   }
 
@@ -230,14 +228,13 @@ export default function CartPage() {
       }
       
       const normalizedCategory = normalizeCategory(category)
-      const itemPrice = (item.product.price || 0) * (item.quantity || 0)
-      const surchargePerUnit = getSurchargePerUnit(item.customizations, item.product)
-      const customizationCost = surchargePerUnit * (item.quantity || 0)
+      const unitPrice = getStorefrontLineUnitPrice(item.product, item.customizations)
+      const lineTotal = unitPrice * (item.quantity || 0)
       
       return {
         productId: item.product.id,
         category: normalizedCategory,
-        price: itemPrice + customizationCost
+        price: lineTotal
       }
     })
   }
@@ -578,21 +575,18 @@ export default function CartPage() {
                             )
                           })()
                         ) : (
-                          // 일반 상품 커스터마이징 정보 표시
-                          Object.entries(item.customizations)
-                            .filter(([key]) => key !== 'customizedImage' && !key.includes('customizedImage'))
-                            .length > 0 && (
+                          getCartCustomizationDisplayEntries(item.customizations).length > 0 && (
                             <div className="mt-2 space-y-1">
-                              {Object.entries(item.customizations)
-                                .filter(([key]) => key !== 'customizedImage' && !key.includes('customizedImage'))
-                                .map(([key, value]) => {
-                                  const isColor = key.toLowerCase() === 'color' && String(value).startsWith('#')
+                              {getCartCustomizationDisplayEntries(item.customizations).map(
+                                ([key, value]) => {
+                                  const isColor =
+                                    key.toLowerCase() === 'color' && String(value).startsWith('#')
                                   return (
                                     <div key={key} className="text-sm text-gray-600 flex items-center gap-2">
-                                      <span className="font-medium capitalize">{key}:</span>
+                                      <span className="font-medium">{key}:</span>
                                       {isColor ? (
                                         <div className="flex items-center gap-2">
-                                          <div 
+                                          <div
                                             className="w-5 h-5 rounded border border-gray-300"
                                             style={{ backgroundColor: String(value) }}
                                             title={String(value)}
@@ -604,7 +598,14 @@ export default function CartPage() {
                                       )}
                                     </div>
                                   )
-                                })}
+                                }
+                              )}
+                              {isMixedLabelsCartCustomizations(item.customizations) &&
+                                item.quantity > 1 && (
+                                  <p className="text-xs text-gray-500">
+                                    {item.quantity} packs · quantity is number of bundles, not sheets
+                                  </p>
+                                )}
                             </div>
                           )
                         )}
@@ -652,17 +653,29 @@ export default function CartPage() {
                       </div>
                       <div className="text-right">
                         {(() => {
-                          const surchargePerUnit = getSurchargePerUnit(item.customizations, item.product)
-                          const lineTotal = item.product.price * item.quantity + surchargePerUnit * item.quantity
+                          const unitPrice = getStorefrontLineUnitPrice(
+                            item.product,
+                            item.customizations
+                          )
+                          const lineTotal = unitPrice * item.quantity
+                          const mixed = isMixedLabelsCartCustomizations(item.customizations)
                           return (
                             <>
                               <div className="text-lg font-semibold text-gray-900">
                                 ${lineTotal.toFixed(2)}
                               </div>
                               <div className="text-sm text-gray-500">
-                                {surchargePerUnit > 0
-                                  ? `${item.product.price.toFixed(2)} + $${surchargePerUnit.toFixed(2)} surcharge each`
-                                  : `$${item.product.price.toFixed(2)} each`}
+                                {mixed
+                                  ? `$${unitPrice.toFixed(2)} per pack × ${item.quantity}`
+                                  : (() => {
+                                      const surchargePerUnit = getSurchargePerUnit(
+                                        item.customizations,
+                                        item.product
+                                      )
+                                      return surchargePerUnit > 0
+                                        ? `${item.product.price.toFixed(2)} + $${surchargePerUnit.toFixed(2)} surcharge each`
+                                        : `$${item.product.price.toFixed(2)} each`
+                                    })()}
                               </div>
                             </>
                           )

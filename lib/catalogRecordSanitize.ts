@@ -1,4 +1,5 @@
 import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
+import { sanitizeMixedLabelsSheetBundles } from '@/lib/mixedLabelsPricing'
 import type { BundleItem, CustomizationOption, Product } from '@/lib/store'
 
 const MAX_NAME = 500
@@ -251,6 +252,25 @@ export function sanitizeIncomingCatalogRecord(item: unknown): CatalogProductReco
   if (typeof clone.stickerHasImage === 'boolean') record.stickerHasImage = clone.stickerHasImage
   if (typeof clone.twoLineSurcharge === 'number' && Number.isFinite(clone.twoLineSurcharge)) {
     record.twoLineSurcharge = clone.twoLineSurcharge
+  }
+  if (typeof clone.customizationMode === 'string' && clone.customizationMode.trim()) {
+    record.customizationMode = clone.customizationMode.trim().slice(0, 80)
+  }
+  if (typeof clone.mixedSheetTemplateId === 'string' && clone.mixedSheetTemplateId.trim()) {
+    record.mixedSheetTemplateId = clone.mixedSheetTemplateId.trim().slice(0, 120)
+  }
+  if (typeof clone.mixedLabelsNameMaxLength === 'number' && Number.isFinite(clone.mixedLabelsNameMaxLength)) {
+    record.mixedLabelsNameMaxLength = Math.max(1, Math.min(20, Math.round(clone.mixedLabelsNameMaxLength)))
+  }
+  if (typeof clone.mixedLabelsNameHint === 'string' && clone.mixedLabelsNameHint.trim()) {
+    record.mixedLabelsNameHint = clone.mixedLabelsNameHint.trim().slice(0, 500)
+  }
+  if (typeof clone.limitedEditionText === 'string' && clone.limitedEditionText.trim()) {
+    record.limitedEditionText = clone.limitedEditionText.trim().slice(0, 500)
+  }
+  if (typeof clone.isLimitedEdition === 'boolean') record.isLimitedEdition = clone.isLimitedEdition
+  if (Array.isArray(clone.mixedLabelsSheetBundles) && clone.mixedLabelsSheetBundles.length > 0) {
+    record.mixedLabelsSheetBundles = sanitizeMixedLabelsSheetBundles(clone.mixedLabelsSheetBundles)
   }
   if (typeof clone.rating === 'number' && Number.isFinite(clone.rating)) record.rating = clone.rating
   if (typeof clone.reviews === 'number' && Number.isFinite(clone.reviews)) record.reviews = Math.max(0, clone.reviews)

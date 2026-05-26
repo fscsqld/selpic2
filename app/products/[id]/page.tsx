@@ -11,6 +11,10 @@ import { useTranslation } from '@/lib/useTranslation'
 import { useUserAuth } from '@/lib/userAuth'
 import Image from 'next/image'
 import ProductGallery from '@/components/ProductGallery'
+import {
+  hydrateMediaStoreFromLocalStorage,
+  resolveStorefrontFallbackImage,
+} from '@/lib/mediaGalleryLocal'
 import ProductDetailJsonLd from '@/components/ProductDetailJsonLd'
 import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 
@@ -30,6 +34,10 @@ export default function ProductDetailPage() {
   // productId를 먼저 정의 (useEffect보다 위에 있어야 함)
   const productId = Array.isArray(params?.id) ? params.id[0] : params?.id
   const product = products.find(p => p.id === productId)
+  const galleryFallback =
+    product && productId
+      ? resolveStorefrontFallbackImage(productId, product.fallbackImage, product.image)
+      : ''
   
   // Hydration 방지: 서버와 클라이언트 첫 렌더를 동일하게 맞춘 뒤, 마운트 후에만 store 의존 UI 표시
   useEffect(() => {
@@ -41,6 +49,7 @@ export default function ProductDetailPage() {
     if (!mounted || !productId || typeof window === 'undefined') return
     // 상세 페이지 진입 시 미디어 스토어를 localStorage에서 즉시 동기화 (갤러리 연결 이미지가 첫 로드에 보이도록)
     refreshMediaFilesFromStorage()
+    hydrateMediaStoreFromLocalStorage()
     refreshProducts()
     if (!_hasHydrated) return
     const t = setTimeout(() => setStoreSettled(true), 400)
@@ -51,9 +60,21 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const handleMediaFilesUpdate = (e: CustomEvent) => {
       console.log('🔄 [ProductPage] Media files updated:', e.detail)
-      // 상품 이미지가 업데이트된 경우 강제 리렌더링
-      if (e.detail?.productId === productId || !e.detail?.productId) {
-        setForceUpdate(prev => prev + 1)
+      refreshMediaFilesFromStorage()
+      hydrateMediaStoreFromLocalStorage()
+      const detail = e.detail as {
+        productId?: string
+        productIds?: string[]
+        action?: string
+      }
+      const affectsThis =
+        detail?.action === 'delete' ||
+        !detail?.productIds?.length ||
+        detail?.productIds?.some((pid) => String(pid) === String(productId)) ||
+        detail?.productId === productId ||
+        !detail?.productId
+      if (affectsThis) {
+        setForceUpdate((prev) => prev + 1)
       }
     }
     
@@ -61,13 +82,20 @@ export default function ProductDetailPage() {
       if (e.key === 'media-store') {
         console.log('🔄 [ProductPage] localStorage media-store changed, syncing and refreshing...')
         refreshMediaFilesFromStorage()
+        hydrateMediaStoreFromLocalStorage()
         setForceUpdate(prev => prev + 1)
       }
     }
     
     // Custom Event 리스너
+    const handleProductsUpdate = () => {
+      refreshProducts()
+      setForceUpdate((prev) => prev + 1)
+    }
+
     window.addEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
     window.addEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
+    window.addEventListener('products-store-updated', handleProductsUpdate)
     
     // Storage Event 리스너 (다른 탭/페이지에서 변경 시)
     window.addEventListener('storage', handleStorageChange)
@@ -75,9 +103,10 @@ export default function ProductDetailPage() {
     return () => {
       window.removeEventListener('media-files-updated', handleMediaFilesUpdate as EventListener)
       window.removeEventListener('media-file-uploaded', handleMediaFilesUpdate as EventListener)
+      window.removeEventListener('products-store-updated', handleProductsUpdate)
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [productId, refreshMediaFilesFromStorage])
+  }, [productId, refreshProducts, refreshMediaFilesFromStorage])
 
   // 브라우저 탭·메타 설명: 상품은 localStorage 기반이라 서버 메타는 layout 기본값만 가능
   useEffect(() => {
@@ -239,6 +268,11 @@ export default function ProductDetailPage() {
                   POPULAR
                 </span>
               )}
+              {product.isLimitedEdition && (
+                <span className="bg-amber-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
+                  LIMITED EDITION
+                </span>
+              )}
               {isOutOfStock && (
                 <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
                   Out of Stock
@@ -253,13 +287,14 @@ export default function ProductDetailPage() {
             
             {/* ProductGallery 컴포넌트 */}
             <ProductGallery
+              key={`${productId}-${forceUpdate}`}
               productId={productId}
               showThumbnails={true}
               showFullscreenButton={true}
               showPlayButton={false}
               showBullets={false}
               autoPlay={false}
-              fallbackImage={product.fallbackImage || product.image} // 🆕 Fallback Image 우선, 없으면 기본 이미지
+              fallbackImage={galleryFallback}
             />
           </div>
 

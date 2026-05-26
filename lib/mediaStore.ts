@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import imageCompression from 'browser-image-compression'
 import { buildSelpicStoragePath, uploadToSelpicContents } from '@/lib/selpicStorageUpload'
 import { scheduleMediaSyncToServer } from '@/lib/mediaSyncScheduler'
+import { hasClientMediaStore, recordDeletedMediaTombstone } from '@/lib/mediaDeleteTombstone'
 
 // 표준 태그 상수 정의
 export const STANDARD_MEDIA_TAGS = {
@@ -163,6 +164,8 @@ interface MediaStore {
   addMediaFile: (file: MediaFile) => void
   updateMediaFile: (id: string, updates: Partial<MediaFile>) => void
   deleteMediaFile: (id: string) => void
+  /** Batch delete + one debounced server sync (avoids N timers when deleting many). */
+  deleteMediaFiles: (ids: string[]) => void
   getMediaFilesByCategory: (category: string) => MediaFile[]
   getMediaFilesByProduct: (productId: string) => MediaFile[]
   getMediaFileById: (id: string) => MediaFile | undefined
@@ -340,11 +343,35 @@ export const useMediaStore = create<MediaStore>()(
         scheduleMediaSyncToServer()
       },
 
-      deleteMediaFile: (id) => {
+      deleteMediaFiles: (ids) => {
+        if (!ids.length) return
+        const idSet = new Set(ids)
+        const removed = get().mediaFiles.filter((file) => idSet.has(file.id))
+        const productIds = [
+          ...new Set(
+            removed
+              .map((f) => (f.productId != null ? String(f.productId).trim() : ''))
+              .filter(Boolean)
+          ),
+        ]
+        if (typeof window !== 'undefined') {
+          recordDeletedMediaTombstone(removed, ids)
+        }
         set((state) => ({
-          mediaFiles: state.mediaFiles.filter(file => file.id !== id)
+          mediaFiles: state.mediaFiles.filter((file) => !idSet.has(file.id)),
         }))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('media-files-updated', {
+              detail: { action: 'delete', deletedIds: ids, productIds },
+            })
+          )
+        }
         scheduleMediaSyncToServer()
+      },
+
+      deleteMediaFile: (id) => {
+        get().deleteMediaFiles([id])
       },
 
       getMediaFilesByCategory: (category) => {
@@ -457,9 +484,17 @@ export const useMediaStore = create<MediaStore>()(
             ...file,
             uploadedAt: typeof file.uploadedAt === 'string' ? new Date(file.uploadedAt) : file.uploadedAt,
           }))
-          const fromLsIds = new Set(fromLs.map((f) => f.id))
-          const pending = inMemory.filter((f) => !fromLsIds.has(f.id))
-          const merged = pending.length > 0 ? [...pending, ...fromLs] : fromLs
+          // In-memory wins (current tab deletes). Only add rows from LS that are new in another tab.
+          if (inMemory.length === 0) {
+            if (hasClientMediaStore()) {
+              return
+            }
+            set({ mediaFiles: fromLs })
+            return
+          }
+          const memIds = new Set(inMemory.map((f) => f.id))
+          const fromOtherTab = fromLs.filter((f) => !memIds.has(f.id))
+          const merged = fromOtherTab.length > 0 ? [...inMemory, ...fromOtherTab] : inMemory
           set({ mediaFiles: merged })
           console.log('🔄 [MediaStore] Synced mediaFiles from localStorage:', merged.length, 'files')
         } catch (e) {

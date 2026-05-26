@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import ImageGallery from 'react-image-gallery'
 import 'react-image-gallery/styles/image-gallery.css'
 import { useMediaStore } from '@/lib/mediaStore'
+import { hasClientMediaStore, isSuppressedMediaUrl } from '@/lib/mediaDeleteTombstone'
+import {
+  hydrateMediaStoreFromLocalStorage,
+  readProductGalleryMediaFromLocalStorage,
+} from '@/lib/mediaGalleryLocal'
 import { ImageIcon } from 'lucide-react'
 
 function isValidFallbackUrl(url: unknown): url is string {
@@ -60,15 +65,23 @@ export default function ProductGallery({
   const [remoteProductMedia, setRemoteProductMedia] = useState<any[]>([])
   const [remoteLoaded, setRemoteLoaded] = useState(false)
   const [remoteRefreshToken, setRemoteRefreshToken] = useState(0)
+  /** Immediate storefront hide for admin deletes before server snapshot catches up. */
+  const suppressedMediaIdsRef = useRef<Set<string>>(new Set())
+  const [suppressionEpoch, setSuppressionEpoch] = useState(0)
   const bumpRemoteRefresh = useCallback(() => {
     setRemoteRefreshToken((n) => n + 1)
   }, [])
+  const bumpSuppression = useCallback(() => {
+    setSuppressionEpoch((n) => n + 1)
+  }, [])
 
-  // 마운트 시 localStorage에서 미디어 스토어 즉시 동기화 (persist 복원 전에도 연결 이미지 목록 확보)
+  // 마운트 시 localStorage → Zustand 동기화 (rehydrate가 삭제를 되살리는 것 방지)
   useEffect(() => {
     if (!productId || typeof window === 'undefined') return
+    hydrateMediaStoreFromLocalStorage()
     refreshMediaFilesFromStorage()
-  }, [productId, refreshMediaFilesFromStorage])
+    bumpSuppression()
+  }, [productId, refreshMediaFilesFromStorage, bumpSuppression])
 
   // 첫 방문 시에도 fallback 이미지를 즉시 표시 (미디어 스토어 복원 전에도 상품 대표 이미지 노출)
   const [galleryImages, setGalleryImages] = useState<any[]>(() => {
@@ -89,14 +102,15 @@ export default function ProductGallery({
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set())
   const retryAttemptsRef = useRef<Record<string, number>>({})
 
-  // productId로 연결된 미디어 가져오기 (이미지 + 동영상)
+  // Local admin: membership from flushed localStorage (not stale Zustand / server snapshot).
   const productMedia = useMemo(() => {
     if (!productId) return []
-    
+    if (hasClientMediaStore()) {
+      return readProductGalleryMediaFromLocalStorage(productId)
+    }
     const media = getMediaFilesByProduct(productId)
-    // 이미지와 동영상 모두 포함
-    return media.filter(file => file.type === 'image' || file.type === 'video')
-  }, [productId, getMediaFilesByProduct, mediaFiles]) // mediaFiles를 의존성에 추가하여 변경 감지
+    return media.filter((file) => file.type === 'image' || file.type === 'video')
+  }, [productId, getMediaFilesByProduct, mediaFiles, suppressionEpoch])
 
   useEffect(() => {
     setRemoteLoaded(false)
@@ -148,11 +162,33 @@ export default function ProductGallery({
       if (document.visibilityState === 'visible') bumpRemoteRefresh()
     }
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'media-store') bumpRemoteRefresh()
+      if (e.key === 'media-store') {
+        hydrateMediaStoreFromLocalStorage()
+        refreshMediaFilesFromStorage()
+        bumpSuppression()
+        bumpRemoteRefresh()
+      }
     }
     const onMediaEvent = (e: Event) => {
-      const d = (e as CustomEvent<{ productId?: string }>).detail
-      if (!d?.productId || String(d.productId) === String(productId)) bumpRemoteRefresh()
+      const d = (e as CustomEvent<{
+        productId?: string
+        productIds?: string[]
+        action?: string
+        deletedIds?: string[]
+      }>).detail
+      if (d?.action === 'delete' && Array.isArray(d.deletedIds)) {
+        for (const id of d.deletedIds) {
+          if (id) suppressedMediaIdsRef.current.add(String(id))
+        }
+        bumpSuppression()
+      }
+      hydrateMediaStoreFromLocalStorage()
+      refreshMediaFilesFromStorage()
+      const affectsThisProduct =
+        !d?.productIds?.length ||
+        d.productIds.some((pid) => String(pid) === String(productId)) ||
+        (d?.productId != null && String(d.productId) === String(productId))
+      if (affectsThisProduct) bumpRemoteRefresh()
     }
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('storage', onStorage)
@@ -168,22 +204,50 @@ export default function ProductGallery({
       window.removeEventListener('media-file-uploaded', onMediaEvent)
       window.clearInterval(interval)
     }
-  }, [productId, bumpRemoteRefresh])
+  }, [productId, bumpRemoteRefresh, bumpSuppression, refreshMediaFilesFromStorage])
+
+  useEffect(() => {
+    bumpSuppression()
+  }, [productId, bumpSuppression])
 
   /**
-   * Prefer server snapshot, then merge only client rows that are plausibly not yet on the server.
-   * Without the filter, stale persisted `media-store` could re-append HTTPS assets the server list no longer includes.
+   * Local `media-store`: never merge stale `/api/media/public` rows (POST may lag).
+   * Production visitors (no media-store): hydrate gallery URLs from server snapshot only.
    */
   const mergedProductMedia = useMemo(() => {
     if (!productId) return []
+
+    if (hasClientMediaStore()) {
+      return productMedia
+    }
+
     if (!remoteLoaded) return productMedia
-    const remoteIds = new Set(remoteProductMedia.map((f: { id?: string }) => String(f?.id ?? '')))
+
+    const remoteFiltered = remoteProductMedia.filter((f: { id?: string; url?: string; webpUrl?: string }) => {
+      if (!f?.id) return false
+      return (
+        !suppressedMediaIdsRef.current.has(String(f.id)) &&
+        !isSuppressedMediaUrl(f.url) &&
+        !isSuppressedMediaUrl(f.webpUrl)
+      )
+    })
+
+    if (productMedia.length > 0) {
+      const remoteById = new Map(remoteFiltered.map((f: { id?: string }) => [String(f.id), f]))
+      return productMedia
+        .map((f) => {
+          const r = remoteById.get(String(f.id))
+          return (r ? { ...r, ...f } : f) as (typeof productMedia)[0]
+        })
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    }
+
+    const remoteIds = new Set(remoteFiltered.map((f: { id?: string }) => String(f?.id ?? '')))
     const localOnly = productMedia.filter(
       (f) => f.id && !remoteIds.has(String(f.id)) && isLikelyPendingClientOnlyMedia(f)
     )
-    const combined = [...remoteProductMedia, ...localOnly]
-    return combined.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-  }, [productId, remoteLoaded, remoteProductMedia, productMedia])
+    return [...remoteFiltered, ...localOnly].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }, [productId, remoteLoaded, remoteProductMedia, productMedia, remoteRefreshToken, suppressionEpoch])
 
   const effectiveProductMedia = mergedProductMedia
 
@@ -255,7 +319,7 @@ export default function ProductGallery({
       let cancelled = false
 
       const showFallback = async () => {
-        if (!isValidFallbackUrl(fallbackImage)) {
+        if (!isValidFallbackUrl(fallbackImage) || isSuppressedMediaUrl(fallbackImage)) {
           if (!cancelled) {
             setGalleryImages([])
             setIsLoading(false)
@@ -265,7 +329,9 @@ export default function ProductGallery({
 
         setIsLoading(true)
         const finalFallback =
-          fallbackImage.startsWith('indexeddb://') ? '' : fallbackImage
+          fallbackImage.startsWith('indexeddb://') || isSuppressedMediaUrl(fallbackImage)
+            ? ''
+            : fallbackImage
 
         if (!cancelled) {
           if (finalFallback) {
@@ -372,7 +438,11 @@ export default function ProductGallery({
                                 fallbackImage !== 'undefined' &&
                                 !fallbackImage.startsWith('undefined')
         
-        if (isValidFallback && !fallbackImage.startsWith('indexeddb://')) {
+        if (
+          isValidFallback &&
+          !fallbackImage.startsWith('indexeddb://') &&
+          !isSuppressedMediaUrl(fallbackImage)
+        ) {
           const finalFallbackImage = fallbackImage
           console.log('✅ [ProductGallery] Using fallback image:', finalFallbackImage)
           formattedImages.push({
@@ -405,7 +475,7 @@ export default function ProductGallery({
     }
     
     processMedia()
-  }, [effectiveProductMedia, fallbackImage, productId])
+  }, [effectiveProductMedia, fallbackImage, productId, suppressionEpoch])
 
   // 이미지가 없을 때
   if (isLoading) {

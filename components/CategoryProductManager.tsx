@@ -41,6 +41,8 @@ interface ProductFormData {
   isNew?: boolean
   isPopular?: boolean
   isBestSeller?: boolean
+  isLimitedEdition?: boolean
+  limitedEditionText?: string
   isHotGoods?: boolean
   stockQuantity?: number
   safetyStock?: number
@@ -93,6 +95,8 @@ export default function CategoryProductManager({
     isNew: false,
     isPopular: false,
     isBestSeller: false,
+    isLimitedEdition: false,
+    limitedEditionText: '',
     isHotGoods: categoryValue === 'HotGoods',
     stockQuantity: 0,
     safetyStock: 5,
@@ -130,6 +134,8 @@ export default function CategoryProductManager({
         isNew: product.isNew || false,
         isPopular: product.isPopular || false,
         isBestSeller: product.isBestSeller || false,
+        isLimitedEdition: !!(product as any).isLimitedEdition,
+        limitedEditionText: (product as any).limitedEditionText || '',
         isHotGoods: product.isHotGoods || (categoryValue === 'HotGoods'),
         stockQuantity: (product as any).stockQuantity ?? 0,
         safetyStock: (product as any).safetyStock ?? 5,
@@ -162,6 +168,8 @@ export default function CategoryProductManager({
         isNew: false,
         isPopular: false,
         isBestSeller: false,
+        isLimitedEdition: false,
+        limitedEditionText: '',
         isHotGoods: categoryValue === 'HotGoods',
         stockQuantity: 0,
         safetyStock: 5,
@@ -805,7 +813,7 @@ export default function CategoryProductManager({
                 </div>
 
                 {/* Product status */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -840,6 +848,18 @@ export default function CategoryProductManager({
                     />
                     <label className="ml-2 block text-sm text-gray-900">
                       Popular Item
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="isLimitedEdition"
+                      checked={!!formData.isLimitedEdition}
+                      onChange={handleCheckboxChange}
+                      className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      Limited Edition
                     </label>
                   </div>
                 </div>

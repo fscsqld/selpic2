@@ -1,6 +1,6 @@
 import type { OrderRecord } from '@/lib/store'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
-import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 
 export type BankOrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -37,10 +37,8 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
     if (!Number.isFinite(baseUnitPrice) || baseUnitPrice < 0) {
       throw new Error(`Invalid catalog price for product: ${productId}`)
     }
-    const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, {
-      size: (item.customizations?.size && String(item.customizations.size).trim()) || (catalogProduct as { size?: string }).size,
-    })
-    const unitPrice = Number((baseUnitPrice + surchargePerUnit).toFixed(2))
+    const { unitPrice, baseUnitPrice: resolvedBase, customizationSurchargePerUnit: surchargePerUnit } =
+      getStorefrontLinePriceBreakdown(catalogProduct, item.customizations)
     const unitCents = audCents(unitPrice)
     itemsSubtotalCents += unitCents * qty
 
@@ -50,7 +48,7 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
       name: catalogProduct.name || item.name,
       image: catalogProduct.image || item.image,
       price: unitPrice,
-      baseUnitPrice: Number(baseUnitPrice.toFixed(2)),
+      baseUnitPrice: Number(resolvedBase.toFixed(2)),
       customizationSurchargePerUnit: Number(surchargePerUnit.toFixed(2)),
       quantity: qty,
       category: (catalogProduct as { category?: string }).category ?? item.category,

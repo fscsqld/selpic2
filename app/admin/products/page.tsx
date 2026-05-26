@@ -9,6 +9,17 @@ import MediaUpload from '@/components/MediaUpload'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminRoute from '@/components/AdminRoute'
 import { catalogImagePersistError } from '@/lib/catalogRecordSanitize'
+import {
+  MIXED_LABELS_SUBCATEGORY,
+  MIXED_LABELS_ADMIN_SHEET_INTRO,
+  MIXED_LABELS_ADMIN_SHEET_RANDOM_NOTE,
+  STICKER_PRODUCT_COLOR,
+  isMixedLabelsSubcategory,
+  mixedLabelsFormDefaults,
+  resolveMixedSheetTemplateId,
+} from '@/lib/mixedLabelsProduct'
+import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/lib/mixedLabelsPricing'
+import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -85,6 +96,13 @@ interface ProductFormData {
   fallbackImage?: string // 🆕 동영상 로딩 전 표시할 Fallback 이미지
   /** 스티커 시트지 수량. 가격은 3장 기준, 기본 3장. 이벤트 시 3장 이상 입력. 관리자 미설정 시 모든 커스텀 네임스티커에 적용. */
   stickerSheetQuantity?: number
+  customizationMode?: string
+  mixedSheetTemplateId?: string
+  mixedLabelsNameMaxLength?: number
+  mixedLabelsNameHint?: string
+  mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+  isLimitedEdition?: boolean
+  limitedEditionText?: string
 }
 
 const normalizeSubcategoryKey = (value?: string): string =>
@@ -146,6 +164,8 @@ function AdminProductsPageContent() {
     isNew: false,
     isPopular: false,
     isBestSeller: false,
+    isLimitedEdition: false,
+    limitedEditionText: '',
     features: [],
     isHotGoods: false,
     stockQuantity: 0,
@@ -163,9 +183,12 @@ function AdminProductsPageContent() {
   const isStationeryEssentialsProduct =
     formData.category === 'Stickers' && isStationeryEssentialsSubcategory(formData.subcategory)
 
+  const isMixedLabelsProduct =
+    formData.category === 'Stickers' && isMixedLabelsSubcategory(formData.subcategory)
+
   const categories = [
     { value: 'All', label: t('admin.products.categories.all') },
-    { value: 'Stickers', label: t('admin.products.categories.stickers'), icon: '🏷️', subcategories: ['Basic', 'Set', 'Premium', 'Office', 'Kids', 'Custom', 'Others'] },
+    { value: 'Stickers', label: t('admin.products.categories.stickers'), icon: '🏷️', subcategories: ['Basic', 'Set', 'Premium', 'Office', 'Kids', 'Custom', 'Mixed Labels', 'Others'] },
     { value: 'Stamps', label: t('admin.products.categories.stamps'), icon: '📮', subcategories: ['Set', 'Basic', 'Self-Inking', 'Traditional', 'Embosser', 'Wax Seal', 'Others'] },
     { value: 'PhoneCases', label: t('admin.products.categories.phoneCases'), icon: '📱', subcategories: ['Samsung', 'iPhone', 'Others'] },
     { value: 'HotGoods', label: t('admin.products.categories.hotGoods'), icon: '🔥', subcategories: ['Sunscreen', 'Sunstick', 'Cool Patch', 'Lifestyle', 'Other'] }
@@ -340,6 +363,15 @@ function AdminProductsPageContent() {
         customizationOptions: (product as any).customizationOptions || [],
         fallbackImage: (product as any).fallbackImage || '', // 🆕 Fallback Image
         stickerSheetQuantity: (product as any).stickerSheetQuantity ?? 3,
+        customizationMode: (product as any).customizationMode,
+        mixedSheetTemplateId: (product as any).mixedSheetTemplateId || '',
+        mixedLabelsNameMaxLength: (product as any).mixedLabelsNameMaxLength,
+        mixedLabelsNameHint: (product as any).mixedLabelsNameHint || '',
+        mixedLabelsSheetBundles: sanitizeMixedLabelsSheetBundles(
+          (product as any).mixedLabelsSheetBundles
+        ),
+        isLimitedEdition: (product as any).isLimitedEdition,
+        limitedEditionText: (product as any).limitedEditionText || '',
         rating: typeof (product as any).rating === 'number' ? (product as any).rating : 4.5,
         reviews: typeof (product as any).reviews === 'number' ? (product as any).reviews : 0
       })
@@ -366,6 +398,8 @@ function AdminProductsPageContent() {
         isNew: false,
         isPopular: false,
         isBestSeller: false,
+        isLimitedEdition: false,
+        limitedEditionText: '',
         features: [],
         isHotGoods: false,
         stockQuantity: 0,
@@ -407,6 +441,8 @@ function AdminProductsPageContent() {
         isNew: false,
         isPopular: false,
         isBestSeller: false,
+        isLimitedEdition: false,
+        limitedEditionText: '',
       features: [],
       isHotGoods: false,
       stockQuantity: 0,
@@ -435,16 +471,53 @@ function AdminProductsPageContent() {
       showNotification('error', t('admin.products.hotGoodsSubcategoryError'))
       return
     }
-    
+
     const isStationeryEssentials =
       formData.category === 'Stickers' && isStationeryEssentialsSubcategory(formData.subcategory)
+    const limitedEditionPayload = {
+      isLimitedEdition: !!formData.isLimitedEdition,
+      limitedEditionText: formData.isLimitedEdition
+        ? (formData.limitedEditionText?.trim() ||
+            (isMixedLabelsProduct ? mixedLabelsFormDefaults().limitedEditionText : ''))
+        : '',
+    }
+
+    const mixedLabelsBundles = isMixedLabelsProduct
+      ? sanitizeMixedLabelsSheetBundles(formData.mixedLabelsSheetBundles)
+      : undefined
+
+    const mixedLabelsPayload = isMixedLabelsProduct
+      ? {
+          customizationMode: mixedLabelsFormDefaults().customizationMode,
+          mixedSheetTemplateId: resolveMixedSheetTemplateId(formData.mixedSheetTemplateId),
+          mixedLabelsNameMaxLength: Math.max(
+            1,
+            Math.min(20, Number(formData.mixedLabelsNameMaxLength) || 6)
+          ),
+          mixedLabelsNameHint: formData.mixedLabelsNameHint?.trim() || '',
+          mixedLabelsSheetBundles: mixedLabelsBundles,
+          size: formData.size?.trim() || mixedLabelsFormDefaults().size,
+          price:
+            mixedLabelsBundles && mixedLabelsBundles.length > 0
+              ? Math.min(...mixedLabelsBundles.map((b) => b.price))
+              : formData.price,
+        }
+      : {}
+
     const normalizedFormData: ProductFormData = {
       ...formData,
+      ...mixedLabelsPayload,
+      ...limitedEditionPayload,
+      ...(formData.category === 'Stickers' ? { color: STICKER_PRODUCT_COLOR } : {}),
       // Stationery Essentials uses file-based stationery products, not 3-sheet name-sticker pricing.
       stickerSheetQuantity: isStationeryEssentials
         ? undefined
-        : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+        : isMixedLabelsProduct
+          ? Math.max(1, Number(formData.stickerSheetQuantity) || 1)
+          : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
     }
+
+    const productPayload: ProductFormData = normalizedFormData
 
     const imagePersistErr = catalogImagePersistError(normalizedFormData.image)
     if (imagePersistErr) {
@@ -462,10 +535,10 @@ function AdminProductsPageContent() {
         // 상품 수정
         // ✅ customizationOptions 명시적 전달 (빈 배열도 유효한 값이므로 || [] 제거)
         const updatedProduct = {
-          ...normalizedFormData,
-          customizationOptions: Array.isArray(normalizedFormData.customizationOptions) 
-            ? normalizedFormData.customizationOptions 
-            : (normalizedFormData.customizationOptions || []),
+          ...productPayload,
+          customizationOptions: Array.isArray(productPayload.customizationOptions) 
+            ? productPayload.customizationOptions 
+            : (productPayload.customizationOptions || []),
           updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: customizationOptions 확인 (개발 환경에서만)
@@ -514,12 +587,12 @@ function AdminProductsPageContent() {
         // 새 상품 추가
         // ✅ customizationOptions 명시적 전달 (Edit Product와 동일한 로직)
         const newProduct = {
-          ...normalizedFormData,
+          ...productPayload,
           id: Date.now().toString(), // 간단한 ID 생성
-          image: normalizedFormData.image || '', // ✅ image 명시적 보존
-          customizationOptions: Array.isArray(normalizedFormData.customizationOptions) 
-            ? normalizedFormData.customizationOptions 
-            : (normalizedFormData.customizationOptions || []),
+          image: productPayload.image || '', // ✅ image 명시적 보존
+          customizationOptions: Array.isArray(productPayload.customizationOptions) 
+            ? productPayload.customizationOptions 
+            : (productPayload.customizationOptions || []),
           updatedAt: new Date().toISOString() // 업데이트 시간 추가
         }
         // ✅ 디버깅: 상품 데이터 확인 (개발 환경에서만)
@@ -606,28 +679,66 @@ function AdminProductsPageContent() {
         newData.isHotGoods = value === 'HotGoods'
         if (value === 'Stickers') {
           newData.stickerSheetQuantity = 3
+          newData.color = STICKER_PRODUCT_COLOR
         }
       }
 
       if (name === 'subcategory' && newData.category === 'Stickers') {
+        newData.color = STICKER_PRODUCT_COLOR
+        if (isMixedLabelsSubcategory(value)) {
+          const defs = mixedLabelsFormDefaults()
+          newData.customizationMode = defs.customizationMode
+          newData.stickerSheetQuantity = defs.stickerSheetQuantity
+          newData.size = defs.size
+          newData.color = defs.color
+          newData.mixedSheetTemplateId = mixedLabelsFormDefaults().mixedSheetTemplateId
+          if (newData.mixedLabelsNameMaxLength == null) {
+            newData.mixedLabelsNameMaxLength = defs.mixedLabelsNameMaxLength
+          }
+          if (!newData.mixedLabelsNameHint?.trim()) {
+            newData.mixedLabelsNameHint = defs.mixedLabelsNameHint
+          }
+          if (!newData.mixedLabelsSheetBundles?.length) {
+            newData.mixedLabelsSheetBundles = defs.mixedLabelsSheetBundles.map((b) => ({ ...b }))
+          }
+          if (!newData.limitedEditionText?.trim()) {
+            newData.limitedEditionText = defs.limitedEditionText
+          }
+          newData.isLimitedEdition = true
+        } else {
+          newData.customizationMode = undefined
+          newData.mixedSheetTemplateId = ''
+          newData.mixedLabelsNameHint = ''
+          newData.mixedLabelsSheetBundles = undefined
+          newData.limitedEditionText = ''
+          newData.isLimitedEdition = false
+        }
         if (isStationeryEssentialsSubcategory(value)) {
           // Stationery Essentials products are not priced by name-sticker sheet count.
           newData.stickerSheetQuantity = undefined
           newData.size = ''
+        } else if (isMixedLabelsSubcategory(value)) {
+          newData.stickerSheetQuantity = Math.max(1, Number(newData.stickerSheetQuantity) || 1)
         } else if (newData.stickerSheetQuantity == null || Number(newData.stickerSheetQuantity) < 3) {
           newData.stickerSheetQuantity = 3
         }
       }
       
-      // 스티커 시트지 수량은 최소 3
+      // 스티커 시트지 수량: Mixed Labels min 1, grid name labels min 3
       if (
         name === 'stickerSheetQuantity' &&
         newData.category === 'Stickers' &&
         !isStationeryEssentialsSubcategory(newData.subcategory) &&
-        typeof newData.stickerSheetQuantity === 'number' &&
-        newData.stickerSheetQuantity < 3
+        typeof newData.stickerSheetQuantity === 'number'
       ) {
-        newData.stickerSheetQuantity = 3
+        if (isMixedLabelsSubcategory(newData.subcategory) && newData.stickerSheetQuantity < 1) {
+          newData.stickerSheetQuantity = 1
+        } else if (
+          !isMixedLabelsSubcategory(newData.subcategory) &&
+          newData.stickerSheetQuantity < 3
+        ) {
+          newData.stickerSheetQuantity = 3
+        }
       }
       
       return newData
@@ -1039,6 +1150,11 @@ function AdminProductsPageContent() {
                              {(product as any).isBestSeller && (
                                <span className="inline-flex px-2 py-1 text-xs bg-orange-100 text-orange-600 rounded">
                                  BEST
+                               </span>
+                             )}
+                             {(product as any).isLimitedEdition && (
+                               <span className="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded">
+                                 LIMITED
                                </span>
                              )}
                              {(product as any).isHotGoods && (
@@ -1483,11 +1599,23 @@ function AdminProductsPageContent() {
                        
                        // 동적으로 서브카테고리 옵션 생성
                        if (availableSubcategories.length > 0) {
-                         return availableSubcategories.map(subcategory => (
-                           <option key={subcategory.id} value={subcategory.title}>
-                             {subcategory.emoji} {subcategory.title}
-                           </option>
-                         ))
+                         const hasMixedLabels = availableSubcategories.some((item) =>
+                           isMixedLabelsSubcategory(item.title)
+                         )
+                         return (
+                           <>
+                             {availableSubcategories.map(subcategory => (
+                               <option key={subcategory.id} value={subcategory.title}>
+                                 {subcategory.emoji} {subcategory.title}
+                               </option>
+                             ))}
+                             {formData.category === 'Stickers' && !hasMixedLabels && (
+                               <option value={MIXED_LABELS_SUBCATEGORY}>
+                                 🦕 {MIXED_LABELS_SUBCATEGORY}
+                               </option>
+                             )}
+                           </>
+                         )
                        }
                        
                        // 서브카테고리가 없으면 기본 하드코딩된 옵션 표시 (하위 호환성)
@@ -1500,6 +1628,7 @@ function AdminProductsPageContent() {
                              <option value="Office">💼 {t('admin.products.subcategoryOffice')}</option>
                              <option value="Kids">👶 {t('admin.products.subcategoryKids')}</option>
                              <option value="Custom">🎨 {t('admin.products.subcategoryCustom')}</option>
+                             <option value={MIXED_LABELS_SUBCATEGORY}>🦕 {MIXED_LABELS_SUBCATEGORY}</option>
                              <option value="Others">📌 Others</option>
                            </>
                          )
@@ -1544,6 +1673,83 @@ function AdminProductsPageContent() {
                      <p className="mt-1 text-sm text-gray-500">{t('admin.products.stickerSubcategoryNote')}</p>
                    )}
                  </div>
+
+                 {isMixedLabelsProduct && (
+                   <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-4">
+                     <div>
+                       <h4 className="text-sm font-semibold text-amber-900">Mixed Labels sheet</h4>
+                       <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                         {MIXED_LABELS_ADMIN_SHEET_INTRO}
+                       </p>
+                       <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+                         {MIXED_LABELS_ADMIN_SHEET_RANDOM_NOTE}
+                       </p>
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-sm font-medium text-gray-800 mb-1">
+                           Max name length
+                         </label>
+                         <input
+                           type="number"
+                           name="mixedLabelsNameMaxLength"
+                           value={formData.mixedLabelsNameMaxLength ?? 6}
+                           onChange={handleInputChange}
+                           min={1}
+                           max={20}
+                           className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
+                         />
+                       </div>
+                     </div>
+                     <MixedLabelsSheetBundlesEditor
+                       bundles={formData.mixedLabelsSheetBundles}
+                       onChange={(bundles) =>
+                         setFormData((prev) => ({
+                           ...prev,
+                           mixedLabelsSheetBundles: bundles,
+                           price: bundles.length
+                             ? Math.min(...bundles.map((b) => b.price))
+                             : prev.price,
+                         }))
+                       }
+                     />
+                     <p className="text-xs text-amber-800">
+                       List price above syncs to the lowest bundle when you save. Customers pick a bundle,
+                       then quantity (number of packs) on the customize page.
+                     </p>
+                     <div>
+                       <label className="block text-sm font-medium text-gray-800 mb-1">
+                         Name input hint (storefront)
+                       </label>
+                       <textarea
+                         name="mixedLabelsNameHint"
+                         value={formData.mixedLabelsNameHint || ''}
+                         onChange={handleInputChange}
+                         rows={2}
+                         className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white text-sm"
+                         placeholder="Shown on the customize page above the name field"
+                       />
+                     </div>
+                     {formData.isLimitedEdition && (
+                       <div className="rounded-lg border border-amber-300 bg-white p-3">
+                         <label className="block text-sm font-medium text-gray-800 mb-1">
+                           Limited edition text (storefront)
+                         </label>
+                         <textarea
+                           name="limitedEditionText"
+                           value={formData.limitedEditionText || ''}
+                           onChange={handleInputChange}
+                           rows={3}
+                           className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                           placeholder={mixedLabelsFormDefaults().limitedEditionText}
+                         />
+                         <p className="mt-1 text-xs text-amber-800">
+                           Enable <strong>Limited Edition</strong> in Product Status below.
+                         </p>
+                       </div>
+                     )}
+                   </div>
+                 )}
 
                 {/* {t('admin.products.stockStatus')} */}
                 <div className="flex items-center">
@@ -1657,7 +1863,8 @@ function AdminProductsPageContent() {
                     />
                   </div>
                 ) : (
-                  (formData.category === 'Stickers' || formData.category === 'Stamps' || formData.category === 'PhoneCases') && (
+                  (formData.category === 'Stickers' || formData.category === 'Stamps' || formData.category === 'PhoneCases') &&
+                  !isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {t('admin.products.sizeLabel')}
@@ -1780,38 +1987,49 @@ function AdminProductsPageContent() {
                   </div>
                 )}
 
-                {/* 색상 필드 · 스티커 시트지 수량(Stickers일 때만) */}
+                {/* Color — Stickers: black only; other categories keep full list */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {t('admin.products.colorLabel')}
                   </label>
-                  <select
-                    name="color"
-                    value={formData.color || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  >
-                    <option value="">{t('admin.products.selectColor')}</option>
-                    <option value="White">White</option>
-                    <option value="Black">Black</option>
-                    <option value="Red">Red</option>
-                    <option value="Blue">Blue</option>
-                    <option value="Green">Green</option>
-                    <option value="Yellow">Yellow</option>
-                    <option value="Pink">Pink</option>
-                    <option value="Purple">Purple</option>
-                    <option value="Brown">Brown</option>
-                    <option value="Clear">Clear</option>
-                    <option value="Transparent">Transparent</option>
-                    <option value="Carbon">Carbon</option>
-                    <option value="Walnut">Walnut</option>
-                    <option value="Multi">Multi Color</option>
-                    <option value="Custom">Custom</option>
-                  </select>
+                  {formData.category === 'Stickers' ? (
+                    <select
+                      name="color"
+                      value={formData.color || STICKER_PRODUCT_COLOR}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-gray-50"
+                    >
+                      <option value={STICKER_PRODUCT_COLOR}>{STICKER_PRODUCT_COLOR}</option>
+                    </select>
+                  ) : (
+                    <select
+                      name="color"
+                      value={formData.color || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">{t('admin.products.selectColor')}</option>
+                      <option value="White">White</option>
+                      <option value="Black">Black</option>
+                      <option value="Red">Red</option>
+                      <option value="Blue">Blue</option>
+                      <option value="Green">Green</option>
+                      <option value="Yellow">Yellow</option>
+                      <option value="Pink">Pink</option>
+                      <option value="Purple">Purple</option>
+                      <option value="Brown">Brown</option>
+                      <option value="Clear">Clear</option>
+                      <option value="Transparent">Transparent</option>
+                      <option value="Carbon">Carbon</option>
+                      <option value="Walnut">Walnut</option>
+                      <option value="Multi">Multi Color</option>
+                      <option value="Custom">Custom</option>
+                    </select>
+                  )}
                 </div>
 
                 {/* 스티커 시트지 수량: Stickers 카테고리일 때 Color 오른쪽에 표시. 가격 3장 기준, 기본 3장, 이벤트 시 3장 이상. */}
-                {formData.category === 'Stickers' && !isStationeryEssentialsProduct && (
+                {formData.category === 'Stickers' && !isStationeryEssentialsProduct && !isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {t('admin.products.stickerSheetQuantityLabel')}
@@ -1928,7 +2146,7 @@ function AdminProductsPageContent() {
                 </div>
 
                 {/* 상품 상태 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -1965,7 +2183,35 @@ function AdminProductsPageContent() {
                       {t('admin.products.isPopularLabel')}
                     </label>
                   </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="isLimitedEdition"
+                      checked={!!formData.isLimitedEdition}
+                      onChange={handleCheckboxChange}
+                      className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.products.isLimitedEditionLabel')}
+                    </label>
+                  </div>
                 </div>
+
+                {formData.isLimitedEdition && !isMixedLabelsProduct && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Limited edition text (optional)
+                    </label>
+                    <textarea
+                      name="limitedEditionText"
+                      value={formData.limitedEditionText || ''}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+                      placeholder="Shown on product and customize pages when set"
+                    />
+                  </div>
+                )}
 
                 {/* 상품 설명 */}
                 <div className="md:col-span-2">

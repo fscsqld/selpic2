@@ -7,6 +7,18 @@ import AdminProductHeader from '@/components/AdminProductHeader'
 import MediaUpload from '@/components/MediaUpload'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 import { catalogImagePersistError } from '@/lib/catalogRecordSanitize'
+import {
+  MIXED_LABELS_SUBCATEGORY,
+  MIXED_LABELS_ADMIN_SHEET_INTRO,
+  MIXED_LABELS_ADMIN_SHEET_RANDOM_NOTE,
+  STICKER_PRODUCT_COLOR,
+  isMixedLabelsSubcategory,
+  mixedLabelsFormDefaults,
+  stripGridNameLabelFields,
+  resolveMixedSheetTemplateId,
+} from '@/lib/mixedLabelsProduct'
+import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/lib/mixedLabelsPricing'
+import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
 
 interface StickerFormData {
   id: string
@@ -24,6 +36,7 @@ interface StickerFormData {
   rating?: number
   reviews?: number
   isNew?: boolean
+  isPopular?: boolean
   isBestSeller?: boolean
   features?: string[]
   tags?: string[]
@@ -38,6 +51,13 @@ interface StickerFormData {
   stickerHasImage?: boolean
   /** Extra charge when customer uses 2-line (Option 1 or 2). Optional; default applied in customize page if not set. */
   twoLineSurcharge?: number
+  customizationMode?: string
+  mixedSheetTemplateId?: string
+  mixedLabelsNameMaxLength?: number
+  mixedLabelsNameHint?: string
+  mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+  limitedEditionText?: string
+  isLimitedEdition?: boolean
 }
 
 const normalizeSubcategoryKey = (value?: string): string =>
@@ -75,7 +95,8 @@ export default function StickersPage() {
     { value: 'Office', label: 'Office', icon: '💼' },
     { value: 'Kids', label: 'Kids', icon: '👶' },
     { value: 'Custom', label: 'Custom', icon: '🎨' },
-    { value: 'Stationery Essentials', label: 'Stationery Essentials', icon: '📎' }
+    { value: 'Stationery Essentials', label: 'Stationery Essentials', icon: '📎' },
+    { value: MIXED_LABELS_SUBCATEGORY, label: 'Mixed Labels', icon: '🦕' },
   ]
   
   const [selectedSubcategory, setSelectedSubcategory] = useState('all')
@@ -103,7 +124,10 @@ export default function StickersPage() {
     rating: 4.5,
     reviews: 0,
     isNew: false,
+    isPopular: false,
     isBestSeller: false,
+    isLimitedEdition: false,
+    limitedEditionText: '',
     features: [],
     tags: [],
     stickerSheetQuantity: 3,
@@ -113,9 +137,15 @@ export default function StickersPage() {
     stickerRows: undefined,
     stickerGapMm: undefined,
     stickerHasImage: false,
-    twoLineSurcharge: undefined
+    twoLineSurcharge: undefined,
+    customizationMode: undefined,
+    mixedSheetTemplateId: '',
+    mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
+    mixedLabelsNameHint: '',
+    mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
   })
   const isStationeryEssentialsProduct = isStationeryEssentialsSubcategory(formData.subcategory)
+  const isMixedLabelsProduct = isMixedLabelsSubcategory(formData.subcategory)
   
   // Filter by subcategory
   const filteredProducts = selectedSubcategory === 'all' 
@@ -143,6 +173,7 @@ export default function StickersPage() {
         rating: product.rating || 4.5,
         reviews: product.reviews || 0,
         isNew: product.isNew || false,
+        isPopular: product.isPopular || false,
         isBestSeller: product.isBestSeller || false,
         features: product.features || [],
         tags: product.tags || [],
@@ -153,7 +184,16 @@ export default function StickersPage() {
         stickerRows: (product as any).stickerRows,
         stickerGapMm: (product as any).stickerGapMm,
         stickerHasImage: !!(product as any).stickerHasImage,
-        twoLineSurcharge: (product as any).twoLineSurcharge
+        twoLineSurcharge: (product as any).twoLineSurcharge,
+        customizationMode: (product as any).customizationMode,
+        mixedSheetTemplateId: (product as any).mixedSheetTemplateId || '',
+        mixedLabelsNameMaxLength: (product as any).mixedLabelsNameMaxLength,
+        mixedLabelsNameHint: (product as any).mixedLabelsNameHint || '',
+        mixedLabelsSheetBundles: sanitizeMixedLabelsSheetBundles(
+          (product as any).mixedLabelsSheetBundles
+        ),
+        limitedEditionText: (product as any).limitedEditionText || '',
+        isLimitedEdition: !!(product as any).isLimitedEdition,
       })
     } else {
       setEditingProduct(null)
@@ -173,7 +213,10 @@ export default function StickersPage() {
         rating: 4.5,
         reviews: 0,
         isNew: false,
+        isPopular: false,
         isBestSeller: false,
+        isLimitedEdition: false,
+        limitedEditionText: '',
         features: [],
         tags: [],
         stickerSheetQuantity: 3,
@@ -183,7 +226,12 @@ export default function StickersPage() {
         stickerRows: undefined,
         stickerGapMm: undefined,
         stickerHasImage: false,
-        twoLineSurcharge: undefined
+        twoLineSurcharge: undefined,
+        customizationMode: undefined,
+        mixedSheetTemplateId: '',
+        mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
+        mixedLabelsNameHint: '',
+    mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
       })
     }
     setIsModalOpen(true)
@@ -209,7 +257,10 @@ export default function StickersPage() {
       rating: 4.5,
       reviews: 0,
       isNew: false,
+      isPopular: false,
       isBestSeller: false,
+      isLimitedEdition: false,
+      limitedEditionText: '',
       features: [],
       tags: [],
       stickerSheetQuantity: 3,
@@ -217,11 +268,16 @@ export default function StickersPage() {
       stickerHeightMm: undefined,
       stickerCols: undefined,
       stickerRows: undefined,
-    stickerGapMm: undefined,
+      stickerGapMm: undefined,
     stickerHasImage: false,
-    twoLineSurcharge: undefined
-  })
-}
+      twoLineSurcharge: undefined,
+      customizationMode: undefined,
+      mixedSheetTemplateId: '',
+      mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
+      mixedLabelsNameHint: '',
+    mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
+    })
+  }
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -240,6 +296,7 @@ export default function StickersPage() {
     
     try {
       const hasStickerDims =
+        !isMixedLabelsProduct &&
         formData.stickerWidthMm != null &&
         formData.stickerHeightMm != null &&
         formData.stickerCols != null &&
@@ -255,17 +312,63 @@ export default function StickersPage() {
           }
         : {}
       const twoLineSurchargeVal =
-        formData.twoLineSurcharge != null ? Number(formData.twoLineSurcharge) : undefined
+        !isMixedLabelsProduct && formData.twoLineSurcharge != null
+          ? Number(formData.twoLineSurcharge)
+          : undefined
       const normalizedStickerSheetQuantity = isStationeryEssentialsProduct
         ? undefined
-        : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+        : isMixedLabelsProduct
+          ? Math.max(1, Number(formData.stickerSheetQuantity) || 1)
+          : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+
+      const limitedEditionPayload = {
+        isLimitedEdition: !!formData.isLimitedEdition,
+        limitedEditionText: formData.isLimitedEdition
+          ? (formData.limitedEditionText?.trim() ||
+              (isMixedLabelsProduct ? mixedLabelsFormDefaults().limitedEditionText : ''))
+          : '',
+      }
+
+      const mixedLabelsBundles = isMixedLabelsProduct
+        ? sanitizeMixedLabelsSheetBundles(formData.mixedLabelsSheetBundles)
+        : undefined
+
+      const mixedLabelsPayload = isMixedLabelsProduct
+        ? {
+            customizationMode: mixedLabelsFormDefaults().customizationMode,
+            mixedSheetTemplateId: resolveMixedSheetTemplateId(formData.mixedSheetTemplateId),
+            mixedLabelsNameMaxLength: Math.max(
+              1,
+              Math.min(20, Number(formData.mixedLabelsNameMaxLength) || 6)
+            ),
+            mixedLabelsNameHint: formData.mixedLabelsNameHint?.trim() || '',
+            mixedLabelsSheetBundles: mixedLabelsBundles,
+            size: formData.size?.trim() || mixedLabelsFormDefaults().size,
+            price:
+              mixedLabelsBundles && mixedLabelsBundles.length > 0
+                ? Math.min(...mixedLabelsBundles.map((b) => b.price))
+                : formData.price,
+          }
+        : {}
+
+      const basePayload = {
+        ...formData,
+        color: STICKER_PRODUCT_COLOR,
+        stickerSheetQuantity: normalizedStickerSheetQuantity,
+        ...optionalSticker,
+        twoLineSurcharge: twoLineSurchargeVal,
+        ...mixedLabelsPayload,
+        ...limitedEditionPayload,
+      }
+
+      const productPayload = isMixedLabelsProduct
+        ? stripGridNameLabelFields(basePayload)
+        : basePayload
+
       if (editingProduct) {
         // Update product
         const updatedProduct = {
-          ...formData,
-          stickerSheetQuantity: normalizedStickerSheetQuantity,
-          ...optionalSticker,
-          twoLineSurcharge: twoLineSurchargeVal,
+          ...productPayload,
           customizationOptions: (editingProduct as any).customizationOptions || [],
           updatedAt: new Date().toISOString()
         }
@@ -280,10 +383,7 @@ export default function StickersPage() {
       } else {
         // Add new product
         const newProduct = {
-          ...formData,
-          stickerSheetQuantity: normalizedStickerSheetQuantity,
-          ...optionalSticker,
-          twoLineSurcharge: twoLineSurchargeVal,
+          ...productPayload,
           id: Date.now().toString(),
           customizationOptions: [],
           updatedAt: new Date().toISOString()
@@ -341,20 +441,58 @@ export default function StickersPage() {
         next.stickerGapMm = preset.stickerGapMm ?? prev.stickerGapMm ?? 2
       }
       if (name === 'subcategory' && typeof value === 'string') {
-        const size = next.size || ''
-        if (size.trim()) {
-          const preset = stickerPresetForAdminForm(size, value)
-          next.stickerWidthMm = preset.stickerWidthMm
-          next.stickerHeightMm = preset.stickerHeightMm
-          next.stickerCols = preset.stickerCols
-          next.stickerRows = preset.stickerRows
-          next.stickerGapMm = preset.stickerGapMm ?? next.stickerGapMm ?? 2
+        next.color = STICKER_PRODUCT_COLOR
+        if (isMixedLabelsSubcategory(value)) {
+          const defs = mixedLabelsFormDefaults()
+          next.customizationMode = defs.customizationMode
+          next.stickerSheetQuantity = defs.stickerSheetQuantity
+          next.size = defs.size
+          next.color = defs.color
+          next.stickerWidthMm = undefined
+          next.stickerHeightMm = undefined
+          next.stickerCols = undefined
+          next.stickerRows = undefined
+          next.stickerGapMm = undefined
+          next.stickerHasImage = false
+          next.twoLineSurcharge = undefined
+          next.mixedSheetTemplateId = mixedLabelsFormDefaults().mixedSheetTemplateId
+          if (next.mixedLabelsNameMaxLength == null) {
+            next.mixedLabelsNameMaxLength = defs.mixedLabelsNameMaxLength
+          }
+          if (!next.mixedLabelsNameHint?.trim()) {
+            next.mixedLabelsNameHint = defs.mixedLabelsNameHint
+          }
+          if (!next.mixedLabelsSheetBundles?.length) {
+            next.mixedLabelsSheetBundles = defs.mixedLabelsSheetBundles.map((b) => ({ ...b }))
+          }
+          if (!next.limitedEditionText?.trim()) {
+            next.limitedEditionText = defs.limitedEditionText
+          }
+          if (name === 'subcategory') next.isLimitedEdition = true
+        } else {
+          next.customizationMode = undefined
+          next.mixedSheetTemplateId = ''
+          next.mixedLabelsNameHint = ''
+          next.mixedLabelsSheetBundles = undefined
+          next.limitedEditionText = ''
+          next.isLimitedEdition = false
+          const size = next.size || ''
+          if (size.trim() && !isStationeryEssentialsSubcategory(value)) {
+            const preset = stickerPresetForAdminForm(size, value)
+            next.stickerWidthMm = preset.stickerWidthMm
+            next.stickerHeightMm = preset.stickerHeightMm
+            next.stickerCols = preset.stickerCols
+            next.stickerRows = preset.stickerRows
+            next.stickerGapMm = preset.stickerGapMm ?? next.stickerGapMm ?? 2
+          }
         }
       }
       if (name === 'subcategory') {
         if (isStationeryEssentialsSubcategory(value)) {
           next.stickerSheetQuantity = undefined
           next.size = ''
+        } else if (isMixedLabelsSubcategory(value)) {
+          next.stickerSheetQuantity = Math.max(1, Number(next.stickerSheetQuantity) || 1)
         } else if (next.stickerSheetQuantity == null || Number(next.stickerSheetQuantity) < 3) {
           next.stickerSheetQuantity = 3
         }
@@ -362,10 +500,16 @@ export default function StickersPage() {
       if (
         name === 'stickerSheetQuantity' &&
         !isStationeryEssentialsSubcategory(next.subcategory) &&
-        typeof next.stickerSheetQuantity === 'number' &&
-        next.stickerSheetQuantity < 3
+        typeof next.stickerSheetQuantity === 'number'
       ) {
-        next.stickerSheetQuantity = 3
+        if (isMixedLabelsSubcategory(next.subcategory) && next.stickerSheetQuantity < 1) {
+          next.stickerSheetQuantity = 1
+        } else if (
+          !isMixedLabelsSubcategory(next.subcategory) &&
+          next.stickerSheetQuantity < 3
+        ) {
+          next.stickerSheetQuantity = 3
+        }
       }
       return next
     })
@@ -570,7 +714,13 @@ export default function StickersPage() {
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900">
-                  {editingProduct ? 'Edit Sticker' : 'Add New Sticker'}
+                  {editingProduct
+                    ? isMixedLabelsProduct
+                      ? 'Edit Mixed Labels Product'
+                      : 'Edit Sticker'
+                    : isMixedLabelsProduct
+                      ? 'Add Mixed Labels Product'
+                      : 'Add New Sticker'}
                 </h3>
                 <button
                   onClick={closeModal}
@@ -654,7 +804,92 @@ export default function StickersPage() {
                     </select>
                   </div>
 
-                  {/* Size */}
+                  {isMixedLabelsProduct && (
+                    <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-4">
+                      <div>
+                        <h4 className="text-sm font-semibold text-amber-900">Mixed Labels sheet</h4>
+                        <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                          {MIXED_LABELS_ADMIN_SHEET_INTRO}
+                        </p>
+                        <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+                          {MIXED_LABELS_ADMIN_SHEET_RANDOM_NOTE}
+                        </p>
+                        <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+                          Not the same as grid name labels (Basic / Premium).
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-800 mb-1">
+                            Max name length
+                          </label>
+                          <input
+                            type="number"
+                            name="mixedLabelsNameMaxLength"
+                            value={formData.mixedLabelsNameMaxLength ?? 6}
+                            onChange={handleInputChange}
+                            min={1}
+                            max={20}
+                            className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <MixedLabelsSheetBundlesEditor
+                        bundles={formData.mixedLabelsSheetBundles}
+                        onChange={(bundles) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            mixedLabelsSheetBundles: bundles,
+                            price: bundles.length
+                              ? Math.min(...bundles.map((b) => b.price))
+                              : prev.price,
+                          }))
+                        }
+                      />
+                      <p className="text-xs text-amber-800">
+                        List price syncs to the lowest bundle on save. Quantity on the storefront is
+                        number of packs.
+                      </p>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-800 mb-1">
+                          Name input hint (storefront)
+                        </label>
+                        <textarea
+                          name="mixedLabelsNameHint"
+                          value={formData.mixedLabelsNameHint || ''}
+                          onChange={handleInputChange}
+                          rows={2}
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white text-sm"
+                          placeholder="Shown on the customize page above the name field"
+                        />
+                      </div>
+
+                      {formData.isLimitedEdition && (
+                        <div className="rounded-lg border border-amber-300 bg-white p-3">
+                          <label className="block text-sm font-medium text-gray-800 mb-1">
+                            Limited edition text (storefront)
+                          </label>
+                          <textarea
+                            name="limitedEditionText"
+                            value={formData.limitedEditionText || ''}
+                            onChange={handleInputChange}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                            placeholder={mixedLabelsFormDefaults().limitedEditionText}
+                          />
+                          <p className="mt-1 text-xs text-amber-800">
+                            Enable <strong>Limited Edition</strong> in Product Status below.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Size — grid name labels only */}
+                  {!isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Size
@@ -693,8 +928,10 @@ export default function StickersPage() {
                       </>
                     )}
                   </div>
+                  )}
 
-                  {/* Sticker dimensions (optional): used when set; Custom size or override preset */}
+                  {/* Sticker dimensions (optional): grid name labels only */}
+                  {!isMixedLabelsProduct && (
                   <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-3">
                     <label className="col-span-2 md:col-span-5 text-sm font-medium text-gray-700">스티커 치수 (선택) — 입력 시 해당 상품에만 적용</label>
                     <div>
@@ -718,8 +955,10 @@ export default function StickersPage() {
                       <input type="number" name="stickerGapMm" value={formData.stickerGapMm ?? ''} onChange={handleInputChange} min={0} step={0.5} placeholder="예: 2" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                   </div>
+                  )}
 
-                  {/* Sticker has image (e.g. icon on left) — text area avoids overlap */}
+                  {/* Sticker has image — grid name labels only */}
+                  {!isMixedLabelsProduct && (
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -733,8 +972,10 @@ export default function StickersPage() {
                       Sticker has image (e.g. icon on left) — text will be placed so it does not overlap the image
                     </label>
                   </div>
+                  )}
 
-                  {/* Material */}
+                  {/* Material — not used for Mixed Labels */}
+                  {!isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Material
@@ -751,33 +992,24 @@ export default function StickersPage() {
                       <option value="Waterproof PP">Waterproof PP</option>
                     </select>
                   </div>
+                  )}
 
-                  {/* Color */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Color
                     </label>
                     <select
                       name="color"
-                      value={formData.color || ''}
+                      value={formData.color || STICKER_PRODUCT_COLOR}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-gray-50"
                     >
-                      <option value="">Select Color</option>
-                      <option value="White">White</option>
-                      <option value="Black">Black</option>
-                      <option value="Red">Red</option>
-                      <option value="Blue">Blue</option>
-                      <option value="Green">Green</option>
-                      <option value="Yellow">Yellow</option>
-                      <option value="Pink">Pink</option>
-                      <option value="Purple">Purple</option>
-                      <option value="Multi">Multi Color</option>
-                      <option value="Custom">Custom</option>
+                      <option value={STICKER_PRODUCT_COLOR}>{STICKER_PRODUCT_COLOR}</option>
                     </select>
                   </div>
 
-                  {/* 2-line surcharge (Large / Extra Large / Medium): extra charge when customer uses 2 lines (Option 1 or 2) */}
+                  {/* 2-line surcharge — grid name labels only */}
+                  {!isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       2-line surcharge (AUD)
@@ -794,9 +1026,10 @@ export default function StickersPage() {
                     />
                     <p className="mt-1 text-xs text-gray-500">Extra charge when customer uses 2 lines (Affiliation+Name or Name+Phone). Leave empty to use default ($2) on customize page.</p>
                   </div>
+                  )}
 
-                  {/* Sticker sheet quantity: price based on 3 sheets, default 3. Events: 3+. Applies to all custom name stickers if not changed. */}
-                  {!isStationeryEssentialsProduct && (
+                  {/* Sticker sheet quantity — grid name labels (3+ sheets) */}
+                  {!isStationeryEssentialsProduct && !isMixedLabelsProduct && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Sticker sheet quantity (sheets)
@@ -836,6 +1069,14 @@ export default function StickersPage() {
 
                   {/* Image upload — Supabase URL required (base64 is stripped on catalog sync) */}
                   <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {isMixedLabelsProduct ? 'Product image (listing & sample sheet)' : 'Product image'}
+                    </label>
+                    {isMixedLabelsProduct && (
+                      <p className="mb-2 text-xs text-gray-500">
+                        Upload the sample sheet image (e.g. with placeholder name). Used on shop listing and product detail until customize preview is live.
+                      </p>
+                    )}
                     <MediaUpload
                       type="image"
                       currentUrl={formData.image}
@@ -880,7 +1121,7 @@ export default function StickersPage() {
                   </div>
 
                   {/* Product status */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -890,7 +1131,7 @@ export default function StickersPage() {
                         className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
                       />
                       <label className="ml-2 block text-sm text-gray-900">
-                        New Product
+                        New Arrival
                       </label>
                     </div>
                     <div className="flex items-center">
@@ -905,7 +1146,47 @@ export default function StickersPage() {
                         Best Seller
                       </label>
                     </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="isPopular"
+                        checked={formData.isPopular || false}
+                        onChange={handleCheckboxChange}
+                        className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900">
+                        Popular Item
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        name="isLimitedEdition"
+                        checked={!!formData.isLimitedEdition}
+                        onChange={handleCheckboxChange}
+                        className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900">
+                        Limited Edition
+                      </label>
+                    </div>
                   </div>
+
+                  {formData.isLimitedEdition && !isMixedLabelsProduct && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Limited edition text (optional)
+                      </label>
+                      <textarea
+                        name="limitedEditionText"
+                        value={formData.limitedEditionText || ''}
+                        onChange={handleInputChange}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+                        placeholder="Shown on product and customize pages when set"
+                      />
+                    </div>
+                  )}
 
                   {/* Product description */}
                   <div className="md:col-span-2">
@@ -919,7 +1200,11 @@ export default function StickersPage() {
                       required
                       rows={4}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      placeholder="Enter detailed description of the sticker"
+                      placeholder={
+                        isMixedLabelsProduct
+                          ? 'Describe the mixed sheet (themes, sticker count, fixed design, name-only customization)...'
+                          : 'Enter detailed description of the sticker'
+                      }
                     />
                   </div>
                 </div>

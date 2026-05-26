@@ -18,7 +18,7 @@ import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { updateUserGrade } from '@/lib/userGradeUtils'
 import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
-import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
@@ -215,19 +215,11 @@ export default function CheckoutPage() {
     }
     
     const result = cart.reduce((total, item) => {
-      // 안전한 가격 및 수량 확인
-      const price = typeof item.product?.price === 'number' && !isNaN(item.product.price) 
-        ? item.product.price 
-        : 0
       const quantity = typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0
         ? item.quantity 
         : 0
-      
-      const itemTotal = price * quantity
-      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, item.product)
-      const additionalCost = surchargePerUnit * quantity
-      
-      return total + itemTotal + additionalCost
+      const unitPrice = getStorefrontLineUnitPrice(item.product, item.customizations)
+      return total + unitPrice * quantity
     }, 0)
     
     console.log('💰 Subtotal 계산:', {
@@ -259,17 +251,12 @@ export default function CheckoutPage() {
     }
 
     return cart && cart.length > 0 ? cart.map(item => {
-      const priceNum = typeof item.product.price === 'number'
-        ? item.product.price
-        : parseFloat((item.product.price as any) ?? '0')
       const quantityNum = typeof item.quantity === 'number'
         ? item.quantity
         : parseFloat((item.quantity as any) ?? '0')
-      const safePrice = !isNaN(priceNum) && isFinite(priceNum) ? priceNum : 0
       const safeQty = !isNaN(quantityNum) && isFinite(quantityNum) && quantityNum > 0 ? quantityNum : 0
-      const itemTotal = safePrice * safeQty
-      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, item.product)
-      const customizationCost = surchargePerUnit * safeQty
+      const unitPrice = getStorefrontLineUnitPrice(item.product, item.customizations)
+      const lineTotal = unitPrice * safeQty
       const categoryRaw =
         (item.product as any)?.category ||
         (item.product as any)?.categoryName ||
@@ -279,7 +266,7 @@ export default function CheckoutPage() {
       return {
         productId: item.product.id,
         category: normalizeCategory(categoryRaw, item.product),
-        price: itemTotal + customizationCost
+        price: lineTotal
       }
     }) : []
   }
@@ -694,19 +681,15 @@ export default function CheckoutPage() {
           ? Math.max(0, stockQuantity - item.quantity)
           : undefined
 
-      const basePrice =
-        typeof sourceProduct.price === 'number' && !isNaN(sourceProduct.price)
-          ? sourceProduct.price
-          : 0
-      const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, sourceProduct)
-      const unitPriceInclOptions = Number((basePrice + surchargePerUnit).toFixed(2))
+      const { unitPrice: unitPriceInclOptions, baseUnitPrice, customizationSurchargePerUnit } =
+        getStorefrontLinePriceBreakdown(sourceProduct, item.customizations)
 
       return {
         productId: sourceProduct.id,
         name: sourceProduct.name,
         price: unitPriceInclOptions,
-        baseUnitPrice: Number(basePrice.toFixed(2)),
-        customizationSurchargePerUnit: Number(surchargePerUnit.toFixed(2)),
+        baseUnitPrice,
+        customizationSurchargePerUnit,
         image: sourceProduct.image,
         quantity: item.quantity,
         customizations: item.customizations,

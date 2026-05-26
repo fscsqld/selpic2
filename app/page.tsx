@@ -674,10 +674,28 @@ export default function HomePage() {
       return
     }
     
-    const handleMediaFilesUpdate = () => {
-      devLog('🔄 [Homepage] Media files updated, refreshing...')
-      // 강제 리렌더링을 위한 상태 업데이트
-      setForceUpdate(prev => prev + 1)
+    const handleMediaFilesUpdate = (event?: Event) => {
+      const detail = (event as CustomEvent)?.detail as {
+        action?: string
+        productIds?: string[]
+      } | undefined
+      devLog('🔄 [Homepage] Media files updated, refreshing...', detail)
+      if (detail?.action === 'delete') {
+        refreshProducts()
+        try {
+          const raw = localStorage.getItem('selpic-store')
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            if (parsed?.state?.products && Array.isArray(parsed.state.products)) {
+              const storeState = useStore.getState()
+              useStore.setState({ ...storeState, products: parsed.state.products })
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      setForceUpdate((prev) => prev + 1)
     }
     
     const handleProductsUpdate = (event?: Event) => {
@@ -692,13 +710,22 @@ export default function HomePage() {
         updatedProductsCount: updatedProducts?.length || 0
       })
       
-      // ✅ 항상 localStorage에서 최신 products 가져오기 (삭제된 상품 제거 보장)
+      if (updatedProducts && Array.isArray(updatedProducts)) {
+        const storeState = useStore.getState()
+        useStore.setState({
+          ...storeState,
+          products: updatedProducts,
+        })
+        setForceUpdate((prev) => prev + 1)
+        return
+      }
+
+      // ✅ localStorage fallback when event has no inline products payload
       try {
         const currentStore = localStorage.getItem('selpic-store')
         if (currentStore) {
           const parsed = JSON.parse(currentStore)
           if (parsed?.state?.products && Array.isArray(parsed.state.products)) {
-            // ✅ Zustand store에 직접 설정 (localStorage의 최신 데이터 사용)
             const storeState = useStore.getState()
             useStore.setState({ 
               ...storeState,

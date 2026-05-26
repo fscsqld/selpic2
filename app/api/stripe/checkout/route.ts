@@ -4,7 +4,7 @@ import type { OrderRecord } from '@/lib/store'
 import { getStripe } from '@/lib/stripe'
 import { orderDraftToMetadataChunks } from '@/lib/stripeCheckoutMetadata'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
-import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -47,8 +47,8 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
     if (!Number.isFinite(baseUnitPrice) || baseUnitPrice < 0) {
       throw new Error(`Invalid catalog price for product: ${productId}`)
     }
-    const surchargePerUnit = getCustomizationSurchargePerUnit(item.customizations, catalogProduct)
-    const unitPrice = Number((baseUnitPrice + surchargePerUnit).toFixed(2))
+    const { unitPrice, baseUnitPrice: resolvedBase, customizationSurchargePerUnit: surchargePerUnit } =
+      getStorefrontLinePriceBreakdown(catalogProduct, item.customizations)
     const unitCents = audCents(unitPrice)
     itemsSubtotalCents += unitCents * qty
     const name = (catalogProduct.name || item.name || 'Item').slice(0, 120)
@@ -68,7 +68,7 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
       name: catalogProduct.name || item.name,
       image: catalogProduct.image || item.image,
       price: unitPrice,
-      baseUnitPrice: Number(baseUnitPrice.toFixed(2)),
+      baseUnitPrice: Number(resolvedBase.toFixed(2)),
       customizationSurchargePerUnit: Number(surchargePerUnit.toFixed(2)),
       quantity: qty,
       category: (catalogProduct as any).category ?? item.category,

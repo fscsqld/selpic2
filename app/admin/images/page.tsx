@@ -87,7 +87,7 @@ function ImageManagementPageContent() {
   const { 
     mediaFiles, 
     addMediaFileWithData, 
-    deleteMediaFile: deleteMediaFileFromStore,
+    deleteMediaFiles: deleteMediaFilesFromStore,
     updateMediaFile,
     getMediaFilesByCategory,
     searchMediaFiles,
@@ -118,7 +118,9 @@ function ImageManagementPageContent() {
   const mergeRemoteWithLocalPending = useCallback((remote: MediaFile[], local: MediaFile[]): MediaFile[] => {
     const remoteById = new Map(remote.map((f) => [f.id, f]))
     if (local.length === 0) {
-      return remote
+      // First pull only — do not refill from stale server after local delete-all.
+      if (!lastRemoteMediaVersionRef.current) return remote
+      return []
     }
     return local.map((f) => {
       const r = remoteById.get(f.id)
@@ -344,6 +346,50 @@ function ImageManagementPageContent() {
       return false
     }
   }, [])
+
+  /** Remove from local store, push snapshot to server, clear linked product images. */
+  const removeMediaAndSync = useCallback(
+    async (ids: string[], successMessage: string): Promise<boolean> => {
+      if (ids.length === 0) return false
+      const {
+        flushMediaStoreToLocalStorage,
+        urlsForMediaIds,
+        clearStorefrontProductsUsingMediaUrls,
+        clearProductPrimaryWhenNoGalleryMedia,
+      } = await import('@/lib/mediaDeleteSideEffects')
+      const before = useMediaStore.getState().mediaFiles
+      const droppedUrls = urlsForMediaIds(before, ids)
+      const affectedProductIds = [
+        ...new Set(
+          before
+            .filter((f) => ids.includes(f.id) && f.productId != null)
+            .map((f) => String(f.productId).trim())
+            .filter(Boolean)
+        ),
+      ]
+      deleteMediaFilesFromStore(ids)
+      const after = useMediaStore.getState().mediaFiles
+      flushMediaStoreToLocalStorage(after)
+      // Prevent syncMediaFromServer from refilling zustand from stale server when local list is empty.
+      lastRemoteMediaVersionRef.current = new Date().toISOString()
+      const { hydrateMediaStoreFromLocalStorage } = await import('@/lib/mediaGalleryLocal')
+      hydrateMediaStoreFromLocalStorage()
+      await clearStorefrontProductsUsingMediaUrls(droppedUrls)
+      await clearProductPrimaryWhenNoGalleryMedia(affectedProductIds)
+      const synced = await forceMediaSync()
+      if (synced) {
+        lastRemoteMediaVersionRef.current = new Date().toISOString()
+        showNotification('success', successMessage)
+        return true
+      }
+      showNotification(
+        'error',
+        'Removed on this device only. Server sync failed — open Network tab for POST /api/media/products (401 = sign in / CATALOG_SYNC_SECRET).'
+      )
+      return false
+    },
+    [deleteMediaFilesFromStore, forceMediaSync, showNotification]
+  )
 
   // 파일 업로드 핸들러 (EditStage를 통한 업로드)
   const handleFileUpload = useCallback(async (files: FileList, targetCategory?: string) => {
@@ -675,15 +721,15 @@ function ImageManagementPageContent() {
 
   // 파일 삭제 핸들러
   const handleDeleteFile = (id: string) => {
-    if (confirm('Are you sure you want to delete this file?')) {
-      deleteMediaFileFromStore(id)
-      setSelectedFiles(prev => {
+    if (!confirm('Are you sure you want to delete this file?')) return
+    void removeMediaAndSync([id], 'File deleted and synced to the server.').then((ok) => {
+      if (!ok) return
+      setSelectedFiles((prev) => {
         const newSet = new Set(prev)
         newSet.delete(id)
         return newSet
       })
-      showNotification('success', 'File deleted successfully.')
-    }
+    })
   }
 
   // 파일 다운로드 핸들러
@@ -849,15 +895,14 @@ function ImageManagementPageContent() {
 
   const handleBulkDelete = () => {
     if (selectedFiles.size === 0) return
-    
-    const count = selectedFiles.size
-    selectedFiles.forEach(fileId => {
-      deleteMediaFileFromStore(fileId)
+    const ids = Array.from(selectedFiles)
+    const count = ids.length
+    void removeMediaAndSync(ids, `Deleted ${count} file(s) and synced to the server.`).then((ok) => {
+      if (!ok) return
+      setSelectedFiles(new Set())
+      setIsBulkActionModalOpen(false)
+      setBulkAction(null)
     })
-    setSelectedFiles(new Set())
-    setIsBulkActionModalOpen(false)
-    setBulkAction(null)
-    showNotification('success', `Deleted ${count} file(s) successfully`)
   }
 
   // 필터링 및 정렬된 파일 목록
@@ -1717,7 +1762,7 @@ function ImageManagementPageContent() {
               </p>
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                 <p className="text-xs text-yellow-800">
-                  <strong>Note:</strong> These files are not linked to any product. They will be permanently deleted from both localStorage and IndexedDB.
+                  <strong>Note:</strong> These files are not linked to any product. Deletion updates the shared server media list (used on the live storefront).
                 </p>
               </div>
               <div className="flex items-center justify-end gap-3">
@@ -1729,10 +1774,15 @@ function ImageManagementPageContent() {
                 </button>
                 <button
                   onClick={() => {
-                    orphanedFiles.forEach(file => deleteMediaFileFromStore(file.id))
-                    setIsDeleteOrphanedModalOpen(false)
-                    setShowOrphanedFiles(false)
-                    showNotification('success', `Successfully deleted ${orphanedFiles.length} orphaned file${orphanedFiles.length !== 1 ? 's' : ''}`)
+                    const ids = orphanedFiles.map((file) => file.id)
+                    void removeMediaAndSync(
+                      ids,
+                      `Deleted ${ids.length} orphaned file${ids.length !== 1 ? 's' : ''} and synced to the server.`
+                    ).then((ok) => {
+                      if (!ok) return
+                      setIsDeleteOrphanedModalOpen(false)
+                      setShowOrphanedFiles(false)
+                    })
                   }}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
                 >
@@ -2387,7 +2437,7 @@ function ImageManagementPageContent() {
                     </p>
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                       <p className="text-xs text-red-800">
-                        ⚠️ <strong>Warning:</strong> All selected files will be permanently deleted from both localStorage and IndexedDB.
+                        ⚠️ <strong>Warning:</strong> All selected files will be removed from Image Management and the server media snapshot (storefront galleries).
                       </p>
                     </div>
                     <div className="flex gap-3">

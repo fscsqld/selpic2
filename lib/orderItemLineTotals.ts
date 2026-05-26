@@ -1,4 +1,5 @@
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import { getMixedLabelsBundleUnitPrice } from '@/lib/mixedLabelsPricing'
 
 /** Shape needed to compute displayed line amounts (email, receipts). */
 export type OrderItemForLineTotals = {
@@ -20,6 +21,14 @@ export function getOrderItemLineMoney(item: OrderItemForLineTotals): {
   lineTotal: number
 } {
   const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 0
+  const mixedUnit = getMixedLabelsBundleUnitPrice({ price: item.price }, item.customizations)
+  if (mixedUnit != null) {
+    return {
+      baseUnit: mixedUnit,
+      surchargeUnit: 0,
+      lineTotal: mixedUnit * qty,
+    }
+  }
   const surStored = item.customizationSurchargePerUnit
   const baseStored = item.baseUnitPrice
 

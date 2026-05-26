@@ -1,6 +1,10 @@
 import type { Product } from '@/lib/store'
+import { isMixedLabelsProduct } from '@/lib/mixedLabelsProduct'
 
-type ProductCustomizationLike = Pick<Product, 'id' | 'category' | 'subcategory' | 'customizationOptions'>
+type ProductCustomizationLike = Pick<
+  Product,
+  'id' | 'category' | 'subcategory' | 'customizationOptions' | 'customizationMode'
+>
 
 function normalizedCategory(category?: string): string {
   return (category || '').trim().toLowerCase()
@@ -25,6 +29,9 @@ export function isCustomizationRequired(product: ProductCustomizationLike): bool
 export function getCustomizationPath(product: ProductCustomizationLike): string {
   const category = normalizedCategory(product.category)
   const encodedProductId = encodeURIComponent(product.id)
+  if (category === 'stickers' && isMixedLabelsProduct(product)) {
+    return `/stickers/customize/mixed?product=${encodedProductId}`
+  }
   if (category === 'stickers') return `/stickers/customize?product=${encodedProductId}`
   if (category === 'stamps') return `/stamp/customize?product=${encodedProductId}`
   return `/customize?product=${encodedProductId}`

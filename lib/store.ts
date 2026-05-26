@@ -55,6 +55,25 @@ export interface Product {
   stickerHasImage?: boolean
   /** Extra charge when customer uses 2-line option (affiliation+name or name+phone). Set in admin when registering product. */
   twoLineSurcharge?: number
+  /** `fixed-mixed-sheet` for Mixed Labels (one sheet, name-only customize). */
+  customizationMode?: string
+  /** Template id for mixed sheet preview/print (e.g. dino-friends-v1). */
+  mixedSheetTemplateId?: string
+  /** Max characters for customer name on mixed sheet. */
+  mixedLabelsNameMaxLength?: number
+  /** Short hint shown on customize page. */
+  mixedLabelsNameHint?: string
+  /** Storefront / product badge copy for limited runs. */
+  limitedEditionText?: string
+  /** When true, show limitedEditionText on product and customize UI. */
+  isLimitedEdition?: boolean
+  /** Mixed Labels: sheet pack options (e.g. 1 sheet $2.99, 4 sheets $9.99). */
+  mixedLabelsSheetBundles?: Array<{
+    id: string
+    sheets: number
+    price: number
+    label?: string
+  }>
   /** 평점 (0–5). Edit Product에서 설정. */
   rating?: number
   /** 리뷰 수. Edit Product에서 설정. */
