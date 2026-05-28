@@ -48,7 +48,7 @@ export default function HotGoodsPage() {
   const [filteredProducts, setFilteredProducts] = useState<MarketSProduct[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<string>('trending')
+  const [sortBy, setSortBy] = useState<string>('price-low')
   const [showFilters, setShowFilters] = useState(false)
   
   // 클라이언트에서만 마운트 확인

@@ -10,6 +10,10 @@ import Header from '@/components/Header'
 import SlidingBackground from '@/components/SlidingBackground'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
+import {
+  sortProductsByCatalogPrice,
+  type StorefrontPriceSort,
+} from '@/lib/storefrontProductSort'
 
 function toSubcategorySlug(value: string): string {
   return decodeURIComponent(value || '')
@@ -139,6 +143,7 @@ export default function StickersPage() {
   
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSubcategory, setSelectedSubcategory] = useState('All')
+  const [sortBy, setSortBy] = useState<StorefrontPriceSort>('price-low')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -299,13 +304,18 @@ export default function StickersPage() {
     }
   }, [_hasHydrated, refreshProducts])
 
-  // 검색어와 서브카테고리에 따라 상품 Filtering
-  const filteredStickers = availableStickers.filter(sticker => {
-    const matchesSearch = sticker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         sticker.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesSubcategory = selectedSubcategory === 'All' || sticker.subcategory === selectedSubcategory
-    return matchesSearch && matchesSubcategory
-  })
+  // 검색·서브카테고리 필터 후 카탈로그 price 기준 정렬 (Mixed Labels 포함)
+  const filteredStickers = React.useMemo(() => {
+    const filtered = availableStickers.filter((sticker) => {
+      const matchesSearch =
+        sticker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sticker.description.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesSubcategory =
+        selectedSubcategory === 'All' || sticker.subcategory === selectedSubcategory
+      return matchesSearch && matchesSubcategory
+    })
+    return sortProductsByCatalogPrice(filtered, sortBy)
+  }, [availableStickers, searchTerm, selectedSubcategory, sortBy])
 
   const handleCustomize = (product: Product) => {
     setSelectedProduct(product)
@@ -401,18 +411,29 @@ export default function StickersPage() {
 
             {/* 서브카테고리 Filter */}
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Filter size={20} className="text-gray-400" />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <Filter size={20} className="text-gray-400" />
+                  <select
+                    value={selectedSubcategory}
+                    onChange={(e) => setSelectedSubcategory(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {subcategories.map((subcategory) => (
+                      <option key={subcategory} value={subcategory}>
+                        {subcategory}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <select
-                  value={selectedSubcategory}
-                  onChange={(e) => setSelectedSubcategory(e.target.value)}
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as StorefrontPriceSort)}
+                  aria-label="Sort products"
                   className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {subcategories.map(subcategory => (
-                    <option key={subcategory} value={subcategory}>
-                      {subcategory}
-                    </option>
-                  ))}
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
                 </select>
               </div>
 

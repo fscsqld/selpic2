@@ -4,7 +4,8 @@ import { useStore } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
 
 export default function OfficeStickersPage() {
   const { products } = useStore()
@@ -15,9 +16,15 @@ export default function OfficeStickersPage() {
     setIsMounted(true)
   }, [])
   
-  // 오피스 스티커 상품만 필터링
-  const officeStickers = products.filter(product => 
-    product.category === 'Stickers' && product.subcategory === 'Office'
+  const officeStickers = useMemo(
+    () =>
+      sortProductsByCatalogPrice(
+        products.filter(
+          (product) => product.category === 'Stickers' && product.subcategory === 'Office'
+        ),
+        'price-low'
+      ),
+    [products]
   )
 
   // Content Store에서 서브카테고리 정보 가져오기

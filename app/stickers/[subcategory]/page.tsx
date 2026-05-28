@@ -4,7 +4,8 @@ import { useStore } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import Header from '@/components/Header'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
 import { useParams, notFound } from 'next/navigation'
 import ProductCard from '@/components/ProductCard'
 
@@ -92,7 +93,7 @@ export default function DynamicSubcategoryPage() {
       })
     : null
   
-  const subcategoryProducts = products.filter(product => {
+  const subcategoryProductsFiltered = products.filter(product => {
     if (product.category !== 'Stickers') return false
     if (!product.subcategory) return false
     
@@ -110,6 +111,11 @@ export default function DynamicSubcategoryPage() {
 
     return false
   })
+
+  const subcategoryProducts = useMemo(
+    () => sortProductsByCatalogPrice(subcategoryProductsFiltered, 'price-low'),
+    [subcategoryProductsFiltered]
+  )
 
   // 디버깅 로그 (개발 환경에서만) — must run before any conditional return (hooks rules)
   useEffect(() => {

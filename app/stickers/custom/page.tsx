@@ -7,6 +7,7 @@ import ProductCard from '@/components/ProductCard'
 import { useState, useEffect, useMemo } from 'react'
 import { Type, Image as ImageIcon, Ruler, Send, ChevronDown, ChevronUp } from 'lucide-react'
 import { getStickerFonts, type FontConfig } from '@/lib/fontList'
+import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
 
 /** Same numbering as Sticker Customization (Font 1–7) */
 const STICKER_FONT_PRESET_LABELS: Record<string, string> = {
@@ -286,9 +287,15 @@ export default function CustomStickersPage() {
     setIsMounted(true)
   }, [])
   
-  // Custom sticker products only
-  const customStickers = products.filter(product => 
-    product.category === 'Stickers' && product.subcategory === 'Custom'
+  const customStickers = useMemo(
+    () =>
+      sortProductsByCatalogPrice(
+        products.filter(
+          (product) => product.category === 'Stickers' && product.subcategory === 'Custom'
+        ),
+        'price-low'
+      ),
+    [products]
   )
 
   // Subcategory copy from content store (if configured)

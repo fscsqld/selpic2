@@ -4,7 +4,8 @@ import { useStore } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
 
 export default function KidsStickersPage() {
   const { products } = useStore()
@@ -15,9 +16,15 @@ export default function KidsStickersPage() {
     setIsMounted(true)
   }, [])
   
-  // 키즈 스티커 상품만 필터링
-  const kidsStickers = products.filter(product => 
-    product.category === 'Stickers' && product.subcategory === 'Kids'
+  const kidsStickers = useMemo(
+    () =>
+      sortProductsByCatalogPrice(
+        products.filter(
+          (product) => product.category === 'Stickers' && product.subcategory === 'Kids'
+        ),
+        'price-low'
+      ),
+    [products]
   )
 
   // Content Store에서 서브카테고리 정보 가져오기
