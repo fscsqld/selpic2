@@ -224,6 +224,8 @@ function InvoicePreviewPageContent() {
   const [savedClients, setSavedClients] = useState<SavedClientProfile[]>([])
   const [selectedSavedClientId, setSelectedSavedClientId] = useState<string>('')
   const [newSavedClientLabel, setNewSavedClientLabel] = useState<string>('')
+  const [isLoadingSavedClients, setIsLoadingSavedClients] = useState(false)
+  const [savedClientsError, setSavedClientsError] = useState<string | null>(null)
 
   const waitForNextPaint = async () => {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -292,28 +294,33 @@ function InvoicePreviewPageContent() {
     }
   }
 
-  // Saved clients localStorage 동기화 (Create & Send와 동일 키 사용)
+  // Saved clients (cross-device): load from Supabase via admin API
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem('selpic_saved_clients_v1')
-      if (raw) {
-        const parsed = JSON.parse(raw) as SavedClientProfile[]
-        setSavedClients(parsed)
+    let isCancelled = false
+    const load = async () => {
+      setIsLoadingSavedClients(true)
+      setSavedClientsError(null)
+      try {
+        const res = await fetch('/api/admin/saved-clients', { method: 'GET' })
+        if (!res.ok) {
+          const txt = await res.text()
+          throw new Error(txt || `Failed to load saved clients (${res.status})`)
+        }
+        const json = (await res.json()) as { clients?: SavedClientProfile[] }
+        if (!isCancelled) {
+          setSavedClients(Array.isArray(json.clients) ? json.clients : [])
+        }
+      } catch (e: any) {
+        if (!isCancelled) setSavedClientsError(e?.message || 'Failed to load saved clients')
+      } finally {
+        if (!isCancelled) setIsLoadingSavedClients(false)
       }
-    } catch (e) {
-      console.warn('Failed to load saved clients in preview page', e)
+    }
+    load()
+    return () => {
+      isCancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem('selpic_saved_clients_v1', JSON.stringify(savedClients))
-    } catch (e) {
-      console.warn('Failed to save clients in preview page', e)
-    }
-  }, [savedClients])
 
   // 합계 자동 계산 (할인, 배송비, 결제 수수료 포함)
   useEffect(() => {
@@ -737,7 +744,12 @@ function InvoicePreviewPageContent() {
                   {showStep2BillingInfo && (
                   <div className="space-y-4 mt-4 pt-4 border-t border-gray-200">
                     {/* 저장된 파트너/고객 프로필 선택 및 저장 (Documents 화면과 동일 컨셉) */}
-                    <div className="border border-dashed border-gray-300 rounded-lg p-3 bg-gray-50 space-y-3">
+                      <div className="border border-dashed border-gray-300 rounded-lg p-3 bg-gray-50 space-y-3">
+                        {savedClientsError && (
+                          <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1">
+                            {savedClientsError}
+                          </div>
+                        )}
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <div className="flex-1">
                           <label className="block text-xs font-semibold text-gray-700 mb-1">Saved Clients / Partners</label>
@@ -745,8 +757,11 @@ function InvoicePreviewPageContent() {
                             value={selectedSavedClientId}
                             onChange={e => setSelectedSavedClientId(e.target.value)}
                             className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                              disabled={isLoadingSavedClients}
                           >
-                            <option value="">Select saved client</option>
+                              <option value="">
+                                {isLoadingSavedClients ? 'Loading saved clients...' : 'Select saved client'}
+                              </option>
                             {savedClients.map(client => (
                               <option key={client.id} value={client.id}>
                                 {client.label} {client.category === 'cleaning' ? '(Cleaning)' : '(Sticker)'}
@@ -787,8 +802,22 @@ function InvoicePreviewPageContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              setSavedClients(prev => prev.filter(c => c.id !== selectedSavedClientId))
-                              setSelectedSavedClientId('')
+                              const id = selectedSavedClientId
+                              ;(async () => {
+                                try {
+                                  const res = await fetch(`/api/admin/saved-clients/${encodeURIComponent(id)}`, {
+                                    method: 'DELETE',
+                                  })
+                                  if (!res.ok) {
+                                    const txt = await res.text()
+                                    throw new Error(txt || `Failed to delete (${res.status})`)
+                                  }
+                                  setSavedClients(prev => prev.filter(c => c.id !== id))
+                                  setSelectedSavedClientId('')
+                                } catch (e: any) {
+                                  setSavedClientsError(e?.message || 'Failed to delete saved client')
+                                }
+                              })()
                             }}
                             className="px-3 py-2 text-xs sm:text-sm bg-red-50 text-red-600 border border-red-200 rounded-md"
                           >
@@ -813,8 +842,7 @@ function InvoicePreviewPageContent() {
                             const label = newSavedClientLabel.trim()
                             if (!label) return
                             const billing = documentType === 'invoice' ? invoiceData.billing : quoteData.billing
-                            const newClient: SavedClientProfile = {
-                              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                            const payload = {
                               label,
                               category: documentCategory,
                               billing: {
@@ -825,11 +853,31 @@ function InvoicePreviewPageContent() {
                                 name: billing.name,
                                 email: billing.email,
                                 phone: billing.phone,
-                                address: billing.address
-                              }
+                                address: billing.address,
+                              },
                             }
-                            setSavedClients(prev => [...prev, newClient])
-                            setNewSavedClientLabel('')
+                            ;(async () => {
+                              setSavedClientsError(null)
+                              try {
+                                const res = await fetch('/api/admin/saved-clients', {
+                                  method: 'POST',
+                                  headers: { 'content-type': 'application/json' },
+                                  body: JSON.stringify(payload),
+                                })
+                                const json = await res.json().catch(() => ({}))
+                                if (!res.ok) {
+                                  throw new Error(json?.error || `Failed to save (${res.status})`)
+                                }
+                                const created = json?.client as SavedClientProfile | undefined
+                                if (created) {
+                                  setSavedClients(prev => [created, ...prev])
+                                  setSelectedSavedClientId(created.id)
+                                }
+                                setNewSavedClientLabel('')
+                              } catch (e: any) {
+                                setSavedClientsError(e?.message || 'Failed to save client')
+                              }
+                            })()
                           }}
                           className="px-3 py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md"
                         >
