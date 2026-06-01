@@ -29,14 +29,44 @@ before update on public.admin_saved_clients
 for each row
 execute function public.set_updated_at();
 
--- Recommended security: deny direct client access; use server routes with service role.
+-- Security (RLS): allow only authenticated admin users (cross-device, no service role required).
 alter table public.admin_saved_clients enable row level security;
 
-drop policy if exists "no direct access" on public.admin_saved_clients;
-create policy "no direct access"
+-- Helper: define "admin" based on JWT metadata set by your admin auth flow.
+-- Covers common variants used across the app: app_metadata.admin, app_metadata.role, user_metadata.admin, user_metadata.role.
+drop policy if exists "admin select" on public.admin_saved_clients;
+create policy "admin select"
 on public.admin_saved_clients
-for all
-to public
-using (false)
-with check (false);
+for select
+to authenticated
+using (
+  (auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'app_metadata' ->> 'admin')::boolean, false) = true
+  or (auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'user_metadata' ->> 'admin')::boolean, false) = true
+);
+
+drop policy if exists "admin insert" on public.admin_saved_clients;
+create policy "admin insert"
+on public.admin_saved_clients
+for insert
+to authenticated
+with check (
+  (auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'app_metadata' ->> 'admin')::boolean, false) = true
+  or (auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'user_metadata' ->> 'admin')::boolean, false) = true
+);
+
+drop policy if exists "admin delete" on public.admin_saved_clients;
+create policy "admin delete"
+on public.admin_saved_clients
+for delete
+to authenticated
+using (
+  (auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'app_metadata' ->> 'admin')::boolean, false) = true
+  or (auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'super_admin')
+  or coalesce((auth.jwt() -> 'user_metadata' ->> 'admin')::boolean, false) = true
+);
 

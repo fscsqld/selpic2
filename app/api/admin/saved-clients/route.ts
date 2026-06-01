@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
-import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 type SavedClientCategory = 'sticker' | 'cleaning'
 
@@ -18,7 +18,7 @@ export async function GET() {
   const user = await requireSupabaseAdminUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const sb = getSupabaseAdmin()
+  const sb = await createSupabaseServerClient()
   const { data, error } = await sb
     .from('admin_saved_clients')
     .select('*')
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
   }
 
-  const sb = getSupabaseAdmin()
+  const sb = await createSupabaseServerClient()
   const { data, error } = await sb
     .from('admin_saved_clients')
     .insert({ label, category, billing })
