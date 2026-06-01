@@ -463,9 +463,13 @@ function InvoicePreviewPageContent() {
       const brandName = getCompanyBrandName(companyName)
       const isInvoice = documentType === 'invoice'
       const docLabel = isInvoice ? 'tax invoice' : 'quote'
+      const recipientDisplayName =
+        (currentData.billing.companyName || '').trim() ||
+        (currentData.billing.name || '').trim() ||
+        'there'
       const emailContent =
         message ||
-        `Dear ${currentData.billing.name},\n\n` +
+        `Dear ${recipientDisplayName},\n\n` +
         `We appreciate your business with ${brandName}.\n\n` +
         `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
         `Payment Instructions:\n` +
@@ -476,7 +480,7 @@ function InvoicePreviewPageContent() {
       
       await emailService.sendResponse({
         customerEmail: emailToSend,
-        customerName: currentData.billing.name,
+        customerName: recipientDisplayName,
         subject: isInvoice
           ? `Tax Invoice ${docNumber} from ${brandName}`
           : `Quote ${docNumber} from ${brandName}`,
