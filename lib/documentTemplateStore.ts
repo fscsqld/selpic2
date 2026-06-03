@@ -181,7 +181,7 @@ const getDefaultEmailSettings = (type: DocumentType, companyName: string = COMPA
   const baseSettings: EmailSettings = {
     subject: '',
     greeting: 'Dear {customerName},',
-    closing: 'Kind regards,',
+    closing: '',
     customMessage: ''
   }
   
@@ -378,6 +378,16 @@ function migrateEmailDeliverabilityTemplates(
           customMessage: newOther.customMessage
         }
       }
+    }
+  }
+
+  // Clear legacy inline closings — transactional branding appends Kind Regards + contact block.
+  const LEGACY_CLOSINGS = new Set(['Kind regards,', 'Kind Regards,', 'Best regards,', 'Best Regards,'])
+  for (const key of Object.keys(next) as DocumentType[]) {
+    const t = next[key]
+    if (!t?.email?.closing) continue
+    if (LEGACY_CLOSINGS.has(String(t.email.closing).trim())) {
+      next[key] = { ...t, email: { ...t.email, closing: '' } }
     }
   }
 

@@ -1404,11 +1404,7 @@ export const useStore = create<Store>()(
           content += get().replaceTemplatePlaceholders(template.email.customMessage, variables) + '\n\n'
         }
 
-        // Template-specific content
-        // Closing
-        if (template.email.closing) {
-          content += get().replaceTemplatePlaceholders(template.email.closing, variables) + '\n'
-        }
+        // Email signature (Kind Regards, contact, confidentiality) is appended by emailService / resendServer branding.
 
         // Shipping Notification 템플릿 특화 내용
         if (template.type === 'shipping_notification') {
@@ -2624,10 +2620,7 @@ We're excited to offer you a special promotion!
 
 This offer is valid for a limited time only. Don't miss out on this amazing opportunity!
 
-Shop now and save!
-
-Best regards,
-Selpic Team`,
+Shop now and save!`,
           type: 'promotion',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2645,10 +2638,7 @@ We're thrilled to announce our latest product collection!
 
 Check out our new products and discover something special.
 
-Thank you for being part of the Selpic family!
-
-Best regards,
-Selpic Team`,
+Thank you for being part of the Selpic family!`,
           type: 'announcement',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2664,10 +2654,7 @@ You're invited to join us for a special event!
 
 📅 [EVENT DETAILS]
 
-We'd love to see you there!
-
-Best regards,
-Selpic Team`,
+We'd love to see you there!`,
           type: 'event',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2683,10 +2670,7 @@ Welcome to our monthly newsletter!
 
 📰 [NEWSLETTER CONTENT]
 
-Stay tuned for more updates and special offers!
-
-Best regards,
-Selpic Team`,
+Stay tuned for more updates and special offers!`,
           type: 'newsletter',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -2702,10 +2686,7 @@ We wanted to share an important update with you.
 
 📢 [UPDATE CONTENT]
 
-Thank you for your continued support!
-
-Best regards,
-Selpic Team`,
+Thank you for your continued support!`,
           type: 'general',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

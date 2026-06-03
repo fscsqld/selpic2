@@ -437,10 +437,7 @@ Total Amount: $${order?.total.toFixed(2) || '0.00'}
 
 Your order has been confirmed and is being processed. You will receive a shipping notification once your order has been dispatched.
 
-If you have any questions, please don't hesitate to contact us.
-
-Best regards,
-${brandName} Team`
+If you have any questions, please don't hesitate to contact us.`
         }
       case 'shipping_notification':
         const expectedDelivery =
@@ -459,10 +456,7 @@ Your order is on its way to you. You can track your shipment using the tracking 
 
 Expected delivery: ${expectedDelivery}
 
-Thank you for your purchase!
-
-Best regards,
-${brandName} Team`
+Thank you for your purchase!`
         }
       case 'receipt':
         return {
@@ -479,10 +473,7 @@ Total: $${order?.total.toFixed(2) || '0.00'}
 
 Payment Method: ${order?.paymentMethod || 'N/A'}
 
-Thank you for your purchase!
-
-Best regards,
-${brandName} Team`
+Thank you for your purchase!`
         }
       case 'invoice':
         return {
@@ -497,10 +488,7 @@ Amount Due: $${order?.total.toFixed(2) || '0.00'}
 
 Payment is due within 30 days of the invoice date.
 
-If you have any questions about this invoice, please contact us.
-
-Best regards,
-${brandName} Team`
+If you have any questions about this invoice, please contact us.`
         }
       case 'contract':
         return {
@@ -511,10 +499,7 @@ Please find the contract document attached.
 
 This contract outlines the terms and conditions of our agreement.
 
-If you have any questions or need clarification on any terms, please don't hesitate to contact us.
-
-Best regards,
-${brandName} Team`
+If you have any questions or need clarification on any terms, please don't hesitate to contact us.`
         }
       default:
         return {
@@ -523,10 +508,7 @@ ${brandName} Team`
 
 Please find the requested document attached.
 
-If you have any questions, please contact us.
-
-Best regards,
-${brandName} Team`
+If you have any questions, please contact us.`
         }
     }
   }
@@ -4461,7 +4443,7 @@ ${brandName} Team`
                                 })
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                              placeholder="e.g., Best regards,"
+                              placeholder="Leave empty — signature is added automatically when sending"
                             />
                           </div>
                         </div>

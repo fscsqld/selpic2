@@ -43,9 +43,6 @@ Your inquiry: {{originalSubject}}
 
 We will review your message and get back to you within 24 hours. If you have any urgent concerns, please don't hesitate to contact us directly.
 
-Best regards,
-Selpic Customer Support Team
-
 ---
 This is a response to your inquiry submitted on {{submissionDate}}.`,
     category: 'general'
@@ -62,10 +59,7 @@ Your inquiry: {{originalSubject}}
 
 Our team is looking into your request and will provide you with detailed information about your order shortly. You can also track your order status on our website using your order number.
 
-If you need immediate assistance, please contact us at info@selpic.com.au.
-
-Best regards,
-Selpic Order Management Team`,
+If you need immediate assistance, please contact us at info@selpic.com.au.`,
     category: 'order'
   },
   {
@@ -80,10 +74,7 @@ Your inquiry: {{originalSubject}}
 
 Our technical team has received your request and is working on a solution. We'll provide you with step-by-step instructions or arrange additional support if needed.
 
-Expected response time: Within 4-6 hours during business hours.
-
-Technical Support Team
-Selpic`,
+Expected response time: Within 4-6 hours during business hours.`,
     category: 'technical'
   },
   {
@@ -98,10 +89,7 @@ Your inquiry: {{originalSubject}}
 
 Our business development team will review your proposal and contact you within 2-3 business days to discuss next steps.
 
-Please feel free to reach out if you have any additional information to share in the meantime.
-
-Best regards,
-Selpic Business Development Team`,
+Please feel free to reach out if you have any additional information to share in the meantime.`,
     category: 'business'
   },
   {
@@ -118,10 +106,7 @@ We sincerely apologize for any inconvenience this may have caused. Our customer 
 
 You can expect to hear from us within 24 hours with an update on our progress.
 
-Thank you for giving us the opportunity to make this right.
-
-Sincerely,
-Selpic Customer Care Team`,
+Thank you for giving us the opportunity to make this right.`,
     category: 'complaint'
   }
 ]
