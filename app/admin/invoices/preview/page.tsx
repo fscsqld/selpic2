@@ -481,9 +481,7 @@ function InvoicePreviewPageContent() {
         `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
         `Payment Instructions:\n` +
         `For bank transfers, please ensure the ${isInvoice ? 'Invoice Number' : 'Quote Number'} is included as your payment reference to help us identify your payment.\n\n` +
-        `Thank you for choosing us. If you have any questions, please feel free to reply to this email.\n\n` +
-        `Kind regards,\n` +
-        `${brandName} Team`
+        `Thank you for choosing us. If you have any questions, please feel free to reply to this email.`
       
       await emailService.sendResponse({
         customerEmail: emailToSend,
