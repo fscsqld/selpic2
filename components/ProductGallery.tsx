@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback, type ReactEventHandler } from 'react'
 import ImageGallery from 'react-image-gallery'
 import 'react-image-gallery/styles/image-gallery.css'
 import { useMediaStore } from '@/lib/mediaStore'
@@ -10,6 +10,7 @@ import {
   readProductGalleryMediaFromLocalStorage,
 } from '@/lib/mediaGalleryLocal'
 import { ImageIcon } from 'lucide-react'
+import ProductImageZoomPan from '@/components/ProductImageZoomPan'
 
 function isValidFallbackUrl(url: unknown): url is string {
   return typeof url === 'string' && url.trim() !== '' && url !== 'undefined' && !url.startsWith('undefined')
@@ -542,72 +543,71 @@ export default function ProductGallery({
             )
           }
           
-          // 이미지인 경우 기존 로직
+          const handleImageError: ReactEventHandler<HTMLImageElement> = async (e) => {
+            const img = e.currentTarget
+            const currentSrc = img.src
+
+            console.warn(`⚠️ [ProductGallery] Image load failed: ${safeAlt}`, {
+              currentSrc,
+              fileId,
+              fileName,
+              backupUrlsCount: backupUrls.length,
+            })
+
+            if (backupUrls.length > 0) {
+              const nextUrlIndex = backupUrls.findIndex((url: string) => url === currentSrc) + 1
+              if (nextUrlIndex < backupUrls.length) {
+                const nextUrl = backupUrls[nextUrlIndex]
+                if (!nextUrl.startsWith('indexeddb://')) {
+                  console.log(`🔄 [ProductGallery] Trying backup URL ${nextUrlIndex + 1}/${backupUrls.length}`)
+                  img.src = nextUrl
+                  return
+                }
+              }
+            }
+
+            if (item.thumbnail && item.thumbnail !== currentSrc && !String(item.thumbnail).startsWith('indexeddb://')) {
+              console.log(`🔄 [ProductGallery] Trying thumbnail URL: ${safeAlt}`)
+              img.src = item.thumbnail
+              return
+            }
+
+            if (fileId) {
+              console.log(`🔄 [ProductGallery] Attempting automatic recovery for: ${fileId}`)
+              const recoveredUrl = await recoverImage(fileId, fileName)
+
+              if (recoveredUrl) {
+                console.log(`✅ [ProductGallery] Image recovered successfully: ${fileId}`)
+                img.src = recoveredUrl
+                return
+              }
+            }
+
+            console.error(`❌ [ProductGallery] All recovery attempts failed: ${safeAlt}`)
+            img.style.display = 'none'
+
+            const placeholder = document.createElement('div')
+            placeholder.className = 'flex items-center justify-center w-full h-full bg-gray-100 text-gray-400'
+            placeholder.innerHTML = `
+              <div class="text-center">
+                <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p class="text-sm">Image unavailable</p>
+              </div>
+            `
+            img.parentElement?.parentElement?.appendChild(placeholder)
+          }
+
           return (
             <div className="image-gallery-image">
-              <img
+              <ProductImageZoomPan
                 src={item.original}
                 alt={safeAlt}
                 className="w-full h-full object-contain"
-                style={{ maxHeight: '600px' }}
+                style={{ maxHeight: '600px', minHeight: '400px' }}
                 loading="lazy"
-                onError={async (e) => {
-                  const img = e.currentTarget
-                  const currentSrc = img.src
-                  
-                  console.warn(`⚠️ [ProductGallery] Image load failed: ${safeAlt}`, {
-                    currentSrc,
-                    fileId,
-                    fileName,
-                    backupUrlsCount: backupUrls.length
-                  })
-
-                  if (backupUrls.length > 0) {
-                    const nextUrlIndex = backupUrls.findIndex((url: string) => url === currentSrc) + 1
-                    if (nextUrlIndex < backupUrls.length) {
-                      const nextUrl = backupUrls[nextUrlIndex]
-                      if (!nextUrl.startsWith('indexeddb://')) {
-                        console.log(`🔄 [ProductGallery] Trying backup URL ${nextUrlIndex + 1}/${backupUrls.length}`)
-                        img.src = nextUrl
-                        return
-                      }
-                    }
-                  }
-
-                  if (item.thumbnail && item.thumbnail !== currentSrc && !String(item.thumbnail).startsWith('indexeddb://')) {
-                    console.log(`🔄 [ProductGallery] Trying thumbnail URL: ${safeAlt}`)
-                    img.src = item.thumbnail
-                    return
-                  }
-
-                  if (fileId) {
-                    console.log(`🔄 [ProductGallery] Attempting automatic recovery for: ${fileId}`)
-                    const recoveredUrl = await recoverImage(fileId, fileName)
-                    
-                    if (recoveredUrl) {
-                      console.log(`✅ [ProductGallery] Image recovered successfully: ${fileId}`)
-                      img.src = recoveredUrl
-                      return
-                    }
-                  }
-                  
-                  // 4단계: 모든 시도 실패 시 플레이스홀더 표시
-                  console.error(`❌ [ProductGallery] All recovery attempts failed: ${safeAlt}`)
-                  img.style.display = 'none'
-                  
-                  // 플레이스홀더 표시
-                  const placeholder = document.createElement('div')
-                  placeholder.className = 'flex items-center justify-center w-full h-full bg-gray-100 text-gray-400'
-                  placeholder.innerHTML = `
-                    <div class="text-center">
-                      <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p class="text-sm">Image unavailable</p>
-                    </div>
-                  `
-                  img.parentElement?.appendChild(placeholder)
-                }}
+                onError={handleImageError}
               />
             </div>
           )
@@ -679,6 +679,10 @@ export default function ProductGallery({
           align-items: center;
           justify-content: center;
           background: #f9fafb;
+          min-height: 400px;
+        }
+
+        .product-gallery-wrapper .product-image-zoom-pan {
           min-height: 400px;
         }
         
