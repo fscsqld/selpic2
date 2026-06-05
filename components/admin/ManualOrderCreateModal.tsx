@@ -3,7 +3,10 @@
 import { useMemo, useState } from 'react'
 import { X, Loader2, MapPin, Palette } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
-import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import {
+  getCustomizationSurchargePerUnit,
+  TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE,
+} from '@/lib/orderCustomizationSurcharge'
 
 export type ManualOrderProductLite = {
   id: string
@@ -21,8 +24,6 @@ type Props = {
   products: ManualOrderProductLite[]
   onCreated: (order: OrderRecord) => void
 }
-
-const DEFAULT_TWO_LINE_SURCHARGE = 2
 
 function buildAsSingleLine(a: {
   streetAddress: string

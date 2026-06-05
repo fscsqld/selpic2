@@ -3,7 +3,8 @@
  * Amounts are GST-inclusive (AUD) and added on top of catalogue unit price.
  */
 
-const TWO_LINE_SURCHARGE_DEFAULT = 2
+/** GST-inclusive AUD; used when product has no admin `twoLineSurcharge`. */
+export const TWO_LINE_SURCHARGE_DEFAULT = 1
 const TWO_LINE_SIZE_VALUES = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
 
 function parseSurchargeFromValue(value: string): number {

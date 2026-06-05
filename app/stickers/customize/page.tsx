@@ -12,6 +12,7 @@ import Header from '@/components/Header'
 import { getStickerFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
 import { resolveStickerSheetLayout, sheetContentDimensionsMm } from '@/lib/stickerSheetLayout'
 import { isMixedLabelsProduct } from '@/lib/mixedLabelsProduct'
+import { TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE } from '@/lib/orderCustomizationSurcharge'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -22,9 +23,6 @@ const NAME_MAX_LETTERS = 9
 // 6자 이하: 기본 크기. 7자 이상: 글자 수에 따라 자동 축소하여 한 줄에 표시.
 const getSheetNameFontSize = (len: number) => (len <= 6 ? 21 : Math.max(11, Math.round((21 * 5) / len)))
 const getCanvasNameFontSize = (len: number) => (len <= 6 ? 24 : Math.max(12, Math.round((24 * 5) / len)))
-// 2줄 선택 시 추가 요금 (상품별 twoLineSurcharge 미설정 시 기본값)
-const DEFAULT_TWO_LINE_SURCHARGE = 2
-
 // 학습: 대형(Large)·특대형(Extra Large)·중형(Medium)은 2줄(이름 + 소속) 지원. 고객 커스텀 시 두 줄 입력·시트 표기 적용.
 
 // Suspense wrapper for useSearchParams

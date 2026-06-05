@@ -1021,10 +1021,10 @@ export default function StickersPage() {
                       onChange={handleInputChange}
                       min={0}
                       step={0.5}
-                      placeholder="e.g. 2"
+                      placeholder="e.g. 1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Extra charge when customer uses 2 lines (Affiliation+Name or Name+Phone). Leave empty to use default ($2) on customize page.</p>
+                    <p className="mt-1 text-xs text-gray-500">Extra charge when customer uses 2 lines (Affiliation+Name or Name+Phone). Leave empty to use default ($1) on customize page.</p>
                   </div>
                   )}
 

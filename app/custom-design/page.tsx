@@ -12,6 +12,7 @@ import { Type, Palette, Package, X, Gamepad2, ChevronDown, ChevronUp, BookOpen }
 import Header from '@/components/Header'
 import CustomDesignStudioPreview from '@/components/CustomDesignStudioPreview'
 import { isStampsCheckoutEnabled } from '@/lib/stampsCommerce'
+import { TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE } from '@/lib/orderCustomizationSurcharge'
 
 // Suspense wrapper for useSearchParams
 export default function CustomDesignPage() {
@@ -26,7 +27,6 @@ const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches Font 1–5 in the menu (Sticker Customization parity) */
 const AU_SCHOOL_FONT_GUIDE_IMAGE = '/images/guides/australian-school-fonts-black-print.png'
 const NAME_MAX_LETTERS = 9
-const DEFAULT_TWO_LINE_SURCHARGE = 2
 const twoLineMaxChars = 18
 
 function CustomDesignContent() {

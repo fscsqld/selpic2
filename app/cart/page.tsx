@@ -19,6 +19,7 @@ import {
   getCartCustomizationDisplayEntries,
   isMixedLabelsCartCustomizations,
 } from '@/lib/mixedLabelsCartDisplay'
+import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 
 export default function CartPage() {
   const router = useRouter()
@@ -148,50 +149,6 @@ export default function CartPage() {
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
-
-  // Parse surcharge from customization value (e.g. "2 lines (Name & Phone) +$2.00" -> 2)
-  const parseSurchargeFromValue = (value: string): number => {
-    if (typeof value !== 'string') return 0
-    const match = value.match(/\+\s*\$\s*([\d.]+)/)
-    if (!match) return 0
-    const n = parseFloat(match[1])
-    return !isNaN(n) && isFinite(n) ? n : 0
-  }
-
-  const TWO_LINE_SURCHARGE_DEFAULT = 2
-  const TWO_LINE_SIZE_VALUES = ['large', 'extra large', 'medium', '대형', '특대형', '중형']
-
-  // 2줄 옵션 등 커스텀 추가 요금: twoLineSurchargeAmount 우선 → twoLineOption 파싱 → 텍스트 줄바꿈+size로 추론
-  const getSurchargePerUnit = (
-    customizations: Record<string, string> | undefined,
-    product?: { size?: string }
-  ): number => {
-    if (!customizations || typeof customizations !== 'object') return 0
-    const explicit = customizations.twoLineSurchargeAmount
-    if (explicit != null && String(explicit).trim() !== '') {
-      const n = parseFloat(String(explicit).trim())
-      if (!isNaN(n) && isFinite(n) && n >= 0) return n
-    }
-    const twoLineOpt = customizations.twoLineOption
-    if (typeof twoLineOpt === 'string' && twoLineOpt.trim()) {
-      const m = twoLineOpt.match(/\+\s*\$?\s*([\d.]+)/)
-      if (m) {
-        const n = parseFloat(m[1])
-        if (!isNaN(n) && isFinite(n) && n >= 0) return n
-      }
-    }
-    const fromEntries = Object.entries(customizations)
-      .filter(([key]) => !key.toLowerCase().includes('customizedimage'))
-      .reduce((sum, [, value]) => sum + parseSurchargeFromValue(value), 0)
-    if (fromEntries > 0) return fromEntries
-    // 키가 없어도 2줄 텍스트(줄바꿈) + 2줄 지원 size면 기본 추가 요금 적용
-    const text = customizations.text
-    const hasTwoLineText = typeof text === 'string' && text.includes('\n')
-    const sizeNorm = product?.size ? String(product.size).trim().toLowerCase() : ''
-    const sizeSupportsTwo = TWO_LINE_SIZE_VALUES.includes(sizeNorm)
-    if (hasTwoLineText && sizeSupportsTwo) return TWO_LINE_SURCHARGE_DEFAULT
-    return 0
-  }
 
   const calculateSubtotal = () => {
     if (!validCart || validCart.length === 0) {
@@ -668,7 +625,7 @@ export default function CartPage() {
                                 {mixed
                                   ? `$${unitPrice.toFixed(2)} per pack × ${item.quantity}`
                                   : (() => {
-                                      const surchargePerUnit = getSurchargePerUnit(
+                                      const surchargePerUnit = getCustomizationSurchargePerUnit(
                                         item.customizations,
                                         item.product
                                       )
