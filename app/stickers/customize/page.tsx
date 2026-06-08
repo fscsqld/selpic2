@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import MixedLabelsBundleSelector from '@/components/mixedLabels/MixedLabelsBundleSelector'
 import { useRouter, useSearchParams } from 'next/navigation'
 import NextImage from 'next/image'
 import { useStore, Product } from '@/lib/store'
@@ -13,6 +14,13 @@ import { getStickerFonts, getEffectiveFont, containsKorean, type FontConfig } fr
 import { resolveStickerSheetLayout, sheetContentDimensionsMm } from '@/lib/stickerSheetLayout'
 import { isMixedLabelsProduct } from '@/lib/mixedLabelsProduct'
 import { TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE } from '@/lib/orderCustomizationSurcharge'
+import {
+  buildStickerSheetBundleCustomizations,
+  getStickerSheetBundles,
+  productHasStickerPackOptions,
+  type StickerSheetBundle,
+} from '@/lib/stickerSheetBundles'
+import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -59,6 +67,7 @@ function StickerCustomizeContent() {
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   /** Lines added to cart / checkout from this page (cart page can still change qty later) */
   const [orderQuantity, setOrderQuantity] = useState(1)
+  const [selectedStickerPackId, setSelectedStickerPackId] = useState('')
   const [customizedImage, setCustomizedImage] = useState<string | null>(null)
   const [textPosition, setTextPosition] = useState({ x: 50, y: 50 }) // 텍스트 위치 (퍼센트)
   const [textSize, setTextSize] = useState(14) // 텍스트 크기 (9자 한 줄에 맞춤)
@@ -216,18 +225,75 @@ function StickerCustomizeContent() {
     // Medium only when NOT 30×13mm
     ((sizeNorm.includes('medium') || sizeNorm.includes('중형')) && !isMedium30x13)
 
-  const getCustomizationPrice = (): number => {
-    if (!displayProduct) return 20.00
-    let total = displayProduct.price
-    const usesTwoLines = supportsTwoLinesForDisplayProduct && lineMode === 'two'
-    if (usesTwoLines) {
-      const surcharge = typeof (displayProduct as { twoLineSurcharge?: number }).twoLineSurcharge === 'number'
-        ? (displayProduct as { twoLineSurcharge: number }).twoLineSurcharge
-        : DEFAULT_TWO_LINE_SURCHARGE
-      total += surcharge
+  const stickerPackOptionsEnabled = productHasStickerPackOptions(displayProduct ?? undefined)
+  const stickerPackBundles = useMemo(
+    () => getStickerSheetBundles(displayProduct ?? undefined),
+    [displayProduct]
+  )
+  const selectedStickerPack = useMemo((): StickerSheetBundle | null => {
+    if (!stickerPackOptionsEnabled || stickerPackBundles.length === 0) return null
+    const found = stickerPackBundles.find((b) => b.id === selectedStickerPackId)
+    return found ?? stickerPackBundles[0] ?? null
+  }, [stickerPackOptionsEnabled, stickerPackBundles, selectedStickerPackId])
+
+  useEffect(() => {
+    if (!stickerPackOptionsEnabled || stickerPackBundles.length === 0) {
+      setSelectedStickerPackId('')
+      return
     }
-    return total
-  }
+    const preferThree = stickerPackBundles.find((b) => b.sheets === 3)
+    const fallback = preferThree ?? stickerPackBundles[stickerPackBundles.length - 1]
+    if (!selectedStickerPackId || !stickerPackBundles.some((b) => b.id === selectedStickerPackId)) {
+      setSelectedStickerPackId(fallback?.id ?? stickerPackBundles[0].id)
+    }
+  }, [stickerPackOptionsEnabled, stickerPackBundles, selectedStickerPackId])
+
+  const buildBaseCustomizations = useCallback((): Record<string, string> => {
+    const customizations: Record<string, string> = {
+      text: customText,
+      font: selectedFont,
+      color: selectedColor,
+      size: displayProduct?.size || 'Medium',
+    }
+    if (supportsTwoLinesForDisplayProduct && lineMode === 'two') {
+      const baseProduct = (selectedProduct ?? displayProduct) as { twoLineSurcharge?: number }
+      const surcharge =
+        typeof baseProduct?.twoLineSurcharge === 'number'
+          ? baseProduct.twoLineSurcharge
+          : DEFAULT_TWO_LINE_SURCHARGE
+      const optionLabel =
+        twoLineFormat === 'name-phone'
+          ? '2 lines (Name & Phone)'
+          : '2 lines (Affiliation & Name)'
+      customizations.twoLineOption = `${optionLabel} +$${surcharge.toFixed(2)}`
+      customizations.twoLineSurchargeAmount = String(surcharge)
+    }
+    return customizations
+  }, [
+    customText,
+    selectedFont,
+    selectedColor,
+    displayProduct?.size,
+    supportsTwoLinesForDisplayProduct,
+    lineMode,
+    twoLineFormat,
+    selectedProduct,
+    displayProduct,
+  ])
+
+  const mergePackCustomizations = useCallback(
+    (base: Record<string, string>): Record<string, string> => {
+      if (!selectedStickerPack) return base
+      return buildStickerSheetBundleCustomizations(selectedStickerPack, base)
+    },
+    [selectedStickerPack]
+  )
+
+  const customizationUnitPrice = useMemo(() => {
+    if (!displayProduct) return 20
+    const previewCustomizations = mergePackCustomizations(buildBaseCustomizations())
+    return getStorefrontLineUnitPrice(displayProduct, previewCustomizations)
+  }, [displayProduct, mergePackCustomizations, buildBaseCustomizations])
 
   // 디자인 통계 계산
   const designStats = (() => {
@@ -254,13 +320,18 @@ function StickerCustomizeContent() {
     steps += 1
     if (displayProduct) done += 1
 
+    if (stickerPackOptionsEnabled) {
+      steps += 1
+      if (selectedStickerPack) done += 1
+    }
+
     const completion = steps > 0 ? Math.floor((done / steps) * 100) : 0
 
     return {
       characters,
       maxCharacters,
       completion,
-      price: getCustomizationPrice()
+      price: customizationUnitPrice
     }
   })()
 
@@ -642,6 +713,11 @@ function StickerCustomizeContent() {
       return
     }
 
+    if (stickerPackOptionsEnabled && !selectedStickerPack) {
+      alert('Please select a pack size')
+      return
+    }
+
     setIsAddingToCart(true)
 
     // SET 상품인 경우
@@ -705,28 +781,7 @@ function StickerCustomizeContent() {
     // 일반 상품인 경우 (기존 로직)
     const customizedImg = await generateCustomizedImage()
     
-    const customizations: Record<string, string> = {
-      text: customText,
-      font: selectedFont,
-      color: selectedColor,
-      size: fixedSize.name
-    }
-
-    // 2줄 옵션 선택 시: 장바구니/결제 금액에 추가 요금 반영 (명시적 금액 + 표시용 라벨)
-    if (supportsTwoLines && lineMode === 'two') {
-      const baseProduct = (selectedProduct ?? displayProduct) as { twoLineSurcharge?: number }
-      const surcharge =
-        typeof baseProduct.twoLineSurcharge === 'number'
-          ? baseProduct.twoLineSurcharge
-          : DEFAULT_TWO_LINE_SURCHARGE
-      const optionLabel =
-        twoLineFormat === 'name-phone'
-          ? '2 lines (Name & Phone)'
-          : '2 lines (Affiliation & Name)'
-      customizations.twoLineOption = `${optionLabel} +$${surcharge.toFixed(2)}`
-      // 장바구니/결제 합계에서 확실히 반영되도록 숫자만 별도 저장 (문자열 파싱 실패 방지)
-      customizations.twoLineSurchargeAmount = String(surcharge)
-    }
+    let customizations = mergePackCustomizations(buildBaseCustomizations())
     
     if (customizedImg) {
       customizations.customizedImage = customizedImg
@@ -853,6 +908,11 @@ function StickerCustomizeContent() {
       return
     }
 
+    if (stickerPackOptionsEnabled && !selectedStickerPack) {
+      alert('Please select a pack size')
+      return
+    }
+
     // SET 상품인 경우
     if (displayProduct.subcategory === 'Set') {
       // 모든 아이템이 디자인을 선택했는지 확인
@@ -912,12 +972,7 @@ function StickerCustomizeContent() {
     // 일반 상품인 경우 (기존 로직)
     const customizedImg = await generateCustomizedImage()
     
-    const customizations: Record<string, string> = {
-      text: customText,
-      font: selectedFont,
-      color: selectedColor,
-      size: fixedSize.name
-    }
+    let customizations = mergePackCustomizations(buildBaseCustomizations())
     
     if (customizedImg) {
       customizations.customizedImage = customizedImg
@@ -1042,7 +1097,12 @@ function StickerCustomizeContent() {
                 )}
                 <div className="min-w-0">
                   <h2 className="text-xl sm:text-2xl font-bold text-white break-words">{displayProduct.name}</h2>
-                  <p className="text-slate-300 text-sm sm:text-base">Size: {fixedSize.name} • ${getCustomizationPrice().toFixed(2)} • {(displayProduct as { stickerSheetQuantity?: number }).stickerSheetQuantity ?? 3} sheets</p>
+                  <p className="text-slate-300 text-sm sm:text-base">
+                    Size: {fixedSize.name} • ${customizationUnitPrice.toFixed(2)}
+                    {selectedStickerPack
+                      ? ` • ${selectedStickerPack.label || `${selectedStickerPack.sheets} sheet pack`}`
+                      : ` • ${(displayProduct as { stickerSheetQuantity?: number }).stickerSheetQuantity ?? 3} sheets`}
+                  </p>
                   <p className="text-slate-400 text-sm mt-0.5">
                     {Number(stickerSpec.widthMm.toFixed(1))}×{Number(stickerSpec.heightMm.toFixed(1))}mm · {stickerSpec.cols}×{stickerSpec.rows} = {totalCells} labels
                     {supportsTwoLines && (
@@ -1708,6 +1768,19 @@ function StickerCustomizeContent() {
 
                 {/* Customization Controls */}
                 <div className="space-y-3">
+                  {stickerPackOptionsEnabled && stickerPackBundles.length > 0 && (
+                    <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700">
+                      <MixedLabelsBundleSelector
+                        bundles={stickerPackBundles}
+                        selectedBundleId={selectedStickerPack?.id ?? ''}
+                        onSelect={(bundle) => setSelectedStickerPackId(bundle.id)}
+                        variant="dark"
+                        title="Pack size"
+                        hint="Labels per pack — then choose quantity (number of packs) below."
+                      />
+                    </div>
+                  )}
+
                   {/* Text Input: 2줄 옵션1 소속+이름, 옵션2 이름+전화번호 */}
                   <div className="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-700">
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">

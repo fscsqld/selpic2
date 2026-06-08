@@ -20,6 +20,13 @@ import {
 } from '@/lib/mixedLabelsProduct'
 import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/lib/mixedLabelsPricing'
 import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
+import StickerPackOptionsEditor from '@/components/admin/StickerPackOptionsEditor'
+import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
+import {
+  buildSuggestedStickerPacks,
+  sanitizeStickerSheetBundles,
+  type StickerSheetBundle,
+} from '@/lib/stickerSheetBundles'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -101,6 +108,8 @@ interface ProductFormData {
   mixedLabelsNameMaxLength?: number
   mixedLabelsNameHint?: string
   mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+  enableStickerPackOptions?: boolean
+  stickerSheetBundles?: StickerSheetBundle[]
   isLimitedEdition?: boolean
   limitedEditionText?: string
 }
@@ -177,7 +186,9 @@ function AdminProductsPageContent() {
     setItemCount: 3, // SET 상품인 경우 포함된 아이템 개수 (기본값: 3)
     customizationOptions: [], // 커스터마이징 옵션
     fallbackImage: '', // 🆕 동영상 로딩 전 표시할 Fallback 이미지
-    stickerSheetQuantity: 3 // 네임스티커 시트지 수량 (가격 3장 기준, 기본 3장)
+    stickerSheetQuantity: 3, // 네임스티커 시트지 수량 (가격 3장 기준, 기본 3장)
+    enableStickerPackOptions: false,
+    stickerSheetBundles: [],
   })
 
   const isStationeryEssentialsProduct =
@@ -185,6 +196,21 @@ function AdminProductsPageContent() {
 
   const isMixedLabelsProduct =
     formData.category === 'Stickers' && isMixedLabelsSubcategory(formData.subcategory)
+
+  const isGridNameLabelStickerProduct =
+    formData.category === 'Stickers' &&
+    !isMixedLabelsProduct &&
+    !isStationeryEssentialsProduct &&
+    formData.subcategory !== 'Set'
+
+  const stickerPackLayoutProduct = useMemo(
+    () => ({
+      size: formData.size,
+      subcategory: formData.subcategory,
+      ...stickerPresetForAdminForm(formData.size || '', formData.subcategory || ''),
+    }),
+    [formData.size, formData.subcategory]
+  )
 
   const categories = [
     { value: 'All', label: t('admin.products.categories.all') },
@@ -370,6 +396,8 @@ function AdminProductsPageContent() {
         mixedLabelsSheetBundles: sanitizeMixedLabelsSheetBundles(
           (product as any).mixedLabelsSheetBundles
         ),
+        enableStickerPackOptions: !!(product as any).enableStickerPackOptions,
+        stickerSheetBundles: sanitizeStickerSheetBundles((product as any).stickerSheetBundles),
         isLimitedEdition: (product as any).isLimitedEdition,
         limitedEditionText: (product as any).limitedEditionText || '',
         rating: typeof (product as any).rating === 'number' ? (product as any).rating : 4.5,
@@ -411,7 +439,9 @@ function AdminProductsPageContent() {
         setItemCount: 3,
         customizationOptions: [],
         fallbackImage: '',
-        stickerSheetQuantity: 3
+        stickerSheetQuantity: 3,
+        enableStickerPackOptions: false,
+        stickerSheetBundles: [],
       })
     }
     setIsModalOpen(true)
@@ -453,7 +483,9 @@ function AdminProductsPageContent() {
       fallbackImage: '', // 🆕 Fallback Image 초기화
       detailDescription: '',
       customizationOptions: [],
-      stickerSheetQuantity: 3
+      stickerSheetQuantity: 3,
+      enableStickerPackOptions: false,
+      stickerSheetBundles: [],
     })
   }
 
@@ -504,9 +536,38 @@ function AdminProductsPageContent() {
         }
       : {}
 
+    const isGridNameLabel =
+      formData.category === 'Stickers' &&
+      !isMixedLabelsProduct &&
+      !isStationeryEssentials &&
+      formData.subcategory !== 'Set'
+
+    const stickerPackBundles =
+      isGridNameLabel && formData.enableStickerPackOptions
+        ? sanitizeStickerSheetBundles(formData.stickerSheetBundles)
+        : []
+
+    if (isGridNameLabel && formData.enableStickerPackOptions && stickerPackBundles.length === 0) {
+      showNotification('error', 'Add at least one pack option or disable pack options.')
+      return
+    }
+
+    const stickerPackPayload =
+      isGridNameLabel && formData.enableStickerPackOptions
+        ? {
+            enableStickerPackOptions: true,
+            stickerSheetBundles: stickerPackBundles,
+            price: Math.min(...stickerPackBundles.map((b) => b.price)),
+          }
+        : {
+            enableStickerPackOptions: false,
+            stickerSheetBundles: undefined,
+          }
+
     const normalizedFormData: ProductFormData = {
       ...formData,
       ...mixedLabelsPayload,
+      ...stickerPackPayload,
       ...limitedEditionPayload,
       ...(formData.category === 'Stickers' ? { color: STICKER_PRODUCT_COLOR } : {}),
       // Stationery Essentials uses file-based stationery products, not 3-sheet name-sticker pricing.
@@ -680,6 +741,9 @@ function AdminProductsPageContent() {
         if (value === 'Stickers') {
           newData.stickerSheetQuantity = 3
           newData.color = STICKER_PRODUCT_COLOR
+        } else {
+          newData.enableStickerPackOptions = false
+          newData.stickerSheetBundles = undefined
         }
       }
 
@@ -701,6 +765,8 @@ function AdminProductsPageContent() {
           if (!newData.mixedLabelsSheetBundles?.length) {
             newData.mixedLabelsSheetBundles = defs.mixedLabelsSheetBundles.map((b) => ({ ...b }))
           }
+          newData.enableStickerPackOptions = false
+          newData.stickerSheetBundles = undefined
           if (!newData.limitedEditionText?.trim()) {
             newData.limitedEditionText = defs.limitedEditionText
           }
@@ -712,11 +778,17 @@ function AdminProductsPageContent() {
           newData.mixedLabelsSheetBundles = undefined
           newData.limitedEditionText = ''
           newData.isLimitedEdition = false
+          if (value === 'Set' || isStationeryEssentialsSubcategory(value)) {
+            newData.enableStickerPackOptions = false
+            newData.stickerSheetBundles = undefined
+          }
         }
         if (isStationeryEssentialsSubcategory(value)) {
           // Stationery Essentials products are not priced by name-sticker sheet count.
           newData.stickerSheetQuantity = undefined
           newData.size = ''
+          newData.enableStickerPackOptions = false
+          newData.stickerSheetBundles = undefined
         } else if (isMixedLabelsSubcategory(value)) {
           newData.stickerSheetQuantity = Math.max(1, Number(newData.stickerSheetQuantity) || 1)
         } else if (newData.stickerSheetQuantity == null || Number(newData.stickerSheetQuantity) < 3) {
@@ -1670,7 +1742,15 @@ function AdminProductsPageContent() {
                      })()}
                    </select>
                    {formData.category === 'Stickers' && (
-                     <p className="mt-1 text-sm text-gray-500">{t('admin.products.stickerSubcategoryNote')}</p>
+                     <p className="mt-1 text-sm text-gray-500">
+                       {t('admin.products.stickerSubcategoryNote')}
+                       {isGridNameLabelStickerProduct && (
+                         <span className="block mt-1 text-sky-700">
+                           Sky-blue <strong>Enable label pack options</strong> appears below for grid name
+                           labels (not Set, Mixed Labels, or Stationery Essentials).
+                         </span>
+                       )}
+                     </p>
                    )}
                  </div>
 
@@ -1750,6 +1830,66 @@ function AdminProductsPageContent() {
                      )}
                    </div>
                  )}
+
+                {formData.category === 'Stickers' && !isGridNameLabelStickerProduct && (
+                  <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 leading-relaxed">
+                    {formData.subcategory === 'Set' && (
+                      <p>
+                        Label pack options are not available for <strong>Set</strong> products. Use set
+                        pricing and item count instead.
+                      </p>
+                    )}
+                    {isStationeryEssentialsProduct && (
+                      <p>
+                        Label pack options are not available for <strong>Stationery Essentials</strong>{' '}
+                        products.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {isGridNameLabelStickerProduct && (
+                  <StickerPackOptionsEditor
+                    enabled={!!formData.enableStickerPackOptions}
+                    onEnabledChange={(enabled) =>
+                      setFormData((prev) => {
+                        const layout = {
+                          size: prev.size,
+                          subcategory: prev.subcategory,
+                          ...stickerPresetForAdminForm(prev.size || '', prev.subcategory || ''),
+                        }
+                        const bundles =
+                          enabled && !prev.stickerSheetBundles?.length
+                            ? buildSuggestedStickerPacks(layout)
+                            : sanitizeStickerSheetBundles(prev.stickerSheetBundles)
+                        return {
+                          ...prev,
+                          enableStickerPackOptions: enabled,
+                          stickerSheetBundles: enabled ? bundles : [],
+                          price:
+                            enabled && bundles.length > 0
+                              ? Math.min(...bundles.map((b) => b.price))
+                              : prev.price,
+                        }
+                      })
+                    }
+                    bundles={formData.stickerSheetBundles}
+                    onChange={(bundles) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        stickerSheetBundles: bundles,
+                        price: bundles.length
+                          ? Math.min(...bundles.map((b) => b.price))
+                          : prev.price,
+                      }))
+                    }
+                    layoutProduct={stickerPackLayoutProduct}
+                    listPrice={formData.price}
+                    onListPriceChange={(price) =>
+                      setFormData((prev) => ({ ...prev, price }))
+                    }
+                  />
+                )}
 
                 {/* {t('admin.products.stockStatus')} */}
                 <div className="flex items-center">
@@ -2029,7 +2169,10 @@ function AdminProductsPageContent() {
                 </div>
 
                 {/* 스티커 시트지 수량: Stickers 카테고리일 때 Color 오른쪽에 표시. 가격 3장 기준, 기본 3장, 이벤트 시 3장 이상. */}
-                {formData.category === 'Stickers' && !isStationeryEssentialsProduct && !isMixedLabelsProduct && (
+                {formData.category === 'Stickers' &&
+                  !isStationeryEssentialsProduct &&
+                  !isMixedLabelsProduct &&
+                  !formData.enableStickerPackOptions && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {t('admin.products.stickerSheetQuantityLabel')}

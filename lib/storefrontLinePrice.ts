@@ -4,16 +4,24 @@ import {
   resolveMixedLabelsSheetBundle,
   type MixedLabelsSheetBundle,
 } from '@/lib/mixedLabelsPricing'
+import { resolveStickerSheetBundle, type StickerSheetBundle } from '@/lib/stickerSheetBundles'
 
 export type StorefrontLinePriceBreakdown = {
   unitPrice: number
   baseUnitPrice: number
   customizationSurchargePerUnit: number
   mixedLabelsBundle?: MixedLabelsSheetBundle
+  stickerPackBundle?: StickerSheetBundle
 }
 
 export function getStorefrontLineUnitPrice(
-  product: { price: number; mixedLabelsSheetBundles?: MixedLabelsSheetBundle[] },
+  product: {
+    price: number
+    mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+    enableStickerPackOptions?: boolean
+    stickerSheetBundles?: StickerSheetBundle[]
+    size?: string
+  },
   customizations?: Record<string, string>
 ): number {
   return getStorefrontLinePriceBreakdown(product, customizations).unitPrice
@@ -24,16 +32,36 @@ export function getStorefrontLineUnitPrice(
  * Mixed Labels: unit price = selected sheet bundle price (× cart quantity at checkout).
  */
 export function getStorefrontLinePriceBreakdown(
-  product: { price: number; mixedLabelsSheetBundles?: MixedLabelsSheetBundle[] },
+  product: {
+    price: number
+    mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+    enableStickerPackOptions?: boolean
+    stickerSheetBundles?: StickerSheetBundle[]
+    size?: string
+  },
   customizations?: Record<string, string>
 ): StorefrontLinePriceBreakdown {
-  const bundle = resolveMixedLabelsSheetBundle(product, customizations)
-  if (bundle) {
+  const mixedBundle = resolveMixedLabelsSheetBundle(product, customizations)
+  if (mixedBundle) {
     return {
-      unitPrice: bundle.price,
-      baseUnitPrice: bundle.price,
+      unitPrice: mixedBundle.price,
+      baseUnitPrice: mixedBundle.price,
       customizationSurchargePerUnit: 0,
-      mixedLabelsBundle: bundle,
+      mixedLabelsBundle: mixedBundle,
+    }
+  }
+
+  const stickerPack = resolveStickerSheetBundle(product, customizations)
+  if (stickerPack) {
+    const customizationSurchargePerUnit = getCustomizationSurchargePerUnit(customizations, {
+      size: product.size,
+    })
+    const unitPrice = Number((stickerPack.price + customizationSurchargePerUnit).toFixed(2))
+    return {
+      unitPrice,
+      baseUnitPrice: Number(stickerPack.price.toFixed(2)),
+      customizationSurchargePerUnit: Number(customizationSurchargePerUnit.toFixed(2)),
+      stickerPackBundle: stickerPack,
     }
   }
 

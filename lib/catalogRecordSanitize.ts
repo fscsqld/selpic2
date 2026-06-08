@@ -1,5 +1,6 @@
 import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
 import { sanitizeMixedLabelsSheetBundles } from '@/lib/mixedLabelsPricing'
+import { sanitizeStickerSheetBundles } from '@/lib/stickerSheetBundles'
 import type { BundleItem, CustomizationOption, Product } from '@/lib/store'
 
 const MAX_NAME = 500
@@ -271,6 +272,12 @@ export function sanitizeIncomingCatalogRecord(item: unknown): CatalogProductReco
   if (typeof clone.isLimitedEdition === 'boolean') record.isLimitedEdition = clone.isLimitedEdition
   if (Array.isArray(clone.mixedLabelsSheetBundles) && clone.mixedLabelsSheetBundles.length > 0) {
     record.mixedLabelsSheetBundles = sanitizeMixedLabelsSheetBundles(clone.mixedLabelsSheetBundles)
+  }
+  if (typeof clone.enableStickerPackOptions === 'boolean') {
+    record.enableStickerPackOptions = clone.enableStickerPackOptions
+  }
+  if (Array.isArray(clone.stickerSheetBundles) && clone.stickerSheetBundles.length > 0) {
+    record.stickerSheetBundles = sanitizeStickerSheetBundles(clone.stickerSheetBundles)
   }
   if (typeof clone.rating === 'number' && Number.isFinite(clone.rating)) record.rating = clone.rating
   if (typeof clone.reviews === 'number' && Number.isFinite(clone.reviews)) record.reviews = Math.max(0, clone.reviews)

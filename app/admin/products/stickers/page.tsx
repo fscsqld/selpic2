@@ -19,6 +19,12 @@ import {
 } from '@/lib/mixedLabelsProduct'
 import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/lib/mixedLabelsPricing'
 import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
+import StickerPackOptionsEditor from '@/components/admin/StickerPackOptionsEditor'
+import {
+  buildSuggestedStickerPacks,
+  sanitizeStickerSheetBundles,
+  type StickerSheetBundle,
+} from '@/lib/stickerSheetBundles'
 
 interface StickerFormData {
   id: string
@@ -56,6 +62,8 @@ interface StickerFormData {
   mixedLabelsNameMaxLength?: number
   mixedLabelsNameHint?: string
   mixedLabelsSheetBundles?: MixedLabelsSheetBundle[]
+  enableStickerPackOptions?: boolean
+  stickerSheetBundles?: StickerSheetBundle[]
   limitedEditionText?: string
   isLimitedEdition?: boolean
 }
@@ -143,9 +151,13 @@ export default function StickersPage() {
     mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
     mixedLabelsNameHint: '',
     mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
+    enableStickerPackOptions: false,
+    stickerSheetBundles: [],
   })
   const isStationeryEssentialsProduct = isStationeryEssentialsSubcategory(formData.subcategory)
   const isMixedLabelsProduct = isMixedLabelsSubcategory(formData.subcategory)
+  const isGridNameLabelProduct =
+    !isMixedLabelsProduct && !isStationeryEssentialsProduct && formData.subcategory !== 'Set'
   
   // Filter by subcategory
   const filteredProducts = selectedSubcategory === 'all' 
@@ -192,6 +204,8 @@ export default function StickersPage() {
         mixedLabelsSheetBundles: sanitizeMixedLabelsSheetBundles(
           (product as any).mixedLabelsSheetBundles
         ),
+        enableStickerPackOptions: !!(product as any).enableStickerPackOptions,
+        stickerSheetBundles: sanitizeStickerSheetBundles((product as any).stickerSheetBundles),
         limitedEditionText: (product as any).limitedEditionText || '',
         isLimitedEdition: !!(product as any).isLimitedEdition,
       })
@@ -232,6 +246,8 @@ export default function StickersPage() {
         mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
         mixedLabelsNameHint: '',
     mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
+        enableStickerPackOptions: false,
+        stickerSheetBundles: [],
       })
     }
     setIsModalOpen(true)
@@ -276,6 +292,8 @@ export default function StickersPage() {
       mixedLabelsNameMaxLength: mixedLabelsFormDefaults().mixedLabelsNameMaxLength,
       mixedLabelsNameHint: '',
     mixedLabelsSheetBundles: mixedLabelsFormDefaults().mixedLabelsSheetBundles.map((b) => ({ ...b })),
+      enableStickerPackOptions: false,
+      stickerSheetBundles: [],
     })
   }
 
@@ -351,6 +369,32 @@ export default function StickersPage() {
           }
         : {}
 
+      const isGridNameLabel =
+        !isMixedLabelsProduct &&
+        !isStationeryEssentialsProduct &&
+        formData.subcategory !== 'Set'
+
+      const stickerPackBundles =
+        isGridNameLabel && formData.enableStickerPackOptions
+          ? sanitizeStickerSheetBundles(formData.stickerSheetBundles)
+          : []
+
+      if (isGridNameLabel && formData.enableStickerPackOptions && stickerPackBundles.length === 0) {
+        showNotification('error', 'Add at least one pack option or disable pack options.')
+        return
+      }
+
+      const stickerPackPayload = isGridNameLabel && formData.enableStickerPackOptions
+        ? {
+            enableStickerPackOptions: true,
+            stickerSheetBundles: stickerPackBundles,
+            price: Math.min(...stickerPackBundles.map((b) => b.price)),
+          }
+        : {
+            enableStickerPackOptions: false,
+            stickerSheetBundles: undefined,
+          }
+
       const basePayload = {
         ...formData,
         color: STICKER_PRODUCT_COLOR,
@@ -358,6 +402,7 @@ export default function StickersPage() {
         ...optionalSticker,
         twoLineSurcharge: twoLineSurchargeVal,
         ...mixedLabelsPayload,
+        ...stickerPackPayload,
         ...limitedEditionPayload,
       }
 
@@ -465,6 +510,8 @@ export default function StickersPage() {
           if (!next.mixedLabelsSheetBundles?.length) {
             next.mixedLabelsSheetBundles = defs.mixedLabelsSheetBundles.map((b) => ({ ...b }))
           }
+          next.enableStickerPackOptions = false
+          next.stickerSheetBundles = undefined
           if (!next.limitedEditionText?.trim()) {
             next.limitedEditionText = defs.limitedEditionText
           }
@@ -474,6 +521,10 @@ export default function StickersPage() {
           next.mixedSheetTemplateId = ''
           next.mixedLabelsNameHint = ''
           next.mixedLabelsSheetBundles = undefined
+          if (isStationeryEssentialsSubcategory(value) || value === 'Set') {
+            next.enableStickerPackOptions = false
+            next.stickerSheetBundles = undefined
+          }
           next.limitedEditionText = ''
           next.isLimitedEdition = false
           const size = next.size || ''
@@ -957,6 +1008,61 @@ export default function StickersPage() {
                   </div>
                   )}
 
+                  {isGridNameLabelProduct && (
+                    <StickerPackOptionsEditor
+                      enabled={!!formData.enableStickerPackOptions}
+                      onEnabledChange={(enabled) =>
+                        setFormData((prev) => {
+                          const layout = {
+                            size: prev.size,
+                            subcategory: prev.subcategory,
+                            stickerWidthMm: prev.stickerWidthMm,
+                            stickerHeightMm: prev.stickerHeightMm,
+                            stickerCols: prev.stickerCols,
+                            stickerRows: prev.stickerRows,
+                            stickerGapMm: prev.stickerGapMm,
+                          }
+                          const bundles =
+                            enabled && (!prev.stickerSheetBundles?.length)
+                              ? buildSuggestedStickerPacks(layout)
+                              : sanitizeStickerSheetBundles(prev.stickerSheetBundles)
+                          return {
+                            ...prev,
+                            enableStickerPackOptions: enabled,
+                            stickerSheetBundles: enabled ? bundles : [],
+                            price:
+                              enabled && bundles.length > 0
+                                ? Math.min(...bundles.map((b) => b.price))
+                                : prev.price,
+                          }
+                        })
+                      }
+                      bundles={formData.stickerSheetBundles}
+                      onChange={(bundles) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          stickerSheetBundles: bundles,
+                          price: bundles.length
+                            ? Math.min(...bundles.map((b) => b.price))
+                            : prev.price,
+                        }))
+                      }
+                      layoutProduct={{
+                        size: formData.size,
+                        subcategory: formData.subcategory,
+                        stickerWidthMm: formData.stickerWidthMm,
+                        stickerHeightMm: formData.stickerHeightMm,
+                        stickerCols: formData.stickerCols,
+                        stickerRows: formData.stickerRows,
+                        stickerGapMm: formData.stickerGapMm,
+                      }}
+                      listPrice={formData.price}
+                      onListPriceChange={(price) =>
+                        setFormData((prev) => ({ ...prev, price }))
+                      }
+                    />
+                  )}
+
                   {/* Sticker has image — grid name labels only */}
                   {!isMixedLabelsProduct && (
                   <div className="flex items-center gap-2">
@@ -1028,8 +1134,8 @@ export default function StickersPage() {
                   </div>
                   )}
 
-                  {/* Sticker sheet quantity — grid name labels (3+ sheets) */}
-                  {!isStationeryEssentialsProduct && !isMixedLabelsProduct && (
+                  {/* Sticker sheet quantity — legacy single-price mode (hidden when pack options on) */}
+                  {!isStationeryEssentialsProduct && !isMixedLabelsProduct && !formData.enableStickerPackOptions && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Sticker sheet quantity (sheets)

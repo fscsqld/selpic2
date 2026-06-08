@@ -9,6 +9,8 @@ type Props = {
   onSelect: (bundle: MixedLabelsSheetBundle) => void
   /** Match Sticker Customization sidebar (slate) or standalone light panels */
   variant?: 'light' | 'dark'
+  title?: string
+  hint?: string
 }
 
 export default function MixedLabelsBundleSelector({
@@ -16,6 +18,8 @@ export default function MixedLabelsBundleSelector({
   selectedBundleId,
   onSelect,
   variant = 'light',
+  title = 'Sheet bundle',
+  hint = 'Sheets per pack — then choose quantity (number of packs) below the preview.',
 }: Props) {
   if (bundles.length === 0) return null
 
@@ -24,12 +28,12 @@ export default function MixedLabelsBundleSelector({
   return (
     <div className="space-y-2">
       <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-300' : 'text-gray-900'}`}>
-        Sheet bundle
+        {title}
       </p>
       <p className={`text-xs -mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-        Sheets per pack — then choose quantity (number of packs) below the preview.
+        {hint}
       </p>
-      <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Sheet bundle">
+      <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label={title}>
         {bundles.map((bundle) => {
           const selected = bundle.id === selectedBundleId
           const label = formatMixedLabelsBundleOptionLabel(bundle)

@@ -20,6 +20,7 @@ import {
   isMixedLabelsCartCustomizations,
 } from '@/lib/mixedLabelsCartDisplay'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
+import { isStickerPackCartCustomizations } from '@/lib/stickerSheetBundles'
 
 export default function CartPage() {
   const router = useRouter()
@@ -616,13 +617,14 @@ export default function CartPage() {
                           )
                           const lineTotal = unitPrice * item.quantity
                           const mixed = isMixedLabelsCartCustomizations(item.customizations)
+                          const stickerPack = isStickerPackCartCustomizations(item.customizations)
                           return (
                             <>
                               <div className="text-lg font-semibold text-gray-900">
                                 ${lineTotal.toFixed(2)}
                               </div>
                               <div className="text-sm text-gray-500">
-                                {mixed
+                                {mixed || stickerPack
                                   ? `$${unitPrice.toFixed(2)} per pack × ${item.quantity}`
                                   : (() => {
                                       const surchargePerUnit = getCustomizationSurchargePerUnit(

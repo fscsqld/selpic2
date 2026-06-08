@@ -74,6 +74,15 @@ export interface Product {
     price: number
     label?: string
   }>
+  /** Custom name stickers: admin enables pack options (eBay-style label packs). */
+  enableStickerPackOptions?: boolean
+  /** Custom name stickers: pack options when enableStickerPackOptions is true. */
+  stickerSheetBundles?: Array<{
+    id: string
+    sheets: number
+    price: number
+    label?: string
+  }>
   /** 평점 (0–5). Edit Product에서 설정. */
   rating?: number
   /** 리뷰 수. Edit Product에서 설정. */
