@@ -135,6 +135,10 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
   }
 
   const hasDetailPage = (product as any).hasDetailPage !== false
+  const hasDiscount =
+    typeof product.originalPrice === 'number' &&
+    product.originalPrice > product.price
+  const showLimitedEdition = !!product.isLimitedEdition
 
   return (
     <div className="card group hover:shadow-lg transition-all duration-300">
@@ -196,13 +200,23 @@ export default function ProductCard({ product, onCustomize }: ProductCardProps) 
           <Tag className="w-8 h-8 text-gray-400" />
           <span className="text-xs text-gray-500 mt-2">No Image</span>
         </div>
-        {product.originalPrice && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-            {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% {t('product.discount')}
+        {(hasDiscount || showLimitedEdition) && (
+          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 pointer-events-none">
+            {hasDiscount && product.originalPrice != null && (
+              <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-semibold shadow-sm">
+                {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%{' '}
+                {t('product.discount')}
+              </span>
+            )}
+            {showLimitedEdition && (
+              <span className="bg-amber-500 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-semibold shadow-sm leading-tight">
+                LIMITED EDITION
+              </span>
+            )}
           </div>
         )}
         {isLowStock && typeof stockQuantity === 'number' && (
-          <div className="absolute top-2 right-2 bg-white/90 text-red-600 text-xs px-2 py-1 rounded-full shadow">
+          <div className="absolute top-2 right-2 z-10 bg-white/90 text-red-600 text-xs px-2 py-1 rounded-full shadow pointer-events-none">
             Only {stockQuantity} left
           </div>
         )}
