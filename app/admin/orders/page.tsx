@@ -14,7 +14,7 @@ import {
   startEtsyOAuth,
 } from '@/lib/admin/etsyAdminUi'
 import { useEtsyOAuthReturn } from '@/components/admin/useEtsyOAuthReturn'
-import { playNewOrderChime, unlockNewOrderChime } from '@/lib/admin/newOrderChime'
+import { playNewOrderChime, unlockNewOrderChime, enableOrderAlertSoundWithTest, isOrderAlertSoundEnabled } from '@/lib/admin/orderAlertSound'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
@@ -74,7 +74,6 @@ export default function AdminOrdersPage() {
   )
 
   const [ledgerSynced, setLedgerSynced] = useState(false)
-  const [chimeUnlocked, setChimeUnlocked] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
   const [etsyConn, setEtsyConn] = useState<{
     connected: boolean
@@ -164,12 +163,10 @@ export default function AdminOrdersPage() {
     }
   }, [refreshOrdersFromStorage, syncOrdersFromSupabase, autoRefreshInterval])
 
-  // Browser autoplay policy: unlock Web Audio after first user gesture (click/tap).
   useEffect(() => {
+    if (isOrderAlertSoundEnabled()) return
     const onFirstClick = () => {
-      unlockNewOrderChime().then((ok) => {
-        if (ok) setChimeUnlocked(true)
-      })
+      void unlockNewOrderChime()
       window.removeEventListener('click', onFirstClick, true)
     }
     window.addEventListener('click', onFirstClick, true)
@@ -189,11 +186,11 @@ export default function AdminOrdersPage() {
     for (const o of orders) {
       if (knownOrderIdsRef.current.has(o.id)) continue
       knownOrderIdsRef.current.add(o.id)
-      if (o.status === 'paid' && chimeUnlocked) {
+      if ((o.status === 'paid' || o.status === 'pending') && isOrderAlertSoundEnabled()) {
         playNewOrderChime()
       }
     }
-  }, [orders, ledgerSynced, chimeUnlocked])
+  }, [orders, ledgerSynced])
 
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
@@ -1060,19 +1057,19 @@ export default function AdminOrdersPage() {
           }}
         />
 
-        {!chimeUnlocked && (
+        {!isOrderAlertSoundEnabled() && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="flex items-center gap-2">
                 <Volume2 className="w-4 h-4 shrink-0" />
                 {isKo
-                  ? '새 결제 완료(paid) 주문이 들어오면 짧은 알림음이 납니다. 브라우저 정책상 페이지를 한 번 클릭하거나 아래 버튼으로 재생을 허용해 주세요.'
-                  : 'A short chime plays when a new paid order appears. Browsers require a click (or the button below) before audio can play.'}
+                  ? '새 주문(결제 완료·무통장 대기)이 들어오면 알림 효과음이 납니다. 브라우저 정책상 한 번 클릭하거나 아래 버튼으로 재생을 허용해 주세요. 효과음 파일: public/sounds/new-order-alert.mp3'
+                  : 'Plays your order alert sound when a new pending or paid order arrives. Click once or use the button below. Sound file: public/sounds/new-order-alert.mp3'}
               </span>
               <button
                 type="button"
                 className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-700"
-                onClick={() => unlockNewOrderChime().then((ok) => ok && setChimeUnlocked(true))}
+                onClick={() => void enableOrderAlertSoundWithTest()}
               >
                 {isKo ? '알림음 허용' : 'Enable chime'}
               </button>

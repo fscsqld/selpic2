@@ -6,6 +6,7 @@ import { useAdminAuth } from '@/lib/adminAuth'
 import { useAdminSession } from '@/lib/adminSession'
 import AdminInboundSync from '@/components/AdminInboundSync'
 import AdminInboundSoundAlert from '@/components/AdminInboundSoundAlert'
+import AdminOrderSoundListener from '@/components/AdminOrderSoundListener'
 
 interface AdminRouteProps {
   children: React.ReactNode
@@ -277,6 +278,7 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
   return (
     <>
       <AdminInboundSync />
+      <AdminOrderSoundListener />
       <AdminInboundSoundAlert />
       {children}
     </>

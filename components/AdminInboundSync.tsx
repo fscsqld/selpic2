@@ -12,6 +12,7 @@ const POLL_MS = 60_000
  */
 export default function AdminInboundSync() {
   const prevTotalRef = useRef<number | null>(null)
+  const prevOrdersCountRef = useRef<number | null>(null)
   const ranRef = useRef(false)
 
   useEffect(() => {
@@ -44,7 +45,18 @@ export default function AdminInboundSync() {
           items: json.items,
         }
         const prev = prevTotalRef.current
+        const ordersCount = summary.items.find((i) => i.key === 'orders')?.count ?? 0
+        const prevOrders = prevOrdersCountRef.current
         applySummary(summary)
+
+        if (prevOrders !== null && ordersCount > prevOrders) {
+          window.dispatchEvent(
+            new CustomEvent('admin-new-order', {
+              detail: { delta: ordersCount - prevOrders, summary },
+            })
+          )
+        }
+        prevOrdersCountRef.current = ordersCount
 
         if (prev !== null && summary.totalCount > prev) {
           window.dispatchEvent(
