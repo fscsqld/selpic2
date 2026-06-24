@@ -4,6 +4,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { sanitizeStorefrontBankOrderDraft, type BankOrderDraft } from '@/lib/orders/sanitizeStorefrontBankOrderDraft'
+import { notifyAdminsOfNewOrder } from '@/lib/server/adminInboundNotify'
 
 /**
  * Storefront bank-transfer checkout: same catalog/total validation as admin manual orders,
@@ -41,6 +42,8 @@ export async function POST(req: Request) {
     if (error) {
       throw new Error(error.message)
     }
+
+    void notifyAdminsOfNewOrder(order)
 
     return NextResponse.json({ success: true, order })
   } catch (e) {

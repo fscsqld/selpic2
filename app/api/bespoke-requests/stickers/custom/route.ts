@@ -3,53 +3,17 @@ import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
-
-type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'approved' | 'rejected'
-
-type BespokeStickerRequestRecord = {
-  id: string
-  createdAt: string
-  status: BespokeStickerRequestStatus
-  payload: any
-  logo?: {
-    fileUrl: string
-    mimeType: string
-    originalName: string
-    size: number
-  }
-}
-
-const DATA_DIR = path.join(process.cwd(), 'data', 'bespoke-requests', 'stickers-custom')
-const DATA_FILE = path.join(DATA_DIR, 'requests.json')
-
-const UPLOAD_DIR = path.join(
-  process.cwd(),
-  'public',
-  'uploads',
-  'bespoke-requests',
-  'stickers-custom'
-)
-
-const FILE_URL_BASE = '/uploads/bespoke-requests/stickers-custom'
+import { notifyAdminsOfBespokeRequest } from '@/lib/server/adminInboundNotify'
+import {
+  BESPOKE_STICKER_FILE_URL_BASE,
+  BESPOKE_STICKER_UPLOAD_DIR,
+  type BespokeStickerRequestRecord,
+  readBespokeStickerRequests,
+  writeBespokeStickerRequests,
+} from '@/lib/server/bespokeStickerRequests'
 
 async function ensureDir(dirPath: string) {
   await fs.mkdir(dirPath, { recursive: true })
-}
-
-async function readRecords(): Promise<BespokeStickerRequestRecord[]> {
-  try {
-    const raw = await fs.readFile(DATA_FILE, 'utf-8')
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed
-    return []
-  } catch {
-    return []
-  }
-}
-
-async function writeRecords(records: BespokeStickerRequestRecord[]) {
-  await ensureDir(DATA_DIR)
-  await fs.writeFile(DATA_FILE, JSON.stringify(records, null, 2), 'utf-8')
 }
 
 export async function GET() {
@@ -58,8 +22,7 @@ export async function GET() {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
   }
 
-  const records = await readRecords()
-  // Newest first
+  const records = await readBespokeStickerRequests()
   records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   return NextResponse.json({ records })
 }
@@ -71,9 +34,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: 'Missing payload' }, { status: 400 })
   }
 
-  let payload: any = null
+  let payload: Record<string, unknown> | null = null
   try {
-    payload = JSON.parse(payloadRaw)
+    payload = JSON.parse(payloadRaw) as Record<string, unknown>
   } catch {
     return NextResponse.json({ success: false, message: 'Invalid payload JSON' }, { status: 400 })
   }
@@ -81,9 +44,8 @@ export async function POST(req: Request) {
   const logo = form.get('logoFile')
   let logoMeta: BespokeStickerRequestRecord['logo'] | undefined = undefined
 
-  // File is optional.
   if (logo) {
-    const maybeFile = logo as any
+    const maybeFile = logo as File & { arrayBuffer?: () => Promise<ArrayBuffer> }
     const isFileLike = typeof maybeFile?.arrayBuffer === 'function'
 
     if (!isFileLike) {
@@ -102,42 +64,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'File is too large. Max size is 10MB.' }, { status: 400 })
     }
 
-    const id = randomUUID()
+    const fileId = randomUUID()
     const ext = mimeType === 'image/svg+xml' ? '.svg' : '.png'
-    const filename = `${id}${ext}`
+    const filename = `${fileId}${ext}`
 
-    const uploadPath = path.join(UPLOAD_DIR, filename)
-    await ensureDir(UPLOAD_DIR)
+    const uploadPath = path.join(BESPOKE_STICKER_UPLOAD_DIR, filename)
+    await ensureDir(BESPOKE_STICKER_UPLOAD_DIR)
 
     const arrayBuffer = await maybeFile.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     await fs.writeFile(uploadPath, buffer)
 
     logoMeta = {
-      fileUrl: `${FILE_URL_BASE}/${filename}`,
+      fileUrl: `${BESPOKE_STICKER_FILE_URL_BASE}/${filename}`,
       mimeType,
       originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
-      size
+      size,
     }
-
-    // Store request id separate from logo id: we already created id above for filename uniqueness.
-    // But to keep stable id across record, override id later.
   }
 
   const requestId = randomUUID()
-  // If logoMeta was created with a filename id, keep it; request id is record id.
   const record: BespokeStickerRequestRecord = {
     id: requestId,
     createdAt: new Date().toISOString(),
     status: 'new',
     payload,
-    logo: logoMeta
+    logo: logoMeta,
   }
 
-  const records = await readRecords()
+  const records = await readBespokeStickerRequests()
   records.unshift(record)
-  await writeRecords(records)
+  await writeBespokeStickerRequests(records)
+
+  const contact = (payload?.contact || {}) as { name?: string; email?: string }
+  const roll = (payload?.roll || {}) as { preset?: string; variant?: string }
+  void notifyAdminsOfBespokeRequest({
+    id: record.id,
+    contactName: contact.name,
+    contactEmail: contact.email,
+    rollPreset: roll.variant || roll.preset,
+  })
 
   return NextResponse.json({ success: true, id: record.id })
 }
-

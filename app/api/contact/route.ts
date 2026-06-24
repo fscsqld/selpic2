@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { notifyAdminsOfContactMessage } from '@/lib/server/adminInboundNotify'
 
 type ContactCategory =
   | 'general'
@@ -55,6 +56,18 @@ export async function POST(req: Request) {
         { ok: false, error: 'SUPABASE_INSERT_FAILED', details: error.message },
         { status: 500 }
       )
+    }
+
+    const messageId = String(data?.id || '')
+    if (messageId) {
+      void notifyAdminsOfContactMessage({
+        id: messageId,
+        name,
+        email,
+        subject,
+        message,
+        category,
+      })
     }
 
     return NextResponse.json({ ok: true, id: data?.id || null })

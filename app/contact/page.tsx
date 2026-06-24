@@ -3,8 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Header from '@/components/Header'
 import { useTranslation } from '@/lib/useTranslation'
-import { useMessageStore } from '@/lib/messageStore'
-import { 
+import {
   MessageSquare, Send, CheckCircle, AlertCircle
 } from 'lucide-react'
 import Link from 'next/link'
@@ -21,7 +20,6 @@ export default function ContactPage() {
 
 function ContactPageContent() {
   const { t } = useTranslation()
-  const { addMessage } = useMessageStore()
   const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     name: '',

@@ -18,6 +18,7 @@ export async function sendEmailViaResendServer(params: {
   to: string | string[]
   subject: string
   html: string
+  replyTo?: string
   skipBranding?: boolean
   skipTracking?: boolean
   attachments?: ResendAttachmentInput[]
@@ -43,9 +44,11 @@ export async function sendEmailViaResendServer(params: {
   }
 
   const resend = new Resend(apiKey)
+  const replyTo =
+    params.replyTo?.trim() || process.env.RESEND_FROM_EMAIL || 'info@selpic.com.au'
   const payload = {
     from: resendFrom(),
-    replyTo: process.env.RESEND_FROM_EMAIL || 'info@selpic.com.au',
+    replyTo,
     to: recipients,
     subject: params.subject.slice(0, 500),
     html,

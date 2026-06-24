@@ -2,6 +2,7 @@ import { getStripe } from '@/lib/stripe'
 import { parseOrderDraftFromMetadata } from '@/lib/stripeCheckoutMetadata'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
+import { notifyAdminsOfNewOrder } from '@/lib/server/adminInboundNotify'
 import type Stripe from 'stripe'
 import type { OrderRecord } from '@/lib/store'
 
@@ -90,7 +91,9 @@ export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, 
     throw new Error(insErr.message)
   }
 
-  return normalizeLedgerOrder(order)
+  const saved = normalizeLedgerOrder(order)
+  void notifyAdminsOfNewOrder(saved)
+  return saved
 }
 
 export async function persistVerifiedStripeSession(sessionId: string): Promise<

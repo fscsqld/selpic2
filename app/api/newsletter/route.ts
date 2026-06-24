@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { appendTransactionalEmailBrandingHtml } from '@/lib/transactionalEmailBranding'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { notifyAdminsOfNewsletterSignup } from '@/lib/server/adminInboundNotify'
 
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
 const RATE_LIMIT_MAX = 5
@@ -111,6 +112,7 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
+    let isNewSignup = false
 
     if (isSupabaseConfigured()) {
       try {
@@ -121,6 +123,7 @@ export async function POST(req: Request) {
             { status: 409 }
           )
         }
+        isNewSignup = outcome === 'created' || outcome === 'reactivated'
       } catch (e) {
         console.error('[newsletter] Supabase persist failed:', e)
         return NextResponse.json({ success: false, message: 'Something went wrong. Please try again.' }, { status: 500 })
@@ -133,6 +136,11 @@ export async function POST(req: Request) {
         )
       }
       legacySubscribedEmails.add(normalizedEmail)
+      isNewSignup = true
+    }
+
+    if (isNewSignup) {
+      void notifyAdminsOfNewsletterSignup(normalizedEmail)
     }
 
     // Send welcome/confirmation email via Resend (skips if not configured)

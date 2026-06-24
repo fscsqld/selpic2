@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useMessageStore } from '@/lib/messageStore'
 import { 
   BarChart3, 
   Users, 
@@ -45,6 +44,8 @@ import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminOrderNotification from '@/components/AdminOrderNotification'
+import AdminInboundAlertBanner from '@/components/AdminInboundAlertBanner'
+import { useAdminInboundStore } from '@/lib/adminInboundStore'
 import { useSalesGoals } from '@/lib/salesGoals'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import {
@@ -87,14 +88,16 @@ export default function AdminDashboard() {
     updateOrderStatus,
   } = useStore()
   const { users } = useUserAuth()
-  const { unreadCount } = useMessageStore()
+  const inboundSummary = useAdminInboundStore((s) => s.summary)
+  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders') =>
+    inboundSummary.items.find((i) => i.key === key)?.count ?? 0
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
   const router = useRouter()
   const { t } = useTranslation()
   const accountingBaseUrl = process.env.NEXT_PUBLIC_ACCOUNTING_URL || 'http://localhost:3001'
   
   const salesUnreadCount = getUnreadCount()
-  const totalUnreadCount = unreadCount + salesUnreadCount
+  const totalUnreadCount = inboundSummary.totalCount + salesUnreadCount
 
   // 컴포넌트 준비 상태 관리
   useEffect(() => {
@@ -440,6 +443,7 @@ export default function AdminDashboard() {
       icon: ShoppingCart,
       href: '/admin/orders',
       color: 'bg-orange-500',
+      badge: inboundCount('orders') > 0 ? inboundCount('orders') : undefined,
       requiredPermission: 'orders:read'
     },
     {
@@ -465,7 +469,7 @@ export default function AdminDashboard() {
       icon: MessageSquare,
       href: '/admin/messages',
       color: 'bg-pink-500',
-      badge: unreadCount > 0 ? unreadCount : undefined,
+      badge: inboundCount('contact') > 0 ? inboundCount('contact') : undefined,
       requiredPermission: 'messages:read'
     },
     {
@@ -474,6 +478,7 @@ export default function AdminDashboard() {
       icon: Image,
       href: '/admin/bespoke-requests',
       color: 'bg-indigo-500',
+      badge: inboundCount('bespoke') > 0 ? inboundCount('bespoke') : undefined,
       requiredPermission: 'messages:read'
     },
     {
@@ -482,6 +487,7 @@ export default function AdminDashboard() {
       icon: Mail,
       href: '/admin/newsletter',
       color: 'bg-cyan-500',
+      badge: inboundCount('newsletter') > 0 ? inboundCount('newsletter') : undefined,
       requiredPermission: 'users:read'
     },
     {
@@ -506,6 +512,7 @@ export default function AdminDashboard() {
       icon: MessageCircle,
       href: '/admin/community',
       color: 'bg-cyan-500',
+      badge: inboundCount('community') > 0 ? inboundCount('community') : undefined,
       requiredPermission: 'community:read'
     },
     {
@@ -545,7 +552,7 @@ export default function AdminDashboard() {
       )
     }
     return hasPermission(action.requiredPermission)
-  }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, unreadCount])
+  }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, inboundSummary])
 
   const recentActivities = [
     {
@@ -697,6 +704,7 @@ export default function AdminDashboard() {
 
       {/* 메인 콘텐츠 */}
       <main className="p-6">
+          <AdminInboundAlertBanner />
           {/* 통계 카드 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {stats.map((stat, index) => (

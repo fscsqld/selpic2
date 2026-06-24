@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useAdminSession } from '@/lib/adminSession'
+import AdminInboundSync from '@/components/AdminInboundSync'
+import AdminInboundSoundAlert from '@/components/AdminInboundSoundAlert'
 
 interface AdminRouteProps {
   children: React.ReactNode
@@ -272,5 +274,11 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     )
   }
 
-  return <>{children}</>
+  return (
+    <>
+      <AdminInboundSync />
+      <AdminInboundSoundAlert />
+      {children}
+    </>
+  )
 } 

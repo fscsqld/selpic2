@@ -5,6 +5,7 @@ import { hasBannedCommunityContent, sanitizeCommunityText } from '@/lib/communit
 import { allowRateLimit } from '@/lib/server/simpleRateLimit'
 import { getRequestClientIp } from '@/lib/server/requestIp'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { notifyAdminsOfCommunityPost } from '@/lib/server/adminInboundNotify'
 
 const WINDOW_MS = 10 * 60 * 1000
 const MAX_POSTS_PER_WINDOW = 12
@@ -70,6 +71,15 @@ export async function POST(req: Request) {
     }
 
     const [postOut] = buildPostsWithComments([inserted], [], { includeModeration: false })
+
+    void notifyAdminsOfCommunityPost({
+      id: inserted.id,
+      title,
+      category,
+      author: authorDisplay,
+      content,
+    })
+
     return NextResponse.json({ ok: true, post: postOut })
   } catch (e) {
     console.error('[community/posts]', e)
