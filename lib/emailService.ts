@@ -157,6 +157,8 @@ export class EmailService {
     submissionDate?: string
     adminName?: string
     messageId?: string
+    /** Logs to bespoke_request_emails when set (Bespoke Label Requests admin). */
+    bespokeRequestId?: string
     attachments?: File[]
     /** When true, do not append shared signature / logo / confidentiality. */
     skipBranding?: boolean
@@ -239,6 +241,7 @@ export class EmailService {
         skipBranding: true,
         skipTracking: true,
         contactMessageId: params.messageId,
+        bespokeRequestId: params.bespokeRequestId,
         contentText: params.message,
         templateUsed: params.templateUsed,
         ...(attachments && attachments.length > 0 ? { attachments } : {}),

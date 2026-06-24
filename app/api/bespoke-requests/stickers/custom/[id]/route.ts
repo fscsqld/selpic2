@@ -6,7 +6,7 @@ import {
   type BespokeStickerRequestStatus,
 } from '@/lib/server/bespokeStickerRequests'
 
-const ALLOWED: BespokeStickerRequestStatus[] = ['new', 'reviewed', 'approved', 'rejected']
+const ALLOWED: BespokeStickerRequestStatus[] = ['new', 'reviewed', 'replied', 'approved', 'rejected']
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireSupabaseAdminUser()

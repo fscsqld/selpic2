@@ -3,7 +3,7 @@
  * Keep in sync with JSON stored under data/bespoke-requests/stickers-custom/requests.json
  */
 
-export type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'approved' | 'rejected'
+export type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'replied' | 'approved' | 'rejected'
 
 export type BespokeEmailNotification = {
   at: string

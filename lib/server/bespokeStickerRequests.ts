@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SELPIC_CONTENTS_BUCKET } from '@/lib/selpicStorageBucket'
 
-export type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'approved' | 'rejected'
+export type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'replied' | 'approved' | 'rejected'
 
 export type BespokeStickerRequestRecord = {
   id: string
@@ -158,9 +158,13 @@ export async function updateBespokeStickerRequestStatus(
 ): Promise<BespokeStickerRequestRecord> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin()
+    const update: Record<string, unknown> = { status }
+    if (status === 'replied') {
+      update.replied_at = new Date().toISOString()
+    }
     const { data, error } = await admin
       .from('bespoke_sticker_requests')
-      .update({ status })
+      .update(update)
       .eq('id', id)
       .select('*')
       .single()

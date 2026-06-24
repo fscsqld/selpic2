@@ -162,6 +162,7 @@ export async function sendAdminComposeEmailAction(input: {
   skipBranding?: boolean
   skipTracking?: boolean
   contactMessageId?: string
+  bespokeRequestId?: string
   contentText?: string
   templateUsed?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -181,26 +182,46 @@ export async function sendAdminComposeEmailAction(input: {
     return { ok: false, error: 'SEND_FAILED' }
   }
 
+  const toFirst = Array.isArray(input.to) ? (input.to[0] || '') : input.to
+  const emailLogBase = {
+    to_email: String(toFirst || '').trim(),
+    subject: String(input.subject || '').trim(),
+    content_text: typeof input.contentText === 'string' ? input.contentText : null,
+    html: String(input.html || ''),
+    sent_by: admin.id,
+    status: 'sent',
+    template_used: typeof input.templateUsed === 'string' ? input.templateUsed : null,
+  }
+
   // Persist reply content for Customer Messages dashboard.
   if (isSupabaseConfigured() && input.contactMessageId?.trim()) {
     try {
       const sb = getSupabaseAdmin()
-      const toFirst = Array.isArray(input.to) ? (input.to[0] || '') : input.to
       const { error: logErr } = await sb.from('contact_message_emails').insert({
         contact_message_id: input.contactMessageId.trim(),
-        to_email: String(toFirst || '').trim(),
-        subject: String(input.subject || '').trim(),
-        content_text: typeof input.contentText === 'string' ? input.contentText : null,
-        html: String(input.html || ''),
-        sent_by: admin.id,
-        status: 'sent',
-        template_used: typeof input.templateUsed === 'string' ? input.templateUsed : null,
+        ...emailLogBase,
       })
       if (logErr) {
-        console.warn('[sendAdminComposeEmailAction] failed to log email:', logErr.message)
+        console.warn('[sendAdminComposeEmailAction] failed to log contact email:', logErr.message)
       }
     } catch (e) {
-      console.warn('[sendAdminComposeEmailAction] log exception:', e)
+      console.warn('[sendAdminComposeEmailAction] contact log exception:', e)
+    }
+  }
+
+  // Persist reply content for Bespoke Label Requests dashboard.
+  if (isSupabaseConfigured() && input.bespokeRequestId?.trim()) {
+    try {
+      const sb = getSupabaseAdmin()
+      const { error: logErr } = await sb.from('bespoke_request_emails').insert({
+        bespoke_request_id: input.bespokeRequestId.trim(),
+        ...emailLogBase,
+      })
+      if (logErr) {
+        console.warn('[sendAdminComposeEmailAction] failed to log bespoke email:', logErr.message)
+      }
+    } catch (e) {
+      console.warn('[sendAdminComposeEmailAction] bespoke log exception:', e)
     }
   }
 

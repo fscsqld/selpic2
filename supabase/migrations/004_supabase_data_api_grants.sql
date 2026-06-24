@@ -63,6 +63,14 @@ begin
     execute 'grant select, insert, update, delete on table public.contact_message_emails to service_role';
   end if;
 
+  -- Bespoke label requests (docs/bespoke-sticker-requests-supabase.sql)
+  if to_regclass('public.bespoke_sticker_requests') is not null then
+    execute 'grant select, insert, update, delete on table public.bespoke_sticker_requests to service_role';
+  end if;
+  if to_regclass('public.bespoke_request_emails') is not null then
+    execute 'grant select, insert, update, delete on table public.bespoke_request_emails to service_role';
+  end if;
+
   -- Game promo (docs/game-promo-codes-supabase.sql)
   if to_regclass('public.game_promo_registrations') is not null then
     execute 'grant select, insert, update, delete on table public.game_promo_registrations to service_role';
