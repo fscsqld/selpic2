@@ -140,8 +140,15 @@ function AdminMessagesPageContent() {
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [showEmailHistory, setShowEmailHistory] = useState(false)
-  const [serverEmailHistory, setServerEmailHistory] = useState<EmailHistory[] | null>(null)
+  const [emailHistoryByMessageId, setEmailHistoryByMessageId] = useState<Record<string, EmailHistory[]>>({})
+  const [loadingEmailHistoryFor, setLoadingEmailHistoryFor] = useState<string | null>(null)
   const [refreshTrackingData, setRefreshTrackingData] = useState(false)
+
+  const resolveEmailHistory = (messageId: string): EmailHistory[] => {
+    const server = emailHistoryByMessageId[messageId]
+    if (server !== undefined) return server
+    return getEmailHistory(messageId)
+  }
 
   // 필터링된 메시지 목록
   const filteredMessages = useMemo(() => messages.filter(message => {
@@ -200,6 +207,9 @@ function AdminMessagesPageContent() {
       })
     }
     setAdminNote(message.adminNotes || '')
+    void loadServerEmailHistory(message.id).catch(() => {
+      // non-fatal: button falls back to local history until server loads
+    })
   }
 
   const handleReply = async () => {
@@ -268,6 +278,9 @@ function AdminMessagesPageContent() {
         void syncMessageToServer(selectedMessage.id, { status: 'replied' }).catch(() => {
           // non-fatal
         })
+        void loadServerEmailHistory(selectedMessage.id).catch(() => {
+          // non-fatal
+        })
         
         setShowReplyModal(false)
         setReplyText('')
@@ -318,29 +331,40 @@ function AdminMessagesPageContent() {
   }
 
   const loadServerEmailHistory = async (messageId: string) => {
-    const res = await fetch(`/api/admin/contact-messages/${encodeURIComponent(messageId)}/emails`, { cache: 'no-store' })
-    const json = (await res.json().catch(() => null)) as any
-    if (!res.ok || !json?.ok || !Array.isArray(json.emails)) {
-      throw new Error(json?.error || 'EMAIL_HISTORY_LOAD_FAILED')
-    }
-
-    const mapped: EmailHistory[] = json.emails.map((e: any) => {
-      return {
-        id: String(e.id || ''),
-        messageId: String(e.contact_message_id || messageId),
-        customerEmail: String(e.to_email || ''),
-        customerName: selectedMessage?.name || 'Customer',
-        subject: String(e.subject || ''),
-        content: String(e.content_text || ''),
-        sentAt: e.sent_at ? new Date(e.sent_at) : new Date(),
-        sentBy: 'Selpic Support Team',
-        templateUsed: typeof e.template_used === 'string' ? e.template_used : undefined,
-        attachments: typeof e.attachments === 'string' ? e.attachments : undefined,
-        status: (e.status === 'sent' ? 'sent' : 'failed') as any,
+    setLoadingEmailHistoryFor(messageId)
+    try {
+      const res = await fetch(`/api/admin/contact-messages/${encodeURIComponent(messageId)}/emails`, { cache: 'no-store' })
+      const json = (await res.json().catch(() => null)) as any
+      if (!res.ok || !json?.ok || !Array.isArray(json.emails)) {
+        throw new Error(json?.error || 'EMAIL_HISTORY_LOAD_FAILED')
       }
-    }).filter((x: EmailHistory) => Boolean(x.id))
 
-    setServerEmailHistory(mapped)
+      const customerName =
+        selectedMessage?.id === messageId
+          ? selectedMessage.name
+          : messages.find((m) => m.id === messageId)?.name || 'Customer'
+
+      const mapped: EmailHistory[] = json.emails.map((e: any) => {
+        return {
+          id: String(e.id || ''),
+          messageId: String(e.contact_message_id || messageId),
+          customerEmail: String(e.to_email || ''),
+          customerName,
+          subject: String(e.subject || ''),
+          content: String(e.content_text || ''),
+          sentAt: e.sent_at ? new Date(e.sent_at) : new Date(),
+          sentBy: 'Selpic Support Team',
+          templateUsed: typeof e.template_used === 'string' ? e.template_used : undefined,
+          attachments: typeof e.attachments === 'string' ? e.attachments : undefined,
+          status: (e.status === 'sent' ? 'sent' : 'failed') as any,
+        }
+      }).filter((x: EmailHistory) => Boolean(x.id))
+
+      setEmailHistoryByMessageId((prev) => ({ ...prev, [messageId]: mapped }))
+      return mapped
+    } finally {
+      setLoadingEmailHistoryFor((current) => (current === messageId ? null : current))
+    }
   }
 
   // Get updated tracking data for email
@@ -670,15 +694,16 @@ function AdminMessagesPageContent() {
                     <button
                       onClick={() => {
                         setShowEmailHistory(true)
-                        setServerEmailHistory(null)
-                        void loadServerEmailHistory(selectedMessage.id).catch(() => {
-                          // fallback to local history only
-                        })
+                        if (emailHistoryByMessageId[selectedMessage.id] === undefined) {
+                          void loadServerEmailHistory(selectedMessage.id).catch(() => {
+                            // fallback to local history only
+                          })
+                        }
                       }}
                       className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                     >
                       <History className="w-4 h-4 mr-2" />
-                      Email History ({(serverEmailHistory || getEmailHistory(selectedMessage.id)).length})
+                      Email History ({resolveEmailHistory(selectedMessage.id).length})
                     </button>
                     
                     <select
@@ -1009,10 +1034,7 @@ function AdminMessagesPageContent() {
                     Refresh Tracking
                   </button>
                   <button
-                    onClick={() => {
-                      setShowEmailHistory(false)
-                      setServerEmailHistory(null)
-                    }}
+                    onClick={() => setShowEmailHistory(false)}
                     className="text-gray-400 hover:text-gray-600"
                   >
                     ×
@@ -1022,19 +1044,20 @@ function AdminMessagesPageContent() {
             </div>
             
             <div className="p-6">
-              {serverEmailHistory === null ? (
+              {loadingEmailHistoryFor === selectedMessage.id &&
+              emailHistoryByMessageId[selectedMessage.id] === undefined ? (
                 <div className="text-center py-8">
                   <Loader2 className="w-12 h-12 mx-auto mb-3 text-gray-300 animate-spin" />
                   <p className="text-gray-500">Loading email history…</p>
                 </div>
-              ) : (serverEmailHistory || getEmailHistory(selectedMessage.id)).length === 0 ? (
+              ) : resolveEmailHistory(selectedMessage.id).length === 0 ? (
                 <div className="text-center py-8">
                   <History className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-gray-500">No emails sent yet</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {(serverEmailHistory || getEmailHistory(selectedMessage.id)).map((email, index) => {
+                  {resolveEmailHistory(selectedMessage.id).map((email, index) => {
                     const updatedEmail = getUpdatedTrackingData(email)
                     return (
                       <div key={email.id} className="border border-gray-200 rounded-lg p-4">

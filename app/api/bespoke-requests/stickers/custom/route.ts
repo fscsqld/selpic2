@@ -3,13 +3,15 @@ import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { isSupabaseConfigured } from '@/lib/supabase/admin'
 import { notifyAdminsOfBespokeRequest } from '@/lib/server/adminInboundNotify'
 import {
   BESPOKE_STICKER_FILE_URL_BASE,
   BESPOKE_STICKER_UPLOAD_DIR,
   type BespokeStickerRequestRecord,
+  insertBespokeStickerRequest,
   readBespokeStickerRequests,
-  writeBespokeStickerRequests,
+  uploadBespokeLogoToStorage,
 } from '@/lib/server/bespokeStickerRequests'
 
 async function ensureDir(dirPath: string) {
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
 
   const logo = form.get('logoFile')
   let logoMeta: BespokeStickerRequestRecord['logo'] | undefined = undefined
+  let logoStoragePath: string | null = null
 
   if (logo) {
     const maybeFile = logo as File & { arrayBuffer?: () => Promise<ArrayBuffer> }
@@ -68,18 +71,38 @@ export async function POST(req: Request) {
     const ext = mimeType === 'image/svg+xml' ? '.svg' : '.png'
     const filename = `${fileId}${ext}`
 
-    const uploadPath = path.join(BESPOKE_STICKER_UPLOAD_DIR, filename)
-    await ensureDir(BESPOKE_STICKER_UPLOAD_DIR)
-
     const arrayBuffer = await maybeFile.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    await fs.writeFile(uploadPath, buffer)
 
-    logoMeta = {
-      fileUrl: `${BESPOKE_STICKER_FILE_URL_BASE}/${filename}`,
-      mimeType,
-      originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
-      size,
+    if (isSupabaseConfigured()) {
+      try {
+        const uploaded = await uploadBespokeLogoToStorage({ filename, buffer, mimeType })
+        logoStoragePath = uploaded.storagePath
+        logoMeta = {
+          fileUrl: uploaded.fileUrl,
+          mimeType,
+          originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
+          size,
+        }
+      } catch (err) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: err instanceof Error ? err.message : 'Failed to upload logo',
+          },
+          { status: 500 }
+        )
+      }
+    } else {
+      const uploadPath = path.join(BESPOKE_STICKER_UPLOAD_DIR, filename)
+      await ensureDir(BESPOKE_STICKER_UPLOAD_DIR)
+      await fs.writeFile(uploadPath, buffer)
+      logoMeta = {
+        fileUrl: `${BESPOKE_STICKER_FILE_URL_BASE}/${filename}`,
+        mimeType,
+        originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
+        size,
+      }
     }
   }
 
@@ -92,9 +115,17 @@ export async function POST(req: Request) {
     logo: logoMeta,
   }
 
-  const records = await readBespokeStickerRequests()
-  records.unshift(record)
-  await writeBespokeStickerRequests(records)
+  try {
+    await insertBespokeStickerRequest(record, logoStoragePath)
+  } catch (err) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to save request',
+      },
+      { status: 500 }
+    )
+  }
 
   const contact = (payload?.contact || {}) as { name?: string; email?: string }
   const roll = (payload?.roll || {}) as { preset?: string; variant?: string }
