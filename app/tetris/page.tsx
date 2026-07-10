@@ -4,16 +4,18 @@ import { Suspense, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Home } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
+import { useUserAuth } from '@/lib/userAuth'
 
 function TetrisGameContent() {
   const searchParams = useSearchParams()
+  const { user } = useUserAuth()
   const promoBannerRef = useRef<HTMLDivElement>(null)
   
-  // URL 파라미터를 iframe src에 전달
   const en = searchParams.get('en') || ''
   const ko = searchParams.get('ko') || ''
   const mat = searchParams.get('mat') || ''
-  const userId = searchParams.get('userId') || 'guest'
+  const userIdParam = searchParams.get('userId')
+  const userId = (userIdParam && userIdParam !== 'guest' ? userIdParam : user?.id) || 'guest'
   
   // iframe src에 파라미터 추가
   let iframeSrc = '/custom-game/index.html'

@@ -577,7 +577,7 @@ function CustomDesignContent() {
                       🎮 Play Selpic TETRIS & Win Rewards!
                     </p>
                     <p className="text-[10px] font-bold text-yellow-400 whitespace-nowrap overflow-hidden text-ellipsis">
-                      Complete all 5 levels to unlock a promo code: 10% off (max $15), min. cart $30 — one use per customer.
+                      Complete all 5 levels to unlock a promo code: 10% off (max $15), valid 6 months — one use per customer.
                     </p>
                     <p className="text-slate-400 text-[10px] mt-1.5 italic">
                       Your custom name will appear in the game blocks!
@@ -1021,7 +1021,8 @@ function CustomDesignContent() {
                     if (!koreanName) koreanName = ''
                     
                     // 게임 URL 생성 (이름이 있으면 전달, 없으면 빈 문자열)
-                    const gameUrl = `/tetris?en=${encodeURIComponent(englishName)}&ko=${encodeURIComponent(koreanName)}`
+                    const userQuery = user?.id ? `&userId=${encodeURIComponent(user.id)}` : ''
+                    const gameUrl = `/tetris?en=${encodeURIComponent(englishName)}&ko=${encodeURIComponent(koreanName)}${userQuery}`
                     router.push(gameUrl)
                   }}
                   className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 mb-3"

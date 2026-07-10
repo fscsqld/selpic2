@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useContentStore } from '@/lib/contentStore'
+import { GAME_PROMO_STORE_DESCRIPTION } from '@/lib/game-promo-constants'
 
 /**
  * 게임에서 생성된 프로모 코드를 contentStore에 자동으로 추가하는 컴포넌트
@@ -10,10 +11,28 @@ import { useContentStore } from '@/lib/contentStore'
  */
 export default function GamePromoCodeSync() {
   const addPromoCode = useContentStore((state) => state.addPromoCode)
+  const updatePromoCode = useContentStore((state) => state.updatePromoCode)
   const getPromoCodeByCode = useContentStore((state) => state.getPromoCodeByCode)
 
   useEffect(() => {
-    // 주기적으로 localStorage를 체크 (게임이 다른 탭/프레임에서 실행될 수 있음)
+    const upgradeLegacyGamePromoCodes = () => {
+      const { promoCodes, updatePromoCode: update } = useContentStore.getState()
+      for (const code of promoCodes) {
+        if (
+          code.code.startsWith('SELPIC-GAME-') &&
+          code.minPurchaseAmount &&
+          code.minPurchaseAmount > 0
+        ) {
+          update(code.id, {
+            minPurchaseAmount: undefined,
+            description: GAME_PROMO_STORE_DESCRIPTION,
+          })
+        }
+      }
+    }
+
+    upgradeLegacyGamePromoCodes()
+
     const checkForPendingPromoCode = () => {
       try {
         const pendingRaw = localStorage.getItem('selpic-game-promo-pending')
@@ -22,37 +41,38 @@ export default function GamePromoCodeSync() {
         const pending = JSON.parse(pendingRaw)
         if (!pending || !pending.code) return
 
-        // 이미 contentStore에 같은 코드가 있는지 확인
         const existing = getPromoCodeByCode(pending.code)
         if (existing) {
-          // 이미 있으면 pending 키만 삭제하고 종료
+          if (
+            existing.code.startsWith('SELPIC-GAME-') &&
+            existing.minPurchaseAmount &&
+            existing.minPurchaseAmount > 0
+          ) {
+            updatePromoCode(existing.id, {
+              minPurchaseAmount: undefined,
+              description: GAME_PROMO_STORE_DESCRIPTION,
+            })
+          }
           localStorage.removeItem('selpic-game-promo-pending')
           return
         }
 
-        // contentStore에 추가할 PromoCode 객체 생성
         const now = new Date()
         const sixMonthsLater = new Date(now)
         sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6)
 
-        // Determine description based on game source
-        const description = `🎮 Selpic TETRIS Level 5 Clear Reward - 10% OFF (Max $15) | Valid for 6 months | Min purchase $30`;
-        const discountValue = 10;
-        const maxDiscount = 15;
-
         addPromoCode({
           code: pending.code,
-          description: description,
+          description: GAME_PROMO_STORE_DESCRIPTION,
           discountType: 'percentage',
-          discountValue: discountValue,
-          minPurchaseAmount: 30, // 최소 $30 구매
-          maxDiscountAmount: maxDiscount,
-          applicableCategories: undefined, // 모든 카테고리 적용
+          discountValue: 10,
+          maxDiscountAmount: 15,
+          applicableCategories: undefined,
           applicableProducts: [],
           startDate: now,
           endDate: sixMonthsLater,
-          usageLimit: undefined, // 전체 사용 제한 없음
-          userUsageLimit: 1, // 고객당 1회 사용
+          usageLimit: undefined,
+          userUsageLimit: 1,
           isActive: true,
         })
 
@@ -68,7 +88,6 @@ export default function GamePromoCodeSync() {
           body: JSON.stringify(registerBody),
         }).catch(() => {})
 
-        // 추가 완료 후 pending 키 삭제
         localStorage.removeItem('selpic-game-promo-pending')
         console.log('✅ Game promo code added to contentStore:', pending.code)
       } catch (error) {
@@ -76,18 +95,13 @@ export default function GamePromoCodeSync() {
       }
     }
 
-    // 초기 체크
     checkForPendingPromoCode()
-
-    // 주기적으로 체크 (1초마다)
     const interval = setInterval(checkForPendingPromoCode, 1000)
 
     return () => {
       clearInterval(interval)
     }
-  }, [addPromoCode, getPromoCodeByCode])
+  }, [addPromoCode, updatePromoCode, getPromoCodeByCode])
 
-  // 이 컴포넌트는 UI를 렌더링하지 않음
   return null
 }
-

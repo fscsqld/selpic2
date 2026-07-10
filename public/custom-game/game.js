@@ -1033,12 +1033,54 @@ function showLevelCompleteScreen(isFinalLevel, promoCode = null) {
 }
 
 function generatePromoCode() {
-  // 사용자별로 localStorage 키를 분리
-  // 로그인한 사용자는 사용자 ID를 키에 포함, 비로그인 사용자는 'guest' 사용
-  const storageKey = userId && userId !== 'guest' 
-    ? `selpic-game-completed-${userId}` 
-    : 'selpic-game-completed-guest';
-  
+  const guestKey = 'selpic-game-completed-guest';
+  const userKey = userId && userId !== 'guest' ? `selpic-game-completed-${userId}` : guestKey;
+
+  function readEntries(key) {
+    const raw = localStorage.getItem(key) || '[]';
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeEntries(key, entries) {
+    localStorage.setItem(key, JSON.stringify(entries));
+  }
+
+  // Logged-in: reuse guest final-level code and migrate to user key
+  if (userId && userId !== 'guest') {
+    const guestEntries = readEntries(guestKey);
+    const guestFinal = guestEntries.find((entry) => entry && entry.source === 'game_level_5' && entry.code);
+    const userEntries = readEntries(userKey);
+    const userFinal = userEntries.find((entry) => entry && entry.source === 'game_level_5' && entry.code);
+
+    if (userFinal && userFinal.code) {
+      return userFinal.code;
+    }
+
+    if (guestFinal && guestFinal.code) {
+      const merged = userEntries.filter((e) => !(e && e.source === 'game_level_5'));
+      merged.push(guestFinal);
+      writeEntries(userKey, merged);
+      writeEntries(
+        guestKey,
+        guestEntries.filter((e) => !(e && e.source === 'game_level_5'))
+      );
+      localStorage.setItem('selpic-game-promo-pending', JSON.stringify({
+        code: guestFinal.code,
+        source: 'game_level_5',
+        level: guestFinal.level,
+        score: guestFinal.score,
+        timestamp: new Date().toISOString(),
+      }));
+      return guestFinal.code;
+    }
+  }
+
+  const storageKey = userKey;
   // 1) 기존에 발급된 게임 프로모 코드가 있는지 확인
   //    - 한 "고객(사용자)"당 1번만 발급하기 위함
   const raw = localStorage.getItem(storageKey) || '[]';
