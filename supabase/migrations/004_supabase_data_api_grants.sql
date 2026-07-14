@@ -76,6 +76,11 @@ begin
     execute 'grant select, insert, update, delete on table public.game_promo_registrations to service_role';
   end if;
 
+  -- Storefront traffic (docs/site-pageviews-supabase.sql)
+  if to_regclass('public.site_pageviews') is not null then
+    execute 'grant select, insert, update, delete on table public.site_pageviews to service_role';
+  end if;
+
   -- Supabase Auth “profiles” in public (if you use the template table)
   if to_regclass('public.profiles') is not null then
     execute 'grant select, insert, update, delete on table public.profiles to service_role';

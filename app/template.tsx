@@ -5,6 +5,7 @@ import CatalogStoreHydrator from '@/components/CatalogStoreHydrator'
 import SiteConfigStoreAutosave from '@/components/SiteConfigStoreAutosave'
 import SiteConfigWriteStatusBadge from '@/components/SiteConfigWriteStatusBadge'
 import GamePromoCodeSyncLazy from '@/components/GamePromoCodeSyncLazy'
+import StorefrontPageViewTrackerLazy from '@/components/StorefrontPageViewTrackerLazy'
 import StorefrontDeployVersionGuard from '@/components/StorefrontDeployVersionGuard'
 
 /**
@@ -32,6 +33,7 @@ export default function RootTemplate({
       <CatalogStoreHydrator />
       <SiteConfigWriteStatusBadge />
       <GamePromoCodeSyncLazy />
+      <StorefrontPageViewTrackerLazy />
     </>
   )
 }

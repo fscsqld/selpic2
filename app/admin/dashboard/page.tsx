@@ -464,6 +464,14 @@ export default function AdminDashboard() {
       requiredPermission: 'analytics:read'
     },
     {
+      title: 'Traffic & Conversion',
+      description: 'Daily unique visitors vs orders (marketing)',
+      icon: TrendingUp,
+      href: '/admin/traffic',
+      color: 'bg-indigo-500',
+      requiredPermission: 'analytics:read'
+    },
+    {
       title: 'Customer Messages',
       description: 'View and manage customer inquiries',
       icon: MessageSquare,
