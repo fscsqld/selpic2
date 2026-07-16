@@ -119,100 +119,102 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
 
   drawLabelFrame(doc, box)
 
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(100, 116, 139)
+  // FROM — compact (sender is secondary for delivery staff)
+  doc.setFont('helvetica', 'bold').setFontSize(5.5).setTextColor(100, 116, 139)
   doc.text('FROM', innerL, y)
-  y += 3.2
+  y += 2.8
 
-  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(17, 24, 39)
+  doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(17, 24, 39)
   doc.text(SENDER_NAME, innerL, y)
-  y += 3.6
-  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(55, 65, 81)
+  y += 3
+  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(55, 65, 81)
   for (const line of SENDER_ADDRESS_LINES) {
     doc.text(line, innerL, y)
-    y += 3.2
+    y += 2.7
   }
 
-  y += 1.2
+  y += 1
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
   doc.line(innerL, y, innerR, y)
-  y += 3.5
+  y += 3.2
 
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(100, 116, 139)
+  // DELIVER TO — larger for carriers / packing staff
+  doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(100, 116, 139)
   doc.text('DELIVER TO', innerL, y)
   y += 3.5
 
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(17, 24, 39)
+  doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(17, 24, 39)
   const nameLines = doc.splitTextToSize(recipientDisplayName(order), innerW)
   const nameShow = nameLines.slice(0, 2)
   doc.text(nameShow, innerL, y)
-  y += nameShow.length * 4.2 + 0.8
+  y += nameShow.length * 4.6 + 0.8
 
-  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(31, 41, 55)
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(31, 41, 55)
   const stLines = doc.splitTextToSize(streetLine(order), innerW).slice(0, 2)
   doc.text(stLines, innerL, y)
-  y += stLines.length * 3.6 + 1.5
+  y += stLines.length * 4 + 1.2
 
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(17, 24, 39)
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(17, 24, 39)
   const locality = formatLocalityLine(order)
   const locLines = doc.splitTextToSize(locality, innerW).slice(0, 2)
   doc.text(locLines, innerL, y)
-  y += locLines.length * 4
+  y += locLines.length * 4.4
 
   const addr = order.address
   const country = (addr?.country || '').trim()
   if (country && !isAustralia(country)) {
-    doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(71, 85, 105)
+    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(71, 85, 105)
     doc.text(country, innerL, y)
     y += 3.2
   }
 
-  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(71, 85, 105)
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(17, 24, 39)
   const phone = (order.customer?.phone || '').trim()
   if (phone) {
     doc.text(`Ph ${phone}`, innerL, y)
-    y += 3
+    y += 3.6
   }
 
-  y += 1.5
+  y += 1.2
   const pers = formatOrderPersonalizationForLabel(order)
   doc.setDrawColor(203, 213, 225)
   doc.setFillColor(248, 250, 252)
-  doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(71, 85, 105)
+  doc.setFont('helvetica', 'bold').setFontSize(5.5).setTextColor(71, 85, 105)
   const persAll = doc.splitTextToSize(pers, innerW - 3)
-  const maxPersLines = 4
+  const maxPersLines = 3
   const persLines =
     persAll.length > maxPersLines
       ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 40)}…`]
       : persAll
-  const lineH = 2.8
-  const persBoxH = 4.5 + persLines.length * lineH + 2
+  const lineH = 2.6
+  const persBoxH = 4 + persLines.length * lineH + 1.5
   const persTop = y
   doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
-  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
-  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(17, 24, 39)
-  doc.text(persLines, innerL + 1.5, persTop + 4.5)
-  y = persTop + persBoxH + 2.5
+  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.6)
+  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(17, 24, 39)
+  doc.text(persLines, innerL + 1.5, persTop + 4.2)
+  y = persTop + persBoxH + 2
 
   const weightKg = computeDeclaredShippingWeightKg(order)
   const weightStr = formatDeclaredWeightForLabel(weightKg)
   doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(55, 65, 81)
   doc.text(`Service: ${INTERNAL_SERVICE_DISPLAY}  ·  Wt: ${weightStr}`, innerL, y)
-  y += 3
+  y += 2.8
   doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
   const itemLine = itemsSummaryLine(order, 90)
   const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 2)
   doc.text(itemWrapped, innerL, y)
-  y += itemWrapped.length * 2.8 + 1.5
+  y += itemWrapped.length * 2.6 + 1.2
 
   const created = order.createdAtIso
     ? new Date(order.createdAtIso).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
     : '—'
   doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(148, 163, 184)
   doc.text(`Order ${order.id}  ·  ${created}`, innerL, y, { maxWidth: innerW })
-  y += 3.5
+  y += 3
 
-  const barcodeReserved = 28
+  const barcodeReserved = 26
   const barcodeY = Math.min(
     Math.max(y + 1, boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM),
     boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM
@@ -232,7 +234,7 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   })
   const imgData = `data:image/png;base64,${png.toString('base64')}`
   const barW = Math.min(innerW - 4, 88)
-  const barH = 16
+  const barH = 15
   const barX = innerL + (innerW - barW) / 2
   try {
     doc.addImage(imgData, 'PNG', barX, barcodeY, barW, barH)
@@ -240,12 +242,6 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
     doc.setFont('courier', 'normal').setFontSize(7).setTextColor(17, 24, 39)
     doc.text(barcodeText, innerL, barcodeY + 5)
   }
-
-  doc.setFont('helvetica', 'normal').setFontSize(5).setTextColor(148, 163, 184)
-  const noteY = Math.min(barcodeY + barH + 2.5, boxBottom - LABEL_INNER_MARGIN_MM - 1)
-  doc.text('Avery L7169 · 99.1×139 mm · internal barcode', innerL, noteY, {
-    maxWidth: innerW,
-  })
 }
 
 /**
