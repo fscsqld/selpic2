@@ -19,6 +19,7 @@ import { openInternalShippingLabelPdf, openInternalShippingLabelsBatchPdf } from
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import { selectPostOfficeCutoffOrders } from '@/lib/shipping/postOfficeCutoffBatch'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -321,6 +322,7 @@ export default function AdminOrdersPage() {
         all: '전체',
         printSlips: '패킹 슬립 출력',
         printLabels4up: '배송 라벨 (4-up)',
+        printCutoffBatch: '컷오프 배치 (어제 10시→오늘 8시)',
         export: '내보내기',
         exportSelected: '선택 항목 내보내기',
         exportAll: '전체 내보내기',
@@ -398,6 +400,7 @@ export default function AdminOrdersPage() {
         all: 'All',
         printSlips: 'Print Slips',
         printLabels4up: 'Print labels (4-up)',
+        printCutoffBatch: 'Print cut-off batch',
         export: 'Export',
         exportSelected: 'Export Selected',
         exportAll: 'Export All',
@@ -665,6 +668,60 @@ export default function AdminOrdersPage() {
               .join('\n')
           )
         }
+      } finally {
+        setBatchLabelBusy(false)
+      }
+    })()
+  }
+
+  /** Daily post-office run: yesterday 10:00 → today 08:00 (Brisbane). Urgent orders use row Print label. */
+  const printPostOfficeCutoffBatch = () => {
+    const { window, orders: batchOrders } = selectPostOfficeCutoffOrders(orders)
+    if (batchOrders.length === 0) {
+      alert(
+        [
+          'No orders in the cut-off window for Avery labels.',
+          `Window: ${window.labelEn}`,
+          'Includes: paid / processing / approved, not yet labeled, not Click & Collect.',
+          'For urgent orders outside this window, select them and use Print labels (4-up), or Print label on a row.',
+        ].join('\n')
+      )
+      return
+    }
+    if (batchOrders.length > 40) {
+      alert(
+        `Cut-off batch has ${batchOrders.length} orders (max 40 per PDF). Print in two runs or narrow the set.`
+      )
+      return
+    }
+    const sheets = Math.ceil(batchOrders.length / 4)
+    if (
+      !confirm(
+        [
+          `Print post-office cut-off batch?`,
+          `Window: ${window.labelEn}`,
+          `Orders: ${batchOrders.length} → ~${sheets} A4 sheet(s)`,
+          `Skips: Click & Collect, pending/cancelled/shipped, already-labeled.`,
+          `Urgent extras: use row Print label or Print labels (4-up).`,
+        ].join('\n')
+      )
+    ) {
+      return
+    }
+    void (async () => {
+      setBatchLabelBusy(true)
+      try {
+        const ids = batchOrders.map((o) => o.id)
+        const r = await openInternalShippingLabelsBatchPdf(ids, {
+          onOrdersMerged: (updated) => mergeOrdersFromServer(updated),
+        })
+        if (!r.ok) {
+          window.alert(r.error || 'Failed to open cut-off labels PDF')
+          return
+        }
+        window.alert(
+          `Cut-off batch: ${r.labelCount ?? 0} label(s) on ${r.pageCount ?? 0} A4 sheet(s).\n${window.labelEn}`
+        )
       } finally {
         setBatchLabelBusy(false)
       }
@@ -1205,11 +1262,21 @@ export default function AdminOrdersPage() {
                   type="button"
                   onClick={bulkPrintShippingLabels}
                   disabled={batchLabelBusy}
-                  title="Avery L7169 A4 — 4 labels per sheet"
+                  title="Avery L7169 A4 — 4 labels per sheet (selected orders)"
                   className="inline-flex items-center gap-2 px-3 py-2 border border-red-300 bg-red-50 text-red-900 rounded-lg hover:bg-red-100 disabled:opacity-50"
                 >
                   {batchLabelBusy ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
                   {T.printLabels4up}
+                </button>
+                <button
+                  type="button"
+                  onClick={printPostOfficeCutoffBatch}
+                  disabled={batchLabelBusy}
+                  title="Yesterday 10:00 → today 08:00 Australia/Brisbane — daily post-office batch"
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-amber-400 bg-amber-50 text-amber-950 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {batchLabelBusy ? <Loader2 size={16} className="animate-spin" /> : <Truck size={16} />}
+                  {T.printCutoffBatch}
                 </button>
               </div>
             </div>
