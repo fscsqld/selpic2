@@ -131,116 +131,101 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   const innerR = box.x + box.width - LABEL_INNER_MARGIN_MM
   const innerW = innerR - innerL
   const boxBottom = box.y + box.height
-  let y = box.y + LABEL_INNER_MARGIN_MM + 3
+  const contentMaxY = boxBottom - LABEL_INNER_MARGIN_MM
+  let y = box.y + LABEL_INNER_MARGIN_MM + 2.5
 
   drawLabelFrame(doc, box)
 
-  // FROM — compact (sender is secondary for delivery staff)
-  doc.setFont('helvetica', 'bold').setFontSize(5.5).setTextColor(100, 116, 139)
-  doc.text('FROM', innerL, y)
-  y += 2.8
+  // 1) DELIVER TO — address block emphasized (bold, larger, high contrast)
+  const ADDR_SIZE = 11
+  const ADDR_LINE_H = 5.6
 
-  doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(17, 24, 39)
-  doc.text(SENDER_NAME, innerL, y)
-  y += 3
-  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(55, 65, 81)
-  for (const line of SENDER_ADDRESS_LINES) {
-    doc.text(line, innerL, y)
-    y += 2.7
-  }
-
-  y += 1
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.2)
-  doc.line(innerL, y, innerR, y)
-  y += 3.2
-
-  // DELIVER TO — larger for carriers / packing staff
-  doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(100, 116, 139)
+  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(71, 85, 105)
   doc.text('DELIVER TO', innerL, y)
-  y += 3.5
+  y += 5.4
 
-  doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(17, 24, 39)
-  const nameLines = doc.splitTextToSize(recipientDisplayName(order), innerW)
-  const nameShow = nameLines.slice(0, 2)
+  doc.setFont('helvetica', 'bold').setFontSize(ADDR_SIZE).setTextColor(15, 23, 42)
+  const nameShow = doc.splitTextToSize(recipientDisplayName(order), innerW).slice(0, 2)
   doc.text(nameShow, innerL, y)
-  y += nameShow.length * 4.6 + 0.8
+  y += nameShow.length * ADDR_LINE_H + 0.8
 
-  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(31, 41, 55)
   const stLines = doc.splitTextToSize(streetLine(order), innerW).slice(0, 2)
   doc.text(stLines, innerL, y)
-  y += stLines.length * 4 + 1.2
+  y += stLines.length * ADDR_LINE_H + 0.8
 
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(17, 24, 39)
-  const locality = formatLocalityLine(order)
-  const locLines = doc.splitTextToSize(locality, innerW).slice(0, 2)
+  const locLines = doc.splitTextToSize(formatLocalityLine(order), innerW).slice(0, 2)
   doc.text(locLines, innerL, y)
-  y += locLines.length * 4.4
+  y += locLines.length * ADDR_LINE_H
 
-  const addr = order.address
-  const country = (addr?.country || '').trim()
+  const country = (order.address?.country || '').trim()
   if (country && !isAustralia(country)) {
-    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(71, 85, 105)
     doc.text(country, innerL, y)
-    y += 3.2
+    y += ADDR_LINE_H
   }
 
-  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(17, 24, 39)
   const phone = (order.customer?.phone || '').trim()
   if (phone) {
     doc.text(`Ph ${phone}`, innerL, y)
-    y += 3.6
+    y += ADDR_LINE_H
   }
 
   y += 1.2
+  doc.setDrawColor(203, 213, 225)
+  doc.setLineWidth(0.25)
+  doc.line(innerL, y, innerR, y)
+  y += 3.2
+
+  // 2) Order / personalization / items (larger type, tight spacing)
   const pers = formatOrderPersonalizationForLabel(order)
   doc.setDrawColor(203, 213, 225)
   doc.setFillColor(248, 250, 252)
-  doc.setFont('helvetica', 'bold').setFontSize(5.5).setTextColor(71, 85, 105)
+  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(71, 85, 105)
   const persAll = doc.splitTextToSize(pers, innerW - 3)
   const maxPersLines = 3
   const persLines =
     persAll.length > maxPersLines
-      ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 40)}…`]
+      ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 48)}…`]
       : persAll
-  const lineH = 2.6
-  const persBoxH = 4 + persLines.length * lineH + 1.5
+  const persLineH = 3.4
+  const persBoxH = 4.5 + persLines.length * persLineH + 1.2
   const persTop = y
   doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
-  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.6)
-  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(17, 24, 39)
-  doc.text(persLines, innerL + 1.5, persTop + 4.2)
-  y = persTop + persBoxH + 2
+  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(17, 24, 39)
+  doc.text(persLines, innerL + 1.5, persTop + 4.6)
+  y = persTop + persBoxH + 2.2
 
   const weightKg = computeDeclaredShippingWeightKg(order)
   const weightStr = formatDeclaredWeightForLabel(weightKg)
-  doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(55, 65, 81)
-  doc.text(`Service: ${INTERNAL_SERVICE_DISPLAY}  ·  Wt: ${weightStr}`, innerL, y)
-  y += 2.8
-  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
-  const itemLine = itemsSummaryLine(order, 90)
-  const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 2)
+  const serviceName = (order.shippingOptionName || '').trim() || INTERNAL_SERVICE_DISPLAY
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(55, 65, 81)
+  doc.text(`Service: ${serviceName}  ·  Wt: ${weightStr}`, innerL, y, { maxWidth: innerW })
+  y += 3.6
+
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(31, 41, 55)
+  const itemLine = itemsSummaryLine(order, 110)
+  const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 3)
   doc.text(itemWrapped, innerL, y)
-  y += itemWrapped.length * 2.6 + 1.2
+  y += itemWrapped.length * 3.5 + 1.5
 
   const created = order.createdAtIso
     ? new Date(order.createdAtIso).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
     : '—'
-  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(148, 163, 184)
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(100, 116, 139)
   doc.text(`Order ${order.id}  ·  ${created}`, innerL, y, { maxWidth: innerW })
-  y += 3
+  y += 4
 
-  const barcodeReserved = 26
-  const barcodeY = Math.min(
-    Math.max(y + 1, boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM),
-    boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM
-  )
+  // 3) Barcode soon after content (no large empty middle)
+  const barH = 14
+  const fromBlockH = 14
+  const thanksH = 5
+  const barcodeY = Math.min(y + 0.5, contentMaxY - barH - fromBlockH - thanksH - 2)
   const barcodeText = toCode128Payload(getShippingLabelBarcodePayload(order))
   const png: Buffer = await bwipjs.toBuffer({
     bcid: 'code128',
     text: barcodeText,
     scale: 2,
-    height: 10,
+    height: 9,
     includetext: true,
     textfont: 'Helvetica',
     textsize: 7,
@@ -250,7 +235,6 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   })
   const imgData = `data:image/png;base64,${png.toString('base64')}`
   const barW = Math.min(innerW - 4, 88)
-  const barH = 15
   const barX = innerL + (innerW - barW) / 2
   try {
     doc.addImage(imgData, 'PNG', barX, barcodeY, barW, barH)
@@ -258,6 +242,33 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
     doc.setFont('courier', 'normal').setFontSize(7).setTextColor(17, 24, 39)
     doc.text(barcodeText, innerL, barcodeY + 5)
   }
+
+  // 4) FROM under barcode — clear gap below barcode
+  let fromY = barcodeY + barH + 5.5
+  if (fromY + fromBlockH + thanksH > contentMaxY) {
+    fromY = Math.max(barcodeY + barH + 3.5, contentMaxY - fromBlockH - thanksH)
+  }
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.2)
+  doc.line(innerL, fromY - 1.5, innerR, fromY - 1.5)
+
+  doc.setFont('helvetica', 'bold').setFontSize(5).setTextColor(100, 116, 139)
+  doc.text('FROM', innerL, fromY)
+  fromY += 2.8
+  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(55, 65, 81)
+  doc.text(SENDER_NAME, innerL, fromY)
+  fromY += 2.8
+  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
+  doc.text(`${SENDER_ADDRESS_LINES[0]}, ${SENDER_ADDRESS_LINES[1]}`, innerL, fromY, {
+    maxWidth: innerW,
+  })
+  fromY += 3.8
+
+  // 5) Short thanks for the delivery person (bottom)
+  doc.setFont('helvetica', 'italic').setFontSize(6).setTextColor(100, 116, 139)
+  const thanks = 'Thank you for delivering with care.'
+  const thanksY = Math.min(Math.max(fromY, contentMaxY - 1.5), contentMaxY - 0.5)
+  doc.text(thanks, innerL + innerW / 2, thanksY, { align: 'center' })
 }
 
 /**
