@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, User, Lock, Eye, EyeOff, Mail, Phone, User as UserIcon, CheckCircle, AlertCircle, Shield, FileText, Home, ChevronDown, ChevronUp } from 'lucide-react'
 import { useUserAuth } from '@/lib/userAuth'
 import { useTranslation } from '@/lib/useTranslation'
+import { isValidAuPhone } from '@/lib/phone'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 
 function mapSupabaseSignUpError(message: string): string {
@@ -93,6 +94,12 @@ export default function RegisterPage() {
 
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters.')
+      setIsLoading(false)
+      return
+    }
+
+    if (!isValidAuPhone(formData.phone)) {
+      setError(t('checkout.phoneInvalid'))
       setIsLoading(false)
       return
     }
@@ -186,6 +193,8 @@ export default function RegisterPage() {
         router.push('/login?registered=1')
       } else if (result.error === 'emailExists') {
         setError('This email address is already in use. Try signing in or use a different email.')
+      } else if (result.error === 'invalidPhone') {
+        setError(t('checkout.phoneInvalid'))
       } else {
         setError('Registration could not be completed. Please try again.')
       }
@@ -197,20 +206,25 @@ export default function RegisterPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value
-    
-    // 전화번호 필드 (+61 이후 자유 입력)
-    if (e.target.name === 'phone') {
-      // +61로 시작하는지 확인
-      if (!value.startsWith('+61')) {
-        // +61이 없으면 자동으로 추가
-        value = '+61 ' + value.replace(/\D/g, '').slice(0, 15)
+    const { name, value } = e.target
+    let formattedValue = value
+
+    if (name === 'phone') {
+      const digitsOnly = value.replace(/\D/g, '')
+      let national = digitsOnly
+      if (national.startsWith('61')) {
+        national = national.slice(2)
       }
+      if (national.startsWith('0')) {
+        national = national.slice(1)
+      }
+      national = national.slice(0, 9)
+      formattedValue = national.length > 0 ? `+61 ${national}` : '+61 '
     }
-    
+
     setFormData({
       ...formData,
-      [e.target.name]: value
+      [name]: formattedValue
     })
   }
 
@@ -303,7 +317,7 @@ export default function RegisterPage() {
             {/* 전화번호 */}
             <div className="group">
               <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-3 group-focus-within:text-purple-600 transition-colors">
-                Phone number
+                Phone number *
               </label>
               <div className="relative">
                 <input
@@ -312,12 +326,19 @@ export default function RegisterPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
+                  required
                   maxLength={20}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  aria-describedby="register-phone-hint"
                   className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
-                  placeholder="+61 XXXX XXXX"
+                  placeholder="+61 412 345 678"
                 />
                 <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
               </div>
+              <p id="register-phone-hint" className="mt-1.5 text-xs text-slate-500">
+                {t('checkout.phoneHint')}
+              </p>
             </div>
 
             {/* 호주 주소 컴포넌트 */}

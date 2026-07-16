@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { isValidAuPhone } from '@/lib/phone'
 
 const USER_AUTH_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -250,6 +251,10 @@ export const useUserAuth = create<UserAuthState>()(
 
       register: async (userData) => {
         try {
+          if (!isValidAuPhone(userData.phone)) {
+            return { success: false, error: 'invalidPhone' }
+          }
+
           const { users } = get()
           const normalizedEmail = String(userData.email || '').trim().toLowerCase()
           

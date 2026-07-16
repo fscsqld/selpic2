@@ -5,6 +5,7 @@ import { getStripe } from '@/lib/stripe'
 import { orderDraftToMetadataChunks } from '@/lib/stripeCheckoutMetadata'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
+import { isValidAuPhone } from '@/lib/phone'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -167,6 +168,14 @@ export async function POST(req: Request) {
     })
 
     const { line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(orderDraft)
+
+    if (!isValidAuPhone(sanitizedOrderDraft.customer?.phone)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid Australian phone number (e.g. +61 412 345 678).' },
+        { status: 400 }
+      )
+    }
+
     const stripe = getStripe()
     const origin = normalizeSiteOriginFromEnv()
 

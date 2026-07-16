@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { isValidAuPhone } from '@/lib/phone'
 
 type Body = {
   email?: string
@@ -42,6 +43,12 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ error: 'Please enter your name.' }, { status: 400 })
   }
+  if (!isValidAuPhone(phone)) {
+    return NextResponse.json(
+      { error: 'Please enter a valid Australian phone number (e.g. +61 412 345 678).' },
+      { status: 400 }
+    )
+  }
 
   try {
     const sb = getSupabaseAdmin()
@@ -51,7 +58,7 @@ export async function POST(req: Request) {
       email_confirm: true,
       user_metadata: {
         full_name: name,
-        phone: phone || undefined,
+        phone: phone,
         address: address || undefined,
         marketing_consent: marketingConsent,
       },

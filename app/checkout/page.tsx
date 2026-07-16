@@ -19,6 +19,7 @@ import { updateUserGrade } from '@/lib/userGradeUtils'
 import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
+import { isValidAuPhone } from '@/lib/phone'
 import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
@@ -626,16 +627,18 @@ export default function CheckoutPage() {
     const { name, value } = e.target
     let formattedValue = value
 
-    // 전화번호 필드 (+61 이후 자유 입력)
+    // 전화번호 필드 (+61 + 숫자만, 국가코드만으로는 유효하지 않음)
     if (name === 'phone') {
-      // +61로 시작하는지 확인
-      if (!value.startsWith('+61')) {
-        // +61이 없으면 자동으로 추가
-        formattedValue = '+61 ' + value.replace(/\D/g, '').slice(0, 15)
-      } else {
-        // +61 이후는 자유 입력
-        formattedValue = value
+      const digitsOnly = value.replace(/\D/g, '')
+      let national = digitsOnly
+      if (national.startsWith('61')) {
+        national = national.slice(2)
       }
+      if (national.startsWith('0')) {
+        national = national.slice(1)
+      }
+      national = national.slice(0, 9)
+      formattedValue = national.length > 0 ? `+61 ${national}` : '+61 '
     }
 
     // 우편번호 숫자만 입력
@@ -846,13 +849,16 @@ export default function CheckoutPage() {
         !formData.firstName ||
         !formData.lastName ||
         !formData.email ||
-        !formData.phone ||
         !addressData.streetAddress ||
         !addressData.suburb ||
         !addressData.state ||
         !addressData.postcode
       ) {
         throw new Error(t('checkout.requiredFields'))
+      }
+
+      if (!isValidAuPhone(formData.phone)) {
+        throw new Error(t('checkout.phoneInvalid'))
       }
 
       const selectedPaymentOption = paymentOptions.find(opt => opt.type === paymentMethod)
@@ -1084,7 +1090,7 @@ export default function CheckoutPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('checkout.phone')}
+                    {t('checkout.phone')} *
                   </label>
                   <input
                     type="tel"
@@ -1093,9 +1099,15 @@ export default function CheckoutPage() {
                     onChange={handleInputChange}
                     required
                     maxLength={20}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    aria-describedby="checkout-phone-hint"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="+61 XXXX XXXX"
+                    placeholder="+61 412 345 678"
                   />
+                  <p id="checkout-phone-hint" className="mt-1.5 text-xs text-gray-500">
+                    {t('checkout.phoneHint')}
+                  </p>
                 </div>
 
                 {/* 호주 주소 입력 컴포넌트 */}

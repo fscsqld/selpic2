@@ -1,6 +1,7 @@
 import type { OrderRecord } from '@/lib/store'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
+import { isValidAuPhone } from '@/lib/phone'
 
 export type BankOrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -15,6 +16,10 @@ function audCents(amount: number): number {
 export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraft): Promise<BankOrderDraft> {
   if (!Array.isArray(orderDraft.items) || orderDraft.items.length === 0) {
     throw new Error('Order must include at least one item.')
+  }
+
+  if (!isValidAuPhone(orderDraft.customer?.phone)) {
+    throw new Error('Please enter a valid Australian phone number (e.g. +61 412 345 678).')
   }
 
   const catalogProducts = await readCatalogProducts()
