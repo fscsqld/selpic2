@@ -773,9 +773,9 @@ Selpic Team`
                   AusPost shipping label
                 </h2>
                 <p className="text-sm text-gray-600 mb-4">
-                  Generates a printable PDF (Standard Letter layout) with sender, recipient, personalization, declared
-                  weight, and a Code 128 barcode (order id until AusPost tracking is connected). Not an official AusPost
-                  API label — use for packing and post office counter until live Digital API is enabled.
+                  Generates a printable PDF at Australia Post thermal size <strong>100 × 150 mm</strong> (sender,
+                  recipient, personalization, declared weight, Code 128 barcode). Not an official AusPost Digital API
+                  label — regenerate after this update if an older A4 label is cached on the order.
                 </p>
                 {isClickAndCollect ? (
                   <p className="text-sm text-gray-500">Click &amp; Collect — postal label not required.</p>

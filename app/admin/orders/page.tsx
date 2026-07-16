@@ -1542,7 +1542,7 @@ export default function AdminOrdersPage() {
                         <button
                           type="button"
                           disabled={!!shippingLabelBusyId}
-                          title="Open shipping label PDF (Standard Letter layout)"
+                          title="Open shipping label PDF (100×150 mm AusPost size)"
                           onClick={(e) => {
                             e.stopPropagation()
                             void (async () => {
