@@ -1,4 +1,5 @@
 import type { OrderRecord } from '@/lib/store'
+import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
 
 export function openPdfBase64(b64: string): void {
   if (typeof window === 'undefined') return
@@ -21,13 +22,21 @@ export function openPdfBase64(b64: string): void {
  */
 export async function openInternalShippingLabelPdf(
   orderId: string,
-  options?: { force?: boolean; onOrderMerged?: (order: OrderRecord) => void }
+  options?: {
+    force?: boolean
+    slot?: AdminShippingLabelSlot
+    onOrderMerged?: (order: OrderRecord) => void
+  }
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch('/api/admin/shipping/auspost/label', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderId, force: Boolean(options?.force) }),
+    body: JSON.stringify({
+      orderId,
+      force: Boolean(options?.force),
+      slot: options?.slot ?? 'top-left',
+    }),
   })
   const data = (await res.json().catch(() => ({}))) as {
     error?: string

@@ -18,6 +18,14 @@ import { playNewOrderChime, unlockNewOrderChime, enableOrderAlertSoundWithTest, 
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
+import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+
+const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-right', label: 'Top right' },
+  { value: 'bottom-left', label: 'Bottom left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+]
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -75,6 +83,7 @@ export default function AdminOrdersPage() {
 
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
+  const [shippingLabelSlot, setShippingLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
   const [etsyConn, setEtsyConn] = useState<{
     connected: boolean
     shopName?: string | null
@@ -1539,33 +1548,48 @@ export default function AdminOrdersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm align-top">
-                        <button
-                          type="button"
-                          disabled={!!shippingLabelBusyId}
-                          title="Open shipping label PDF (100×150 mm AusPost size)"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void (async () => {
-                              setShippingLabelBusyId(order.id)
-                              try {
-                                const r = await openInternalShippingLabelPdf(order.id, {
-                                  onOrderMerged: (o) => mergeOrdersFromServer([o]),
-                                })
-                                if (!r.ok) window.alert(r.error || 'Failed to open label')
-                              } finally {
-                                setShippingLabelBusyId(null)
-                              }
-                            })()
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 whitespace-nowrap disabled:opacity-50"
-                        >
-                          {shippingLabelBusyId === order.id ? (
-                            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-                          ) : (
-                            <Printer className="w-3.5 h-3.5 shrink-0" />
-                          )}
-                          Print label
-                        </button>
+                        <div className="space-y-2">
+                          <select
+                            value={shippingLabelSlot}
+                            onChange={(e) => setShippingLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
+                            title="Choose Avery L7169 sheet position"
+                          >
+                            {LABEL_SLOT_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={!!shippingLabelBusyId}
+                            title="Open Avery L7169 A4 label PDF"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void (async () => {
+                                setShippingLabelBusyId(order.id)
+                                try {
+                                  const r = await openInternalShippingLabelPdf(order.id, {
+                                    slot: shippingLabelSlot,
+                                    onOrderMerged: (o) => mergeOrdersFromServer([o]),
+                                  })
+                                  if (!r.ok) window.alert(r.error || 'Failed to open label')
+                                } finally {
+                                  setShippingLabelBusyId(null)
+                                }
+                              })()
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 whitespace-nowrap disabled:opacity-50"
+                          >
+                            {shippingLabelBusyId === order.id ? (
+                              <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                            ) : (
+                              <Printer className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            Print label
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     )

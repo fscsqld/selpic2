@@ -5,13 +5,21 @@ import type { OrderRecord } from '@/lib/store'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
-import { buildAdminShippingLabelPdfBase64 } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import {
+  buildAdminShippingLabelPdfBase64,
+  type AdminShippingLabelSlot,
+} from '@/lib/shipping/buildAdminShippingLabelPdf'
 
 /** Barcode + PDF generation require Node APIs (`bwip-js/node`, `Buffer`). */
 export const runtime = 'nodejs'
 
 function isInternalLabelMode(mode: string | undefined): boolean {
   return mode === 'internal' || mode === 'mock'
+}
+
+function normalizeSlot(value: string | undefined): AdminShippingLabelSlot {
+  if (value === 'top-right' || value === 'bottom-left' || value === 'bottom-right') return value
+  return 'top-left'
 }
 
 async function loadOrder(orderId: string): Promise<OrderRecord | null> {
@@ -91,7 +99,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unsupported label mode.' }, { status: 400 })
     }
 
-    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order)
+    const slot = normalizeSlot(new URL(request.url).searchParams.get('slot')?.trim() || undefined)
+    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order, { slot })
     const buf = Buffer.from(pdfBase64, 'base64')
     const safeId = orderId.replace(/[^a-zA-Z0-9_-]+/g, '')
     return new NextResponse(buf, {
@@ -123,9 +132,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
   }
 
-  let body: { orderId?: string; force?: boolean }
+  let body: { orderId?: string; force?: boolean; slot?: string }
   try {
-    body = (await request.json()) as { orderId?: string; force?: boolean }
+    body = (await request.json()) as { orderId?: string; force?: boolean; slot?: string }
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -144,12 +153,13 @@ export async function POST(request: Request) {
     const performedBy = performedByFromUser(adminUser)
     const now = new Date().toISOString()
     const force = Boolean(body.force)
+    const slot = normalizeSlot(body.slot)
     const existing = order.ausPostShippingLabel
 
     const isCached =
       !force && existing?.status === 'created' && isInternalLabelMode(existing.mode)
 
-    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order)
+    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order, { slot })
 
     if (isCached) {
       return NextResponse.json({

@@ -15,17 +15,34 @@ const SENDER_ADDRESS_LINES = ['7 Harvest St', 'Mansfield QLD 4122'] as const
 /** Service line on internal labels until live API selects a product. */
 const INTERNAL_SERVICE_DISPLAY = 'Standard Letter'
 
-/**
- * Australia Post common thermal label size (100 × 150 mm / ~4×6").
- * Page = full label; content uses a small inner margin for printers.
- */
-export const AUSPOST_LABEL_WIDTH_MM = 100
-export const AUSPOST_LABEL_HEIGHT_MM = 150
+export type AdminShippingLabelLayout = 'avery-l7169'
+export type AdminShippingLabelSlot = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
-const MARGIN = 3
-const INNER_L = MARGIN
-const INNER_R = AUSPOST_LABEL_WIDTH_MM - MARGIN
-const INNER_W = INNER_R - INNER_L
+const A4_WIDTH_MM = 210
+const A4_HEIGHT_MM = 297
+const AVERY_LABEL_WIDTH_MM = 99.1
+const AVERY_LABEL_HEIGHT_MM = 139
+const AVERY_LEFT_MARGIN_MM = 5.01
+const AVERY_TOP_MARGIN_MM = 7.06
+const AVERY_HORIZONTAL_GAP_MM = 2.4
+const AVERY_VERTICAL_GAP_MM = 0
+const LABEL_INNER_MARGIN_MM = 3
+
+const SLOT_ORIGIN_MM: Record<AdminShippingLabelSlot, { x: number; y: number }> = {
+  'top-left': { x: AVERY_LEFT_MARGIN_MM, y: AVERY_TOP_MARGIN_MM },
+  'top-right': {
+    x: AVERY_LEFT_MARGIN_MM + AVERY_LABEL_WIDTH_MM + AVERY_HORIZONTAL_GAP_MM,
+    y: AVERY_TOP_MARGIN_MM,
+  },
+  'bottom-left': {
+    x: AVERY_LEFT_MARGIN_MM,
+    y: AVERY_TOP_MARGIN_MM + AVERY_LABEL_HEIGHT_MM + AVERY_VERTICAL_GAP_MM,
+  },
+  'bottom-right': {
+    x: AVERY_LEFT_MARGIN_MM + AVERY_LABEL_WIDTH_MM + AVERY_HORIZONTAL_GAP_MM,
+    y: AVERY_TOP_MARGIN_MM + AVERY_LABEL_HEIGHT_MM + AVERY_VERTICAL_GAP_MM,
+  },
+}
 
 function recipientDisplayName(order: OrderRecord): string {
   const c = order.customer
@@ -75,76 +92,85 @@ function formatLocalityLine(order: OrderRecord): string {
   return tail || '—'
 }
 
-/**
- * Production shipping label PDF — AusPost thermal size 100×150 mm.
- * Code 128 encodes {@link getShippingLabelBarcodePayload}
- * (order id until AusPost tracking is stored).
- */
-export async function buildAdminShippingLabelPdfBase64(order: OrderRecord): Promise<string> {
-  const doc = new jsPDF({
-    unit: 'mm',
-    format: [AUSPOST_LABEL_WIDTH_MM, AUSPOST_LABEL_HEIGHT_MM],
-    orientation: 'portrait',
-  })
+type LabelBox = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
-  let y = MARGIN + 3
+type BuildOptions = {
+  layout?: AdminShippingLabelLayout
+  slot?: AdminShippingLabelSlot
+}
 
+function drawLabelFrame(doc: jsPDF, box: LabelBox): void {
   doc.setDrawColor(30, 41, 59)
   doc.setLineWidth(0.3)
-  doc.rect(1.5, 1.5, AUSPOST_LABEL_WIDTH_MM - 3, AUSPOST_LABEL_HEIGHT_MM - 3, 'S')
+  doc.rect(box.x, box.y, box.width, box.height, 'S')
+}
+
+async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox): Promise<void> {
+  const innerL = box.x + LABEL_INNER_MARGIN_MM
+  const innerR = box.x + box.width - LABEL_INNER_MARGIN_MM
+  const innerW = innerR - innerL
+  const boxBottom = box.y + box.height
+  let y = box.y + LABEL_INNER_MARGIN_MM + 3
+
+  drawLabelFrame(doc, box)
 
   doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(100, 116, 139)
-  doc.text('FROM', INNER_L, y)
+  doc.text('FROM', innerL, y)
   y += 3.2
 
   doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(17, 24, 39)
-  doc.text(SENDER_NAME, INNER_L, y)
+  doc.text(SENDER_NAME, innerL, y)
   y += 3.6
   doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(55, 65, 81)
   for (const line of SENDER_ADDRESS_LINES) {
-    doc.text(line, INNER_L, y)
+    doc.text(line, innerL, y)
     y += 3.2
   }
 
   y += 1.2
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
-  doc.line(INNER_L, y, INNER_R, y)
+  doc.line(innerL, y, innerR, y)
   y += 3.5
 
   doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(100, 116, 139)
-  doc.text('DELIVER TO', INNER_L, y)
+  doc.text('DELIVER TO', innerL, y)
   y += 3.5
 
   doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(17, 24, 39)
-  const nameLines = doc.splitTextToSize(recipientDisplayName(order), INNER_W)
+  const nameLines = doc.splitTextToSize(recipientDisplayName(order), innerW)
   const nameShow = nameLines.slice(0, 2)
-  doc.text(nameShow, INNER_L, y)
+  doc.text(nameShow, innerL, y)
   y += nameShow.length * 4.2 + 0.8
 
   doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(31, 41, 55)
-  const stLines = doc.splitTextToSize(streetLine(order), INNER_W).slice(0, 2)
-  doc.text(stLines, INNER_L, y)
+  const stLines = doc.splitTextToSize(streetLine(order), innerW).slice(0, 2)
+  doc.text(stLines, innerL, y)
   y += stLines.length * 3.6 + 1.5
 
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(17, 24, 39)
   const locality = formatLocalityLine(order)
-  const locLines = doc.splitTextToSize(locality, INNER_W).slice(0, 2)
-  doc.text(locLines, INNER_L, y)
+  const locLines = doc.splitTextToSize(locality, innerW).slice(0, 2)
+  doc.text(locLines, innerL, y)
   y += locLines.length * 4
 
   const addr = order.address
   const country = (addr?.country || '').trim()
   if (country && !isAustralia(country)) {
     doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(71, 85, 105)
-    doc.text(country, INNER_L, y)
+    doc.text(country, innerL, y)
     y += 3.2
   }
 
   doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(71, 85, 105)
   const phone = (order.customer?.phone || '').trim()
   if (phone) {
-    doc.text(`Ph ${phone}`, INNER_L, y)
+    doc.text(`Ph ${phone}`, innerL, y)
     y += 3
   }
 
@@ -153,7 +179,7 @@ export async function buildAdminShippingLabelPdfBase64(order: OrderRecord): Prom
   doc.setDrawColor(203, 213, 225)
   doc.setFillColor(248, 250, 252)
   doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(71, 85, 105)
-  const persAll = doc.splitTextToSize(pers, INNER_W - 3)
+  const persAll = doc.splitTextToSize(pers, innerW - 3)
   const maxPersLines = 4
   const persLines =
     persAll.length > maxPersLines
@@ -162,34 +188,34 @@ export async function buildAdminShippingLabelPdfBase64(order: OrderRecord): Prom
   const lineH = 2.8
   const persBoxH = 4.5 + persLines.length * lineH + 2
   const persTop = y
-  doc.roundedRect(INNER_L, persTop - 1.5, INNER_W, persBoxH, 0.8, 0.8, 'FD')
-  doc.text('PERSONALIZATION', INNER_L + 1.5, persTop + 1.8)
+  doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
+  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
   doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(17, 24, 39)
-  doc.text(persLines, INNER_L + 1.5, persTop + 4.5)
+  doc.text(persLines, innerL + 1.5, persTop + 4.5)
   y = persTop + persBoxH + 2.5
 
   const weightKg = computeDeclaredShippingWeightKg(order)
   const weightStr = formatDeclaredWeightForLabel(weightKg)
   doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(55, 65, 81)
-  doc.text(`Service: ${INTERNAL_SERVICE_DISPLAY}  ·  Wt: ${weightStr}`, INNER_L, y)
+  doc.text(`Service: ${INTERNAL_SERVICE_DISPLAY}  ·  Wt: ${weightStr}`, innerL, y)
   y += 3
   doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
   const itemLine = itemsSummaryLine(order, 90)
-  const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, INNER_W).slice(0, 2)
-  doc.text(itemWrapped, INNER_L, y)
+  const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 2)
+  doc.text(itemWrapped, innerL, y)
   y += itemWrapped.length * 2.8 + 1.5
 
   const created = order.createdAtIso
     ? new Date(order.createdAtIso).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
     : '—'
   doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(148, 163, 184)
-  doc.text(`Order ${order.id}  ·  ${created}`, INNER_L, y, { maxWidth: INNER_W })
+  doc.text(`Order ${order.id}  ·  ${created}`, innerL, y, { maxWidth: innerW })
   y += 3.5
 
   const barcodeReserved = 28
   const barcodeY = Math.min(
-    Math.max(y + 1, AUSPOST_LABEL_HEIGHT_MM - barcodeReserved - MARGIN),
-    AUSPOST_LABEL_HEIGHT_MM - barcodeReserved - MARGIN
+    Math.max(y + 1, boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM),
+    boxBottom - barcodeReserved - LABEL_INNER_MARGIN_MM
   )
   const barcodeText = toCode128Payload(getShippingLabelBarcodePayload(order))
   const png: Buffer = await bwipjs.toBuffer({
@@ -205,20 +231,45 @@ export async function buildAdminShippingLabelPdfBase64(order: OrderRecord): Prom
     textcolor: '000000',
   })
   const imgData = `data:image/png;base64,${png.toString('base64')}`
-  const barW = Math.min(INNER_W - 4, 88)
+  const barW = Math.min(innerW - 4, 88)
   const barH = 16
-  const barX = INNER_L + (INNER_W - barW) / 2
+  const barX = innerL + (innerW - barW) / 2
   try {
     doc.addImage(imgData, 'PNG', barX, barcodeY, barW, barH)
   } catch {
     doc.setFont('courier', 'normal').setFontSize(7).setTextColor(17, 24, 39)
-    doc.text(barcodeText, INNER_L, barcodeY + 5)
+    doc.text(barcodeText, innerL, barcodeY + 5)
   }
 
   doc.setFont('helvetica', 'normal').setFontSize(5).setTextColor(148, 163, 184)
-  const noteY = Math.min(barcodeY + barH + 2.5, AUSPOST_LABEL_HEIGHT_MM - MARGIN - 1)
-  doc.text('100×150 mm · internal barcode (order/tracking)', INNER_L, noteY, {
-    maxWidth: INNER_W,
+  const noteY = Math.min(barcodeY + barH + 2.5, boxBottom - LABEL_INNER_MARGIN_MM - 1)
+  doc.text('Avery L7169 · 99.1×139 mm · internal barcode', innerL, noteY, {
+    maxWidth: innerW,
+  })
+}
+
+/**
+ * Production shipping label PDF — Avery L7169 / AV959020 A4 4-up.
+ * Code 128 encodes {@link getShippingLabelBarcodePayload}
+ * (order id until AusPost tracking is stored).
+ */
+export async function buildAdminShippingLabelPdfBase64(
+  order: OrderRecord,
+  options?: BuildOptions
+): Promise<string> {
+  const layout = options?.layout ?? 'avery-l7169'
+  const slot = options?.slot ?? 'top-left'
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: layout === 'avery-l7169' ? 'a4' : [A4_WIDTH_MM, A4_HEIGHT_MM],
+    orientation: 'portrait',
+  })
+  const origin = SLOT_ORIGIN_MM[slot]
+  await drawShippingLabel(doc, order, {
+    x: origin.x,
+    y: origin.y,
+    width: AVERY_LABEL_WIDTH_MM,
+    height: AVERY_LABEL_HEIGHT_MM,
   })
 
   const dataUri = doc.output('datauristring') as string

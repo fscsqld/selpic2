@@ -17,6 +17,14 @@ import Link from 'next/link'
 // ✅ 회계 장부 자동 기록 통합 (재시도 로직 포함)
 import { recordOrderToAccountingAsyncWithRetry } from '@/apps/accounting-sandbox/src/features/transactions/order-approval-integration-retry'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+
+const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-right', label: 'Top right' },
+  { value: 'bottom-left', label: 'Bottom left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+]
 
 export default function AdminOrderDetailPage() {
   const params = useParams<{ orderId: string }>()
@@ -40,6 +48,7 @@ export default function AdminOrderDetailPage() {
   const [showCustomerMessage, setShowCustomerMessage] = useState(false)
   const [isSendingReceipt, setIsSendingReceipt] = useState(false)
   const [ausPostLabelBusy, setAusPostLabelBusy] = useState(false)
+  const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
   const [ledgerReady, setLedgerReady] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
 
@@ -773,9 +782,8 @@ Selpic Team`
                   AusPost shipping label
                 </h2>
                 <p className="text-sm text-gray-600 mb-4">
-                  Generates a printable PDF at Australia Post thermal size <strong>100 × 150 mm</strong> (sender,
-                  recipient, personalization, declared weight, Code 128 barcode). Not an official AusPost Digital API
-                  label — regenerate after this update if an older A4 label is cached on the order.
+                  Generates a printable PDF for <strong>Avery L7169 / AV959020 A4 4-up</strong>. Choose the exact sheet
+                  position before printing so a partially used label sheet still aligns correctly.
                 </p>
                 {isClickAndCollect ? (
                   <p className="text-sm text-gray-500">Click &amp; Collect — postal label not required.</p>
@@ -792,6 +800,20 @@ Selpic Team`
                     ) : (
                       <p className="text-sm text-amber-800 mb-3">Not generated yet.</p>
                     )}
+                    <div className="mb-3 max-w-xs">
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
+                      <select
+                        value={labelSlot}
+                        onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        {LABEL_SLOT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -802,6 +824,7 @@ Selpic Team`
                           try {
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: false,
+                              slot: labelSlot,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
                             })
                             if (!r.ok) alert(r.error || 'Failed to generate label.')
@@ -822,6 +845,7 @@ Selpic Team`
                           try {
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: true,
+                              slot: labelSlot,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
                             })
                             if (!r.ok) alert(r.error || 'Failed to regenerate label.')
@@ -841,7 +865,7 @@ Selpic Team`
                           setAusPostLabelBusy(true)
                           try {
                             const res = await fetch(
-                              `/api/admin/shipping/auspost/label?orderId=${encodeURIComponent(order.id)}`,
+                              `/api/admin/shipping/auspost/label?orderId=${encodeURIComponent(order.id)}&slot=${encodeURIComponent(labelSlot)}`,
                               { credentials: 'same-origin' }
                             )
                             if (!res.ok) {

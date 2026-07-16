@@ -4,6 +4,14 @@ import { useState } from 'react'
 import { X, Loader2, Printer } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+
+const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-right', label: 'Top right' },
+  { value: 'bottom-left', label: 'Bottom left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+]
 
 type Props = {
   open: boolean
@@ -34,6 +42,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
   const [error, setError] = useState('')
   const [createdOrder, setCreatedOrder] = useState<OrderRecord | null>(null)
   const [printBusy, setPrintBusy] = useState(false)
+  const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
 
   const reset = () => {
     setRecipientName('')
@@ -51,6 +60,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setLabelNotes('')
     setError('')
     setCreatedOrder(null)
+    setLabelSlot('top-left')
   }
 
   const handleClose = () => {
@@ -109,6 +119,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setPrintBusy(true)
     try {
       const r = await openInternalShippingLabelPdf(createdOrder.id, {
+        slot: labelSlot,
         onOrderMerged: (o) => mergeOrdersFromServer([o]),
       })
       if (!r.ok) window.alert(r.error || 'Failed to open label PDF.')
@@ -124,8 +135,8 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Quick ship label</h2>
             <p className="mt-1 text-xs text-gray-500">
-              Creates a minimal order for the internal AusPost-style PDF (address, contents, weight). No storefront
-              catalog or pricing checks.
+              Creates a minimal order for the Avery L7169 / AV959020 A4 4-up label PDF. No storefront catalog or
+              pricing checks.
             </p>
           </div>
           <button
@@ -144,6 +155,20 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
               Saved order <span className="font-mono">{createdOrder.id}</span>. You can print the label now or find this
               order in the list.
             </p>
+            <div className="max-w-xs">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
+              <select
+                value={labelSlot}
+                onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                {LABEL_SLOT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
