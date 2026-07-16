@@ -55,3 +55,63 @@ export async function openInternalShippingLabelPdf(
   }
   return { ok: false, error: 'No PDF in response' }
 }
+
+/**
+ * Batch Avery L7169 labels (4 per A4 page) for selected order IDs.
+ */
+export async function openInternalShippingLabelsBatchPdf(
+  orderIds: string[],
+  options?: {
+    onOrdersMerged?: (orders: OrderRecord[]) => void
+  }
+): Promise<{
+  ok: boolean
+  error?: string
+  labelCount?: number
+  pageCount?: number
+  skippedClickCollect?: string[]
+  skippedMissing?: number
+}> {
+  const ids = [...new Set(orderIds.map((id) => id.trim()).filter(Boolean))]
+  if (!ids.length) {
+    return { ok: false, error: 'No orders selected.' }
+  }
+
+  const res = await fetch('/api/admin/shipping/auspost/labels', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderIds: ids }),
+  })
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string
+    pdfBase64?: string
+    orders?: OrderRecord[]
+    labelCount?: number
+    pageCount?: number
+    skippedClickCollect?: string[]
+    skippedMissing?: number
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: typeof data.error === 'string' ? data.error : 'Request failed',
+      skippedClickCollect: data.skippedClickCollect,
+      skippedMissing: data.skippedMissing,
+    }
+  }
+  if (options?.onOrdersMerged && Array.isArray(data.orders) && data.orders.length) {
+    options.onOrdersMerged(data.orders)
+  }
+  if (typeof data.pdfBase64 === 'string' && data.pdfBase64) {
+    openPdfBase64(data.pdfBase64)
+    return {
+      ok: true,
+      labelCount: data.labelCount,
+      pageCount: data.pageCount,
+      skippedClickCollect: data.skippedClickCollect,
+      skippedMissing: data.skippedMissing,
+    }
+  }
+  return { ok: false, error: 'No PDF in response' }
+}

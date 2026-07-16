@@ -18,6 +18,16 @@ const INTERNAL_SERVICE_DISPLAY = 'Standard Letter'
 export type AdminShippingLabelLayout = 'avery-l7169'
 export type AdminShippingLabelSlot = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+/** Fill order on each Avery L7169 sheet (2×2). */
+export const AVERY_L7169_SLOT_ORDER: readonly AdminShippingLabelSlot[] = [
+  'top-left',
+  'top-right',
+  'bottom-left',
+  'bottom-right',
+] as const
+
+export const AVERY_L7169_LABELS_PER_PAGE = AVERY_L7169_SLOT_ORDER.length
+
 const A4_WIDTH_MM = 210
 const A4_HEIGHT_MM = 297
 const AVERY_LABEL_WIDTH_MM = 99.1
@@ -42,6 +52,12 @@ const SLOT_ORIGIN_MM: Record<AdminShippingLabelSlot, { x: number; y: number }> =
     x: AVERY_LEFT_MARGIN_MM + AVERY_LABEL_WIDTH_MM + AVERY_HORIZONTAL_GAP_MM,
     y: AVERY_TOP_MARGIN_MM + AVERY_LABEL_HEIGHT_MM + AVERY_VERTICAL_GAP_MM,
   },
+}
+
+function pdfBase64FromDoc(doc: jsPDF): string {
+  const dataUri = doc.output('datauristring') as string
+  const parts = dataUri.split(',')
+  return parts.length > 1 ? parts[1] : ''
 }
 
 function recipientDisplayName(order: OrderRecord): string {
@@ -268,7 +284,50 @@ export async function buildAdminShippingLabelPdfBase64(
     height: AVERY_LABEL_HEIGHT_MM,
   })
 
-  const dataUri = doc.output('datauristring') as string
-  const parts = dataUri.split(',')
-  return parts.length > 1 ? parts[1] : ''
+  return pdfBase64FromDoc(doc)
+}
+
+/**
+ * Batch Avery L7169 PDF: up to 4 labels per A4 page in 2×2 fill order.
+ * Partial last page leaves remaining slots blank.
+ */
+export async function buildAdminShippingLabelsBatchPdfBase64(orders: OrderRecord[]): Promise<{
+  pdfBase64: string
+  pageCount: number
+  labelCount: number
+}> {
+  if (!orders.length) {
+    throw new Error('No orders to print.')
+  }
+
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
+  })
+
+  let pageIndex = 0
+  for (let i = 0; i < orders.length; i += AVERY_L7169_LABELS_PER_PAGE) {
+    if (pageIndex > 0) {
+      doc.addPage('a4', 'portrait')
+    }
+    const chunk = orders.slice(i, i + AVERY_L7169_LABELS_PER_PAGE)
+    for (let j = 0; j < chunk.length; j++) {
+      const slot = AVERY_L7169_SLOT_ORDER[j]
+      const origin = SLOT_ORIGIN_MM[slot]
+      await drawShippingLabel(doc, chunk[j], {
+        x: origin.x,
+        y: origin.y,
+        width: AVERY_LABEL_WIDTH_MM,
+        height: AVERY_LABEL_HEIGHT_MM,
+      })
+    }
+    pageIndex += 1
+  }
+
+  return {
+    pdfBase64: pdfBase64FromDoc(doc),
+    pageCount: pageIndex,
+    labelCount: orders.length,
+  }
 }

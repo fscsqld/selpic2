@@ -15,7 +15,7 @@ import {
 } from '@/lib/admin/etsyAdminUi'
 import { useEtsyOAuthReturn } from '@/components/admin/useEtsyOAuthReturn'
 import { playNewOrderChime, unlockNewOrderChime, enableOrderAlertSoundWithTest, isOrderAlertSoundEnabled } from '@/lib/admin/orderAlertSound'
-import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
+import { openInternalShippingLabelPdf, openInternalShippingLabelsBatchPdf } from '@/lib/admin/shippingLabelClient'
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
@@ -84,6 +84,7 @@ export default function AdminOrdersPage() {
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
   const [shippingLabelSlot, setShippingLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
+  const [batchLabelBusy, setBatchLabelBusy] = useState(false)
   const [etsyConn, setEtsyConn] = useState<{
     connected: boolean
     shopName?: string | null
@@ -319,6 +320,7 @@ export default function AdminOrdersPage() {
         dashboard: '대시보드',
         all: '전체',
         printSlips: '패킹 슬립 출력',
+        printLabels4up: '배송 라벨 (4-up)',
         export: '내보내기',
         exportSelected: '선택 항목 내보내기',
         exportAll: '전체 내보내기',
@@ -395,6 +397,7 @@ export default function AdminOrdersPage() {
         dashboard: 'Dashboard',
         all: 'All',
         printSlips: 'Print Slips',
+        printLabels4up: 'Print labels (4-up)',
         export: 'Export',
         exportSelected: 'Export Selected',
         exportAll: 'Export All',
@@ -609,6 +612,63 @@ export default function AdminOrdersPage() {
     }
     const url = `/admin/orders/packing-slips?ids=${encodeURIComponent(ids.join(','))}`
     window.open(url, '_blank')
+  }
+
+  const bulkPrintShippingLabels = () => {
+    const ids = selectedIds.length ? selectedIds : []
+    if (ids.length === 0) {
+      alert(
+        isKo
+          ? '배송 라벨을 인쇄할 주문을 선택해주세요.'
+          : 'Select one or more orders to print shipping labels.'
+      )
+      return
+    }
+    if (ids.length > 40) {
+      alert(
+        isKo
+          ? '한 번에 최대 40건까지 인쇄할 수 있습니다.'
+          : 'You can print at most 40 shipping labels per batch.'
+      )
+      return
+    }
+    const sheets = Math.ceil(ids.length / 4)
+    if (
+      !confirm(
+        isKo
+          ? `선택한 ${ids.length}건을 Avery L7169(4-up) PDF로 인쇄할까요?\n예상 용지: 약 ${sheets}장\n(Click & Collect는 자동 제외)`
+          : `Print ${ids.length} selected order(s) as Avery L7169 4-up PDF?\nApprox. sheets: ${sheets}\n(Click & Collect orders are skipped)`
+      )
+    ) {
+      return
+    }
+    void (async () => {
+      setBatchLabelBusy(true)
+      try {
+        const r = await openInternalShippingLabelsBatchPdf(ids, {
+          onOrdersMerged: (orders) => mergeOrdersFromServer(orders),
+        })
+        if (!r.ok) {
+          window.alert(r.error || 'Failed to open labels PDF')
+          return
+        }
+        const skippedCc = r.skippedClickCollect?.length || 0
+        const skippedMissing = r.skippedMissing || 0
+        if (skippedCc > 0 || skippedMissing > 0) {
+          window.alert(
+            [
+              `Printed ${r.labelCount ?? 0} label(s) on ${r.pageCount ?? 0} A4 sheet(s).`,
+              skippedCc ? `Skipped Click & Collect: ${skippedCc}` : null,
+              skippedMissing ? `Missing orders: ${skippedMissing}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n')
+          )
+        }
+      } finally {
+        setBatchLabelBusy(false)
+      }
+    })()
   }
 
   const bulkStatusChange = (status: 'processing' | 'shipped' | 'cancelled') => {
@@ -1141,6 +1201,16 @@ export default function AdminOrdersPage() {
                 </button>
                 <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Download size={16}/> {T.exportCsv}</button>
                 <button onClick={bulkPrint} className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"><Printer size={16}/> {T.printSlips}</button>
+                <button
+                  type="button"
+                  onClick={bulkPrintShippingLabels}
+                  disabled={batchLabelBusy}
+                  title="Avery L7169 A4 — 4 labels per sheet"
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-red-300 bg-red-50 text-red-900 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                >
+                  {batchLabelBusy ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+                  {T.printLabels4up}
+                </button>
               </div>
             </div>
 
@@ -1357,6 +1427,14 @@ export default function AdminOrdersPage() {
             {selectedIds.length > 0 && (
               <div className="border-t pt-4 mt-4 flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-gray-700">{isKo ? `${selectedIds.length}개 선택됨` : `${selectedIds.length} selected`}</span>
+                <button
+                  type="button"
+                  onClick={bulkPrintShippingLabels}
+                  disabled={batchLabelBusy}
+                  className="px-3 py-1 bg-red-50 text-red-800 rounded hover:bg-red-100 text-sm disabled:opacity-50"
+                >
+                  {batchLabelBusy ? 'Preparing…' : T.printLabels4up}
+                </button>
                 <button
                   onClick={() => bulkStatusChange('processing')}
                   className="px-3 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 text-sm"
