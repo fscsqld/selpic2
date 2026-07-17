@@ -38,12 +38,18 @@ export async function verifyStripeCheckoutSessionPaid(sessionId: string): Promis
   }
 }
 
-/** Stripe Checkout session is verified paid before persistence — ledger must show paid, not pending. */
+/**
+ * Stripe Checkout session proves the payment channel.
+ * Upgrade unpaid drafts to `paid` once, but never overwrite later fulfillment
+ * statuses (approved / processing / shipped / Click & Collect / cancelled).
+ */
 export function normalizeLedgerOrder(order: OrderRecord): OrderRecord {
   if (!order.stripeCheckoutSessionId) return order
+  const status = String(order.status || '').trim()
+  const nextStatus = !status || status === 'pending' ? 'paid' : order.status
   return {
     ...order,
-    status: 'paid',
+    status: nextStatus,
     paymentMethod: 'stripe',
   }
 }
