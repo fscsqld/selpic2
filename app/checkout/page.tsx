@@ -1138,6 +1138,16 @@ export default function CheckoutPage() {
                 </button>
               </div>
 
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-sm text-blue-950">
+                <p className="font-semibold">Choose the delivery service that suits you.</p>
+                <ul className="mt-2 space-y-1 text-xs leading-relaxed text-blue-900">
+                  <li>• Standard Letter is our lowest-cost option and does not include tracking.</li>
+                  <li>• Choose an option marked “Tracking: Included” if you need delivery tracking.</li>
+                  <li>• Insurance is included only when the selected option says “Insurance: Included”.</li>
+                  <li>• Eligible VIP free-shipping benefits are applied automatically to the price shown.</li>
+                </ul>
+              </div>
+
               <div className="space-y-3" id="shipping-options-panel">
                 {!showShippingOptions && selectedShipping && (
                   <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">

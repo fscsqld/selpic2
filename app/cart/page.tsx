@@ -711,6 +711,20 @@ export default function CartPage() {
                     Free shipping (VIP benefit)
                   </div>
                 )}
+
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900">
+                  <p className="font-semibold">Shipping estimate</p>
+                  <p className="mt-1">
+                    Standard Letter is the default estimate and does not include tracking. You can
+                    choose tracked, express, parcel or Click &amp; Collect options at checkout.
+                    Tracking and insurance are included only where shown.
+                  </p>
+                  {vipFreeShipping && (
+                    <p className="mt-1 font-medium">
+                      Your eligible VIP free-shipping benefit will be applied automatically.
+                    </p>
+                  )}
+                </div>
                 
                 <div className="border-t pt-3">
                   <div className="flex justify-between">
