@@ -6,6 +6,7 @@ import { orderDraftToMetadataChunks } from '@/lib/stripeCheckoutMetadata'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
+import { applyServerShippingToDraft } from '@/lib/orders/applyServerShippingToDraft'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -89,7 +90,14 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
     })
   }
 
-  const shipCents = Math.max(0, audCents(orderDraft.shippingPrice))
+  const draftWithCatalogSubtotal: OrderDraft = {
+    ...orderDraft,
+    items: sanitizedItems,
+    subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
+  }
+  const shippingValidated = await applyServerShippingToDraft(draftWithCatalogSubtotal)
+
+  const shipCents = Math.max(0, audCents(shippingValidated.shippingPrice))
   if (shipCents > 0) {
     line_items.push({
       quantity: 1,
@@ -97,13 +105,13 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
         currency: 'aud',
         unit_amount: shipCents,
         product_data: {
-          name: (orderDraft.shippingOptionName || 'Shipping').slice(0, 120),
+          name: (shippingValidated.shippingOptionName || 'Shipping').slice(0, 120),
         },
       },
     })
   }
 
-  const fee = Math.max(0, Number(orderDraft.paymentFee) || 0)
+  const fee = Math.max(0, Number(shippingValidated.paymentFee) || 0)
   if (fee > 0) {
     const feeCents = audCents(fee)
     line_items.push({
@@ -118,21 +126,21 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
     })
   }
 
-  const discountCents = Math.max(0, audCents(orderDraft.discount ?? 0))
+  const discountCents = Math.max(0, audCents(shippingValidated.discount ?? 0))
   const feeCents = audCents(fee)
   const grossTotalCents = itemsSubtotalCents + shipCents + feeCents
   if (discountCents > grossTotalCents) {
     throw new Error('Invalid discount amount for checkout.')
   }
   const expectedTotalCents = grossTotalCents - discountCents
-  const draftTotalCents = Math.max(0, audCents(orderDraft.total))
+  const draftTotalCents = Math.max(0, audCents(shippingValidated.total))
 
   if (Math.abs(expectedTotalCents - draftTotalCents) > 1) {
     throw new Error('Order total does not match line items and discounts.')
   }
 
   const sanitizedOrderDraft: OrderDraft = {
-    ...orderDraft,
+    ...shippingValidated,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shipCents / 100).toFixed(2)),
@@ -167,7 +175,16 @@ export async function POST(req: Request) {
       stripeKeyPrefix: keyPrefix,
     })
 
-    const { line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(orderDraft)
+    let line_items: Stripe.Checkout.SessionCreateParams.LineItem[]
+    let discountCents: number
+    let sanitizedOrderDraft: OrderDraft
+    try {
+      ;({ line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(orderDraft))
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : 'Invalid checkout totals.'
+      console.warn('[stripe/checkout] validation failed:', message)
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
 
     if (!isValidAuPhone(sanitizedOrderDraft.customer?.phone)) {
       return NextResponse.json(

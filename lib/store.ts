@@ -10,6 +10,7 @@ import {
   buildOrderConfirmationEmailSubject,
   buildOrderConfirmationEmailHtml
 } from '@/lib/orderConfirmationEmail'
+import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
 
 export interface Product {
   id: string
@@ -215,6 +216,16 @@ export interface OrderRecord {
   total: number
   shippingOptionId: string
   shippingOptionName?: string
+  /** Catalog list price of the selected option before free-shipping / VIP adjustments. */
+  shippingBasePrice?: number
+  /** Whether the paid option includes carrier tracking (snapshot at checkout). */
+  shippingTrackingIncluded?: boolean
+  /** Whether the paid option includes insurance (snapshot at checkout). */
+  shippingInsuranceIncluded?: boolean
+  /** delivery | pickup | cash-on-delivery — snapshot at checkout. */
+  shippingType?: 'delivery' | 'pickup' | 'cash-on-delivery'
+  /** Customer-facing delivery window text — snapshot at checkout. */
+  shippingDeliveryTime?: string
   paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
   paymentMethodName?: string
   status: OrderStatus
@@ -269,6 +280,15 @@ export interface OrderRecord {
   receiptEmail?: {
     sent: boolean
     sentAt?: string
+  }
+  /** Shipping / dispatch notification email (tracked or untracked). */
+  shippingNotification?: {
+    sent: boolean
+    sentAt?: string
+    attempts?: number
+    status?: 'sending' | 'sent' | 'failed'
+    lastAttempt?: string
+    errorMessage?: string
   }
   // 주문 이력 및 감사 로그
   auditLog?: Array<{
@@ -840,6 +860,21 @@ export const useStore = create<Store>()(
         const { orders } = get()
         const previousOrder = orders.find(o => o.id === orderId)
         if (!previousOrder) return
+
+        if (status === 'shipped' && previousOrder.status !== 'shipped') {
+          if (
+            orderRequiresTrackingNumber(previousOrder) &&
+            !(previousOrder.tracking?.number || '').trim()
+          ) {
+            console.warn('[updateOrderStatus] blocked shipped without tracking number:', orderId)
+            if (typeof window !== 'undefined') {
+              window.alert(
+                'This order uses tracked shipping. Add a tracking number before marking it as shipped.'
+              )
+            }
+            return
+          }
+        }
         
         const updatedOrders = orders.map(o => {
           if (o.id === orderId) {
@@ -894,15 +929,6 @@ export const useStore = create<Store>()(
           }, 100)
         }
 
-        // Shipping Notification 이메일 자동 발송 (추적 정보가 있는 경우)
-        if (status === 'shipped' && previousOrder?.status !== 'shipped' && order?.tracking?.number) {
-          setTimeout(() => {
-            get().sendShippingNotificationEmail(orderId).catch(error => {
-              console.error('Failed to send shipping notification email:', error)
-            })
-          }, 200)
-        }
-        
         // When marked paid: confirmation email (always); receipt skipped for bank (admin sends via sendAdminOrderEmailAction / receipt button).
         // Prefer Supabase-backed sendAdminOrderEmailAction so Supabase admins don't depend on legacy adminAuth or CMS templates.
         if (status === 'paid') {
@@ -1737,9 +1763,13 @@ export const useStore = create<Store>()(
           return false
         }
 
-        // 추적 정보가 없으면 발송하지 않음
-        if (!order.tracking || !order.tracking.number) {
-          console.log('Tracking information not available for shipping notification:', orderId)
+        if (order.shippingNotification?.sent) {
+          console.log('Shipping notification already sent:', orderId)
+          return true
+        }
+
+        if (orderRequiresTrackingNumber(order) && !(order.tracking?.number || '').trim()) {
+          console.log('Tracked shipping order is missing tracking number:', orderId)
           return false
         }
 
@@ -1751,6 +1781,35 @@ export const useStore = create<Store>()(
             orderJson: JSON.stringify(order),
           })
           if (serverResult.ok) {
+            const sentAt = new Date().toISOString()
+            set({
+              orders: get().orders.map((o) =>
+                o.id === orderId
+                  ? {
+                      ...o,
+                      shippingNotification: {
+                        sent: true,
+                        sentAt,
+                        attempts: (o.shippingNotification?.attempts || 0) + 1,
+                      },
+                    }
+                  : o
+              ),
+            })
+            // Persist dedupe flag to ledger so reloads / other tabs do not re-send.
+            try {
+              const latest = get().orders.find((o) => o.id === orderId)
+              if (latest && typeof fetch !== 'undefined') {
+                await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+                  method: 'PUT',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ order: latest }),
+                })
+              }
+            } catch (persistErr) {
+              console.warn('[sendShippingNotificationEmail] failed to persist sent flag:', persistErr)
+            }
             console.log('✅ Shipping notification email sent via server action:', orderId)
             return true
           }
@@ -1770,9 +1829,15 @@ export const useStore = create<Store>()(
           return false
         }
 
+        // Server-only PDF (jsPDF). Do not fall back to client html2pdf — that path often
+        // produces blank PDF attachments (html2canvas captures an opacity:0 overlay).
         try {
           const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
-          const ledger = await sendAdminOrderEmailAction({ orderId, kind: 'receipt' })
+          const ledger = await sendAdminOrderEmailAction({
+            orderId,
+            kind: 'receipt',
+            orderJson: JSON.stringify(order),
+          })
           if (ledger.ok) {
             const sentAt = new Date().toISOString()
             set((state) => ({
@@ -1780,16 +1845,20 @@ export const useStore = create<Store>()(
                 o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
               ),
             }))
+            console.log('✅ Receipt email sent via server action:', orderId)
             return true
           }
-        } catch {
-          /* fall through to legacy paths */
+          console.warn('[sendReceiptEmail] server receipt failed', ledger.error)
+        } catch (e) {
+          console.error('[sendReceiptEmail] server path', e)
         }
 
         const isAdminSession =
           typeof window !== 'undefined' &&
           (await import('./adminAuth')).useAdminAuth.getState().isLoggedIn
 
+        // Customer / guest (card): still use rate-limited server action with order JSON.
+        // Bank receipts remain admin-only (server action returns BANK_USE_ADMIN).
         if (!isAdminSession) {
           try {
             const { sendCustomerReceiptEmailAction } = await import('@/app/actions/emails')
@@ -1803,130 +1872,13 @@ export const useStore = create<Store>()(
               }))
               return true
             }
-            console.warn('[sendReceiptEmail] server receipt failed', r.error)
+            console.warn('[sendReceiptEmail] customer server path failed', r.error)
           } catch (e) {
             console.error('[sendReceiptEmail] customer server path', e)
           }
-          return false
         }
 
-        try {
-          const templateStore = useDocumentTemplateStore.getState()
-          const template = templateStore.getTemplate('receipt')
-          if (!template) {
-            console.error('Receipt template not found')
-            return false
-          }
-
-          const { defaultTemplate } = await import('./invoiceStore').then((m) => m.useInvoiceStore.getState())
-          const companyName = defaultTemplate?.company?.name || COMPANY_LEGAL.companyName
-          const brandName = getCompanyBrandName(companyName)
-
-          const emailContent = get().generateEmailContent(template, order, companyName)
-
-          const subjectVariables = {
-            orderId: order.id,
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            companyName: brandName,
-            companyNameLegal: companyName
-          }
-          const subjectTemplate = (template.email.subject || '').trim()
-          const emailSubject = get().replaceTemplatePlaceholders(
-            subjectTemplate || 'Receipt {orderId} from {companyName}',
-            subjectVariables
-          )
-
-          const { emailService } = await import('./emailService')
-          const attachments: File[] = []
-
-          try {
-            const OrderReceipt = (await import('@/components/OrderReceipt')).default
-            const company = defaultTemplate?.company
-            const React = (await import('react')).default
-
-            const pdfOrder = {
-              id: order.id,
-              customer: {
-                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-                firstName: (order.customer as any).firstName,
-                lastName: (order.customer as any).lastName,
-                email: order.customer.email || '',
-                phone: order.customer.phone || ''
-              },
-              address: {
-                streetAddress: order.address.streetAddress,
-                suburb: order.address.suburb,
-                state: order.address.state,
-                postcode: order.address.postcode,
-                country: order.address.country
-              },
-              items: order.items.map((it: any) => ({
-                product: {
-                  name: it.name,
-                  price: it.price,
-                  image: it.image || '/placeholder-product.jpg'
-                },
-                quantity: it.quantity,
-                customizations: it.customizations || {}
-              })),
-              subtotal: order.subtotal,
-              shipping: order.shippingPrice,
-              total: order.total,
-              vipDiscount: (order as any).vipDiscount,
-              promoDiscount: (order as any).promoDiscount,
-              discount: order.discount,
-              vipGradeName: (order as any).vipGradeName,
-              vipGradeCode: (order as any).vipGradeCode,
-              promoCode: (order as any).promoCode,
-              paymentMethod: order.paymentMethod || 'N/A',
-              shippingOption: {
-                name: order.shippingOptionName || order.shippingOptionId || 'Shipping',
-                price: order.shippingPrice
-              },
-              createdAtIso: order.createdAtIso
-            }
-
-            // OrderReceipt doesn't accept company props today; it reads COMPANY_LEGAL/CONTACT directly.
-            void company
-
-            if (typeof window !== 'undefined') {
-              const { renderReactPreviewToPdfFile } = await import('@/lib/previewPdf')
-              const pdfFile = await renderReactPreviewToPdfFile({
-                reactElement: React.createElement(OrderReceipt as any, {
-                  order: pdfOrder
-                }),
-                filename: `Receipt-${order.id}.pdf`
-              })
-              if (pdfFile) attachments.push(pdfFile)
-            }
-          } catch (e) {
-            console.warn('Failed to generate Receipt PDF attachment:', e)
-          }
-
-          const result = await emailService.sendResponse({
-            customerEmail: order.customer.email || '',
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
-            subject: emailSubject,
-            message: emailContent,
-            adminName: brandName,
-            attachments
-          })
-
-          if (result.success) {
-            const sentAt = new Date().toISOString()
-            set((state) => ({
-              orders: state.orders.map((o) =>
-                o.id === orderId ? { ...o, receiptEmail: { sent: true, sentAt } } : o
-              )
-            }))
-            console.log('✅ Receipt email sent successfully:', orderId)
-            return true
-          }
-          throw new Error(result.message || 'Failed to send receipt email')
-        } catch (error) {
-          console.error('❌ Failed to send receipt email:', error)
-          return false
-        }
+        return false
       },
 
       updateEmailConfirmationStatus: (orderId, status, errorMessage) => {

@@ -20,6 +20,7 @@ import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
+import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
 import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
@@ -734,10 +735,7 @@ export default function CheckoutPage() {
             ? 'paid'
             : 'pending'
 
-    const getShippingOptionName = (id: string) => {
-      const option = shippingOptions.find(opt => opt.id === id)
-      return option ? option.name : id
-    }
+    const shippingSnapshot = buildOrderShippingSnapshot(selectedShipping, shippingNow)
 
     let vipDiscount = 0
     let vipGradeCode: number | undefined = undefined
@@ -803,7 +801,6 @@ export default function CheckoutPage() {
     return {
       items,
       subtotal: Number(subtotalNow.toFixed(2)),
-      shippingPrice: Number(shippingNow.toFixed(2)),
       paymentFee: Number(paymentFee.toFixed(2)),
       discount: Number(totalDiscount.toFixed(2)),
       vipDiscount: vipDiscount > 0 ? Number(vipDiscount.toFixed(2)) : undefined,
@@ -812,8 +809,7 @@ export default function CheckoutPage() {
       promoCode: appliedPromoCode ? appliedPromoCode.code : undefined,
       promoDiscount: promoDiscount > 0 ? Number(promoDiscount.toFixed(2)) : undefined,
       total: Number(finalTotal.toFixed(2)),
-      shippingOptionId: selectedShipping.id,
-      shippingOptionName: getShippingOptionName(selectedShipping.id),
+      ...shippingSnapshot,
       paymentMethod: effectivePaymentType as OrderRecord['paymentMethod'],
       paymentMethodName: selectedPaymentOptionResolved ? selectedPaymentOptionResolved.name : effectivePaymentType,
       status: paymentStatus,

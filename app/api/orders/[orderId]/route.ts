@@ -6,10 +6,61 @@ import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
+import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
+import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
 
 type RouteContext = { params: Promise<{ orderId: string }> }
 
 const PATCHABLE_STATUSES: OrderStatus[] = ['pending', 'approved', 'paid', 'processing', 'shipped', 'cancelled']
+
+async function sendDispatchAndPersist(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  order: OrderRecord
+): Promise<{ order: OrderRecord; warning?: string }> {
+  if (order.shippingNotification?.sent) return { order }
+
+  const result = await sendShippingNotificationEmailForOrder(order)
+  const now = new Date().toISOString()
+  const withNotification: OrderRecord = normalizeLedgerOrder({
+    ...order,
+    shippingNotification: result.ok
+      ? {
+          sent: true,
+          sentAt: result.sentAt,
+          attempts: order.shippingNotification?.attempts || 1,
+          status: 'sent',
+          lastAttempt: now,
+        }
+      : {
+          sent: false,
+          attempts: order.shippingNotification?.attempts || 1,
+          status: 'failed',
+          lastAttempt: now,
+          errorMessage: result.error,
+        },
+  })
+
+  const { error } = await sb
+    .from('orders')
+    .update(buildOrdersTableUpdate(withNotification))
+    .eq('id', order.id)
+  if (error) {
+    logAndSafeMessage('orders/orderId PATCH notification persist', error)
+    return {
+      order: withNotification,
+      warning: result.ok
+        ? 'Dispatch email was sent, but its sent status could not be saved.'
+        : 'Order was marked shipped, but dispatch email failed and its status could not be saved.',
+    }
+  }
+
+  return result.ok
+    ? { order: withNotification }
+    : {
+        order: withNotification,
+        warning: 'Order was marked shipped, but the dispatch email could not be sent. Retry by saving Shipped again.',
+      }
+}
 
 /** Single order from Supabase ledger (admin only). */
 export async function GET(_request: Request, context: RouteContext) {
@@ -51,7 +102,10 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
-/** Update order payload status in Supabase (no customer emails — do not use client store updateOrderStatus). */
+/**
+ * Update canonical order status.
+ * The first transition to shipped sends and records one dispatch notification.
+ */
 export async function PATCH(request: Request, context: RouteContext) {
   const adminUser = await requireSupabaseAdminUser()
   if (!adminUser) {
@@ -102,8 +156,48 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const previous = hydrateLedgerOrder(row as Parameters<typeof hydrateLedgerOrder>[0])
     if (previous.status === nextStatus) {
+      if (
+        nextStatus === 'shipped' &&
+        !previous.shippingNotification?.sent &&
+        previous.shippingNotification?.status !== 'sending'
+      ) {
+        const now = new Date().toISOString()
+        const retrying: OrderRecord = normalizeLedgerOrder({
+          ...previous,
+          shippingNotification: {
+            sent: false,
+            attempts: (previous.shippingNotification?.attempts || 0) + 1,
+            status: 'sending',
+            lastAttempt: now,
+          },
+        })
+        const { error: retryClaimError } = await sb
+          .from('orders')
+          .update(buildOrdersTableUpdate(retrying))
+          .eq('id', orderId.trim())
+        if (retryClaimError) {
+          logAndSafeMessage('orders/orderId PATCH retry claim', retryClaimError)
+          return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+        }
+        const retried = await sendDispatchAndPersist(sb, retrying)
+        return NextResponse.json(retried)
+      }
       const order = normalizeLedgerOrder(previous)
       return NextResponse.json({ order })
+    }
+
+    if (
+      nextStatus === 'shipped' &&
+      orderRequiresTrackingNumber(previous) &&
+      !(previous.tracking?.number || '').trim()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'This order uses tracked shipping. Add a tracking number before marking it as shipped.',
+        },
+        { status: 400 }
+      )
     }
 
     const auditEntry = {
@@ -121,20 +215,60 @@ export async function PATCH(request: Request, context: RouteContext) {
       description: `Order status changed from ${previous.status} to ${nextStatus} (server)`,
     }
 
+    const now = new Date().toISOString()
     const updated: OrderRecord = normalizeLedgerOrder({
       ...previous,
       status: nextStatus,
       auditLog: [...(previous.auditLog || []), auditEntry],
+      ...(nextStatus === 'shipped' && !previous.shippingNotification?.sent
+        ? {
+            shippingNotification: {
+              sent: false,
+              attempts: (previous.shippingNotification?.attempts || 0) + 1,
+              status: 'sending' as const,
+              lastAttempt: now,
+            },
+          }
+        : {}),
     })
 
-    const { error: upErr } = await sb
+    // Claim the status transition against the canonical payload. This prevents
+    // list/detail tabs from both sending the same dispatch email.
+    const { data: claimedRow, error: upErr } = await sb
       .from('orders')
       .update(buildOrdersTableUpdate(updated))
       .eq('id', orderId.trim())
+      .contains('payload', { status: previous.status })
+      .select('payload,platform_source,external_order_key')
+      .maybeSingle()
 
     if (upErr) {
       logAndSafeMessage('orders/orderId PATCH update', upErr)
       return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+    }
+    if (!claimedRow?.payload) {
+      const { data: canonicalRow, error: canonicalError } = await sb
+        .from('orders')
+        .select('payload,platform_source,external_order_key')
+        .eq('id', orderId.trim())
+        .maybeSingle()
+      if (canonicalError || !canonicalRow?.payload) {
+        if (canonicalError) {
+          logAndSafeMessage('orders/orderId PATCH canonical read', canonicalError)
+        }
+        return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })
+      }
+      return NextResponse.json({
+        order: hydrateLedgerOrder(
+          canonicalRow as Parameters<typeof hydrateLedgerOrder>[0]
+        ),
+        warning: 'Order status was already changed in another session.',
+      })
+    }
+
+    if (nextStatus === 'shipped') {
+      const dispatched = await sendDispatchAndPersist(sb, updated)
+      return NextResponse.json(dispatched)
     }
 
     return NextResponse.json({ order: updated })

@@ -22,7 +22,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid order draft.' }, { status: 400 })
     }
 
-    const sanitizedDraft = await sanitizeStorefrontBankOrderDraft(orderDraft)
+    let sanitizedDraft: BankOrderDraft
+    try {
+      sanitizedDraft = await sanitizeStorefrontBankOrderDraft(orderDraft)
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : 'Invalid order.'
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
     const id = `ORD-${Date.now().toString(36)}`
     const order: OrderRecord = {
       id,

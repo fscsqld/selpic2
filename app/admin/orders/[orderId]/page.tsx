@@ -14,10 +14,12 @@ import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharg
 import { useContentStore } from '@/lib/contentStore'
 import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X } from 'lucide-react'
 import Link from 'next/link'
-// ✅ 회계 장부 자동 기록 통합 (재시도 로직 포함)
-import { recordOrderToAccountingAsyncWithRetry } from '@/apps/accounting-sandbox/src/features/transactions/order-approval-integration-retry'
+// Accounting is an independent app — HTTP bridge only (never import sandbox modules).
+import { recordOrderToAccountingAsyncWithRetry } from '@/lib/admin/recordOrderToAccountingBridge'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -38,7 +40,6 @@ export default function AdminOrderDetailPage() {
     sendOrderConfirmationEmail: sendOrderConfirmationEmailFromStore,
     resendOrderConfirmationEmail: resendOrderConfirmationEmailFromStore,
     sendReceiptEmail: sendReceiptEmailFromStore,
-    sendShippingNotificationEmail,
     refreshOrdersFromStorage,
     mergeOrdersFromServer,
   } = useStore()
@@ -123,9 +124,7 @@ export default function AdminOrderDetailPage() {
       try {
         addTrackingNumber(order.id, trackingNumber, provider)
         await persistOrderPayloadToLedger(order.id)
-        // Auto-send after ledger persistence to avoid stale/blank attachment generation.
-        await sendShippingNotificationEmail(order.id)
-        // Show success message
+        // Do not email here — dispatch email is sent once when status becomes shipped.
         alert('Tracking number added successfully!')
       } catch (error) {
         console.error('Error adding tracking number:', error)
@@ -363,6 +362,14 @@ Selpic Team`
 
   const patchLedgerStatus = async (next: 'approved' | 'processing' | 'shipped') => {
     if (!order) return
+    if (
+      next === 'shipped' &&
+      orderRequiresTrackingNumber(order) &&
+      !(order.tracking?.number || '').trim()
+    ) {
+      alert('This order uses tracked shipping. Add a tracking number before marking it as shipped.')
+      return
+    }
     setStatusSaving(true)
     try {
       const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}`, {
@@ -377,6 +384,9 @@ Selpic Team`
       }
       if (data.order) {
         mergeOrdersFromServer([data.order])
+      }
+      if (typeof data.warning === 'string' && data.warning) {
+        alert(data.warning)
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to update status')
@@ -1042,9 +1052,32 @@ Selpic Team`
                     <span className="text-gray-600">Payment Method:</span>
                     <span className="font-medium capitalize">{order.paymentMethod}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-gray-600">Shipping Option:</span>
-                    <span className="font-medium">{formatShippingOption(order.shippingOptionId)}</span>
+                    <span className="font-medium">
+                      {resolveOrderShippingSnapshot(order).shippingOptionName ||
+                        formatShippingOption(order.shippingOptionId)}
+                    </span>
+                    {(() => {
+                      const badge = getShippingFulfillmentBadge(order)
+                      return (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">Delivery window:</span>
+                    <span className="font-medium">
+                      {resolveOrderShippingSnapshot(order).shippingDeliveryTime}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">Shipping charged:</span>
+                    <span className="font-medium">${Number(order.shippingPrice || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-gray-600">Order Date:</span>

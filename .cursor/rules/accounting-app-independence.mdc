@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+description: Accounting app must develop independently from the storefront/homepage
+---
+
+# Accounting App Independence
+
+## Principle
+
+`apps/accounting-sandbox` is a **separate application**. It must be developed, built, run, and deployed **independently** from the SELPIC storefront and admin homepage (`app/`, `components/`, root `lib/`).
+
+Homepage / admin work must never pull accounting sandbox modules into the storefront webpack/TypeScript graph. That coupling has already broken production builds and transactional emails (e.g. aliasing `@/lib/companyLegal` to the sandbox copy).
+
+## Hard rules (storefront + admin)
+
+### DO NOT
+
+- Import from `apps/accounting-sandbox/**` (or `@/apps/accounting-sandbox/**`, `@/src/**` sandbox paths) in:
+  - `app/**` (including `app/admin/**`)
+  - `components/**`
+  - root `lib/**` (except a thin HTTP bridge that only uses `fetch`)
+  - `middleware.ts` / root Next config that remaps storefront `@/lib/*`
+- Add webpack `resolve.alias` entries that map `@/lib/*` (or `@`) into `apps/accounting-sandbox`
+- Add root `tsconfig.json` `paths` that point `@/lib/*` at the accounting sandbox
+- Commit or deploy accounting WIP together with homepage/shipping changes unless the user explicitly asks for an accounting-only release
+- “Fix” storefront build errors by aliasing more sandbox folders into the homepage bundle
+
+### DO
+
+- Develop accounting only under `apps/accounting-sandbox` with its own `package.json`, `tsconfig.json`, and `npm run dev` (typically port 3001)
+- Integrate with the storefront **only** via network boundaries:
+  - `POST /api/accounting/**` proxy routes that `fetch` `ACCOUNTING_API_URL`
+  - Env vars (e.g. `ACCOUNTING_API_URL`) — never deep module imports
+- Keep order approval / ledger sync **non-blocking**: if accounting is down, storefront admin must still approve orders
+- When touching homepage/admin, leave `apps/accounting-sandbox/**` out of the commit unless the change is purely docs/env comments
+
+## Allowed bridge pattern
+
+```typescript
+// lib/admin/recordOrderToAccountingBridge.ts (storefront)
+// Fire-and-forget HTTP only — never import sandbox modules.
+void fetch('/api/accounting/orders/import', { method: 'POST', body: JSON.stringify(...) })
+```
+
+```typescript
+// app/api/accounting/.../route.ts
+// Proxy to process.env.ACCOUNTING_API_URL — no sandbox imports
+```
+
+## If a build error mentions accounting paths
+
+1. Remove the storefront import of sandbox code (do not add aliases).
+2. Use the HTTP bridge or skip the call.
+3. Restart the storefront only (`npm run dev` at repo root).
+4. Run accounting separately: `cd apps/accounting-sandbox && npm run dev`.
+
+## Admin / deploy notes
+
+- Homepage deploy must not require the accounting app to be running.
+- Accounting features are validated inside the sandbox app, not by importing them into `/admin` pages.
+- Optional: set `ACCOUNTING_API_URL` when a live accounting API should receive order imports.
+---

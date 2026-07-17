@@ -2,6 +2,10 @@ import type { OrderRecord } from '@/lib/store'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import { getTransactionalEmailSiteOrigin } from '@/lib/transactionalEmailBranding'
+import {
+  formatOrderShippingSummaryLines,
+  formatOrderShippingSummaryPlain,
+} from '@/lib/shipping/formatOrderShippingSummary'
 
 /** @deprecated use getTransactionalEmailSiteOrigin */
 export const getEmailSiteOrigin = getTransactionalEmailSiteOrigin
@@ -64,7 +68,7 @@ export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string
 
   const financialLines: string[] = [
     `Subtotal (GST incl.): ${formatMoney(order.subtotal)}`,
-    `Shipping: ${formatMoney(order.shippingPrice)}`
+    `Shipping: ${formatMoney(order.shippingPrice)}`,
   ]
   if (order.discount && order.discount > 0) {
     financialLines.push(`Discount: -${formatMoney(order.discount)}`)
@@ -74,6 +78,7 @@ export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string
   }
   financialLines.push(`Total Amount: ${formatMoney(order.total)}`)
   const financialBlock = financialLines.map((line) => `- ${line}`).join('\n')
+  const shippingSummary = formatOrderShippingSummaryPlain(order)
 
   return `Dear ${customerName},
 
@@ -87,6 +92,9 @@ Order Summary:
 - Order ID: ${order.id}
 - Order Date: ${orderDate}
 - Order Status: ${orderStatusLabel(order)}
+
+Shipping:
+${shippingSummary}
 
 Order Items:
 ${itemsBlock}
@@ -145,6 +153,10 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
   }
   financialRows += `<tr><td style="padding:8px 0 0;border-top:1px solid #ddd;"><strong>Total Amount:</strong></td><td style="padding:8px 0 0;border-top:1px solid #ddd;text-align:right;"><strong>${formatMoney(order.total)}</strong></td></tr>`
 
+  const shippingLinesHtml = formatOrderShippingSummaryLines(order)
+    .map((line) => `<li>${escHtml(line)}</li>`)
+    .join('')
+
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;color:#111;max-width:600px;margin:0 auto;padding:16px;">
   <p style="margin:0 0 12px;">Dear ${customerName},</p>
   <p style="margin:0 0 12px;">Thank you for choosing Selpic. We've received your order and are excited to start creating your custom stickers!</p>
@@ -157,6 +169,8 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
     <li>Order Date: ${orderDate}</li>
     <li>Order Status: ${statusLabel}</li>
   </ul>
+  <p style="margin:0 0 8px;"><strong>Shipping:</strong></p>
+  <ul style="margin:0 0 16px;padding-left:20px;">${shippingLinesHtml}</ul>
   <p style="margin:0 0 8px;"><strong>Order Items:</strong></p>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">${itemsHtml}</table>
   <p style="margin:0 0 8px;"><strong>Financial Summary:</strong></p>

@@ -60,6 +60,9 @@ const nextConfig = {
     NEXT_PUBLIC_DEPLOY_VERSION,
   },
   webpack: (config, { isServer, dev }) => {
+    // Do NOT alias `@/lib/*` into apps/accounting-sandbox — that couples the
+    // storefront bundle to accounting and has broken emails/builds. Accounting
+    // runs as its own app; integrate only via HTTP (/api/accounting/*).
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname),

@@ -20,6 +20,8 @@ import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
 import { selectPostOfficeCutoffOrders } from '@/lib/shipping/postOfficeCutoffBatch'
+import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
+import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -293,13 +295,40 @@ export default function AdminOrdersPage() {
       if (data.order) {
         mergeOrdersFromServer([data.order])
       }
+      if (typeof data.warning === 'string' && data.warning) {
+        alert(data.warning)
+      }
     },
     [mergeOrdersFromServer, performedBy]
   )
 
   const applyStatusChange = useCallback(
     async (orderId: string, status: OrderStatus) => {
-      // Keep existing local side effects (emails/grade updates), then persist to server ledger.
+      const current = orders.find((o) => o.id === orderId)
+      if (
+        status === 'shipped' &&
+        current &&
+        orderRequiresTrackingNumber(current) &&
+        !(current.tracking?.number || '').trim()
+      ) {
+        alert(
+          `Order ${orderId}: tracked shipping requires a tracking number before marking as shipped.`
+        )
+        return
+      }
+      // Shipped is server-owned: status persistence, notification send and dedupe
+      // happen together in PATCH so list/detail screens behave identically.
+      if (status === 'shipped') {
+        try {
+          await persistStatusToLedger(orderId, status)
+        } catch (e) {
+          void syncOrdersFromSupabase()
+          alert(e instanceof Error ? e.message : 'Failed to save status')
+        }
+        return
+      }
+
+      // Keep existing local side effects for non-shipping status changes.
       updateOrderStatus(orderId, status, performedBy)
       try {
         await persistStatusToLedger(orderId, status)
@@ -309,7 +338,7 @@ export default function AdminOrdersPage() {
         alert(e instanceof Error ? e.message : 'Failed to save status')
       }
     },
-    [performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus]
+    [orders, performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus]
   )
 
   /** Admin orders UI is English-only; storefront `language` does not apply here. */
@@ -716,10 +745,10 @@ export default function AdminOrdersPage() {
           onOrdersMerged: (updated) => mergeOrdersFromServer(updated),
         })
         if (!r.ok) {
-          window.alert(r.error || 'Failed to open cut-off labels PDF')
+          globalThis.alert(r.error || 'Failed to open cut-off labels PDF')
           return
         }
-        window.alert(
+        globalThis.alert(
           `Cut-off batch: ${r.labelCount ?? 0} label(s) on ${r.pageCount ?? 0} A4 sheet(s).\n${window.labelEn}`
         )
       } finally {
@@ -732,6 +761,22 @@ export default function AdminOrdersPage() {
     if (selectedIds.length === 0) {
       alert(isKo ? '선택한 주문이 없습니다.' : 'No orders selected.')
       return
+    }
+    if (status === 'shipped') {
+      const blocked = selectedIds.filter((id) => {
+        const o = orders.find((ord) => ord.id === id)
+        return (
+          o &&
+          orderRequiresTrackingNumber(o) &&
+          !(o.tracking?.number || '').trim()
+        )
+      })
+      if (blocked.length > 0) {
+        alert(
+          `${blocked.length} selected order(s) use tracked shipping and are missing a tracking number. Add tracking first, then mark shipped.`
+        )
+        return
+      }
     }
     if (confirm(isKo ? `${selectedIds.length}개의 주문을 ${status} 상태로 변경하시겠습니까?` : `Change ${selectedIds.length} orders to ${status}?`)) {
       selectedIds.forEach((id) => {
@@ -1555,12 +1600,19 @@ export default function AdminOrdersPage() {
                   {paginated.map((order) => {
                     const plat = orderPlatformBadge(order)
                     const pers = summarizeOrderPersonalization(order)
+                    const shipBadge = getShippingFulfillmentBadge(order)
                     return (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm border-r border-gray-100"><input type="checkbox" checked={!!selected[order.id]} onChange={e => toggleOne(order.id, e.target.checked)} /></td>
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className={plat.className}>{plat.text}</span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${shipBadge.className}`}
+                            title={order.shippingOptionName || order.shippingOptionId}
+                          >
+                            {shipBadge.label}
+                          </span>
                         </div>
                         <div className="font-medium text-gray-900">{order.id}</div>
                         <div className="text-gray-500">{new Date(order.createdAtIso).toLocaleString()}</div>

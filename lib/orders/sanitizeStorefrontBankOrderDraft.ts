@@ -2,6 +2,7 @@ import type { OrderRecord } from '@/lib/store'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
+import { applyServerShippingToDraft } from '@/lib/orders/applyServerShippingToDraft'
 
 export type BankOrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -68,14 +69,23 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
       isPopular: (catalogProduct as { isPopular?: boolean }).isPopular ?? item.isPopular,
       inStock: (catalogProduct as { inStock?: boolean }).inStock ?? item.inStock,
       features: (catalogProduct as { features?: string[] }).features ?? item.features,
-      bundleItems: (catalogProduct as { bundleItems?: BankOrderDraft['items'][0]['bundleItems'] }).bundleItems ?? item.bundleItems,
+      bundleItems:
+        (catalogProduct as { bundleItems?: BankOrderDraft['items'][0]['bundleItems'] }).bundleItems ??
+        item.bundleItems,
       isBundle: (catalogProduct as { isBundle?: boolean }).isBundle ?? item.isBundle,
     })
   }
 
-  const shippingCents = Math.max(0, audCents(orderDraft.shippingPrice))
-  const feeCents = Math.max(0, audCents(orderDraft.paymentFee || 0))
-  const discountCents = Math.max(0, audCents(orderDraft.discount || 0))
+  const withCatalog: BankOrderDraft = {
+    ...orderDraft,
+    items: sanitizedItems,
+    subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
+  }
+  const shippingValidated = await applyServerShippingToDraft(withCatalog)
+
+  const shippingCents = Math.max(0, audCents(shippingValidated.shippingPrice))
+  const feeCents = Math.max(0, audCents(shippingValidated.paymentFee || 0))
+  const discountCents = Math.max(0, audCents(shippingValidated.discount || 0))
   const grossCents = itemsSubtotalCents + shippingCents + feeCents
 
   if (discountCents > grossCents) {
@@ -83,13 +93,13 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
   }
 
   const expectedTotalCents = grossCents - discountCents
-  const draftTotalCents = Math.max(0, audCents(orderDraft.total))
+  const draftTotalCents = Math.max(0, audCents(shippingValidated.total))
   if (Math.abs(expectedTotalCents - draftTotalCents) > 1) {
     throw new Error('Order total does not match items and discounts.')
   }
 
   return {
-    ...orderDraft,
+    ...shippingValidated,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shippingCents / 100).toFixed(2)),
@@ -97,7 +107,7 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
     discount: Number((discountCents / 100).toFixed(2)),
     total: Number((expectedTotalCents / 100).toFixed(2)),
     paymentMethod: 'bank',
-    paymentMethodName: orderDraft.paymentMethodName || 'Bank Transfer',
+    paymentMethodName: shippingValidated.paymentMethodName || 'Bank Transfer',
     status: 'pending',
   }
 }

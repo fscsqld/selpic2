@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { getColorName } from '@/lib/colorUtils'
+import { formatPackingSlipShipToLines } from '@/lib/shipping/formatPackingSlipAddress'
 
 export default function PackingSlipPage() {
   const params = useParams()
@@ -25,6 +26,7 @@ export default function PackingSlipPage() {
     order.shippingOptionId === 'local-pickup' ||
     order.shippingOptionId === 'click-collect-mansfield' ||
     order.shippingOptionName?.toLowerCase().includes('click & collect')
+  const shipTo = formatPackingSlipShipToLines(order)
 
   return (
     <div className="min-h-screen bg-white p-8">
@@ -48,17 +50,17 @@ export default function PackingSlipPage() {
                   <div className="font-semibold">Click & Collect (Mansfield)</div>
                   <div className="text-gray-700">Local pickup – hold for customer</div>
                   <div className="text-gray-700 text-sm mt-1">
-                    Customer: {order.customer.name}
+                    Customer: {shipTo.name}
                   </div>
                   <div className="text-gray-700">
-                    {formatAuPhoneHyphen(order.customer.phone)}
+                    {formatAuPhoneHyphen(shipTo.phone)}
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="font-semibold">{order.customer.name}</div>
-                  <div className="text-gray-700">{order.address.asSingleLine}</div>
-                  <div className="text-gray-700">{formatAuPhoneHyphen(order.customer.phone)}</div>
+                  <div className="font-semibold">{shipTo.name}</div>
+                  <div className="text-gray-700 whitespace-pre-line">{shipTo.addressLine}</div>
+                  <div className="text-gray-700">{formatAuPhoneHyphen(shipTo.phone)}</div>
                 </>
               )}
             </div>

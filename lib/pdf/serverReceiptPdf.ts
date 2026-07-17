@@ -1,6 +1,7 @@
 import type { OrderRecord } from '@/lib/store'
 import { jsPDF } from 'jspdf'
 import { COMPANY_CONTACT, COMPANY_LEGAL, getCompanyBrandName } from '@/lib/companyLegal'
+import { formatOrderShippingSummaryLines } from '@/lib/shipping/formatOrderShippingSummary'
 
 /**
  * Server-only receipt PDF (Stripe / guest checkout / customer receipt email).
@@ -129,6 +130,14 @@ export function buildOrderReceiptPdfBase64(order: OrderRecord): string {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   writeKeyValue('Payment', order.paymentMethod || 'N/A', 9)
+  for (const line of formatOrderShippingSummaryLines(order)) {
+    const idx = line.indexOf(':')
+    if (idx > 0) {
+      writeKeyValue(line.slice(0, idx).trim(), line.slice(idx + 1).trim(), 9)
+    } else {
+      writeKeyValue('Shipping', line, 9)
+    }
+  }
   if (order.createdAtIso) {
     try {
       writeKeyValue('Order date', new Date(order.createdAtIso).toLocaleString('en-AU'), 9)
@@ -137,7 +146,11 @@ export function buildOrderReceiptPdfBase64(order: OrderRecord): string {
     }
   }
 
-  const dataUri = doc.output('datauristring') as string
-  const parts = dataUri.split(',')
-  return parts.length > 1 ? parts[1] : ''
+  // Prefer arraybuffer → base64 so Resend never receives a data-URI prefix.
+  const ab = doc.output('arraybuffer') as ArrayBuffer
+  const b64 = Buffer.from(ab).toString('base64')
+  if (!b64 || !Buffer.from(b64, 'base64').subarray(0, 5).toString().startsWith('%PDF')) {
+    throw new Error('Receipt PDF generation produced invalid PDF bytes')
+  }
+  return b64
 }

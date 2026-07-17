@@ -17,8 +17,8 @@ const WEBSITE_DISPLAY = COMPANY_DOMAIN
 /** When dev uses localhost, mail clients cannot load `http://localhost/...` images — use this HTTPS base for email assets. */
 const DEFAULT_EMAIL_ASSET_BASE = DEFAULT_PUBLIC_SITE_URL
 
-function escHtml(s: string): string {
-  return s
+function escHtml(s: string | null | undefined): string {
+  return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
