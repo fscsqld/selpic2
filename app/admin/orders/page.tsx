@@ -20,7 +20,7 @@ import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
 import { selectPostOfficeCutoffOrders } from '@/lib/shipping/postOfficeCutoffBatch'
-import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
+import { orderRequiresTrackingNumber, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
@@ -35,7 +35,10 @@ const statusColors: Record<string, string> = {
   paid: 'bg-blue-100 text-blue-800',
   processing: 'bg-purple-100 text-purple-800',
   shipped: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800'
+  ready_for_collection: 'bg-sky-100 text-sky-800',
+  collected: 'bg-teal-100 text-teal-800',
+  cancelled: 'bg-red-100 text-red-800',
+  approved: 'bg-indigo-100 text-indigo-800',
 }
 
 const paymentMethodColors: Record<string, string> = {
@@ -316,9 +319,18 @@ export default function AdminOrdersPage() {
         )
         return
       }
-      // Shipped is server-owned: status persistence, notification send and dedupe
-      // happen together in PATCH so list/detail screens behave identically.
-      if (status === 'shipped') {
+      if (
+        (status === 'ready_for_collection' || status === 'collected') &&
+        current &&
+        !isOrderClickAndCollect(current)
+      ) {
+        alert(
+          `Order ${orderId}: Ready for collection / Collected are only for Click & Collect orders.`
+        )
+        return
+      }
+      // Dispatch / ready-for-collection emails are server-owned (status + send + dedupe).
+      if (status === 'shipped' || status === 'ready_for_collection') {
         try {
           await persistStatusToLedger(orderId, status)
         } catch (e) {
@@ -365,6 +377,8 @@ export default function AdminOrdersPage() {
         approved: '승인됨',
         processing: '처리중',
         shipped: '배송',
+        readyForCollection: '수령 준비 완료',
+        collected: '수령 완료',
         cancelled: '취소',
         sortByDate: '날짜 정렬',
         newest: '(최신순)',
@@ -443,6 +457,8 @@ export default function AdminOrdersPage() {
         approved: 'Approved',
         processing: 'Processing',
         shipped: 'Shipped',
+        readyForCollection: 'Ready for collection',
+        collected: 'Collected',
         cancelled: 'Cancelled',
         sortByDate: 'Sort by Date',
         newest: '(Newest)',
@@ -1272,6 +1288,8 @@ export default function AdminOrdersPage() {
                 <option value="approved">{T.approved}</option>
                 <option value="processing">{T.processing}</option>
                 <option value="shipped">{T.shipped}</option>
+                <option value="ready_for_collection">{T.readyForCollection}</option>
+                <option value="collected">{T.collected}</option>
                 <option value="cancelled">{T.cancelled}</option>
               </select>
               <button
@@ -1714,6 +1732,8 @@ export default function AdminOrdersPage() {
                             <option value="approved">{T.approved}</option>
                             <option value="processing">{T.processing}</option>
                             <option value="shipped">{T.shipped}</option>
+                            <option value="ready_for_collection">{T.readyForCollection}</option>
+                            <option value="collected">{T.collected}</option>
                             <option value="cancelled">{T.cancelled}</option>
                           </select>
                           {String(order.paymentMethod || '').toLowerCase() === 'bank' && order.status === 'pending' && (

@@ -22,7 +22,14 @@ export function calculateUserTotalSales(
   orders: OrderRecord[],
   userPhone?: string
 ): number {
-  const ELIGIBLE_STATUSES = new Set(['paid', 'approved', 'processing', 'shipped'])
+  const ELIGIBLE_STATUSES = new Set([
+    'paid',
+    'approved',
+    'processing',
+    'shipped',
+    'ready_for_collection',
+    'collected',
+  ])
   const normalizedEmail = (userEmail || '').trim().toLowerCase()
   const normalizedPhone = userPhone ? (userPhone || '').replace(/\D/g, '').replace(/^\+?61/, '0') : ''
   

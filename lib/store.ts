@@ -124,6 +124,10 @@ export type OrderStatus =
   | 'cancelled'
   /** Admin/accounting approval step (e.g. before processing) */
   | 'approved'
+  /** Click & Collect: order is ready for customer pickup (email may be sent) */
+  | 'ready_for_collection'
+  /** Click & Collect: customer has collected the order */
+  | 'collected'
 
 /** Sales channel for unified order management (DB column `platform_source` mirrors this). */
 export type OrderPlatformSource = 'website' | 'etsy' | 'ebay' | 'amazon'
@@ -903,11 +907,19 @@ export const useStore = create<Store>()(
         const order = updatedOrders.find((o) => o.id === orderId)
 
         // VIP 등급 시스템: 결제/이행/취소 상태 변경 시 등급 재계산
-        // - paid/approved/processing/shipped: 누적 구매액 반영
+        // - paid/approved/processing/shipped/ready_for_collection/collected: 누적 구매액 반영
         // - cancelled: 누적 구매액 제외 반영
         const shouldRecalculateGrade =
           status !== previousOrder?.status &&
-          ['paid', 'approved', 'processing', 'shipped', 'cancelled'].includes(status)
+          [
+            'paid',
+            'approved',
+            'processing',
+            'shipped',
+            'ready_for_collection',
+            'collected',
+            'cancelled',
+          ].includes(status)
         if (shouldRecalculateGrade && order?.customer?.email) {
           setTimeout(() => {
             try {

@@ -18,6 +18,13 @@ export function getShippingFulfillmentBadge(order: OrderShippingReadable & {
   const hasNumber = Boolean((order.tracking?.number || '').trim())
 
   if (snap.shippingType === 'pickup') {
+    if (order.shippingNotification?.sent) {
+      return {
+        key: 'notified',
+        label: 'CLICK & COLLECT · NOTIFIED',
+        className: 'bg-sky-100 text-sky-800 border-sky-200',
+      }
+    }
     return {
       key: 'click_collect',
       label: 'CLICK & COLLECT',

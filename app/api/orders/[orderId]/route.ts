@@ -6,12 +6,26 @@ import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
-import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
+import { orderRequiresTrackingNumber, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
 
 type RouteContext = { params: Promise<{ orderId: string }> }
 
-const PATCHABLE_STATUSES: OrderStatus[] = ['pending', 'approved', 'paid', 'processing', 'shipped', 'cancelled']
+const PATCHABLE_STATUSES: OrderStatus[] = [
+  'pending',
+  'approved',
+  'paid',
+  'processing',
+  'shipped',
+  'cancelled',
+  'ready_for_collection',
+  'collected',
+]
+
+/** Statuses that send the one-time dispatch / ready-for-collection email. */
+function statusSendsDispatchEmail(status: OrderStatus): boolean {
+  return status === 'shipped' || status === 'ready_for_collection'
+}
 
 async function sendDispatchAndPersist(
   sb: ReturnType<typeof getSupabaseAdmin>,
@@ -104,7 +118,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 /**
  * Update canonical order status.
- * The first transition to shipped sends and records one dispatch notification.
+ * The first transition to shipped or ready_for_collection sends and records one dispatch notification.
  */
 export async function PATCH(request: Request, context: RouteContext) {
   const adminUser = await requireSupabaseAdminUser()
@@ -157,7 +171,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const previous = hydrateLedgerOrder(row as Parameters<typeof hydrateLedgerOrder>[0])
     if (previous.status === nextStatus) {
       if (
-        nextStatus === 'shipped' &&
+        statusSendsDispatchEmail(nextStatus) &&
         !previous.shippingNotification?.sent &&
         previous.shippingNotification?.status !== 'sending'
       ) {
@@ -184,6 +198,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
       const order = normalizeLedgerOrder(previous)
       return NextResponse.json({ order })
+    }
+
+    if (
+      (nextStatus === 'ready_for_collection' || nextStatus === 'collected') &&
+      !isOrderClickAndCollect(previous)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Ready for collection / Collected statuses are only for Click & Collect orders.',
+        },
+        { status: 400 }
+      )
     }
 
     if (
@@ -220,7 +247,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ...previous,
       status: nextStatus,
       auditLog: [...(previous.auditLog || []), auditEntry],
-      ...(nextStatus === 'shipped' && !previous.shippingNotification?.sent
+      ...(statusSendsDispatchEmail(nextStatus) && !previous.shippingNotification?.sent
         ? {
             shippingNotification: {
               sent: false,
@@ -266,7 +293,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       })
     }
 
-    if (nextStatus === 'shipped') {
+    if (statusSendsDispatchEmail(nextStatus)) {
       const dispatched = await sendDispatchAndPersist(sb, updated)
       return NextResponse.json(dispatched)
     }

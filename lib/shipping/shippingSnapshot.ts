@@ -117,3 +117,8 @@ export function orderRequiresTrackingNumber(order: OrderShippingReadable): boole
   const snap = resolveOrderShippingSnapshot(order)
   return snap.shippingType === 'delivery' && snap.shippingTrackingIncluded
 }
+
+/** True for Click & Collect / local pickup (including legacy option ids). */
+export function isOrderClickAndCollect(order: OrderShippingReadable): boolean {
+  return resolveOrderShippingSnapshot(order).shippingType === 'pickup'
+}

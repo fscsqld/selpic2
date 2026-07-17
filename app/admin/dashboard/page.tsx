@@ -256,6 +256,16 @@ export default function AdminDashboard() {
 
   const applyDashboardStatusChange = useCallback(
     async (orderId: string, status: OrderStatus) => {
+      // Dispatch / ready-for-collection emails are server-owned.
+      if (status === 'shipped' || status === 'ready_for_collection') {
+        try {
+          await persistStatusToLedger(orderId, status)
+        } catch (e) {
+          void syncOrdersFromSupabase()
+          alert(e instanceof Error ? e.message : 'Failed to save status')
+        }
+        return
+      }
       updateOrderStatus(orderId, status, performedBy)
       try {
         await persistStatusToLedger(orderId, status)
@@ -949,6 +959,8 @@ export default function AdminDashboard() {
                               <option value="approved">Approved</option>
                               <option value="processing">Processing</option>
                               <option value="shipped">Shipped</option>
+                              <option value="ready_for_collection">Ready for collection</option>
+                              <option value="collected">Collected</option>
                               <option value="cancelled">Cancelled</option>
                             </select>
                           </td>

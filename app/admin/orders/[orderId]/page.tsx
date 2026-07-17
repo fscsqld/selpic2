@@ -12,13 +12,13 @@ import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import { useContentStore } from '@/lib/contentStore'
-import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X } from 'lucide-react'
+import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X, Check } from 'lucide-react'
 import Link from 'next/link'
 // Accounting is an independent app — HTTP bridge only (never import sandbox modules).
 import { recordOrderToAccountingAsyncWithRetry } from '@/lib/admin/recordOrderToAccountingBridge'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
-import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
@@ -271,10 +271,7 @@ export default function AdminOrderDetailPage() {
     return null
   }
 
-  const isClickAndCollect =
-    order.shippingOptionId === 'local-pickup' ||
-    order.shippingOptionId === 'click-collect-mansfield' ||
-    order.shippingOptionName?.toLowerCase().includes('click & collect')
+  const isClickAndCollect = isOrderClickAndCollect(order)
 
   const generateCustomerMessage = () => {
     const customerName = order.customer.name
@@ -360,7 +357,9 @@ Selpic Team`
     window.location.href = smsLink
   }
 
-  const patchLedgerStatus = async (next: 'approved' | 'processing' | 'shipped') => {
+  const patchLedgerStatus = async (
+    next: 'approved' | 'processing' | 'shipped' | 'ready_for_collection' | 'collected'
+  ) => {
     if (!order) return
     if (
       next === 'shipped' &&
@@ -368,6 +367,13 @@ Selpic Team`
       !(order.tracking?.number || '').trim()
     ) {
       alert('This order uses tracked shipping. Add a tracking number before marking it as shipped.')
+      return
+    }
+    if (
+      (next === 'ready_for_collection' || next === 'collected') &&
+      !isOrderClickAndCollect(order)
+    ) {
+      alert('Ready for collection / Collected are only for Click & Collect orders.')
       return
     }
     setStatusSaving(true)
@@ -488,39 +494,78 @@ Selpic Team`
               <span className={`px-3 py-1 text-sm font-medium rounded-full ${
                 order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                 order.status === 'paid' ? 'bg-blue-100 text-blue-800' :
+                order.status === 'approved' ? 'bg-indigo-100 text-indigo-800' :
                 order.status === 'processing' ? 'bg-purple-100 text-purple-800' :
                 order.status === 'shipped' ? 'bg-green-100 text-green-800' :
+                order.status === 'ready_for_collection' ? 'bg-sky-100 text-sky-800' :
+                order.status === 'collected' ? 'bg-teal-100 text-teal-800' :
                 'bg-red-100 text-red-800'
               }`}>
-                {order.status.toUpperCase()}
+                {order.status.replace(/_/g, ' ').toUpperCase()}
               </span>
               <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={
-                    statusSaving ||
-                    order.status === 'processing' ||
-                    order.status === 'shipped' ||
-                    order.status === 'cancelled'
-                  }
-                  onClick={() => patchLedgerStatus('processing')}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-900 hover:bg-purple-100 disabled:opacity-50"
-                >
-                  <Package className="w-4 h-4" />
-                  Ready (processing)
-                </button>
-                <button
-                  type="button"
-                  disabled={statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
-                  onClick={() => patchLedgerStatus('shipped')}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:opacity-50"
-                >
-                  <Truck className="w-4 h-4" />
-                  Shipped
-                </button>
+                {isClickAndCollect ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={
+                        statusSaving ||
+                        order.status === 'ready_for_collection' ||
+                        order.status === 'collected' ||
+                        order.status === 'cancelled'
+                      }
+                      onClick={() => patchLedgerStatus('ready_for_collection')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                    >
+                      <Package className="w-4 h-4" />
+                      Ready for collection
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        statusSaving ||
+                        order.status === 'collected' ||
+                        order.status === 'cancelled'
+                      }
+                      onClick={() => patchLedgerStatus('collected')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-900 hover:bg-teal-100 disabled:opacity-50"
+                    >
+                      <Check className="w-4 h-4" />
+                      Collected
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={
+                        statusSaving ||
+                        order.status === 'processing' ||
+                        order.status === 'shipped' ||
+                        order.status === 'cancelled'
+                      }
+                      onClick={() => patchLedgerStatus('processing')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-900 hover:bg-purple-100 disabled:opacity-50"
+                    >
+                      <Package className="w-4 h-4" />
+                      Ready (processing)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
+                      onClick={() => patchLedgerStatus('shipped')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:opacity-50"
+                    >
+                      <Truck className="w-4 h-4" />
+                      Shipped
+                    </button>
+                  </>
+                )}
               </div>
               <p className="max-w-xs text-right text-xs text-gray-500">
-                Updates Supabase only. Does not resend customer emails (confirmation and receipt were sent at checkout).
+                {isClickAndCollect
+                  ? 'Ready for collection emails the customer once. Mark Collected after pickup.'
+                  : 'Updates Supabase only. Does not resend customer emails (confirmation and receipt were sent at checkout).'}
               </p>
             </div>
           </div>
@@ -1106,20 +1151,58 @@ Selpic Team`
                     onClick={() => {
                       void patchLedgerStatus('processing')
                     }}
-                    disabled={statusSaving || order.status === 'processing'}
+                    disabled={
+                      statusSaving ||
+                      order.status === 'processing' ||
+                      order.status === 'ready_for_collection' ||
+                      order.status === 'collected' ||
+                      order.status === 'shipped'
+                    }
                     className="w-full px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Mark as Processing
                   </button>
-                  <button
-                    onClick={() => {
-                      void patchLedgerStatus('shipped')
-                    }}
-                    disabled={statusSaving || order.status === 'shipped'}
-                    className="w-full px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Mark as Shipped
-                  </button>
+                  {isClickAndCollect ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          void patchLedgerStatus('ready_for_collection')
+                        }}
+                        disabled={
+                          statusSaving ||
+                          order.status === 'ready_for_collection' ||
+                          order.status === 'collected' ||
+                          order.status === 'cancelled'
+                        }
+                        className="w-full px-4 py-2 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Mark Ready for Collection
+                      </button>
+                      <button
+                        onClick={() => {
+                          void patchLedgerStatus('collected')
+                        }}
+                        disabled={
+                          statusSaving ||
+                          order.status === 'collected' ||
+                          order.status === 'cancelled'
+                        }
+                        className="w-full px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Mark Collected
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        void patchLedgerStatus('shipped')
+                      }}
+                      disabled={statusSaving || order.status === 'shipped'}
+                      className="w-full px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Mark as Shipped
+                    </button>
+                  )}
                   {isClickAndCollect && (
                     <button
                       onClick={() => setShowCustomerMessage(true)}
