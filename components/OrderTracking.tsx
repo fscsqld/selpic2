@@ -2,8 +2,12 @@
 
 import { useState } from 'react'
 import { useTranslation } from '@/lib/useTranslation'
-import { Package, Truck, CheckCircle, XCircle, Clock, MapPin, Calendar, Info } from 'lucide-react'
+import { Package, Truck, CheckCircle, XCircle, Clock, MapPin, Calendar, Info, ClipboardPaste, ExternalLink } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
+import {
+  buildAusPostTrackUrl,
+  normalizePastedTrackingInput,
+} from '@/lib/shipping/normalizePastedTracking'
 
 interface OrderTrackingProps {
   order: OrderRecord
@@ -13,24 +17,79 @@ interface OrderTrackingProps {
   onUpdateStatus?: (status: string, location: string, description: string) => void
 }
 
-export default function OrderTracking({ 
-  order, 
-  isAdmin = false, 
-  onUpdateTracking, 
-  onAddTrackingNumber, 
-  onUpdateStatus 
+const PROVIDER_AUSPOST = 'Australia Post'
+
+export default function OrderTracking({
+  order,
+  isAdmin = false,
+  onAddTrackingNumber,
+  onUpdateStatus,
 }: OrderTrackingProps) {
   const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(false)
   const [showAddTracking, setShowAddTracking] = useState(false)
   const [trackingNumber, setTrackingNumber] = useState('')
-  const [provider, setProvider] = useState('')
-  const [showStatusUpdate, setShowStatusUpdate] = useState(false)
+  const [providerMode, setProviderMode] = useState<'auspost' | 'other'>('auspost')
+  const [otherProvider, setOtherProvider] = useState('')
+  const [pasteHint, setPasteHint] = useState('')
   const [newStatus, setNewStatus] = useState('')
   const [newLocation, setNewLocation] = useState('')
   const [newDescription, setNewDescription] = useState('')
 
   const tracking = order.tracking
+  const resolvedProvider =
+    providerMode === 'auspost' ? PROVIDER_AUSPOST : otherProvider.trim()
+
+  const applyPastedValue = (raw: string) => {
+    const normalized = normalizePastedTrackingInput(raw)
+    if (!normalized.number) {
+      setPasteHint('Could not read a tracking number from that paste.')
+      return
+    }
+    setTrackingNumber(normalized.number)
+    if (normalized.providerHint === PROVIDER_AUSPOST) {
+      setProviderMode('auspost')
+      setPasteHint('Australia Post tracking detected from paste.')
+    } else {
+      setPasteHint('Tracking number cleaned from paste.')
+    }
+  }
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      applyPastedValue(text)
+    } catch {
+      setPasteHint('Clipboard access blocked — paste into the field with Ctrl+V.')
+    }
+  }
+
+  const openAddForm = (prefill = false) => {
+    setShowAddTracking(true)
+    setPasteHint('')
+    if (prefill && tracking?.number) {
+      setTrackingNumber(tracking.number)
+      setProviderMode(
+        (tracking.provider || '').toLowerCase().includes('australia') ||
+          (tracking.provider || '').toLowerCase().includes('auspost')
+          ? 'auspost'
+          : 'other'
+      )
+      if (
+        tracking.provider &&
+        !(
+          tracking.provider.toLowerCase().includes('australia') ||
+          tracking.provider.toLowerCase().includes('auspost')
+        )
+      ) {
+        setOtherProvider(tracking.provider)
+      }
+    } else {
+      setTrackingNumber('')
+      setProviderMode('auspost')
+      setOtherProvider('')
+    }
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -84,10 +143,12 @@ export default function OrderTracking({
   }
 
   const handleAddTracking = () => {
-    if (trackingNumber.trim() && provider.trim()) {
-      onAddTrackingNumber?.(trackingNumber.trim(), provider.trim())
+    if (trackingNumber.trim() && resolvedProvider) {
+      onAddTrackingNumber?.(trackingNumber.trim(), resolvedProvider)
       setTrackingNumber('')
-      setProvider('')
+      setOtherProvider('')
+      setProviderMode('auspost')
+      setPasteHint('')
       setShowAddTracking(false)
     }
   }
@@ -98,98 +159,172 @@ export default function OrderTracking({
       setNewStatus('')
       setNewLocation('')
       setNewDescription('')
-      setShowStatusUpdate(false)
     }
   }
 
+  const addTrackingForm = (
+    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+      <h4 className="font-medium text-gray-900 mb-1">
+        {tracking?.number ? 'Update tracking number' : t('admin.orders.addTrackingNumber')}
+      </h4>
+      {isAdmin && (
+        <p className="mb-3 text-sm text-gray-600">
+          Paste the tracking number (or AusPost track link) from{' '}
+          <strong>MyPost Business</strong>. Provider defaults to Australia Post. Customer email
+          still sends when you mark the order <strong>Shipped</strong>.
+        </p>
+      )}
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            {t('ordersPage.trackingNumber')}
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData('text')
+                if (pasted && (pasted.includes('http') || /\s/.test(pasted))) {
+                  e.preventDefault()
+                  applyPastedValue(pasted)
+                }
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+              placeholder="Paste MyPost tracking # or AusPost track URL"
+              autoFocus
+            />
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handlePasteFromClipboard}
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Paste
+              </button>
+            )}
+          </div>
+          {pasteHint ? <p className="mt-1 text-xs text-green-700">{pasteHint}</p> : null}
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            {t('admin.orders.trackingProvider')}
+          </label>
+          <select
+            value={providerMode}
+            onChange={(e) => setProviderMode(e.target.value as 'auspost' | 'other')}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="auspost">Australia Post (MyPost Business)</option>
+            <option value="other">Other carrier</option>
+          </select>
+          {providerMode === 'other' ? (
+            <input
+              type="text"
+              value={otherProvider}
+              onChange={(e) => setOtherProvider(e.target.value)}
+              className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+              placeholder="Carrier name"
+            />
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleAddTracking}
+            disabled={!trackingNumber.trim() || !resolvedProvider}
+            className="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {tracking?.number ? 'Save tracking' : t('admin.orders.addTrackingNumber')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowAddTracking(false)
+              setPasteHint('')
+            }}
+            className="rounded-md bg-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-400"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   if (!tracking) {
     return (
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="rounded-lg bg-gray-50 p-4">
         <div className="flex items-center gap-3">
-          <Package className="w-6 h-6 text-gray-400" />
+          <Package className="h-6 w-6 text-gray-400" />
           <div>
             <h3 className="font-medium text-gray-900">{t('ordersPage.tracking')}</h3>
             <p className="text-sm text-gray-500">{t('ordersPage.noTracking')}</p>
           </div>
           {isAdmin && (
             <button
-              onClick={() => setShowAddTracking(true)}
-              className="ml-auto px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              type="button"
+              onClick={() => openAddForm(false)}
+              className="ml-auto rounded-md bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700"
             >
               {t('admin.orders.addTrackingNumber')}
             </button>
           )}
         </div>
-
-        {showAddTracking && (
-          <div className="mt-4 p-4 bg-white rounded-lg border">
-            <h4 className="font-medium text-gray-900 mb-3">{t('admin.orders.addTrackingNumber')}</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('ordersPage.trackingNumber')}
-                </label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter tracking number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('admin.orders.trackingProvider')}
-                </label>
-                <input
-                  type="text"
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., FedEx, UPS, DHL"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleAddTracking}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  {t('admin.orders.addTrackingNumber')}
-                </button>
-                <button
-                  onClick={() => setShowAddTracking(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {showAddTracking ? addTrackingForm : null}
       </div>
     )
   }
 
+  const ausPostUrl = buildAusPostTrackUrl(tracking.number)
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Package className="w-6 h-6 text-blue-600" />
-            <div>
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <div className="border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Package className="h-6 w-6 shrink-0 text-blue-600" />
+            <div className="min-w-0">
               <h3 className="font-medium text-gray-900">{t('ordersPage.tracking')}</h3>
-              <p className="text-sm text-gray-500">
+              <p className="truncate text-sm text-gray-500">
                 {t('ordersPage.trackingNumber')}: {tracking.number}
+                {tracking.provider ? ` · ${tracking.provider}` : ''}
               </p>
+              {ausPostUrl &&
+              (tracking.provider || '').toLowerCase().includes('australia') ? (
+                <a
+                  href={ausPostUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
+                >
+                  Open AusPost track
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(tracking.status)}`}>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className={`rounded-full border px-3 py-1 text-sm font-medium ${getStatusColor(tracking.status)}`}
+            >
               {getStatusText(tracking.status)}
             </span>
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => openAddForm(true)}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50"
+              >
+                Update #
+              </button>
+            ) : null}
             <button
+              type="button"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1 text-gray-400 transition-colors hover:text-gray-600"
             >
               {isExpanded ? '−' : '+'}
             </button>
@@ -197,26 +332,26 @@ export default function OrderTracking({
         </div>
       </div>
 
+      {showAddTracking ? <div className="px-4 pb-2">{addTrackingForm}</div> : null}
+
       {isExpanded && (
-        <div className="p-4 space-y-4">
-          {/* Current Status */}
+        <div className="space-y-4 p-4">
           <div className="flex items-center gap-3">
             {getStatusIcon(tracking.status)}
             <div className="flex-1">
               <p className="font-medium text-gray-900">{getStatusText(tracking.status)}</p>
               {tracking.currentLocation && (
-                <p className="text-sm text-gray-500 flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
+                <p className="flex items-center gap-1 text-sm text-gray-500">
+                  <MapPin className="h-4 w-4" />
                   {tracking.currentLocation}
                 </p>
               )}
             </div>
           </div>
 
-          {/* Delivery Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-gray-400" />
+              <Calendar className="h-4 w-4 text-gray-400" />
               <div>
                 <p className="text-sm font-medium text-gray-900">{t('ordersPage.estimatedDelivery')}</p>
                 <p className="text-sm text-gray-500">
@@ -226,7 +361,7 @@ export default function OrderTracking({
             </div>
             {tracking.actualDelivery && (
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" />
+                <CheckCircle className="h-4 w-4 text-green-500" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{t('ordersPage.actualDelivery')}</p>
                   <p className="text-sm text-gray-500">
@@ -237,22 +372,21 @@ export default function OrderTracking({
             )}
           </div>
 
-          {/* Delivery History */}
           <div>
-            <h4 className="font-medium text-gray-900 mb-3">{t('ordersPage.deliveryHistory')}</h4>
+            <h4 className="mb-3 font-medium text-gray-900">{t('ordersPage.deliveryHistory')}</h4>
             <div className="space-y-3">
               {tracking.history.map((event, index) => (
                 <div key={index} className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                  <div className="mt-2 h-2 w-2 rounded-full bg-blue-500" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900">{event.description}</p>
-                    <p className="text-xs text-gray-500 flex items-center gap-2">
+                    <p className="flex items-center gap-2 text-xs text-gray-500">
                       <span>{new Date(event.timestamp).toLocaleString()}</span>
                       {event.location && (
                         <>
                           <span>•</span>
                           <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
+                            <MapPin className="h-3 w-3" />
                             {event.location}
                           </span>
                         </>
@@ -264,16 +398,15 @@ export default function OrderTracking({
             </div>
           </div>
 
-          {/* Admin Actions */}
           {isAdmin && (
-            <div className="pt-4 border-t border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-3">{t('admin.orders.updateDeliveryStatus')}</h4>
+            <div className="border-t border-gray-200 pt-4">
+              <h4 className="mb-3 font-medium text-gray-900">{t('admin.orders.updateDeliveryStatus')}</h4>
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Status</option>
                     <option value="pending">Pending</option>
@@ -288,39 +421,31 @@ export default function OrderTracking({
                     value={newLocation}
                     onChange={(e) => setNewLocation(e.target.value)}
                     placeholder="Location"
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   />
                   <input
                     type="text"
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     placeholder="Description"
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleUpdateStatus}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Update Status
-                  </button>
-                  <button
-                    onClick={() => setShowStatusUpdate(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleUpdateStatus}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+                >
+                  Update Status
+                </button>
               </div>
             </div>
           )}
 
-          {/* Notes */}
           {tracking.notes && (
-            <div className="pt-4 border-t border-gray-200">
+            <div className="border-t border-gray-200 pt-4">
               <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-gray-400 mt-0.5" />
+                <Info className="mt-0.5 h-4 w-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">{t('admin.orders.deliveryNotes')}</p>
                   <p className="text-sm text-gray-600">{tracking.notes}</p>

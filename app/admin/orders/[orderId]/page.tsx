@@ -837,8 +837,13 @@ Selpic Team`
                   AusPost shipping label
                 </h2>
                 <p className="text-sm text-gray-600 mb-4">
-                  Generates a printable PDF for <strong>Avery L7169 / AV959020 A4 4-up</strong>. Choose the exact sheet
-                  position before printing so a partially used label sheet still aligns correctly.
+                  Internal packing address PDF for <strong>Avery L7169 / AV959020 A4 4-up</strong>. Choose the sheet
+                  position before printing so a partially used label sheet still aligns.
+                </p>
+                <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Paid Australia Post labels (with tracking) are created in{' '}
+                  <strong>MyPost Business</strong>, then paste the tracking number into the Tracking section above.
+                  Mark the order <strong>Shipped</strong> to email the customer.
                 </p>
                 {isClickAndCollect ? (
                   <p className="text-sm text-gray-500">Click &amp; Collect — postal label not required.</p>
