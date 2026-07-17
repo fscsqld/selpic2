@@ -64,10 +64,14 @@ const DASH_STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-800',
 }
 
+const DASHBOARD_COLLAPSED_ORDER_COUNT = 8
+const DASHBOARD_EXPANDED_ORDER_COUNT = 25
+
 export default function AdminDashboard() {
   const [isComponentReady, setIsComponentReady] = useState(false)
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
   const [dashboardOrderDetailId, setDashboardOrderDetailId] = useState<string | null>(null)
+  const [ordersExpanded, setOrdersExpanded] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
   const [etsyBanner, setEtsyBanner] = useState<string | null>(null)
   const [etsyConn, setEtsyConn] = useState<{ connected: boolean; shopName?: string | null; shopId?: string } | null>(
@@ -281,8 +285,16 @@ export default function AdminDashboard() {
     () =>
       [...orders]
         .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
-        .slice(0, 25),
+        .slice(0, DASHBOARD_EXPANDED_ORDER_COUNT),
     [orders]
+  )
+
+  const dashboardVisibleOrders = ordersExpanded
+    ? dashboardRecentSlice
+    : dashboardRecentSlice.slice(0, DASHBOARD_COLLAPSED_ORDER_COUNT)
+  const hiddenDashboardOrderCount = Math.max(
+    0,
+    dashboardRecentSlice.length - DASHBOARD_COLLAPSED_ORDER_COUNT
   )
 
   const dashboardDetailOrder: OrderRecord | null = useMemo(
@@ -904,9 +916,14 @@ export default function AdminDashboard() {
             {dashboardRecentSlice.length === 0 ? (
               <p className="text-sm text-gray-500">No orders in the ledger yet.</p>
             ) : (
-              <div className="overflow-x-auto border border-gray-100 rounded-lg">
+              <>
+              <div
+                className={`border border-gray-100 rounded-lg ${
+                  ordersExpanded ? 'max-h-[480px] overflow-auto' : 'overflow-x-auto'
+                }`}
+              >
                 <table className="min-w-full text-sm">
-                  <thead>
+                  <thead className={ordersExpanded ? 'sticky top-0 z-10' : undefined}>
                     <tr className="bg-gray-50 text-left text-gray-600">
                       <th className="px-3 py-2 font-medium">Source</th>
                       <th className="px-3 py-2 font-medium">Order</th>
@@ -918,7 +935,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dashboardRecentSlice.map((o) => {
+                    {dashboardVisibleOrders.map((o) => {
                       const plat = orderPlatformBadge(o)
                       const pers = summarizeOrderPersonalization(o, 160)
                       return (
@@ -1015,6 +1032,23 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+              {hiddenDashboardOrderCount > 0 ? (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setOrdersExpanded((current) => !current)}
+                    aria-expanded={ordersExpanded}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {ordersExpanded
+                      ? 'Show fewer orders'
+                      : `Show ${hiddenDashboardOrderCount} more recent order${
+                          hiddenDashboardOrderCount === 1 ? '' : 's'
+                        }`}
+                  </button>
+                </div>
+              ) : null}
+              </>
             )}
           </div>
 
