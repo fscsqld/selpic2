@@ -75,6 +75,12 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
       quantity: qty,
       category: (catalogProduct as any).category ?? item.category,
       subcategory: (catalogProduct as any).subcategory ?? item.subcategory,
+      shippingClass: (catalogProduct as any).shippingClass,
+      shippingWeightGrams: (catalogProduct as any).shippingWeightGrams,
+      weightKg:
+        Number((catalogProduct as any).shippingWeightGrams) > 0
+          ? Number((Number((catalogProduct as any).shippingWeightGrams) / 1000).toFixed(3))
+          : item.weightKg,
       brand: (catalogProduct as any).brand ?? item.brand,
       size: (catalogProduct as any).size ?? item.size,
       color: (catalogProduct as any).color ?? item.color,

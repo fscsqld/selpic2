@@ -21,6 +21,10 @@ import {
 } from '@/lib/mixedLabelsCartDisplay'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import { isStickerPackCartCustomizations } from '@/lib/stickerSheetBundles'
+import {
+  getCartShippingRequirement,
+  isShippingOptionCompatible,
+} from '@/lib/shipping/productShippingEligibility'
 
 export default function CartPage() {
   const router = useRouter()
@@ -33,8 +37,6 @@ export default function CartPage() {
   } = useContentStore()
   const freeShippingSettings = useContentStore((s) => s.freeShippingSettings)
   
-  const shippingOptions = getActiveShippingOptions()
-
   // Filter out invalid cart items and clean up empty objects
   const validCart = cart.filter(item => 
     item && 
@@ -44,6 +46,21 @@ export default function CartPage() {
     item.product.id && 
     item.product.price !== undefined
   )
+
+  const shippingRequirement = getCartShippingRequirement(
+    validCart.map((item) => ({
+      product: products.find((product) => product.id === item.product.id) || item.product,
+      quantity: item.quantity,
+    }))
+  )
+  const allShippingOptions = getActiveShippingOptions()
+  const shippingOptions = allShippingOptions.filter((option) =>
+    isShippingOptionCompatible(option, shippingRequirement.requiresParcel)
+  )
+  const estimatedShippingOption =
+    shippingOptions.find((option) =>
+      shippingRequirement.requiresParcel ? option.id === 'parcel-post' : option.isDefault
+    ) || shippingOptions[0]
 
   const getStockMeta = (productId: string) => {
     const storeProduct = products.find(p => p.id === productId)
@@ -221,8 +238,8 @@ export default function CartPage() {
   
   // 배송비 계산 (Checkout과 동일한 로직)
   const getShippingPrice = () => {
-    if (shippingOptions.length === 0) return 0
-    const option = shippingOptions[0]
+    if (!estimatedShippingOption) return 0
+    const option = estimatedShippingOption
     
     // VIP 무료 배송 확인
     if (vipFreeShipping) {
@@ -715,9 +732,11 @@ export default function CartPage() {
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900">
                   <p className="font-semibold">Shipping estimate</p>
                   <p className="mt-1">
-                    Standard Letter is the default estimate and does not include tracking. You can
-                    choose tracked, express, parcel or Click &amp; Collect options at checkout.
-                    Tracking and insurance are included only where shown.
+                    {shippingRequirement.requiresParcel
+                      ? `Parcel service is required because this cart contains parcel-class goods or exceeds the 500 g letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
+                      : 'Standard Letter is the default estimate and does not include tracking.'}{' '}
+                    You can choose from the compatible delivery or Click &amp; Collect options at
+                    checkout. Tracking and insurance are included only where shown.
                   </p>
                   {vipFreeShipping && (
                     <p className="mt-1 font-medium">

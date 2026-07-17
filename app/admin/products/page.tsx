@@ -73,6 +73,8 @@ interface ProductFormData {
   name: string
   price: number
   originalPrice?: number
+  shippingClass?: 'letter' | 'parcel'
+  shippingWeightGrams?: number
   image: string
   category: string
   subcategory?: string
@@ -157,6 +159,8 @@ function AdminProductsPageContent() {
     name: '',
     price: 0,
     originalPrice: 0,
+    shippingClass: 'parcel',
+    shippingWeightGrams: 250,
     image: '',
     category: '',
     subcategory: '',
@@ -379,6 +383,14 @@ function AdminProductsPageContent() {
       setEditingProduct(product)
       setFormData({
         ...product,
+        shippingClass:
+          product.shippingClass || (product.category === 'Stickers' ? 'letter' : 'parcel'),
+        shippingWeightGrams:
+          Number(product.shippingWeightGrams) > 0
+            ? Number(product.shippingWeightGrams)
+            : product.category === 'Stickers'
+              ? 20
+              : 250,
         isPopular: product.isPopular || false,
         stockQuantity: (product as any).stockQuantity ?? 0,
         safetyStock: (product as any).safetyStock ?? 5,
@@ -410,6 +422,8 @@ function AdminProductsPageContent() {
         name: '',
         price: 0,
         originalPrice: 0,
+        shippingClass: 'parcel',
+        shippingWeightGrams: 250,
         image: '',
         category: '',
         subcategory: '',
@@ -455,6 +469,8 @@ function AdminProductsPageContent() {
       name: '',
       price: 0,
       originalPrice: 0,
+      shippingClass: 'parcel',
+      shippingWeightGrams: 250,
       image: '',
       category: '',
       subcategory: '',
@@ -738,6 +754,8 @@ function AdminProductsPageContent() {
       if (name === 'category') {
         newData.subcategory = ''
         newData.isHotGoods = value === 'HotGoods'
+        newData.shippingClass = value === 'Stickers' ? 'letter' : 'parcel'
+        newData.shippingWeightGrams = value === 'Stickers' ? 20 : 250
         if (value === 'Stickers') {
           newData.stickerSheetQuantity = 3
           newData.color = STICKER_PRODUCT_COLOR
@@ -1638,6 +1656,46 @@ function AdminProductsPageContent() {
                      ))}
                    </select>
                  </div>
+
+                <div className="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <h4 className="font-semibold text-sky-950">Shipping eligibility</h4>
+                  <p className="mt-1 text-xs text-sky-800">
+                    Parcel products cannot use Standard Letter or Tracked Letter at checkout.
+                    Packed weight is per sellable unit; carts over 500 g also require parcel service.
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Shipping class
+                      </label>
+                      <select
+                        name="shippingClass"
+                        value={formData.shippingClass || 'parcel'}
+                        onChange={handleInputChange}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-sky-500"
+                      >
+                        <option value="letter">Letter (flat products)</option>
+                        <option value="parcel">Parcel (merchandise / bulky goods)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Packed weight per unit (grams)
+                      </label>
+                      <input
+                        type="number"
+                        name="shippingWeightGrams"
+                        value={formData.shippingWeightGrams || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        step="1"
+                        required
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-sky-500"
+                        placeholder="250"
+                      />
+                    </div>
+                  </div>
+                </div>
 
                  {/* {t('admin.products.subcategory')} */}
                  <div>

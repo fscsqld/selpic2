@@ -21,6 +21,10 @@ import AustralianAddressForm, { AddressData } from '@/components/AustralianAddre
 import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
 import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import {
+  getCartShippingRequirement,
+  isShippingOptionCompatible,
+} from '@/lib/shipping/productShippingEligibility'
 import type { OrderRecord } from '@/lib/store'
 
 export default function CheckoutPage() {
@@ -123,9 +127,27 @@ export default function CheckoutPage() {
     updateUserGrade(currentUser, orders, updateUser)
   }, [_hasHydrated, isLoggedIn, currentUser, orders, updateUser])
   
-  // Get shipping options from Content Store
-  const shippingOptions = getActiveShippingOptions()
-  const defaultShippingOption = getDefaultShippingOption() || shippingOptions[0]
+  // Restrict letter services when merchandise or total packed weight requires a parcel.
+  // Canonical store products take precedence over cart snapshots.
+  const allShippingOptions = getActiveShippingOptions()
+  const shippingRequirement = getCartShippingRequirement(
+    cart.map((item) => ({
+      product: products.find((product) => product.id === item.product.id) || item.product,
+      quantity: item.quantity,
+    }))
+  )
+  const shippingOptions = allShippingOptions.filter((option) =>
+    isShippingOptionCompatible(option, shippingRequirement.requiresParcel)
+  )
+  const configuredDefaultShippingOption = getDefaultShippingOption()
+  const defaultShippingOption =
+    configuredDefaultShippingOption &&
+    isShippingOptionCompatible(
+      configuredDefaultShippingOption,
+      shippingRequirement.requiresParcel
+    )
+      ? configuredDefaultShippingOption
+      : shippingOptions.find((option) => option.id === 'parcel-post') || shippingOptions[0]
   
   // CRITICAL: Check cart length first before any other hooks to prevent hooks mismatch
   const hasCartItems = cart.length > 0
@@ -167,12 +189,14 @@ export default function CheckoutPage() {
   }, [defaultPaymentOption, paymentMethod, paymentOptions])
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null)
   
-  // Initialize selectedShipping with default option
+  // Initialize selection and replace an option that becomes incompatible after cart changes.
   useEffect(() => {
-    if (!selectedShipping && defaultShippingOption) {
+    const selectionIsAvailable =
+      selectedShipping && shippingOptions.some((option) => option.id === selectedShipping.id)
+    if (!selectionIsAvailable && defaultShippingOption) {
       setSelectedShipping(defaultShippingOption)
     }
-  }, [defaultShippingOption, selectedShipping])
+  }, [defaultShippingOption, selectedShipping, shippingOptions])
   const [showShippingOptions, setShowShippingOptions] = useState(false)
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [appliedPromoCode, setAppliedPromoCode] = useState<{ code: string; discount: number } | null>(null)
@@ -1147,6 +1171,17 @@ export default function CheckoutPage() {
                   <li>• Eligible VIP free-shipping benefits are applied automatically to the price shown.</li>
                 </ul>
               </div>
+
+              {shippingRequirement.requiresParcel && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                  <p className="font-semibold">Parcel service required for this cart</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    Letter options are hidden because this order contains parcel-class goods or
+                    exceeds the 500 g letter limit. Estimated packed weight:{' '}
+                    {shippingRequirement.totalWeightGrams} g.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-3" id="shipping-options-panel">
                 {!showShippingOptions && selectedShipping && (

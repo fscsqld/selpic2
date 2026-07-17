@@ -2,6 +2,10 @@ import type { OrderRecord } from '@/lib/store'
 import { findActiveShippingOption } from '@/lib/server/cmsShippingConfig'
 import { computeChargedShippingPrice } from '@/lib/shipping/computeChargedShippingPrice'
 import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import {
+  getCartShippingRequirement,
+  isShippingOptionCompatible,
+} from '@/lib/shipping/productShippingEligibility'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -25,6 +29,24 @@ export async function applyServerShippingToDraft(orderDraft: OrderDraft): Promis
   }
 
   const { option, freeShippingSettings, vipFreeShippingByGrade } = found
+  const shippingRequirement = getCartShippingRequirement(
+    (orderDraft.items || []).map((item) => ({
+      product: {
+        category: item.category,
+        shippingClass: item.shippingClass,
+        shippingWeightGrams:
+          item.shippingWeightGrams ||
+          (Number(item.weightKg) > 0 ? Number(item.weightKg) * 1000 : undefined),
+      },
+      quantity: item.quantity,
+    }))
+  )
+  if (!isShippingOptionCompatible(option, shippingRequirement.requiresParcel)) {
+    throw new Error(
+      `Selected shipping option is not suitable for this cart. Parcel service is required (estimated packed weight: ${shippingRequirement.totalWeightGrams} g).`
+    )
+  }
+
   const itemsSubtotal = Number(orderDraft.subtotal) || 0
   const vipGrade =
     orderDraft.vipGradeCode !== undefined && orderDraft.vipGradeCode !== null

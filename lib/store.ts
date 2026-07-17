@@ -17,6 +17,10 @@ export interface Product {
   name: string
   price: number
   originalPrice?: number
+  /** Fulfilment class used to prevent parcel goods being sent as a letter. */
+  shippingClass?: 'letter' | 'parcel'
+  /** Packed weight per sellable unit. Used for the Australia Post 500 g letter limit. */
+  shippingWeightGrams?: number
   image: string
   category: string
   subcategory?: string
@@ -155,6 +159,10 @@ export interface OrderItemSnapshot {
   customizations: Record<string, string>
   /** Mass per sellable unit (kg), for shipping labels; optional until catalog or admin sets it. */
   weightKg?: number
+  /** Fulfilment class captured from the catalogue at checkout. */
+  shippingClass?: 'letter' | 'parcel'
+  /** Packed mass per sellable unit captured from the catalogue. */
+  shippingWeightGrams?: number
   /** Etsy / marketplace buyer-entered personalization (merged text). */
   buyerPersonalization?: string
   /** Structured prompts → answers when the marketplace provides them. */
