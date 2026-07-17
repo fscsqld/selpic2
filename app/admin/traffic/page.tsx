@@ -1,9 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft,
   BarChart3,
   Calendar,
   RefreshCw,
@@ -58,7 +56,6 @@ export default function AdminTrafficPage() {
 }
 
 function AdminTrafficPageContent() {
-  const router = useRouter()
   const { orders } = useStore()
   const [daysBack, setDaysBack] = useState(30)
   const [loading, setLoading] = useState(true)
@@ -162,27 +159,21 @@ function AdminTrafficPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AdminPageHeader />
+      <AdminPageHeader
+        title="Traffic & Conversion"
+        icon={<BarChart3 className="h-6 w-6 text-indigo-600" />}
+        showBackButton
+        backUrl="/admin/dashboard"
+        backLabel="Dashboard"
+        showHomepageLink={false}
+        showLanguageSelector={false}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <button
-              type="button"
-              onClick={() => router.push('/admin/dashboard')}
-              className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 mb-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Dashboard
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="w-7 h-7 text-indigo-600" />
-              Traffic &amp; Conversion
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Daily unique visitors (Australia/Sydney) vs storefront orders for marketing.
-              Tracking starts after deploy + Supabase table setup.
-            </p>
-          </div>
+          <p className="text-sm text-gray-600 max-w-2xl">
+            Daily unique visitors (Australia/Sydney) vs storefront orders for marketing.
+            Tracking starts after deploy + Supabase table setup.
+          </p>
           <div className="flex items-center gap-2">
             <select
               value={daysBack}
