@@ -38,6 +38,12 @@ import { emailService } from '@/lib/emailService'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
 import { useInvoiceStore, convertOrderToInvoice } from '@/lib/invoiceStore'
+import {
+  DocumentSendLog,
+  DocumentSendLogType,
+  useDocumentSendLogStore,
+} from '@/lib/documentSendLogStore'
+import { syncDocumentSendLogsWithSupabase } from '@/lib/documentSendLogClient'
 import InvoiceTemplate, { InvoiceLineItem, InvoiceTemplateProps } from '@/components/invoice/InvoiceTemplate'
 import QuoteTemplate, { QuoteTemplateProps } from '@/components/invoice/QuoteTemplate'
 import OrderReceipt from '@/components/OrderReceipt'
@@ -53,20 +59,7 @@ import {
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
-// 문서 발송 이력 인터페이스
-interface DocumentSendHistory {
-  id: string
-  documentType: 'order_confirmation' | 'shipping_notification' | 'receipt' | 'invoice' | 'contract' | 'other'
-  recipientEmail: string
-  recipientName: string
-  subject: string
-  content: string
-  sentAt: string
-  sentBy: string
-  status: 'sent' | 'failed' | 'pending'
-  relatedOrderId?: string
-  attachmentUrl?: string
-}
+type DocumentSendHistory = DocumentSendLog
 
 const roundTo2 = (v: number) => Math.round((Number(v) + Number.EPSILON) * 100) / 100
 const formatDateOnlyAU = (isoLike?: string) => {
@@ -87,6 +80,9 @@ export default function DocumentSenderPage() {
   const { orders } = useStore()
   const { t } = useTranslation()
   const { defaultTemplate, setDefaultTemplate, addGeneratedInvoice, deleteGeneratedInvoice, generatedInvoices } = useInvoiceStore()
+  const sendHistory = useDocumentSendLogStore((s) => s.logs)
+  const addSendLog = useDocumentSendLogStore((s) => s.addSendLog)
+  const removeSendLog = useDocumentSendLogStore((s) => s.removeSendLog)
   const documentTemplates = useDocumentTemplateStore()
   
   // 템플릿 스토어 초기화 (Invoice 템플릿과 동기화)
@@ -113,7 +109,7 @@ export default function DocumentSenderPage() {
       invoices: generatedInvoices
     })
   }, [generatedInvoices])
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDocumentType, setSelectedDocumentType] = useState<'order_confirmation' | 'shipping_notification' | 'receipt' | 'invoice' | 'contract' | 'other'>('order_confirmation')
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
@@ -127,10 +123,19 @@ export default function DocumentSenderPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [activeTab, setActiveTab] = useState<'send' | 'history' | 'invoices' | 'settings' | 'create'>('send')
+
+  // Sync send history from Supabase when History tab is opened
+  useEffect(() => {
+    if (activeTab !== 'history') return
+    void syncDocumentSendLogsWithSupabase().then((result) => {
+      if (!result.ok) {
+        console.warn('[documents] send history sync:', result.message)
+      }
+    })
+  }, [activeTab])
   const [templateEditData, setTemplateEditData] = useState<{ company: any; payment: any } | null>(null)
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null)
-  const [sendHistory, setSendHistory] = useState<DocumentSendHistory[]>([])
-  const [filterType, setFilterType] = useState<'all' | DocumentSendHistory['documentType']>('all')
+  const [filterType, setFilterType] = useState<'all' | DocumentSendLogType>('all')
   const [orderSearchTerm, setOrderSearchTerm] = useState('')
   
   // Document Template 편집 관련 상태
@@ -402,17 +407,19 @@ export default function DocumentSenderPage() {
   const getDocumentTypeInfo = (type: string) => {
     switch (type) {
       case 'order_confirmation':
-        return { icon: CheckCircle, color: 'bg-blue-100 text-blue-800', label: 'Order Confirmation', description: '주문 확인서' }
+        return { icon: CheckCircle, color: 'bg-blue-100 text-blue-800', label: 'Order Confirmation', description: 'Order Confirmation' }
       case 'shipping_notification':
-        return { icon: Package, color: 'bg-green-100 text-green-800', label: 'Shipping Notification', description: '배송 알림' }
+        return { icon: Package, color: 'bg-green-100 text-green-800', label: 'Shipping Notification', description: 'Shipping Notification' }
       case 'receipt':
-        return { icon: Receipt, color: 'bg-purple-100 text-purple-800', label: 'Receipt', description: '영수증' }
+        return { icon: Receipt, color: 'bg-purple-100 text-purple-800', label: 'Receipt', description: 'Receipt' }
       case 'invoice':
-        return { icon: FileCheck, color: 'bg-orange-100 text-orange-800', label: 'Invoice', description: '청구서' }
+        return { icon: FileCheck, color: 'bg-orange-100 text-orange-800', label: 'Invoice', description: 'Invoice' }
+      case 'quote':
+        return { icon: FileText, color: 'bg-teal-100 text-teal-800', label: 'Quote', description: 'Quote' }
       case 'contract':
-        return { icon: FileText, color: 'bg-indigo-100 text-indigo-800', label: 'Contract', description: '계약서' }
+        return { icon: FileText, color: 'bg-indigo-100 text-indigo-800', label: 'Contract', description: 'Contract' }
       default:
-        return { icon: FileText, color: 'bg-gray-100 text-gray-800', label: 'Other Document', description: '기타 문서' }
+        return { icon: FileText, color: 'bg-gray-100 text-gray-800', label: 'Other Document', description: 'Other' }
     }
   }
 
@@ -933,19 +940,17 @@ If you have any questions, please contact us.`
               recipientEmail: email,
             })
 
-            const historyEntry: DocumentSendHistory = {
-              id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            addSendLog({
               documentType: selectedDocumentType,
               recipientEmail: email,
               recipientName: customerName,
               subject: `Shipping Notification - Order #${sourceOrder.id}`,
               content: documentData.content,
-              sentAt: new Date().toISOString(),
               sentBy: adminUser?.username || 'Admin',
               status: r.ok ? 'sent' : 'failed',
               relatedOrderId: sourceOrder.id,
-            }
-            setSendHistory((prev) => [historyEntry, ...prev])
+              source: 'documents',
+            })
             return { email, success: r.ok }
           })
         )
@@ -1025,26 +1030,26 @@ If you have any questions, please contact us.`
             addGeneratedInvoice(invoiceRecord)
           }
 
-          // 발송 이력 저장
-          const attachmentUrl = filesToSend.length > 0 
-            ? filesToSend.map(f => URL.createObjectURL(f)).join(',')
-            : undefined
-
-          const historyEntry: DocumentSendHistory = {
-            id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          addSendLog({
             documentType: selectedDocumentType,
+            documentNumber:
+              selectedDocumentType === 'invoice' && invoiceData
+                ? invoiceData.invoiceMeta.invoiceNumber
+                : undefined,
             recipientEmail: email,
             recipientName: customerName,
             subject: documentData.subject,
             content: documentData.content,
-            sentAt: new Date().toISOString(),
             sentBy: adminUser?.username || 'Admin',
             status: emailResponse.success ? 'sent' : 'failed',
             relatedOrderId: documentData.relatedOrderId || undefined,
-            attachmentUrl
-          }
-          
-          setSendHistory(prev => [historyEntry, ...prev])
+            source: 'documents',
+            documentSnapshot:
+              selectedDocumentType === 'invoice' && invoiceData
+                ? (JSON.parse(JSON.stringify(invoiceData)) as Record<string, unknown>)
+                : undefined,
+            errorMessage: emailResponse.success ? undefined : emailResponse.message,
+          })
           
           return { email, success: emailResponse.success }
         })
@@ -1797,6 +1802,7 @@ If you have any questions, please contact us.`
                     <option value="shipping_notification">Shipping Notification</option>
                     <option value="receipt">Receipt</option>
                     <option value="invoice">Invoice</option>
+                    <option value="quote">Quote</option>
                     <option value="contract">Contract</option>
                     <option value="other">Other</option>
                   </select>
@@ -1865,7 +1871,7 @@ If you have any questions, please contact us.`
                                 <button
                                   onClick={() => {
                                     if (confirm(`Are you sure you want to delete this document send history?\n\nType: ${typeInfo.label}\nRecipient: ${history.recipientName}\nSubject: ${history.subject}`)) {
-                                      setSendHistory(prev => prev.filter(h => h.id !== history.id))
+                                      removeSendLog(history.id)
                                     }
                                   }}
                                   className="text-red-600 hover:text-red-900 flex items-center gap-1"

@@ -3,10 +3,13 @@
 import { useState, useRef, useEffect } from 'react'
 import InvoiceTemplate, { InvoiceLineItem, InvoiceTemplateProps } from '@/components/invoice/InvoiceTemplate'
 import QuoteTemplate, { QuoteTemplateProps } from '@/components/invoice/QuoteTemplate'
-import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp } from 'lucide-react'
+import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp, History } from 'lucide-react'
 import { emailService } from '@/lib/emailService'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
+import InvoiceQuoteSendHistoryPanel from '@/components/admin/InvoiceQuoteSendHistoryPanel'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { DocumentSendLog, useDocumentSendLogStore } from '@/lib/documentSendLogStore'
 import {
   COMPANY_LEGAL,
   COMPANY_BANK,
@@ -128,9 +131,14 @@ type SavedClientProfile = {
 }
 
 function InvoicePreviewPageContent() {
+  const { adminUser } = useAdminAuth()
+  const addSendLog = useDocumentSendLogStore((s) => s.addSendLog)
   const invoiceRef = useRef<HTMLDivElement>(null)
+  const [pageTab, setPageTab] = useState<'create' | 'history'>('create')
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [pendingResendLogId, setPendingResendLogId] = useState<string | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)
   const [documentType, setDocumentType] = useState<'invoice' | 'quote'>('invoice')
   const [invoiceData, setInvoiceData] = useState(() => getDefaultInvoiceData())
@@ -435,81 +443,188 @@ function InvoicePreviewPageContent() {
     }
   }
 
-  const handleSendInvoice = async () => {
+  const applyDocumentSnapshot = (log: DocumentSendLog) => {
+    const snapshot = log.documentSnapshot
+    if (!snapshot || typeof snapshot !== 'object') {
+      alert('This history entry has no saved document data to open.')
+      return false
+    }
+
+    if (log.documentType === 'quote') {
+      setDocumentType('quote')
+      setQuoteData(snapshot as typeof quoteData)
+    } else {
+      setDocumentType('invoice')
+      setInvoiceData(snapshot as typeof invoiceData)
+    }
+    setRecipientEmail(log.recipientEmail || '')
+    setMessage(log.content || '')
+    setShowEditForm(true)
+    return true
+  }
+
+  const handleOpenHistoryInEditor = (log: DocumentSendLog) => {
+    if (!applyDocumentSnapshot(log)) return
+    setPageTab('create')
+  }
+
+  const handleSendInvoice = async (options?: { resentFromId?: string }) => {
     const currentData = documentType === 'invoice' ? invoiceData : quoteData
-    const emailToSend = recipientEmail || currentData.billing.email
+    const emailToSend = (recipientEmail || currentData.billing.email || '').trim()
     if (!emailToSend || !emailToSend.includes('@')) {
       alert('Please enter a valid email address or set billing email.')
       return
     }
 
     setIsSending(true)
+    const isInvoice = documentType === 'invoice'
+    let docNumber = isInvoice
+      ? invoiceData.invoiceMeta.invoiceNumber
+      : quoteData.quoteMeta.quoteNumber
+    let emailContent = ''
+    let subject = ''
+    const recipientDisplayName =
+      (currentData.billing.companyName || '').trim() ||
+      (currentData.billing.name || '').trim() ||
+      emailToSend.split('@')[0] ||
+      'Customer'
+    const brandName = getCompanyBrandName(COMPANY_LEGAL.companyName)
+    const sentBy = adminUser?.username || adminUser?.email || 'Admin'
+
     try {
-      // PDF 생성
+      docNumber = isInvoice ? ensureInvoiceRefNumber() : ensureQuoteRefNumber()
+
       let pdfFile: File | null = null
-      const docNumber = documentType === 'invoice'
-        ? ensureInvoiceRefNumber()
-        : ensureQuoteRefNumber()
       if (invoiceRef.current) {
         const html2pdf = (await import('html2pdf.js')).default
         const element = invoiceRef.current
-        
-        await new Promise(resolve => setTimeout(resolve, 200))
+
+        await new Promise((resolve) => setTimeout(resolve, 200))
         element.scrollIntoView({ behavior: 'instant', block: 'start' })
         element.parentElement?.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-        await new Promise(resolve => setTimeout(resolve, 100))
+        await new Promise((resolve) => setTimeout(resolve, 100))
         await waitForNextPaint()
         const opt = buildPdfOptions(element, `${documentType}-${docNumber}.pdf`)
         const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob')
         pdfFile = new File([pdfBlob], `${documentType}-${docNumber}.pdf`, { type: 'application/pdf' })
       }
 
-      // 이메일 발송
-      const emailToSend = recipientEmail || currentData.billing.email || ''
-      const companyName = COMPANY_LEGAL.companyName
-      const brandName = getCompanyBrandName(companyName)
-      const isInvoice = documentType === 'invoice'
       const docLabel = isInvoice ? 'tax invoice' : 'quote'
-      const recipientDisplayName =
-        (currentData.billing.companyName || '').trim() ||
-        (currentData.billing.name || '').trim() ||
-        'there'
-      const emailContent =
+      emailContent =
         message ||
         `Dear ${recipientDisplayName},\n\n` +
-        `We appreciate your business with ${brandName}.\n\n` +
-        `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
-        `Payment Instructions:\n` +
-        `For bank transfers, please ensure the ${isInvoice ? 'Invoice Number' : 'Quote Number'} is included as your payment reference to help us identify your payment.\n\n` +
-        `Thank you for choosing us. If you have any questions, please feel free to reply to this email.`
-      
-      await emailService.sendResponse({
+          `We appreciate your business with ${brandName}.\n\n` +
+          `Please find the attached ${docLabel} (${docNumber}) for your recent order/service.\n\n` +
+          `Payment Instructions:\n` +
+          `For bank transfers, please ensure the ${isInvoice ? 'Invoice Number' : 'Quote Number'} is included as your payment reference to help us identify your payment.\n\n` +
+          `Thank you for choosing us. If you have any questions, please feel free to reply to this email.`
+
+      subject = isInvoice
+        ? `Tax Invoice ${docNumber} from ${brandName}`
+        : `Quote ${docNumber} from ${brandName}`
+
+      const emailResponse = await emailService.sendResponse({
         customerEmail: emailToSend,
         customerName: recipientDisplayName,
-        subject: isInvoice
-          ? `Tax Invoice ${docNumber} from ${brandName}`
-          : `Quote ${docNumber} from ${brandName}`,
+        subject,
         message: emailContent,
-        adminName: 'Selpic Admin',
-        attachments: pdfFile ? [pdfFile] : []
+        adminName: sentBy,
+        attachments: pdfFile ? [pdfFile] : [],
       })
+
+      const snapshotSource = isInvoice
+        ? {
+            ...invoiceData,
+            invoiceMeta: { ...invoiceData.invoiceMeta, invoiceNumber: docNumber },
+          }
+        : {
+            ...quoteData,
+            quoteMeta: { ...quoteData.quoteMeta, quoteNumber: docNumber },
+          }
+
+      addSendLog({
+        documentType: isInvoice ? 'invoice' : 'quote',
+        documentNumber: docNumber,
+        recipientEmail: emailToSend,
+        recipientName: recipientDisplayName,
+        subject,
+        content: emailContent,
+        sentBy,
+        status: emailResponse.success ? 'sent' : 'failed',
+        source: 'create_send',
+        documentSnapshot: JSON.parse(JSON.stringify(snapshotSource)) as Record<string, unknown>,
+        errorMessage: emailResponse.success ? undefined : emailResponse.message,
+        resentFromId: options?.resentFromId,
+      })
+
+      if (!emailResponse.success) {
+        alert(`Failed to send ${isInvoice ? 'invoice' : 'quote'}: ${emailResponse.message}`)
+        return
+      }
 
       alert(`${isInvoice ? 'Invoice' : 'Quote'} sent successfully to ${emailToSend}!`)
       setRecipientEmail('')
       setMessage('')
     } catch (error) {
       console.error(`Failed to send ${documentType}:`, error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      addSendLog({
+        documentType: isInvoice ? 'invoice' : 'quote',
+        documentNumber: docNumber,
+        recipientEmail: emailToSend,
+        recipientName: recipientDisplayName,
+        subject: subject || `${isInvoice ? 'Invoice' : 'Quote'} ${docNumber}`,
+        content: emailContent || message || '',
+        sentBy,
+        status: 'failed',
+        source: 'create_send',
+        documentSnapshot: JSON.parse(
+          JSON.stringify(isInvoice ? invoiceData : quoteData)
+        ) as Record<string, unknown>,
+        errorMessage,
+        resentFromId: options?.resentFromId,
+      })
       alert(`Failed to send ${documentType}. Please try again.`)
     } finally {
       setIsSending(false)
+      setResendingId(null)
     }
   }
+
+  const handleResendFromHistory = (log: DocumentSendLog) => {
+    if (!applyDocumentSnapshot(log)) return
+    setResendingId(log.id)
+    setPageTab('create')
+    // Trigger send on the next paint after snapshot state is committed.
+    setPendingResendLogId(log.id)
+  }
+
+  useEffect(() => {
+    if (!pendingResendLogId || pageTab !== 'create') return
+    const logId = pendingResendLogId
+    let cancelled = false
+
+    const run = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      await waitForNextPaint()
+      if (cancelled) return
+      setPendingResendLogId(null)
+      await handleSendInvoice({ resentFromId: logId })
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+    // Intentionally depends on pendingResendLogId/pageTab so send uses the restored form state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingResendLogId, pageTab])
 
   return (
     <AdminRoute>
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto p-6">
-          {/* 헤더 */}
+          {/* Header */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
               <div>
@@ -517,33 +632,76 @@ function InvoicePreviewPageContent() {
                 <p className="text-gray-600 mt-1">Create and send invoices or quotes to customers</p>
               </div>
             </div>
-            {/* 문서 타입 선택 */}
-            <div className="flex gap-4">
+
+            <div className="flex gap-2 mb-4 border-b border-gray-200">
               <button
-                onClick={() => setDocumentType('invoice')}
-                className={`px-6 py-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
-                  documentType === 'invoice'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                type="button"
+                onClick={() => setPageTab('create')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-2 ${
+                  pageTab === 'create'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Receipt className="w-5 h-5" />
-                <span className="font-semibold">Invoice</span>
+                <FileText className="w-4 h-4" />
+                Create & Send
               </button>
               <button
-                onClick={() => setDocumentType('quote')}
-                className={`px-6 py-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
-                  documentType === 'quote'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                type="button"
+                onClick={() => setPageTab('history')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-2 ${
+                  pageTab === 'history'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <FileText className="w-5 h-5" />
-                <span className="font-semibold">Quote</span>
+                <History className="w-4 h-4" />
+                Send History
               </button>
             </div>
+
+            {pageTab === 'create' && (
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setDocumentType('invoice')}
+                  className={`px-6 py-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                    documentType === 'invoice'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <Receipt className="w-5 h-5" />
+                  <span className="font-semibold">Invoice</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocumentType('quote')}
+                  className={`px-6 py-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                    documentType === 'quote'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <span className="font-semibold">Quote</span>
+                </button>
+              </div>
+            )}
           </div>
-          {/* 비즈니스 유형 & 편집 폼 토글 */}
+
+          {pageTab === 'history' && (
+            <InvoiceQuoteSendHistoryPanel
+              typesFilter={['invoice', 'quote']}
+              onOpenInEditor={handleOpenHistoryInEditor}
+              onResend={handleResendFromHistory}
+              resendingId={resendingId}
+            />
+          )}
+
+          {pageTab === 'create' && (
+          <>
+          {/* Business type & edit form toggle */}
           <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium text-gray-700">Business:</span>
@@ -1604,7 +1762,7 @@ function InvoicePreviewPageContent() {
                     />
                   </div>
                   <button
-                    onClick={handleSendInvoice}
+                    onClick={() => void handleSendInvoice()}
                     disabled={isSending}
                     className="w-full px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
@@ -1684,6 +1842,8 @@ function InvoicePreviewPageContent() {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </AdminRoute>
