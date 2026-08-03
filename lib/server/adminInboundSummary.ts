@@ -11,6 +11,7 @@ export type InboundSummaryKey =
   | 'newsletter'
   | 'community'
   | 'orders'
+  | 'fundraising'
 
 export type InboundSummaryItem = {
   key: InboundSummaryKey
@@ -176,6 +177,37 @@ export async function fetchAdminInboundSummary(): Promise<AdminInboundSummary> {
       }
     } catch {
       /* non-fatal */
+    }
+
+    try {
+      const { data: partnerRows, error } = await admin
+        .from('fundraising_partners')
+        .select('id,payload,updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(300)
+
+      if (!error && partnerRows) {
+        const pending = partnerRows.filter((row) => {
+          const payload = row.payload as { status?: string; organizationName?: string; contactName?: string } | null
+          return payload?.status === 'pending'
+        })
+        const latest = pending[0]
+        const latestPayload = latest?.payload as
+          | { organizationName?: string; contactName?: string; contactEmail?: string }
+          | undefined
+        items.push({
+          key: 'fundraising',
+          label: 'Fundraising Applications',
+          count: pending.length,
+          href: '/admin/fundraising/partners',
+          latestTitle: latestPayload?.organizationName,
+          latestSubtitle: latestPayload?.contactName
+            ? `From ${latestPayload.contactName}`
+            : latestPayload?.contactEmail,
+        })
+      }
+    } catch {
+      /* non-fatal — table may not exist until migration is applied */
     }
   }
 

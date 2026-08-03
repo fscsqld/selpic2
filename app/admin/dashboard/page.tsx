@@ -33,6 +33,7 @@ import {
   ExternalLink,
   RefreshCw,
   Shield,
+  HeartHandshake,
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
@@ -93,7 +94,7 @@ export default function AdminDashboard() {
   } = useStore()
   const { users } = useUserAuth()
   const inboundSummary = useAdminInboundStore((s) => s.summary)
-  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders') =>
+  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders' | 'fundraising') =>
     inboundSummary.items.find((i) => i.key === key)?.count ?? 0
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
   const router = useRouter()
@@ -527,6 +528,15 @@ export default function AdminDashboard() {
       href: '/admin/documents',
       color: 'bg-teal-500',
       requiredPermission: 'users:read'
+    },
+    {
+      title: 'Fundraising',
+      description: 'School partners, reports, payouts, and document pack',
+      icon: HeartHandshake,
+      href: '/admin/fundraising/partners',
+      color: 'bg-emerald-600',
+      badge: inboundCount('fundraising') > 0 ? inboundCount('fundraising') : undefined,
+      requiredPermission: 'analytics:read',
     },
     {
       title: 'Invoice preview',

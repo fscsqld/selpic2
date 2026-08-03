@@ -965,12 +965,18 @@ export default function HomePage() {
   const helpLinks = useMemo(() => {
     const links = [
       getFooterLink('Help Links Item 1', '/help', 'Help Center'),
-      getFooterLink('Help Links Item 2', '/benefits', 'Benefits & Promo Codes'),
+      getFooterLink('Help Links Item 2', '/about', 'About Us'),
       getFooterLink('Help Links Item 3', '/privacy', 'Privacy Policy'),
       getFooterLink('Help Links Item 4', '/terms', 'Terms and Conditions'),
       getFooterLink('Help Links Item 5', '/refund', 'Refund Policy'),
     ]
-    return links.filter(link => link.label && link.url)
+    // School Fundraising lives only under Community / Partnerships
+    return links.filter(
+      (link) =>
+        Boolean(link.label && link.url) &&
+        link.url !== '/fundraising' &&
+        !/fundraising|benefits|promo codes/i.test(link.label)
+    )
   }, [getFooterLink, footerContent])
 
   // 디버깅: Footer content 확인
@@ -1887,7 +1893,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-300 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-5 gap-12">
           <div>
             {showFooterLogo ? (
               <Link
@@ -1952,6 +1958,21 @@ export default function HomePage() {
                   </Link>
                 </li>
               ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-white text-lg font-bold mb-4">Community / Partnerships</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/community" className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
+                  Community Board
+                </Link>
+              </li>
+              <li>
+                <Link href="/fundraising" className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
+                  Fundraising
+                </Link>
+              </li>
             </ul>
           </div>
           <div>

@@ -1682,6 +1682,9 @@ export default function CheckoutPage() {
                        {promoCodeError && (
                          <p className="text-sm text-red-600">{promoCodeError}</p>
                        )}
+                       <p className="text-xs text-gray-500">
+                         Entering a school or daycare fundraising code? Type it above to receive 5% OFF and support your school!
+                       </p>
                      </div>
                    ) : (
                      <div className="space-y-2">

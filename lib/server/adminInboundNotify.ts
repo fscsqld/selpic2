@@ -183,6 +183,33 @@ export async function notifyAdminsOfCommunityComment(input: {
   })
 }
 
+export async function notifyAdminsOfFundraisingApplication(input: {
+  id: string
+  organizationName: string
+  organizationTypeLabel: string
+  contactName: string
+  contactEmail: string
+  phone: string
+  postalAddress: string
+}): Promise<{ ok: boolean; logMessage?: string }> {
+  return sendAdminInboundEmail({
+    subjectPrefix: `[SELPIC Fundraising] New partner application — ${input.organizationName}`.slice(0, 120),
+    headline: 'New fundraising partnership application',
+    intro: 'An organisation applied to the SELPIC Fundraising Program. Review and assign a promo code in admin.',
+    rows: [
+      { label: 'Organisation', value: input.organizationName },
+      { label: 'Type', value: input.organizationTypeLabel },
+      { label: 'Contact', value: `${input.contactName} <${input.contactEmail}>` },
+      { label: 'Phone', value: input.phone },
+      { label: 'Address', value: input.postalAddress },
+      { label: 'Partner ID', value: input.id },
+    ],
+    adminPath: '/admin/fundraising/partners',
+    replyTo: input.contactEmail,
+    footerNote: 'Open Fundraising Partners to approve, assign a code, and send the welcome pack.',
+  })
+}
+
 export async function notifyAdminsOfNewOrder(order: OrderRecord) {
   const customerName = order.customer?.name || 'Customer'
   const customerEmail = order.customer?.email || '—'
