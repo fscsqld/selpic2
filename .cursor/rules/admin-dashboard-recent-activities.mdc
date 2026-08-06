@@ -1,0 +1,20 @@
+---
+description: Admin Dashboard Recent Activities shows curated important events only
+globs: app/admin/dashboard/**,lib/adminDashboardRecentActivities.ts,lib/adminActivityLog.ts
+alwaysApply: false
+---
+
+# Admin Dashboard — Recent Activities
+
+## Product rule
+
+Show a **curated, high-signal** feed — not every admin log row, and never fake placeholder copy.
+
+## Source
+
+- `useAdminActivityLog` + `lib/adminDashboardRecentActivities.ts`
+- Includes staff security events **and** product / CMS / promo / media mutations
+- Excludes routine `login` / `logout` / `profile_updated`
+- Limit: 8 rows; full trail in Activity Log (+ Supabase when migrated)
+
+See also: `admin-superadmin-audit-visibility.mdc`

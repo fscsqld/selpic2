@@ -11,6 +11,10 @@ import {
   buildOrderConfirmationEmailHtml,
   buildOrderConfirmationEmailSubject,
 } from '@/lib/orderConfirmationEmail'
+import {
+  buildDepositConfirmedEmailHtml,
+  buildDepositConfirmedEmailSubject,
+} from '@/lib/depositConfirmedEmail'
 import { buildSimpleReceiptEmailHtml, buildSimpleReceiptSubject } from '@/lib/email/simpleReceiptEmail'
 import { buildOrderReceiptPdfBase64 } from '@/lib/pdf/serverReceiptPdf'
 import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
@@ -360,10 +364,10 @@ export async function sendCustomerReceiptEmailAction(
   return { ok: true }
 }
 
-/** Admin resend confirmation/receipt for an order id (ledger, or orderJson fallback). */
+/** Admin resend confirmation/receipt, or bank deposit-confirmed, for an order id. */
 export async function sendAdminOrderEmailAction(input: {
   orderId: string
-  kind: 'confirmation' | 'receipt' | 'both'
+  kind: 'confirmation' | 'receipt' | 'both' | 'deposit_confirmed'
   /** When ledger row is missing/stale, use the admin UI order payload (same as shipping notify). */
   orderJson?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -381,6 +385,19 @@ export async function sendAdminOrderEmailAction(input: {
   }
 
   const to = order.customer.email.trim()
+
+  if (input.kind === 'deposit_confirmed') {
+    const r = await sendEmailViaResendServer({
+      to,
+      subject: buildDepositConfirmedEmailSubject(order.id),
+      html: buildDepositConfirmedEmailHtml(order),
+    })
+    if (!r.ok) {
+      console.error('[sendAdminOrderEmailAction] deposit_confirmed', r.logMessage)
+      return { ok: false, error: 'SEND_FAILED' }
+    }
+    return { ok: true }
+  }
 
   if (input.kind === 'confirmation' || input.kind === 'both') {
     const r = await sendEmailViaResendServer({

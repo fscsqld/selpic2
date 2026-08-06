@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+const DEFAULT_ADMIN_IDLE_TIMEOUT_MS = 60 * 60 * 1000
+const DEFAULT_ADMIN_ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000
+
 export interface AdminSession {
   id: string
   username: string
@@ -34,12 +37,37 @@ interface AdminSessionState {
   setMaxSessionsPerUser: (max: number) => void
 }
 
+function isAdminSessionExpired(
+  session: AdminSession,
+  idleTimeoutMs: number,
+  absoluteTimeoutMs: number,
+  nowMs = Date.now()
+): boolean {
+  if (!session.isActive) return true
+
+  if (idleTimeoutMs > 0) {
+    const lastActivityMs = new Date(session.lastActivity).getTime()
+    if (!Number.isFinite(lastActivityMs) || nowMs - lastActivityMs > idleTimeoutMs) {
+      return true
+    }
+  }
+
+  if (absoluteTimeoutMs > 0) {
+    const loginTimeMs = new Date(session.loginTime).getTime()
+    if (!Number.isFinite(loginTimeMs) || nowMs - loginTimeMs > absoluteTimeoutMs) {
+      return true
+    }
+  }
+
+  return false
+}
+
 export const useAdminSession = create<AdminSessionState>()(
   persist(
     (set, get) => ({
       sessions: [],
       currentSessionId: null,
-      sessionTimeout: 60 * 60 * 1000, // Default: 60 minutes (3600000ms)
+      sessionTimeout: DEFAULT_ADMIN_IDLE_TIMEOUT_MS, // Default: 60 minutes
       maxSessionsPerUser: 0, // Default: unlimited
 
       createSession: (username, role, ipAddress, userAgent) => {
@@ -130,37 +158,32 @@ export const useAdminSession = create<AdminSessionState>()(
 
       isSessionValid: (sessionId) => {
         const session = get().sessions.find(s => s.id === sessionId)
-        if (!session || !session.isActive) return false
-
-        // Check timeout
         const { sessionTimeout } = get()
-        if (sessionTimeout > 0) {
-          const lastActivity = new Date(session.lastActivity).getTime()
-          const now = Date.now()
-          if (now - lastActivity > sessionTimeout) {
-            return false
-          }
-        }
-
-        return true
+        if (!session) return false
+        return !isAdminSessionExpired(
+          session,
+          sessionTimeout,
+          DEFAULT_ADMIN_ABSOLUTE_TIMEOUT_MS
+        )
       },
 
       cleanupExpiredSessions: () => {
         const { sessions, sessionTimeout } = get()
-        if (sessionTimeout <= 0) return
-
         const now = Date.now()
-        const updatedSessions = sessions.map(s => {
-          if (!s.isActive) return s
-          
-          const lastActivity = new Date(s.lastActivity).getTime()
-          if (now - lastActivity > sessionTimeout) {
-            return { ...s, isActive: false }
-          }
-          return s
-        })
+        const updatedSessions = sessions.map(s =>
+          isAdminSessionExpired(s, sessionTimeout, DEFAULT_ADMIN_ABSOLUTE_TIMEOUT_MS, now)
+            ? { ...s, isActive: false }
+            : s
+        )
+        const currentSessionId = get().currentSessionId
+        const currentStillActive = currentSessionId
+          ? updatedSessions.some((s) => s.id === currentSessionId && s.isActive)
+          : false
 
-        set({ sessions: updatedSessions })
+        set({
+          sessions: updatedSessions,
+          currentSessionId: currentStillActive ? currentSessionId : null,
+        })
       },
 
       setSessionTimeout: (timeout) => {
@@ -235,7 +258,7 @@ export const useAdminSession = create<AdminSessionState>()(
         if (state) {
           // Ensure default values if missing
           if (state.sessionTimeout === undefined || state.sessionTimeout === null) {
-            state.sessionTimeout = 60 * 60 * 1000 // Default: 60 minutes
+            state.sessionTimeout = DEFAULT_ADMIN_IDLE_TIMEOUT_MS
             console.log('⚠️ [Session] sessionTimeout was undefined/null, set to default 60 minutes')
           }
           if (state.maxSessionsPerUser === undefined || state.maxSessionsPerUser === null) {
@@ -263,7 +286,7 @@ export const useAdminSession = create<AdminSessionState>()(
           return {
             sessions: [],
             currentSessionId: null,
-            sessionTimeout: 60 * 60 * 1000, // 60 minutes
+            sessionTimeout: DEFAULT_ADMIN_IDLE_TIMEOUT_MS,
             maxSessionsPerUser: 0
           }
         }
@@ -277,5 +300,11 @@ if (typeof window !== 'undefined') {
   setInterval(() => {
     useAdminSession.getState().cleanupExpiredSessions()
   }, 60000) // Every minute
+
+  // Local/dev verification helper (browser console / automation only).
+  if (process.env.NODE_ENV === 'development') {
+    ;(window as unknown as { __SELPIC_ADMIN_SESSION__?: typeof useAdminSession }).__SELPIC_ADMIN_SESSION__ =
+      useAdminSession
+  }
 }
 

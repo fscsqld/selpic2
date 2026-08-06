@@ -9,16 +9,14 @@ const POLL_MS = 60_000
 
 /**
  * Polls unified inbound summary so dashboard badges stay in sync with Supabase + server files.
+ * Note: do not gate with a "ran once" ref — React Strict Mode remounts effects after cleanup
+ * and that pattern skips the second setup, leaving badges stuck on stale localStorage data.
  */
 export default function AdminInboundSync() {
   const prevTotalRef = useRef<number | null>(null)
   const prevOrdersCountRef = useRef<number | null>(null)
-  const ranRef = useRef(false)
 
   useEffect(() => {
-    if (ranRef.current) return
-    ranRef.current = true
-
     let cancelled = false
 
     const applySummary = (summary: AdminInboundSummary) => {

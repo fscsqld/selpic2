@@ -40,6 +40,11 @@ import type { OrderRecord, OrderStatus } from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { formatCurrency } from '@/lib/formatUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { useAdminActivityLog } from '@/lib/adminActivityLog'
+import {
+  DASHBOARD_RECENT_ACTIVITY_LIMIT,
+  getDashboardImportantActivities,
+} from '@/lib/adminDashboardRecentActivities'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
@@ -80,6 +85,13 @@ export default function AdminDashboard() {
   const [etsySyncBusy, setEtsySyncBusy] = useState(false)
 
   const { adminUser, logout } = useAdminAuth()
+  const activityLogs = useAdminActivityLog((s) => s.logs)
+
+  useEffect(() => {
+    void import('@/lib/logAdminActivity').then(({ pullAdminActivityLogsFromServer }) => {
+      void pullAdminActivityLogsFromServer()
+    })
+  }, [])
   const {
     products,
     orders,
@@ -584,32 +596,10 @@ export default function AdminDashboard() {
     return hasPermission(action.requiredPermission)
   }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, inboundSummary])
 
-  const recentActivities = [
-    {
-      action: t('admin.dashboard.activities.productAdded.action'),
-      item: t('admin.dashboard.activities.productAdded.item'),
-      time: t('admin.dashboard.activities.productAdded.time'),
-      type: 'success'
-    },
-    {
-      action: t('admin.dashboard.activities.contentEdited.action'),
-      item: t('admin.dashboard.activities.contentEdited.item'),
-      time: t('admin.dashboard.activities.contentEdited.time'),
-      type: 'info'
-    },
-    {
-      action: t('admin.dashboard.activities.imageUploaded.action'),
-      item: t('admin.dashboard.activities.imageUploaded.item'),
-      time: t('admin.dashboard.activities.imageUploaded.time'),
-      type: 'success'
-    },
-    {
-      action: t('admin.dashboard.activities.systemUpdated.action'),
-      item: t('admin.dashboard.activities.systemUpdated.item'),
-      time: t('admin.dashboard.activities.systemUpdated.time'),
-      type: 'warning'
-    }
-  ]
+  const recentActivities = useMemo(
+    () => getDashboardImportantActivities(activityLogs, DASHBOARD_RECENT_ACTIVITY_LIMIT),
+    [activityLogs]
+  )
 
   // 컴포넌트가 준비되지 않았을 때 로딩 표시
   if (!isComponentReady) {
@@ -1168,29 +1158,66 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* 최근 활동 */}
+          {/* Recent Activities — curated high-signal admin events only */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.sections.recentActivities')}</h3>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {t('admin.dashboard.sections.recentActivities')}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  Important account, product, CMS, promo, and media changes. Routine sign-ins stay in the full Activity Log.
+                </p>
+              </div>
+              {adminUser?.role === 'super_admin' && (
+                <Link
+                  href="/admin/settings?tab=activity-log"
+                  className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                >
+                  View full log →
+                </Link>
+              )}
+            </div>
             <div className="space-y-4">
-              {recentActivities.map((activity, index) => (
-                <div key={index} className="flex items-center space-x-3">
-                  <div className={`p-2 rounded-full ${
-                    activity.type === 'success' ? 'bg-green-100' :
-                    activity.type === 'warning' ? 'bg-yellow-100' :
-                    'bg-blue-100'
-                  }`}>
-                    <AlertCircle className={`h-4 w-4 ${
-                      activity.type === 'success' ? 'text-green-600' :
-                      activity.type === 'warning' ? 'text-yellow-600' :
-                      'text-blue-600'
-                    }`} />
+              {recentActivities.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No important activity yet. Account, product, CMS, promo, and media changes will appear here.
+                </p>
+              ) : (
+                recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-center space-x-3">
+                    <div
+                      className={`p-2 rounded-full ${
+                        activity.tone === 'success'
+                          ? 'bg-green-100'
+                          : activity.tone === 'warning'
+                            ? 'bg-yellow-100'
+                            : activity.tone === 'danger'
+                              ? 'bg-red-100'
+                              : 'bg-blue-100'
+                      }`}
+                    >
+                      <AlertCircle
+                        className={`h-4 w-4 ${
+                          activity.tone === 'success'
+                            ? 'text-green-600'
+                            : activity.tone === 'warning'
+                              ? 'text-yellow-600'
+                              : activity.tone === 'danger'
+                                ? 'text-red-600'
+                                : 'text-blue-600'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {activity.detail} • {activity.timeLabel}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                    <p className="text-xs text-gray-500">{activity.item} • {activity.time}</p>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 

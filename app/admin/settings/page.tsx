@@ -187,6 +187,25 @@ export default function AdminSettingsPage() {
   const [isMyProfileModalOpen, setIsMyProfileModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('general')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  // Deep-link from dashboard (e.g. /admin/settings?tab=activity-log)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (!tab) return
+    const allowed = new Set([
+      'general',
+      'security',
+      'notifications',
+      'media',
+      'admin-management',
+      'activity-log',
+      'sessions',
+      'system',
+      'sales',
+    ])
+    if (allowed.has(tab)) setActiveTab(tab)
+  }, [])
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['general', 'admin', 'system']))
 
@@ -4918,6 +4937,22 @@ function ActivityLogView() {
   const [clearMode, setClearMode] = useState<'all' | 'older'>('all')
   const [daysToKeep, setDaysToKeep] = useState<number>(30)
   const [logToDelete, setLogToDelete] = useState<string | null>(null)
+  const [remoteSyncNote, setRemoteSyncNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void import('@/lib/logAdminActivity').then(async ({ pullAdminActivityLogsFromServer }) => {
+      const added = await pullAdminActivityLogsFromServer()
+      if (cancelled) return
+      if (added > 0) {
+        setRemoteSyncNote(`Merged ${added} shared audit entr${added === 1 ? 'y' : 'ies'} from server.`)
+        window.setTimeout(() => setRemoteSyncNote(null), 4000)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const filteredLogs = useMemo(() => {
     let result = logs
@@ -4952,11 +4987,32 @@ function ActivityLogView() {
     admin_created: 'bg-indigo-100 text-indigo-800',
     admin_deleted: 'bg-red-100 text-red-800',
     profile_updated: 'bg-cyan-100 text-cyan-800',
-    username_changed: 'bg-orange-100 text-orange-800'
+    username_changed: 'bg-orange-100 text-orange-800',
+    product_created: 'bg-emerald-100 text-emerald-800',
+    product_updated: 'bg-teal-100 text-teal-800',
+    product_deleted: 'bg-red-100 text-red-800',
+    product_stock_adjusted: 'bg-amber-100 text-amber-800',
+    cms_content_created: 'bg-sky-100 text-sky-800',
+    cms_content_updated: 'bg-sky-100 text-sky-800',
+    cms_content_deleted: 'bg-red-100 text-red-800',
+    promo_code_created: 'bg-violet-100 text-violet-800',
+    promo_code_updated: 'bg-violet-100 text-violet-800',
+    promo_code_deleted: 'bg-red-100 text-red-800',
+    media_uploaded: 'bg-lime-100 text-lime-800',
+    media_deleted: 'bg-red-100 text-red-800',
   }
 
   return (
     <div className="space-y-4">
+      {remoteSyncNote && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {remoteSyncNote}
+        </div>
+      )}
+      <p className="text-sm text-gray-600">
+        Shared audit of staff account events and storefront changes (products, CMS, promos, media). Use this for
+        oversight and dispute evidence. Dashboard Recent Activities shows a curated subset only.
+      </p>
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
@@ -4999,6 +5055,18 @@ function ActivityLogView() {
             <option value="admin_deleted">Admin Deleted</option>
             <option value="profile_updated">Profile Updated</option>
             <option value="username_changed">Username Changed</option>
+            <option value="product_created">Product Created</option>
+            <option value="product_updated">Product Updated</option>
+            <option value="product_deleted">Product Deleted</option>
+            <option value="product_stock_adjusted">Stock Adjusted</option>
+            <option value="cms_content_created">CMS Created</option>
+            <option value="cms_content_updated">CMS Updated</option>
+            <option value="cms_content_deleted">CMS Deleted</option>
+            <option value="promo_code_created">Promo Created</option>
+            <option value="promo_code_updated">Promo Updated</option>
+            <option value="promo_code_deleted">Promo Deleted</option>
+            <option value="media_uploaded">Media Uploaded</option>
+            <option value="media_deleted">Media Deleted</option>
           </select>
         </div>
         <div className="flex items-end gap-2">
@@ -5229,7 +5297,7 @@ function ActivityLogView() {
 
 // Session Management View Component
 function SessionManagementView() {
-  const { getActiveSessions, endSession, sessionTimeout, setSessionTimeout, maxSessionsPerUser, setMaxSessionsPerUser, currentSessionId, updateActivity } = useAdminSession()
+  const { getActiveSessions, endSession, sessionTimeout, setSessionTimeout, maxSessionsPerUser, setMaxSessionsPerUser } = useAdminSession()
   const { adminUser, logout } = useAdminAuth()
   const [selectedUser, setSelectedUser] = useState<string>('all')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -5290,22 +5358,6 @@ function SessionManagementView() {
       })
     }
   }, [sessionTimeout, maxSessionsPerUser, isHydrated])
-
-  // Update current session activity periodically
-  useEffect(() => {
-    if (currentSessionId) {
-      updateActivity(currentSessionId)
-    }
-    
-    // Update activity every 30 seconds
-    const activityInterval = setInterval(() => {
-      if (currentSessionId) {
-        updateActivity(currentSessionId)
-      }
-    }, 30000)
-    
-    return () => clearInterval(activityInterval)
-  }, [currentSessionId, updateActivity])
 
   // Refresh sessions list every 5 seconds
   useEffect(() => {
@@ -5378,6 +5430,9 @@ function SessionManagementView() {
             />
             <p className="mt-1 text-xs text-gray-500">
               {localTimeout === 0 ? 'Sessions will not expire automatically' : `Sessions will expire after ${localTimeout / 60000} minutes of inactivity`}
+            </p>
+            <p className="mt-1 text-xs text-amber-700">
+              Active use can extend the idle timer, but every admin session is still forced to re-authenticate after 8 hours.
             </p>
           </div>
           <div>
