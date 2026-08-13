@@ -3,10 +3,10 @@
  * ABN/ACN are Australian identifiers — keep in sync with official records.
  * Invoices, quotes, emails, footers, and policy fallbacks should read from here.
  */
-/** Public website (official store), canonical HTTPS URL */
-export const COMPANY_WEBSITE_URL = 'https://selpic.com.au' as const
+/** Public website (official store), canonical HTTPS URL (www — matches live Vercel host) */
+export const COMPANY_WEBSITE_URL = 'https://www.selpic.com.au' as const
 
-/** Registered / marketing domain without scheme */
+/** Registered / marketing domain without scheme (display; SEO uses www via COMPANY_WEBSITE_URL) */
 export const COMPANY_DOMAIN = 'selpic.com.au' as const
 
 export const COMPANY_LEGAL = {

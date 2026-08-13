@@ -4,7 +4,16 @@ import { useMemo } from 'react'
 import type { Product } from '@/lib/store'
 
 function getSiteBase(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+  // Client bundle: NEXT_PUBLIC_* is inlined; normalize apex → www for SEO JSON-LD.
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.selpic.com.au').replace(/\/$/, '')
+  try {
+    const u = new URL(raw)
+    if (u.hostname === 'selpic.com.au') u.hostname = 'www.selpic.com.au'
+    u.protocol = 'https:'
+    return u.origin
+  } catch {
+    return 'https://www.selpic.com.au'
+  }
 }
 
 function toAbsoluteUrl(baseUrl: string, maybeUrl?: string): string | undefined {

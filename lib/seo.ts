@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+const SITE_URL = getPublicSiteUrl()
 const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logo.png`
 
 type PublicSeoInput = {

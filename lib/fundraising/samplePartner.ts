@@ -27,6 +27,7 @@ export function createSampleFundraisingPartner(): FundraisingPartner {
     accountName: 'Sample Primary School P&C',
     bsb: '000-000',
     accountNumber: '12345678',
+    abn: '51 824 753 556',
     notes: 'Preview-only sample partner (not saved to Supabase).',
     createdAt: now,
     updatedAt: now,
@@ -39,7 +40,7 @@ export function sampleDocumentExtras(
   settings: FundraisingSettings,
   period?: string
 ): Record<string, string | number | undefined> {
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://selpic.com.au'
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://www.selpic.com.au'
   const token = partner.lookupToken || 'samplepreviewtoken'
   const net = 1250
   const rate = settings.donationRate ?? DEFAULT_FUNDRAISING_SETTINGS.donationRate
@@ -58,7 +59,11 @@ export function sampleDocumentExtras(
     orderCount: 18,
     oldDonationRate: String(Math.max(5, rate - 5)),
     effectiveFrom: new Date().toISOString().slice(0, 10),
-    paymentReference: `SELPIC-${partner.linkedPromoCode || 'CODE'}-${period || 'YYYY-MM'}`,
+    paymentReference: `SELPIC-${partner.linkedPromoCode || 'CODE'}-${period || 'FY2025-26-Q1'}`,
     paidAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    kind: 'updated',
+    partnersUrl: `${base}/admin/fundraising/partners`,
+    payoutUrl: `${base}/admin/fundraising/payout`,
   }
 }

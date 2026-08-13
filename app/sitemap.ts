@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
 /**
  * Static public routes + `/products/[id]` from `data/catalog/products.json`.
@@ -7,9 +8,8 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
  * if CATALOG_SYNC_SECRET / NEXT_PUBLIC_CATALOG_SYNC_SECRET are set.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Canonical production domain for sitemap output.
-  // Keep this fixed so Search Console never receives preview/legacy hosts.
-  const base = 'https://selpic.com.au'
+  // Primary production host (www). Must match live Vercel + HTML canonical.
+  const base = getPublicSiteUrl()
   const now = new Date()
   const catalog = await readCatalogProducts()
   const latestCatalogUpdate = catalog
@@ -49,8 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: '/login', priority: 0.35, changeFrequency: 'monthly' },
     { path: '/login/personal', priority: 0.3, changeFrequency: 'monthly' },
     { path: '/register', priority: 0.35, changeFrequency: 'monthly' },
-    { path: '/forgot-password', priority: 0.2, changeFrequency: 'yearly' },
-    { path: '/reset-password', priority: 0.2, changeFrequency: 'yearly' },
+    // forgot-password / reset-password: noindex + omitted (account tooling, not SEO)
     { path: '/orders', priority: 0.35, changeFrequency: 'monthly' },
     { path: '/profile', priority: 0.35, changeFrequency: 'monthly' },
     { path: '/promo-codes', priority: 0.35, changeFrequency: 'monthly' },
