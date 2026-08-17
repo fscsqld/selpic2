@@ -4928,7 +4928,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
 
 // Activity Log View Component
 function ActivityLogView() {
-  const { logs, getLogsByAdmin, clearLogs, deleteLog, deleteLogsByDate } = useAdminActivityLog()
+  const { logs, getLogsByActors, clearLogs, deleteLog, deleteLogsByDate } = useAdminActivityLog()
   const { adminUsers, adminUser } = useAdminAuth()
   const [filterAdmin, setFilterAdmin] = useState<string>('all')
   const [filterAction, setFilterAction] = useState<string>('all')
@@ -4954,29 +4954,73 @@ function ActivityLogView() {
     }
   }, [])
 
+  /** Role-only picker — individual names are available via Search (avoids seed + display-name duplicates). */
+  const actorKeysForFilter = (filter: string): string[] | null => {
+    if (filter === 'all') return null
+    if (filter !== 'role:super_admin' && filter !== 'role:admin') return null
+
+    const role = filter === 'role:super_admin' ? 'super_admin' : 'admin'
+    const keys = new Set<string>()
+
+    const addActor = (username?: string, email?: string, actorRole?: string) => {
+      if (actorRole !== role) return
+      if (username?.trim()) keys.add(username.trim())
+      if (email?.trim()) keys.add(email.trim())
+    }
+
+    // Prefer live session role over a stale roster row for the same person.
+    const sessionKey = adminUser?.username?.trim().toLowerCase() || ''
+    for (const a of adminUsers) {
+      if (sessionKey && a.username?.trim().toLowerCase() === sessionKey) continue
+      addActor(a.username, a.email, a.role)
+    }
+    if (adminUser) {
+      addActor(adminUser.username, adminUser.email, adminUser.role)
+    }
+
+    // Legacy seed login names still appear on older Activity Log rows
+    if (role === 'super_admin') keys.add('superadmin')
+    if (role === 'admin') keys.add('admin')
+
+    return Array.from(keys)
+  }
+
+  // Drop stale per-username filter values from the previous detailed dropdown
+  useEffect(() => {
+    if (
+      filterAdmin !== 'all' &&
+      filterAdmin !== 'role:super_admin' &&
+      filterAdmin !== 'role:admin'
+    ) {
+      setFilterAdmin('all')
+    }
+  }, [filterAdmin])
+
   const filteredLogs = useMemo(() => {
     let result = logs
 
-    if (filterAdmin !== 'all') {
-      result = getLogsByAdmin(filterAdmin)
+    const actors = actorKeysForFilter(filterAdmin)
+    if (actors) {
+      result = getLogsByActors(actors)
     }
 
     if (filterAction !== 'all') {
-      result = result.filter(log => log.action === filterAction)
+      result = result.filter((log) => log.action === filterAction)
     }
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      result = result.filter(log =>
-        log.performedBy.toLowerCase().includes(term) ||
-        log.targetAdmin?.toLowerCase().includes(term) ||
-        log.details?.description?.toLowerCase().includes(term) ||
-        log.ipAddress?.toLowerCase().includes(term)
+      result = result.filter(
+        (log) =>
+          log.performedBy.toLowerCase().includes(term) ||
+          log.targetAdmin?.toLowerCase().includes(term) ||
+          log.details?.description?.toLowerCase().includes(term) ||
+          log.ipAddress?.toLowerCase().includes(term)
       )
     }
 
     return result.slice(0, 500) // Show last 500 logs
-  }, [logs, filterAdmin, filterAction, searchTerm, getLogsByAdmin])
+  }, [logs, filterAdmin, filterAction, searchTerm, getLogsByActors, adminUsers, adminUser])
 
   const actionColors: Record<string, string> = {
     login: 'bg-green-100 text-green-800',
@@ -5000,6 +5044,12 @@ function ActivityLogView() {
     promo_code_deleted: 'bg-red-100 text-red-800',
     media_uploaded: 'bg-lime-100 text-lime-800',
     media_deleted: 'bg-red-100 text-red-800',
+    fundraising_partner_updated: 'bg-emerald-100 text-emerald-800',
+    fundraising_partner_deleted: 'bg-red-100 text-red-800',
+    fundraising_settings_updated: 'bg-teal-100 text-teal-800',
+    fundraising_settlement_paid: 'bg-amber-100 text-amber-800',
+    fundraising_document_sent: 'bg-sky-100 text-sky-800',
+    fundraising_maintenance_run: 'bg-violet-100 text-violet-800',
   }
 
   return (
@@ -5010,8 +5060,9 @@ function ActivityLogView() {
         </div>
       )}
       <p className="text-sm text-gray-600">
-        Shared audit of staff account events and storefront changes (products, CMS, promos, media). Use this for
-        oversight and dispute evidence. Dashboard Recent Activities shows a curated subset only.
+        Shared audit of staff account events and storefront changes (products, CMS, promos, media, fundraising).
+        Filter by Super Admin vs Admin role, or Search by username. Dashboard Recent Activities shows a curated subset
+        only.
       </p>
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -5028,15 +5079,19 @@ function ActivityLogView() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Admin</label>
           <select
-            value={filterAdmin}
+            value={
+              filterAdmin === 'role:super_admin' || filterAdmin === 'role:admin' || filterAdmin === 'all'
+                ? filterAdmin
+                : 'all'
+            }
             onChange={(e) => setFilterAdmin(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="all">All Admins</option>
-            {adminUsers.map(admin => (
-              <option key={admin.username} value={admin.username}>{admin.username}</option>
-            ))}
+            <option value="all">All</option>
+            <option value="role:super_admin">Super Admin</option>
+            <option value="role:admin">Admin</option>
           </select>
+          <p className="mt-1 text-xs text-gray-500">Use Search to find a specific username.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
@@ -5067,6 +5122,12 @@ function ActivityLogView() {
             <option value="promo_code_deleted">Promo Deleted</option>
             <option value="media_uploaded">Media Uploaded</option>
             <option value="media_deleted">Media Deleted</option>
+            <option value="fundraising_partner_updated">Fundraising Partner Updated</option>
+            <option value="fundraising_partner_deleted">Fundraising Partner Deleted</option>
+            <option value="fundraising_settings_updated">Fundraising Settings Updated</option>
+            <option value="fundraising_settlement_paid">Fundraising Settlement Paid</option>
+            <option value="fundraising_document_sent">Fundraising Document Sent</option>
+            <option value="fundraising_maintenance_run">Fundraising Maintenance</option>
           </select>
         </div>
         <div className="flex items-end gap-2">

@@ -1,6 +1,6 @@
 ---
 description: Super-admin audit of staff admin changes for disputes and oversight
-globs: app/admin/**,lib/adminActivityLog.ts,lib/adminDashboardRecentActivities.ts,lib/logAdminActivity.ts,lib/store.ts,lib/contentStore.ts,lib/mediaStore.ts
+globs: app/admin/**,lib/adminActivityLog.ts,lib/adminDashboardRecentActivities.ts,lib/logAdminActivity.ts,lib/store.ts,lib/contentStore.ts,lib/mediaStore.ts,app/admin/fundraising/**
 alwaysApply: false
 ---
 
@@ -11,8 +11,10 @@ alwaysApply: false
 Super admins must see **what regular admins changed** (who / what / when) for oversight and dispute evidence.
 
 - **Dashboard Recent Activities** = curated highlight (max 8)
-- **Admin Settings → Activity Log** = full review UI
-- **Supabase `admin_activity_logs`** = shared durable store (run migration / SQL Editor script)
+- **Admin Settings → Activity Log** = full review UI (super-admin only)
+- **Supabase `admin_activity_logs`** = shared durable store
+
+Standing rule for **all future admin mutations**: [`.cursor/rules/admin-superadmin-change-audit.mdc`](mdc:.cursor/rules/admin-superadmin-change-audit.mdc) (`alwaysApply`).
 
 ## Logging
 
@@ -27,11 +29,12 @@ Super admins must see **what regular admins changed** (who / what / when) for ov
 - CMS content: create / update (45s throttle) / delete (`lib/contentStore.ts`)
 - Promo codes: create / update / delete
 - Media: upload / delete (`lib/mediaStore.ts`)
-- Staff account events: existing `adminAuth` `addLog` (now also syncs remote)
+- Staff account events: existing `adminAuth` `addLog` (also syncs remote)
+- Fundraising: partner save/delete/lifecycle, settings, settlement paid, document send, maintenance (`app/admin/fundraising/**`)
 
-## Still domain-specific (not Activity Log)
+## Still domain-specific (supplementary, not a replacement)
 
-- Per-order `auditLog`, document send history, fundraising grant audits
+- Per-order `auditLog`, document send history, fundraising grant-account events / local `rateLogs`
 
 ## Deploy note
 
