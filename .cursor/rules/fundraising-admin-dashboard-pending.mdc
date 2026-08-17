@@ -1,0 +1,48 @@
+---
+description: Admin Dashboard must surface pending Fundraising partnership applications in Quick Actions / inbound alerts
+globs: app/admin/dashboard/**/*.tsx,components/AdminInbound*.tsx,lib/server/adminInbound*.ts,app/api/fundraising/apply/**/*.ts
+alwaysApply: false
+---
+
+# Fundraising applications on Admin Dashboard
+
+## Product requirement (learned from ops feedback)
+
+When a school/organisation submits a public fundraising partnership application (`/fundraising`), **admins must be able to notice it from the Admin Dashboard without already knowing to open Fundraising Partners**.
+
+Specifically:
+
+1. **Quick Actions → Fundraising** must show a **badge count** of `pending` partnership applications (same source of truth as Partner Registry).
+2. The unified **inbound attention banner** (customer items needing attention) must also list fundraising applications when `count > 0`, linking to `/admin/fundraising/partners`.
+3. Admins should not have to rely only on email or manually opening Partner Registry to discover new applications.
+
+## Current intended wiring (do not remove)
+
+- Apply API persists partner with `status: 'pending'` and calls `notifyAdminsOfFundraisingApplication`.
+- `fetchAdminInboundSummary` counts `fundraising_partners` rows whose `payload.status === 'pending'` → item key `fundraising`.
+- Dashboard Quick Action `Fundraising` uses `inboundCount('fundraising')` for its badge.
+- `AdminInboundSync` polls `/api/admin/inbound-summary`; `AdminInboundAlertBanner` renders items with `count > 0`.
+
+## Known gap (fixed 2026-08-04)
+
+Ops reported: pending applications visible in Partner Registry but **no Quick Actions badge**.
+
+Root cause: `AdminInboundSync` used a `ranRef` “run once” guard. React Strict Mode remounts the effect after cleanup; the second setup exited early, so `/api/admin/inbound-summary` never stayed polled and badges stayed on stale `admin-inbound-summary` localStorage (often without a `fundraising` count).
+
+Fix: remove `ranRef`; rely on effect cleanup `cancelled` + interval/visibility sync only.
+
+When verifying: Partner Registry pending count and Dashboard Fundraising badge / inbound banner must match after a hard refresh of `/admin/dashboard`.
+
+## Known gap to fix when working this area
+
+Ops reported: **new applications are not visible on Dashboard Quick Actions**, so admins cannot review them from the dashboard.
+
+When fixing, verify the full chain (not only the Quick Action tile):
+
+1. Apply succeeds and row exists in Supabase `fundraising_partners` with `payload.status = pending`.
+2. Partner Registry **Sync from server** shows the pending partner (if Sync is 0, Dashboard badge will also be 0).
+3. `/api/admin/inbound-summary` returns a `fundraising` item with the correct count.
+4. Dashboard badge and inbound banner refresh after sync (poll / visibility change).
+5. Copy should make “new partnership application” obvious (badge alone on a generic “Fundraising” tile is easy to miss if count stays 0).
+
+Do not treat “Fundraising exists in Quick Actions without a badge” as done — **pending applications must be discoverable**.

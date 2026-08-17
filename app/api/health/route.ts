@@ -37,6 +37,7 @@ export async function GET() {
         /** Runtime only — missing value does not fail `next build`. */
         secretConfigured: isCronSecretConfigured(),
         etsySyncPath: '/api/cron/etsy-sync',
+        fundraisingRenewalPath: '/api/cron/fundraising-renewal',
       },
     },
     { headers: { 'Cache-Control': 'no-store' } }

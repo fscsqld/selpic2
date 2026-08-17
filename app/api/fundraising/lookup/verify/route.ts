@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { LOOKUP_SESSION_HOURS } from '@/lib/fundraising/lookupConstants'
 import { LOOKUP_SESSION_COOKIE, verifyLookupOtp } from '@/lib/fundraising/lookupAuth'
 
 export async function POST(req: Request) {
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 12 * 60 * 60,
+      maxAge: LOOKUP_SESSION_HOURS * 60 * 60,
     })
     return res
   } catch (e) {

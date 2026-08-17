@@ -1,0 +1,53 @@
+---
+description: Fundraising grant settlements use Australian FY quarters
+globs: lib/fundraising/**/*.ts,app/admin/fundraising/**/*.tsx,app/fundraising/**/*.tsx
+alwaysApply: false
+---
+
+# Fundraising grant settlement — Australian FY quarters
+
+## Cadence
+
+- **Quarterly only** (not monthly). No minimum payout threshold.
+- Quarters follow the **Australian financial year** (starts 1 July) — **not** calendar-year quarters:
+  - **Q1** 1 Jul – 30 Sep
+  - **Q2** 1 Oct – 31 Dec
+  - **Q3** 1 Jan – 31 Mar *(next calendar year)*
+  - **Q4** 1 Apr – 30 Jun *(next calendar year)*
+- Example: August 2026 → **FY2026-27 Q1** (Jul–Sep 2026). January 2027 → **FY2026-27 Q3**.
+- Period id: `FY2025-26-Q1` via `lib/fundraising/auFinancialQuarter.ts`
+- Admin labels lead with months: `Q1 · Jul–Sep 2026 (FY2026-27)` so AU FY ≠ calendar Q1 is obvious.
+- Legacy monthly `YYYY-MM` settlements may still display for history; new settlements must use FY quarter ids.
+
+## Settlement freeze (7 days)
+
+- After quarter end, wait **7 calendar days** (Sydney) before locking final figures (`settlementFreezeCalendarDays`).
+- Purpose: cancellations / refunds can settle before Generate Settlement and bank transfer.
+- Prefer Generate Settlement only after freeze ends (`isFinalSettlementAllowed` / `getSettlementActionsGate`).
+- Grant Tracker: **Generate Settlement** and **Mark Paid** stay disabled until the gate opens; one short amber message explains why (no override / confirm dialogs).
+- Refunds after lock → adjust in a **later** period (do not reopen a Paid quarter).
+- New orders after quarter end count toward the **next** quarter immediately (Lookup “This quarter”).
+
+## Payout due date
+
+- **Due by the 15th** of the calendar month immediately after quarter end.
+- If that day is Saturday/Sunday → next Monday.
+- Public holiday → next banking day (ops may adjust; document on D9).
+
+Examples: Q1 ends 30 Sep → freeze through ~7 Oct → due 15 Oct; Q4 ends 30 Jun → due 15 Jul.
+
+## Display model (Lookup)
+
+- **All-time Impact**: cumulative (all quarters).
+- **This quarter**: current AU FY quarter only (next-quarter accrual after rollover).
+- **Next grant transfer** card: countdown / freeze / target payout for the relevant closed or open quarter.
+- **Transfers**: Ready/Paid settlement snapshots per period.
+
+## UI / copy
+
+- Grant Tracker, Report, Documents: AU FY quarter selectors via `AuFyQuarterSelect` / `listAdminAuFyQuarterPeriods`.
+- Selector order (top → bottom): **current → upcoming (2) → recent past (4)**. Not 12 past-only rows.
+- Quarters are **computed from the calendar** (Sydney AU FY); they are not auto-inserted into the DB. Settlement **rows** appear when admin clicks Generate Settlement.
+- Default selected value remains the **current** open quarter (`currentAuFyQuarterPeriodId`).
+- Partner FAQ, D3 terms, D9/D10, Lookup hints: quarterly + AU FY + 7-day freeze + payout-by-15th.
+---

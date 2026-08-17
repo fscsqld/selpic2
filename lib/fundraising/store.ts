@@ -18,6 +18,7 @@ import {
 } from '@/lib/fundraising/types'
 import { maskAccount as maskAccountImpl, maskBsb as maskBsbImpl } from '@/lib/fundraising/mask'
 import { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
+import { resolvePartnerGrantRates } from '@/lib/fundraising/partnerRates'
 
 function id(prefix: string): string {
   return newFundraisingId(prefix)
@@ -40,6 +41,7 @@ interface FundraisingStore {
     settings?: FundraisingSettings
   }) => void
   setPartnerStatus: (partnerId: string, status: FundraisingPartnerStatus) => void
+  removePartner: (partnerId: string) => void
   addPartnerRate: (
     rate: Omit<FundraisingPartnerRate, 'id' | 'createdAt'>,
     meta: { reason: string; changedBy: string }
@@ -99,6 +101,8 @@ export const useFundraisingStore = create<FundraisingStore>()(
               state: input.state,
               postcode: input.postcode,
               sampleKitRequested: input.sampleKitRequested,
+              sampleKitStatus: input.sampleKitStatus,
+              enableRcti: input.enableRcti,
               linkedPromoCode: String(input.linkedPromoCode || '').trim().toUpperCase(),
               status: input.status || 'pending',
               lookupToken: input.lookupToken,
@@ -107,7 +111,17 @@ export const useFundraisingStore = create<FundraisingStore>()(
               accountName: input.accountName,
               bsb: input.bsb,
               accountNumber: input.accountNumber,
+              abn: input.abn,
               notes: input.notes,
+              approvedAt: input.approvedAt,
+              termStartsAt: input.termStartsAt,
+              termEndsAt: input.termEndsAt,
+              renewalNoticeSentAt: input.renewalNoticeSentAt,
+              renewalIntent: input.renewalIntent,
+              partnershipEndedAt: input.partnershipEndedAt,
+              retentionArchiveClass: input.retentionArchiveClass,
+              retentionUntil: input.retentionUntil,
+              retentionYearsApplied: input.retentionYearsApplied,
               id: input.id || newPartnerId(input.organizationName || 'ORG'),
               createdAt: input.createdAt || now,
               updatedAt: now,
@@ -130,11 +144,21 @@ export const useFundraisingStore = create<FundraisingStore>()(
             for (const row of remote) map.set(row.id, row)
             return Array.from(map.values())
           }
+          const partners = byId(state.partners, payload.partners)
+          // Hydrate local rate index from cloud partner.rateSchedule so Grant Tracker matches other devices.
+          const rateMap = new Map<string, FundraisingPartnerRate>()
+          for (const r of state.rates) rateMap.set(r.id, r)
+          for (const p of partners) {
+            for (const r of p.rateSchedule || []) {
+              rateMap.set(r.id, { ...r, partnerId: r.partnerId || p.id })
+            }
+          }
           return {
             settings: payload.settings ? { ...state.settings, ...payload.settings } : state.settings,
-            partners: byId(state.partners, payload.partners),
+            partners,
             documents: byId(state.documents, payload.documents),
             settlements: byId(state.settlements, payload.settlements),
+            rates: Array.from(rateMap.values()),
           }
         })
       },
@@ -144,6 +168,16 @@ export const useFundraisingStore = create<FundraisingStore>()(
           partners: state.partners.map((p) =>
             p.id === partnerId ? { ...p, status, updatedAt: new Date().toISOString() } : p
           ),
+        }))
+      },
+
+      removePartner: (partnerId) => {
+        set((state) => ({
+          partners: state.partners.filter((p) => p.id !== partnerId),
+          rates: state.rates.filter((r) => r.partnerId !== partnerId),
+          settlements: state.settlements.filter((s) => s.partnerId !== partnerId),
+          documents: state.documents.filter((d) => d.partnerId !== partnerId),
+          rateLogs: state.rateLogs.filter((l) => l.partnerId !== partnerId),
         }))
       },
 
@@ -255,18 +289,12 @@ export const useFundraisingStore = create<FundraisingStore>()(
       getPartnerById: (partnerId) => get().partners.find((p) => p.id === partnerId),
 
       getActiveRateForPartner: (partnerId, onDateIso) => {
-        const settings = get().settings
-        const on = onDateIso ? onDateIso.slice(0, 10) : new Date().toISOString().slice(0, 10)
-        const matches = get()
-          .rates.filter((r) => r.partnerId === partnerId)
-          .filter((r) => r.effectiveFrom.slice(0, 10) <= on)
-          .filter((r) => !r.effectiveTo || r.effectiveTo.slice(0, 10) >= on)
-          .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
-        const hit = matches[0]
-        return {
-          donationRate: hit?.donationRate ?? settings.donationRate,
-          parentDisplayRate: hit?.parentDisplayRate ?? settings.parentDisplayRate,
-        }
+        const partner = get().partners.find((p) => p.id === partnerId)
+        return resolvePartnerGrantRates(partner, get().settings, {
+          onDateIso,
+          partnerId,
+          localRates: get().rates,
+        })
       },
     }),
     {

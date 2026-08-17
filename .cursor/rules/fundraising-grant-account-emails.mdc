@@ -1,0 +1,27 @@
+---
+description: Official Grant Account register/update emails use D16 (partner) + D17 (admin)
+globs: app/api/admin/fundraising/**/*.ts,lib/server/adminInboundNotify.ts,lib/fundraising/**
+alwaysApply: false
+---
+
+# Official Grant Account email notifications (D16 / D17)
+
+## Product rule (ops)
+
+When a **SELPIC admin** registers or updates **Official Grant Account** on Partner Registry (ABN, BSB, account number, account name):
+
+1. Persist partner to Supabase successfully, **then** send emails.
+2. **D16** → organisation contact email (`contactEmail`) — full HTML confirmation (masked details + security alert). **No PDF**.
+3. **D17** → SELPIC admin inbox — full bank/ABN details + Partner Registry / Grant Tracker links. **No PDF**.
+4. Persist D16/D17 rows in `fundraising_documents` for history.
+5. Append `fundraising_grant_account_events` with `changedBy: 'admin'`.
+
+Partners do **not** save bank from Lookup. Lookup **Request update** only emails admins (`notifyAdminsOfGrantAccountChangeRequest`) — no D16/D17 until admin Save.
+
+No email on failed validation/save.
+
+## Trigger
+
+`PUT /api/admin/fundraising` when partner bank/ABN snapshot changes after upsert →
+`sendPartnerGrantAccountConfirmation` (D16) + `notifyAdminsOfGrantAccountUpdate` (D17) + grant-account audit event.
+---

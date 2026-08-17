@@ -1,0 +1,20 @@
+---
+description: Fundraising Partner Community Codes — admin sets End Date on promo codes
+globs: app/admin/content/components/PromoCodeManager.tsx,app/admin/fundraising/**/*.tsx
+alwaysApply: false
+---
+
+# Promo Code End Date (Fundraising / Partner Community Codes)
+
+## Product decision (ops)
+
+Partner organisations **do not** set End Date.  
+**Admins** create the Partner Community Code in Content → Promo Codes and **enter an End Date themselves** (a date the business chooses — e.g. end of school year / campaign).
+
+Do **not** implement “empty End Date = open-ended” unless ops reopen that request. Keep the current Add Promo Code flow (End Date filled by admin).
+
+## Workflow
+
+1. Admin creates promo code with Start Date + End Date (+ discount settings).
+2. Approve fundraising partner and link that Partner Community Code.
+3. To extend or wind down: admin edits End Date (or suspends/terminates the partner).

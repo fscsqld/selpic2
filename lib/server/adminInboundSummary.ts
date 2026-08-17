@@ -186,26 +186,56 @@ export async function fetchAdminInboundSummary(): Promise<AdminInboundSummary> {
         .order('updated_at', { ascending: false })
         .limit(300)
 
+      let pendingApps = 0
+      let latestApp:
+        | { organizationName?: string; contactName?: string; contactEmail?: string }
+        | undefined
       if (!error && partnerRows) {
         const pending = partnerRows.filter((row) => {
-          const payload = row.payload as { status?: string; organizationName?: string; contactName?: string } | null
+          const payload = row.payload as { status?: string } | null
           return payload?.status === 'pending'
         })
-        const latest = pending[0]
-        const latestPayload = latest?.payload as
-          | { organizationName?: string; contactName?: string; contactEmail?: string }
-          | undefined
-        items.push({
-          key: 'fundraising',
-          label: 'Fundraising Applications',
-          count: pending.length,
-          href: '/admin/fundraising/partners',
-          latestTitle: latestPayload?.organizationName,
-          latestSubtitle: latestPayload?.contactName
-            ? `From ${latestPayload.contactName}`
-            : latestPayload?.contactEmail,
-        })
+        pendingApps = pending.length
+        latestApp = pending[0]?.payload as typeof latestApp
       }
+
+      let openChanges = 0
+      let latestChangeTitle: string | undefined
+      try {
+        const { data: changeRows } = await admin
+          .from('fundraising_change_requests')
+          .select('payload,status,updated_at')
+          .in('status', ['submitted', 'under_review', 'awaiting_partner', 'partner_replied'])
+          .order('updated_at', { ascending: false })
+          .limit(100)
+        openChanges = changeRows?.length || 0
+        const latestPayload = changeRows?.[0]?.payload as
+          | { organizationName?: string; kind?: string; id?: string }
+          | undefined
+        if (latestPayload?.organizationName) {
+          latestChangeTitle = `${latestPayload.organizationName} · change request`
+        }
+      } catch {
+        /* table may not exist until migration */
+      }
+
+      const total = pendingApps + openChanges
+      const parts: string[] = []
+      if (pendingApps > 0) parts.push(`${pendingApps} application${pendingApps === 1 ? '' : 's'}`)
+      if (openChanges > 0) parts.push(`${openChanges} change request${openChanges === 1 ? '' : 's'}`)
+
+      items.push({
+        key: 'fundraising',
+        label: 'Fundraising (applications + change requests)',
+        count: total,
+        href: '/admin/fundraising/partners#change-requests',
+        latestTitle: latestChangeTitle || latestApp?.organizationName,
+        latestSubtitle: parts.length
+          ? parts.join(' · ')
+          : latestApp?.contactName
+            ? `From ${latestApp.contactName}`
+            : latestApp?.contactEmail,
+      })
     } catch {
       /* non-fatal — table may not exist until migration is applied */
     }

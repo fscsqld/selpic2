@@ -56,6 +56,13 @@ export type FundraisingDocumentType =
   | 'D13'
   | 'D14'
   | 'D15'
+  | 'D16'
+  | 'D17'
+  | 'D18'
+  | 'D19'
+  | 'D20'
+  | 'D21'
+  | 'D22'
 
 export type FundraisingDocumentStatus =
   | 'Draft'
@@ -64,11 +71,24 @@ export type FundraisingDocumentStatus =
   | 'Archived'
   | 'Failed'
 
+export type FundraisingRenewalIntent = 'pending' | 'wants_renew' | 'declines' | null
+
 export interface FundraisingSettings {
   parentDisplayRate: number
   donationRate: number
   netSalesDefinitionVersion: string
   landingCopyEnabled: boolean
+  /** Partnership length after approval (months). Default 12. */
+  partnershipTermMonths: number
+  /** Send renewal intent email when this many days remain. Default 45. */
+  renewalNoticeDays: number
+  /** Flag partners with no community-code sales for this many months. Default 6. */
+  inactivityMonths: number
+  /**
+   * Years to keep ended (suspended/terminated) partner records in the legal retention archive
+   * before admins may delete app rows. Default 7 (ATO ~5 years + company financial records).
+   */
+  legalRetentionYears: number
   updatedAt: string
 }
 
@@ -86,8 +106,21 @@ export interface FundraisingPartner {
   state?: string
   postcode?: string
   sampleKitRequested?: boolean
+  /** Sample kit fulfilment for D5 lifecycle */
+  sampleKitStatus?: 'none' | 'requested' | 'dispatched'
+  /** When true, D11 RCTI may be issued with Mark Paid */
+  enableRcti?: boolean
   /** Empty until admin assigns a Promo Code on approval */
   linkedPromoCode: string
+  /**
+   * Current Fundraising Cashback Grant % for this partner (cloud-synced on partner payload).
+   * When unset, global fundraising_settings.donationRate applies.
+   */
+  donationRate?: number
+  /** Current parent checkout display / flyer % (cloud-synced). */
+  parentDisplayRate?: number
+  /** Dated rate history synced with the partner row (no separate rates table). */
+  rateSchedule?: FundraisingPartnerRate[]
   status: FundraisingPartnerStatus
   /** Secret URL token for /fundraising/lookup?token=… (32+ hex chars) */
   lookupToken?: string
@@ -96,7 +129,29 @@ export interface FundraisingPartner {
   accountName?: string
   bsb?: string
   accountNumber?: string
+  /** Australian Business Number — 11 digits (Official Grant Account / payee profile) */
+  abn?: string
   notes?: string
+  /** First approval / activation timestamp */
+  approvedAt?: string
+  /** Current partnership term window (typically 12 months) */
+  termStartsAt?: string
+  termEndsAt?: string
+  /** When D19 renewal intent notice was last emailed */
+  renewalNoticeSentAt?: string
+  /** Partner response to renewal (Lookup or admin) */
+  renewalIntent?: FundraisingRenewalIntent
+  /**
+   * When partnership was suspended/terminated (start of legal retention clock).
+   * Auto-set on end; used with retentionUntil for archive classification.
+   */
+  partnershipEndedAt?: string
+  /** Auto classification for ended partners held for AU tax/company record-keeping. */
+  retentionArchiveClass?: 'legal_retention'
+  /** After this ISO date, admin may delete app rows (manual only). */
+  retentionUntil?: string
+  /** Years applied when retentionUntil was computed (audit). */
+  retentionYearsApplied?: number
   createdAt: string
   updatedAt: string
 }
@@ -156,28 +211,142 @@ export interface FundraisingRateLog {
   changedAt: string
 }
 
+/** Canonical Total Community Support definition — document footers must use this exact string. */
+export const TOTAL_COMMUNITY_SUPPORT_DEFINITION_VERSION =
+  'v2-discounted-subtotal-minus-refunds-exclude-shipping' as const
+
 export const DEFAULT_FUNDRAISING_SETTINGS: FundraisingSettings = {
   parentDisplayRate: 5,
   donationRate: 15,
-  netSalesDefinitionVersion: 'v1-subtotal-minus-refunds-exclude-shipping',
+  netSalesDefinitionVersion: TOTAL_COMMUNITY_SUPPORT_DEFINITION_VERSION,
   landingCopyEnabled: true,
+  partnershipTermMonths: 12,
+  renewalNoticeDays: 45,
+  inactivityMonths: 6,
+  legalRetentionYears: 7,
   updatedAt: new Date().toISOString(),
 }
 
 export const FUNDRAISING_DOCUMENT_LABELS: Record<FundraisingDocumentType, string> = {
-  D1: 'Application Acknowledgement',
+  D1: 'Partnership Application Acknowledgement',
   D2: 'Welcome & Enrolment Notice',
-  D3: 'Terms Summary',
-  D4: 'Code Assignment Letter',
+  D3: 'Partnership Terms Summary',
+  D4: 'Partner Community Code Letter',
   D5: 'Sample Kit Dispatch Note',
-  D6: 'Parent Share Kit',
-  D7: 'Mid-period Performance Snapshot',
-  D8: 'Rate Change Notice',
-  D9: 'Monthly Sales & Commission Statement',
-  D10: 'Remittance Advice',
+  D6: 'Family Share Kit',
+  D7: 'Mid-period Community Impact Snapshot',
+  D8: 'Grant Rate Change Notice',
+  D9: 'Quarterly Community Support & Grant Statement',
+  D10: 'Fundraising Cashback Grant Remittance',
   D11: 'Tax Invoice / RCTI (placeholder)',
   D12: 'Suspension / Termination Notice',
-  D13: 'Final Settlement Statement',
-  D14: 'Internal Payout Checklist',
+  D13: 'Final Fundraising Cashback Grant Statement',
+  D14: 'Internal Grant Transfer Checklist',
   D15: 'Settlement Audit Pack',
+  D16: 'Official Grant Account Update Confirmation',
+  D17: 'Admin Grant Account Alert',
+  D18: 'Partner Community Code Change Notice',
+  D19: 'Partnership Renewal Reminder',
+  D20: 'Partnership Renewal Confirmation',
+  D21: 'Partnership Non-Renewal Acknowledgement',
+  D22: 'Partnership Change Request Form',
+}
+
+/**
+ * Admin Save partner (first activation + welcome pack) emails — send in this order only.
+ * D2 welcome → D3 terms → D4 community code (actionable code last among the pack).
+ * Do not include D18 here; D18 is for later code changes on an already-active partner.
+ */
+export const FUNDRAISING_WELCOME_PACK_ORDER = ['D2', 'D3', 'D4'] as const satisfies readonly FundraisingDocumentType[]
+
+
+export type FundraisingGrantAccountSnapshot = {
+  bankName?: string
+  accountName?: string
+  bsb?: string
+  accountNumber?: string
+  abn?: string
+}
+
+export type FundraisingGrantAccountEmailLog = {
+  channel: 'partner_grant_account_confirm' | 'admin_grant_account_alert'
+  to: string
+  subject: string
+  status: 'sent' | 'failed'
+  error?: string
+  sentAt: string
+}
+
+export type FundraisingGrantAccountEvent = {
+  id: string
+  partnerId: string
+  organizationName: string
+  kind: 'registered' | 'updated'
+  changedBy: 'partner_lookup' | 'admin'
+  changedAt: string
+  previous: FundraisingGrantAccountSnapshot
+  next: FundraisingGrantAccountSnapshot
+  emails: FundraisingGrantAccountEmailLog[]
+}
+
+/** Partner Lookup change-request intake (admin queue; no auto-apply). */
+export type FundraisingChangeRequestKind = 'grant_account' | 'contact' | 'other'
+
+export type FundraisingChangeRequestStatus =
+  | 'submitted'
+  | 'under_review'
+  | 'awaiting_partner'
+  | 'partner_replied'
+  | 'applied'
+  | 'declined'
+  | 'closed'
+
+export const FUNDRAISING_CHANGE_REQUEST_OPEN_STATUSES: FundraisingChangeRequestStatus[] = [
+  'submitted',
+  'under_review',
+  'awaiting_partner',
+  'partner_replied',
+]
+
+export type FundraisingChangeRequestProposed = {
+  bankName?: string
+  accountName?: string
+  abn?: string
+  bsb?: string
+  accountNumber?: string
+  contactName?: string
+  contactEmail?: string
+  phone?: string
+}
+
+export type FundraisingChangeRequestAttachment = {
+  id: string
+  fileName: string
+  contentType: string
+  size: number
+  storagePath: string
+  /** Public or signed URL for admin download when available */
+  fileUrl?: string
+  uploadedAt: string
+}
+
+export type FundraisingChangeRequest = {
+  id: string
+  partnerId: string
+  organizationName: string
+  kind: FundraisingChangeRequestKind
+  status: FundraisingChangeRequestStatus
+  message: string
+  /** Optional legacy / admin-prefill only — partners no longer submit bank fields at intake */
+  proposed?: FundraisingChangeRequestProposed
+  partnerReply?: string
+  attachments?: FundraisingChangeRequestAttachment[]
+  adminNotes?: string
+  documentIds?: string[]
+  packSentAt?: string
+  submittedBy: 'partner_lookup'
+  createdAt: string
+  updatedAt: string
+  closedAt?: string
+  closedBy?: string
 }

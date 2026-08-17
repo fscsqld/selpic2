@@ -23,6 +23,7 @@ import {
   type FundraisingPartner,
   type FundraisingDocument,
 } from '@/lib/fundraising/types'
+import { FUNDRAISING_COPY } from '@/lib/fundraising/copy'
 
 const ORG_OPTIONS = FUNDRAISING_ORG_TYPE_OPTIONS.map(
   (value) => [value, FUNDRAISING_ORG_TYPE_LABELS[value]] as const
@@ -31,15 +32,35 @@ const ORG_OPTIONS = FUNDRAISING_ORG_TYPE_OPTIONS.map(
 const FAQ_ITEMS = [
   {
     q: 'Is there any cost or contract period for our organisation?',
-    a: 'No, it is 100% free with no minimum sales or lock-in contract.',
+    a: 'Participation is free. Partnerships run in 12-month terms after approval. Near the end of each term we email a renewal notice; confirm in your Lookup portal to extend another year, or decline if you wish to pause. There is no lock-in beyond the current term. If you decline or the partnership ends, we email how access and organisation information are handled under Australian privacy and record-keeping laws.',
   },
   {
-    q: 'When and how do we get paid?',
-    a: 'We calculate Net Sales at the end of each month and transfer the cashback directly to your official organisation bank account.',
+    q: 'When and how do we receive our Fundraising Cashback Grant?',
+    a: 'Grants are calculated once per Australian financial-year quarter (Q1 Jul–Sep, Q2 Oct–Dec, Q3 Jan–Mar, Q4 Apr–Jun) on Total Community Support — product totals after the family community discount (e.g. 5% OFF), excluding shipping and cancelled orders. Inclusion uses confirmed payment time (bank deposits confirmed by noon Sydney the day after quarter end still count). After each quarter ends, SELPIC waits 7 calendar days so cancellations can settle, then locks the final amount. There is no minimum payout amount. Once SELPIC has registered your Official Grant Account (BSB, Account Number, and ABN) — partners request registration or updates from Lookup; SELPIC verifies and saves them — funds are transferred by bank by the 15th of the month after the quarter ends (or the next business day if that date falls on a weekend), with official quarterly statements (D9 & D10). New orders after quarter end count toward the next quarter immediately. Family checkout and payment are unchanged — these rules apply only to organisation grant settlements.',
   },
   {
-    q: 'How do we track our fundraising progress?',
-    a: "You will receive an automated monthly Sales & Cashback Statement (PDF) via email after each month's close.",
+    q: 'How do we track Community Impact?',
+    a: 'After approval, we email you a secure private Lookup link. You can log in anytime using a One-Time Passcode (OTP) to view real-time community contributions, cashback grant totals, and download account statements.',
+  },
+  {
+    q: 'Do we need an ABN, and is GST applicable to the grant?',
+    a: "SELPIC registers your organisation's ABN on the Official Grant Account after verification (you can request registration or updates from Lookup). Grants are transferred as non-taxable community support (GST-free), making audit and accounting straightforward for your treasurer.",
+  },
+  {
+    q: FUNDRAISING_COPY.partnershipEndDataFaqQ,
+    a: FUNDRAISING_COPY.partnershipEndDataFaqA,
+  },
+  {
+    q: FUNDRAISING_COPY.customerAccountIndependenceFaqQ,
+    a: FUNDRAISING_COPY.customerAccountIndependenceFaqA,
+  },
+  {
+    q: 'How do we share and promote this with our families?',
+    a: 'We provide ready-to-use copy, text snippets, and digital graphics (D6 Family Share Kit) after approval. You can easily copy and paste them into school newsletters, parent apps (e.g. Compass), or group chats. Remind families that they check out with their own SELPIC customer account — your code is only for the community discount.',
+  },
+  {
+    q: 'Can we request sample products for evaluation?',
+    a: 'Yes! During application or post-enrolment, eligible partners can request a complimentary Educator Sample Kit (D5) to evaluate our premium waterproof name labels firsthand.',
   },
 ] as const
 
@@ -66,7 +87,8 @@ export default function FundraisingLandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   const subHeader = useMemo(
-    () => `${donation}% Cashback for Your Organisation + ${parentOff}% OFF for Families`,
+    () =>
+      `${donation}% Fundraising Cashback Grant for your organisation + ${parentOff}% OFF for families`,
     [donation, parentOff]
   )
 
@@ -158,12 +180,13 @@ export default function FundraisingLandingPage() {
             Community fundraising partnerships
           </div>
           <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 tracking-tight">
-            Raise Funds for Your Community with SELPIC
+            Thank you for partnering with SELPIC. Together for Our School &amp; Community.
           </h1>
           <p className="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">{subHeader}</p>
           <p className="mt-3 text-sm text-slate-500 max-w-2xl mx-auto">
-            Open to schools, early learning centres, clubs, charities, and community groups. Custom name labels
-            families love — waterproof, dishwasher safe, printed in QLD.
+            A sustainable community fundraising partnership — not a sales tool. Open to schools, early learning
+            centres, clubs, charities, and community groups. Custom name labels families love — waterproof,
+            dishwasher safe, printed in QLD.
           </p>
           <button
             type="button"
@@ -180,18 +203,18 @@ export default function FundraisingLandingPage() {
             {[
               {
                 icon: Mail,
-                title: 'Apply & Get Your Unique Promo Code',
-                body: 'Submit the form below. After approval we email your unique fundraising code.',
+                title: 'Apply & receive your Partner Community Code',
+                body: 'Submit the form below. After approval we email your Partner Community Code and private Lookup link.',
               },
               {
                 icon: Share2,
-                title: `Share with Families (${parentOff}% OFF on all name labels)`,
-                body: 'Share the code in newsletters, apps, or group chats — supporters get a discount on every order.',
+                title: `Share with families (${parentOff}% OFF on name labels)`,
+                body: 'Share the code in newsletters, apps, or group chats — supporters get a discount and help raise your grant.',
               },
               {
                 icon: Package,
-                title: `Earn ${donation}% Cashback for Your Organisation every month`,
-                body: 'We calculate Net Sales for your code and pay your organisation monthly.',
+                title: `Receive a ${donation}% Fundraising Cashback Grant each quarter`,
+                body: 'We calculate Total Community Support (after the family discount) once per Australian financial-year quarter and transfer your grant to your Official Grant Account by the 15th of the following month.',
               },
             ].map((step) => (
               <div key={step.title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -202,8 +225,12 @@ export default function FundraisingLandingPage() {
             ))}
           </div>
           <p className="mt-4 text-xs sm:text-sm text-slate-500 text-center max-w-3xl mx-auto leading-relaxed">
-            *Cashback is calculated monthly on Net Product Sales (subtotal excluding shipping and refunds) generated by
-            your code. Paid directly to your official bank account.
+            *The Fundraising Cashback Grant is calculated once per Australian financial-year quarter on Total Community
+            Support (product totals after the family community discount, excluding shipping and refunds) for orders using
+            your Partner Community Code. After each quarter ends, figures lock after 7 calendar days (cancellations/refunds
+            window). There is no minimum payout. Funds are transferred to your Official Grant Account by the 15th of the
+            month after the quarter ends (or the next business day if that date falls on a weekend), once SELPIC has
+            registered your Official Grant Account (request registration or updates from your Lookup portal). New orders after quarter end count toward the next quarter.
           </p>
         </section>
 
@@ -232,9 +259,9 @@ export default function FundraisingLandingPage() {
           <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm sm:text-base text-emerald-900 font-medium leading-snug">
             After approval, we email ready-to-share copy for newsletters and group chats.
           </div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-1">Partner Application</h2>
+          <h2 className="text-xl font-semibold text-slate-900 mb-1">Community Partner Application</h2>
           <p className="text-sm text-slate-600 mb-6">
-            Apply for a fundraising partnership. We will email your unique code after approval.
+            Apply for a community fundraising partnership. We will email your Partner Community Code after approval.
           </p>
 
           {notice && (
@@ -352,6 +379,13 @@ export default function FundraisingLandingPage() {
                 />
               </label>
             </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {FUNDRAISING_COPY.applyPrivacyNote}{' '}
+              <a href="/privacy" className="underline hover:text-emerald-700">
+                Privacy Policy
+              </a>
+              .
+            </p>
             <button
               type="submit"
               disabled={loading}
@@ -422,7 +456,16 @@ export default function FundraisingLandingPage() {
               </a>
             </div>
           </div>
-          <p className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500">{COMPANY_LEGAL_LINE}</p>
+          <p className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
+            <span className="block">{COMPANY_LEGAL_LINE}</span>
+            <span className="block">
+              <a href="/privacy" className="underline hover:text-emerald-700">
+                Privacy Policy
+              </a>
+              {' · '}
+              Families shop with their own SELPIC customer accounts; your organisation partnership does not control those logins.
+            </span>
+          </p>
         </div>
       </footer>
     </div>

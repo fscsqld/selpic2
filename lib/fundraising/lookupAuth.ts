@@ -2,12 +2,18 @@ import { createHash, randomBytes, randomInt } from 'crypto'
 
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import type { FundraisingPartner } from '@/lib/fundraising/types'
+import { LOOKUP_SESSION_HOURS } from '@/lib/fundraising/lookupConstants'
 import { listFundraisingPartnersFromDb, upsertFundraisingPartnerRow } from '@/lib/fundraising/persistence'
 import { siteBaseUrl } from '@/lib/server/adminInboundNotify'
 
 const OTP_TTL_MS = 10 * 60 * 1000
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000
+/** Min gap between verification emails for the same Lookup token (refresh / Strict Mode). */
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000
+/** Partner Lookup browser session (aligned with welcome-email guide). */
+const SESSION_TTL_MS = LOOKUP_SESSION_HOURS * 60 * 60 * 1000
 const MAX_OTP_ATTEMPTS = 5
+
+export { LOOKUP_SESSION_HOURS } from '@/lib/fundraising/lookupConstants'
 
 export function generateLookupToken(): string {
   return randomBytes(24).toString('hex') // 48 hex chars (~192 bits)
@@ -55,16 +61,49 @@ export async function findPartnerByLookupToken(token: string): Promise<Fundraisi
 }
 
 export async function issueLookupOtpWithCode(token: string): Promise<
-  { ok: true; email: string; expiresAt: string; otp: string; partner: FundraisingPartner } | { ok: false; error: string }
+  | {
+      ok: true
+      email: string
+      expiresAt: string
+      partner: FundraisingPartner
+      /** When false, reuse the existing code and skip sending another email. */
+      shouldSendEmail: boolean
+      otp?: string
+    }
+  | { ok: false; error: string }
 > {
   const partner = await findPartnerByLookupToken(token)
   if (!partner?.contactEmail) return { ok: false, error: 'Invalid or inactive access link.' }
   if (!isSupabaseConfigured()) return { ok: false, error: 'Lookup service is unavailable.' }
 
+  const admin = getSupabaseAdmin()
+  const { data: existing } = await admin
+    .from('fundraising_lookup_otps')
+    .select('expires_at, updated_at, attempts')
+    .eq('lookup_token', token)
+    .maybeSingle()
+
+  const existingExpires = existing?.expires_at ? new Date(existing.expires_at).getTime() : 0
+  const existingUpdated = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0
+  const withinCooldown =
+    existing &&
+    existingExpires > Date.now() &&
+    Number(existing.attempts || 0) < MAX_OTP_ATTEMPTS &&
+    Date.now() - existingUpdated < OTP_RESEND_COOLDOWN_MS
+
+  if (withinCooldown) {
+    return {
+      ok: true,
+      email: partner.contactEmail,
+      expiresAt: String(existing.expires_at),
+      partner,
+      shouldSendEmail: false,
+    }
+  }
+
   const otp = generateSixDigitOtp()
   const salt = randomBytes(8).toString('hex')
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString()
-  const admin = getSupabaseAdmin()
   const { error } = await admin.from('fundraising_lookup_otps').upsert({
     lookup_token: token,
     otp_hash: hashOtp(otp, salt),
@@ -75,7 +114,14 @@ export async function issueLookupOtpWithCode(token: string): Promise<
   })
   if (error) return { ok: false, error: error.message }
 
-  return { ok: true, email: partner.contactEmail, expiresAt, otp, partner }
+  return {
+    ok: true,
+    email: partner.contactEmail,
+    expiresAt,
+    otp,
+    partner,
+    shouldSendEmail: true,
+  }
 }
 
 export async function verifyLookupOtp(

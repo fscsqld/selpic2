@@ -47,12 +47,30 @@ create table if not exists public.fundraising_lookup_sessions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.fundraising_grant_account_events (
+  id text primary key,
+  partner_id text not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.fundraising_change_requests (
+  id text primary key,
+  partner_id text not null,
+  status text not null default 'submitted',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.fundraising_settings enable row level security;
 alter table public.fundraising_partners enable row level security;
 alter table public.fundraising_settlements enable row level security;
 alter table public.fundraising_documents enable row level security;
 alter table public.fundraising_lookup_otps enable row level security;
 alter table public.fundraising_lookup_sessions enable row level security;
+alter table public.fundraising_grant_account_events enable row level security;
+alter table public.fundraising_change_requests enable row level security;
 
 do $$
 declare
@@ -64,7 +82,9 @@ begin
     'fundraising_settlements',
     'fundraising_documents',
     'fundraising_lookup_otps',
-    'fundraising_lookup_sessions'
+    'fundraising_lookup_sessions',
+    'fundraising_grant_account_events',
+    'fundraising_change_requests'
   ]
   loop
     execute format('drop policy if exists "%s_admin_all" on public.%I', t, t);

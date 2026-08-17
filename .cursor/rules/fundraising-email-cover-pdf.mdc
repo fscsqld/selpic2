@@ -1,0 +1,55 @@
+---
+description: Fundraising PDF emails — D9/D10/D11/D13 only; registration stays HTML
+globs: lib/fundraising/**/*.ts,app/admin/fundraising/**/*.tsx,app/api/admin/fundraising/**/*.ts,app/api/fundraising/**/*.ts,lib/server/adminInboundNotify.ts
+alwaysApply: false
+---
+
+# Fundraising emails & PDF (canonical)
+
+**Source of truth:** `lib/fundraising/pdfAttachmentPolicy.ts` → `fundraisingDocNeedsPdfAttachment(type)`.
+
+## Matrix
+
+| Type | Trigger | Email body | PDF |
+|------|---------|------------|-----|
+| **D1** | Public apply | Full HTML acknowledgement | No |
+| **D2–D4** | Welcome pack / access link | Full HTML | No |
+| **D5–D8, D12** | Lifecycle / Documents Send | Full HTML | No |
+| **D6** | Lookup share / Documents if sent | Full HTML | No |
+| **D9** | Mark Paid / Documents Send | Short cover | **Yes** (client visual) |
+| **D10** | Mark Paid / Documents Send | Short cover | **Yes** (client visual) |
+| **D11** | RCTI lifecycle / Documents (if enabled) | Short cover | **Yes** |
+| **D13** | Termination pack / Documents | Short cover | **Yes** |
+| **D14–D15** | Internal download | Usually no partner email | No |
+| **D16** | Lookup bank save | Full HTML security confirm | No |
+| **D17** | Lookup bank save → admin | Full HTML admin alert | No |
+| **OTP** | Lookup login | Short code mail | No |
+
+## Patterns
+
+**With PDF (invoice-style):** short cover (`buildFundraisingDocCoverPlainText` / `CoverHtml`) + PDF attachment. Do not paste full D9/D10 HTML into the email body.
+
+**Without PDF:** send full `htmlBody` / apply HTML as before. Do not invent empty PDF attachments.
+
+## Code paths
+
+| Path | Behaviour |
+|------|-----------|
+| Documents Send | `needsPdf` → preview/iframe client PDF + cover; else HTML only |
+| Mark Paid | Always D9+D10 client PDFs + settlement cover |
+| `issueFundraisingDocuments` | PDF only if allow-listed; else full HTML |
+| Apply D1 / D16 | HTML only |
+| API lifecycle resend | Same allow-list |
+
+## Client PDF quality (D9/D10)
+
+`lib/fundraising/htmlToPdfClient.ts`: always render full HTML via iframe `srcdoc`, capture full scroll height (explicit html2canvas height/width), multi-page jsPDF.  
+**Never** capture the Documents preview panel (`max-h-[70vh] overflow-auto`) — that crops Payment Destination / footer.  
+Reject blank/white canvases before send; Resend via `emailService.sendResponse({ attachments: File[] })`.
+
+
+## Do not
+
+- Attach PDF to D1 / welcome / D16 “for consistency”
+- Put full settlement HTML in the email when a PDF is attached
+- Expand the allow-list without product confirmation

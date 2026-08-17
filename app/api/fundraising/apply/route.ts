@@ -136,7 +136,8 @@ export async function POST(req: Request) {
       dbError = 'Supabase not configured — partner saved for email only; run fundraising SQL migration for persistence.'
     }
 
-    const emailSubject = `SELPIC Fundraising — Application Received (${organizationName})`
+    const emailSubject = `SELPIC Community Fundraising — Application Received (${organizationName})`
+    // Registration acknowledgement: full HTML body, no PDF (same as original apply email).
     const emailResult = await sendEmailViaResendServer({
       to: contactEmail,
       subject: emailSubject,

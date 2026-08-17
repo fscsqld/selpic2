@@ -1,0 +1,14 @@
+---
+description: Fundraising admin forms — always show field labels, not placeholder-only inputs
+globs: app/admin/fundraising/**/*.tsx
+alwaysApply: false
+---
+
+# Fundraising Admin Form Labels
+
+When editing Partner Registry or other Fundraising admin forms:
+
+- Do **not** rely on placeholder-only inputs for fields that usually have a default value (especially number/date fields such as Donation %, Parent display %, Effective from).
+- Always show a **visible English label** above (or beside) the control so admins can tell fields apart after values are filled.
+- Prefer partnership vocabulary in labels: Fundraising Cashback Grant %, family discount display %, Official Grant Account, Partner Community Code, Change reason.
+- Placeholders may still hint at format; labels must remain readable when the input is non-empty.

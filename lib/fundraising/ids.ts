@@ -28,13 +28,14 @@ function shortSuffix(): string {
 }
 
 /**
- * Example: organization "selpic&co" on 2026-08-03 → `SP-SELPICCO-260803-A3K`
+ * Example: organization "selpic&co" on 2026-08-03 → `TP-SELPICCO-260803-A3K`
+ * Prefix TP (Trading Partner) — avoids clash with invoice refs (SP-*).
  * (Much shorter than `fp-1785738594801-neeq70x`.)
  */
 export function newPartnerId(organizationName: string, d = new Date()): string {
   const slug = slugOrgForPartnerId(organizationName)
   const day = fundraisingDateStamp(d)
-  return `SP-${slug}-${day}-${shortSuffix()}`
+  return `TP-${slug}-${day}-${shortSuffix()}`
 }
 
 /** Documents / other fundraising rows — keep short technical ids. */

@@ -240,6 +240,12 @@ export interface OrderRecord {
   shippingDeliveryTime?: string
   paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
   paymentMethodName?: string
+  /**
+   * When payment was confirmed (ISO).
+   * Stripe: usually same as createdAtIso. Bank: when admin marks paid (deposit confirmed).
+   * Used by fundraising settlement attribution only — does not change customer checkout UX.
+   */
+  paymentConfirmedAt?: string
   status: OrderStatus
   customer: {
     name: string
@@ -905,6 +911,9 @@ export const useStore = create<Store>()(
             return {
               ...o,
               status,
+              ...(status === 'paid' && !o.paymentConfirmedAt
+                ? { paymentConfirmedAt: new Date().toISOString() }
+                : {}),
               auditLog: [...(o.auditLog || []), auditEntry]
             }
           }
@@ -949,11 +958,17 @@ export const useStore = create<Store>()(
           }, 100)
         }
 
-        // When marked paid: confirmation email (always); receipt skipped for bank (admin sends via sendAdminOrderEmailAction / receipt button).
-        // Prefer Supabase-backed sendAdminOrderEmailAction so Supabase admins don't depend on legacy adminAuth or CMS templates.
-        if (status === 'paid') {
+        // When marked paid:
+        // - Bank transfer: send deposit-confirmed email (NOT another order confirmation).
+        //   Receipt PDF stays manual via admin "Send receipt".
+        // - Card/other: confirmation + receipt (existing behaviour).
+        if (status === 'paid' && previousOrder.status !== 'paid') {
+          const isBank = previousOrder.paymentMethod === 'bank'
           setTimeout(() => {
             void (async () => {
+              const latest = get().orders.find((o) => o.id === orderId)
+              if (!latest?.customer?.email) return
+
               const markConfirmationSent = () => {
                 const sentAt = new Date().toISOString()
                 set({
@@ -982,9 +997,32 @@ export const useStore = create<Store>()(
                 })
               }
 
+              if (isBank) {
+                try {
+                  const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
+                  const dep = await sendAdminOrderEmailAction({
+                    orderId,
+                    kind: 'deposit_confirmed',
+                    orderJson: JSON.stringify(latest),
+                  })
+                  if (!dep.ok) {
+                    console.error('[updateOrderStatus] deposit_confirmed email failed', dep.error)
+                  } else {
+                    console.log('✅ Bank deposit confirmed email sent:', orderId)
+                  }
+                } catch (e) {
+                  console.error('[updateOrderStatus] deposit_confirmed email error', e)
+                }
+                return
+              }
+
               try {
                 const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
-                const conf = await sendAdminOrderEmailAction({ orderId, kind: 'confirmation' })
+                const conf = await sendAdminOrderEmailAction({
+                  orderId,
+                  kind: 'confirmation',
+                  orderJson: JSON.stringify(latest),
+                })
                 if (conf.ok) {
                   markConfirmationSent()
                 } else {
@@ -995,14 +1033,14 @@ export const useStore = create<Store>()(
               }
 
               const after = get().orders.find((o) => o.id === orderId)
-              if (
-                after &&
-                after.paymentMethod !== 'bank' &&
-                !after.receiptEmail?.sent
-              ) {
+              if (after && !after.receiptEmail?.sent) {
                 try {
                   const { sendAdminOrderEmailAction } = await import('@/app/actions/emails')
-                  const rec = await sendAdminOrderEmailAction({ orderId, kind: 'receipt' })
+                  const rec = await sendAdminOrderEmailAction({
+                    orderId,
+                    kind: 'receipt',
+                    orderJson: JSON.stringify(after),
+                  })
                   if (rec.ok) {
                     markReceiptSent()
                   } else {
@@ -2077,6 +2115,14 @@ export const useStore = create<Store>()(
             console.error('❌ [addProduct] Failed to update localStorage:', error)
           }
           scheduleCatalogSyncToServer(limitedProducts)
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'product_created',
+              target: String(sanitized.id),
+              description: `Created product “${sanitized.name || sanitized.id}”`,
+              newValue: { id: sanitized.id, name: sanitized.name, category: sanitized.category },
+            })
+          })
         }
       },
 
@@ -2160,11 +2206,20 @@ export const useStore = create<Store>()(
             console.error('Failed to update localStorage:', error)
           }
           scheduleCatalogSyncToServer(updatedProducts)
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'product_updated',
+              target: String(product.id),
+              description: `Updated product “${existing.name || product.name || product.id}”`,
+              newValue: { id: product.id, name: product.name ?? existing.name },
+            })
+          })
         }
       },
 
       deleteProduct: (productId) => {
         const { products } = get()
+        const removed = products.find((p) => p.id === productId)
         const updatedProducts = products.filter(p => p.id !== productId)
         
         // ✅ persist 미들웨어가 자동으로 localStorage를 업데이트하도록 set() 호출
@@ -2203,6 +2258,16 @@ export const useStore = create<Store>()(
             }
           }, 100)
           scheduleCatalogSyncToServer(updatedProducts)
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'product_deleted',
+              target: String(productId),
+              description: `Deleted product “${removed?.name || productId}”`,
+              oldValue: removed
+                ? { id: removed.id, name: removed.name, category: removed.category }
+                : { id: productId },
+            })
+          })
         }
       },
       refreshProducts: () => {
@@ -2278,6 +2343,19 @@ export const useStore = create<Store>()(
 
         if (typeof window !== 'undefined') {
           scheduleCatalogSyncToServer(updatedProducts)
+          // Order-driven stock changes stay on order audit; log admin/manual adjustments for oversight.
+          if ((source ?? 'manual') !== 'order') {
+            void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+              logAdminActivity({
+                action: 'product_stock_adjusted',
+                target: String(productId),
+                description: `Stock ${delta >= 0 ? '+' : ''}${delta} for “${product.name || productId}” (${currentStock} → ${newStock})${reason ? ` · ${reason}` : ''}`,
+                oldValue: currentStock,
+                newValue: newStock,
+                field: 'stockQuantity',
+              })
+            })
+          }
         }
       },
 

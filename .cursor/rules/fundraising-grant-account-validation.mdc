@@ -1,0 +1,26 @@
+---
+description: Official Grant Account input validation (admin Partner Registry)
+globs: app/admin/fundraising/**/*.tsx,lib/fundraising/grantAccountValidation.ts,lib/fundraising/abn.ts
+alwaysApply: false
+---
+
+# Official Grant Account — validation & error messages
+
+Partners do **not** save bank from Lookup (request-only). Validation applies when **SELPIC admins** complete Official Grant Account on Partner Registry / before Mark Paid.
+
+## Phase 1 — format + ABN checksum
+
+| Field | Rule |
+|-------|------|
+| Account name | Required, trimmed |
+| ABN | 11 digits + ABR checksum |
+| BSB | Exactly 6 digits |
+| Account number | 6–10 digits |
+| Bank name | Optional |
+
+Source: `lib/fundraising/grantAccountValidation.ts` (+ `abn.ts`).
+
+## Phase 2 (backlog — recognised BSB)
+
+Validate BSB against a maintained AU BSB list; block Save on miss.
+---

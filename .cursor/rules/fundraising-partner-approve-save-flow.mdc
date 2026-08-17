@@ -1,0 +1,45 @@
+---
+description: Fundraising Partner Registry — Approve vs Save workflow for ops testing
+globs: app/admin/fundraising/partners/**/*.tsx
+alwaysApply: false
+---
+
+# Partner Registry: Approve… vs Save partner
+
+## Correct admin flow (after reading application email / pending list)
+
+1. **Sync from server** — pending partners appear on the right.
+2. Click **Approve…** on the pending card — this only **loads the left form** (status → `active`, Change reason prefilled). It does **not** finish approval or send D2–D4.
+3. Create (if needed) a Partner Community Code in **Content → Promo Codes** (admin sets End Date).
+4. Enter that code in **Partner Community Code** on the form (must exist and be active).
+5. Leave **Email welcome pack** checked if D2/D3/D4 + Lookup link should send.
+6. Click **Save partner** — this persists Active status, links the code, and sends the welcome pack when applicable.
+
+**Approve… alone is not enough. Save partner completes the approval.**
+
+On first activation (`pending` → `active`) with welcome pack checked, only **D2 → D3 → D4** are emailed (in that order). **D18** is not sent on first code assignment — D18 runs only when an **already active** partner’s Partner Community Code is changed later.
+
+When an **already active** partner’s grant % (or parent display %) changes on Save, send **D8** only (not the welcome pack). Welcome pack checkbox does nothing on re-save of an active partner.
+
+Application **D1** is sent earlier on public Apply — not on admin Save.
+
+Welcome pack order (fixed):
+1. **D2** Welcome & Enrolment Notice (enrolled + Lookup access guide)
+2. **D3** Partnership Terms Summary
+3. **D4** Partner Community Code Letter (shareable code)
+
+## Why “Save partner seems broken”
+
+If status is `active` and Partner Community Code is empty, Save **intentionally blocks** with:
+
+`Assign a linked Promo Code before activating a partner.`
+
+That message appears near the top of the Partners shell (easy to miss while looking at the green button). Same for invalid/inactive promo codes.
+
+Bank / Official Grant Account fields may stay empty on first activate — but **Mark Paid** requires a complete account. Partners cannot register bank in Lookup; SELPIC enters Official Grant Account on Partner Registry (or after a Lookup change request).
+
+On Save, blank bank/ABN fields do **not** copy stale local leftovers. Existing bank is kept only when the partner is already **active** and already has a complete Official Grant Account. Pending / re-registered rows get empty bank fields unless the admin typed them in.
+
+## Ops testing note
+
+During QA, always: Approve… → fill Partner Community Code → Save partner. Confirm success toast includes welcome pack / Lookup URL when email pack is checked.

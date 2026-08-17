@@ -1,5 +1,15 @@
+import type { FundraisingChangeRequest, FundraisingPartner, FundraisingSettings } from '@/lib/fundraising/types'
+import { FUNDRAISING_DOCUMENT_LABELS } from '@/lib/fundraising/types'
+import { formatChangeRequestKind, formatChangeRequestStatus } from '@/lib/fundraising/changeRequests'
 import { COMPANY_CONTACT } from '@/lib/companyLegal'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
+import { generateFundraisingDoc } from '@/lib/fundraising/generateDoc'
+import { issueFundraisingDocuments } from '@/lib/fundraising/issueDocuments'
+import {
+  loadFundraisingSettingsFromDb,
+  upsertFundraisingDocumentRow,
+} from '@/lib/fundraising/persistence'
 import type { OrderRecord } from '@/lib/store'
 
 export function resolveAdminNotificationRecipients(): string[] {
@@ -12,12 +22,13 @@ export function resolveAdminNotificationRecipients(): string[] {
 }
 
 export function siteBaseUrl(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.VERCEL_URL?.trim() ||
-    'https://selpic.com.au'
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw.replace(/\/$/, '')
-  return `https://${raw.replace(/\/$/, '')}`
+  if (process.env.NEXT_PUBLIC_SITE_URL?.trim()) return getPublicSiteUrl()
+  const vercel = process.env.VERCEL_URL?.trim()
+  if (vercel) {
+    if (vercel.startsWith('http://') || vercel.startsWith('https://')) return vercel.replace(/\/$/, '')
+    return `https://${vercel.replace(/\/$/, '')}`
+  }
+  return getPublicSiteUrl()
 }
 
 function escapeHtml(value: string): string {
@@ -208,6 +219,246 @@ export async function notifyAdminsOfFundraisingApplication(input: {
     replyTo: input.contactEmail,
     footerNote: 'Open Fundraising Partners to approve, assign a code, and send the welcome pack.',
   })
+}
+
+/** Partner Lookup — request only (no bank mutation). Admin completes change in Partner Registry. */
+export async function notifyAdminsOfGrantAccountChangeRequest(input: {
+  partner: FundraisingPartner
+  kind: 'register' | 'update'
+  note?: string
+  proposed?: {
+    bankName?: string
+    accountName?: string
+    abn?: string
+    bsb?: string
+    accountNumber?: string
+  }
+}): Promise<{ ok: boolean; logMessage?: string; subject: string; to: string[] }> {
+  // Legacy wrapper — prefer notifyAdminsOfFundraisingChangeRequest with a persisted ticket.
+  const proposed = input.proposed
+  const proposedLines = proposed
+    ? [
+        proposed.bankName ? `Bank name: ${proposed.bankName}` : '',
+        proposed.accountName ? `Account name: ${proposed.accountName}` : '',
+        proposed.abn ? `ABN: ${proposed.abn}` : '',
+        proposed.bsb ? `BSB: ${proposed.bsb}` : '',
+        proposed.accountNumber ? `Account number: ${proposed.accountNumber}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : ''
+
+  return sendAdminInboundEmail({
+    subjectPrefix: `SELPIC Fundraising — Grant Account ${
+      input.kind === 'register' ? 'registration' : 'update'
+    } request (${input.partner.organizationName})`.slice(0, 500),
+    headline:
+      input.kind === 'register'
+        ? 'Official Grant Account registration requested'
+        : 'Official Grant Account update requested',
+    intro:
+      'A partner organisation asked SELPIC to set or change Official Grant Account details. Update bank/ABN in Partner Registry after verification.',
+    rows: [
+      { label: 'Organisation', value: input.partner.organizationName },
+      { label: 'Partner ID', value: input.partner.id },
+      { label: 'Contact', value: `${input.partner.contactName} <${input.partner.contactEmail}>` },
+    ],
+    bodyText: [input.note ? `Partner note:\n${input.note}` : '', proposedLines ? `Proposed details:\n${proposedLines}` : '']
+      .filter(Boolean)
+      .join('\n\n'),
+    adminPath: '/admin/fundraising/partners',
+    replyTo: input.partner.contactEmail,
+    footerNote: 'Open Partner Registry → Change requests queue.',
+  }).then((r) => ({
+    ...r,
+    subject: `SELPIC Fundraising — Grant Account request (${input.partner.organizationName})`,
+    to: resolveAdminNotificationRecipients(),
+  }))
+}
+
+export async function notifyAdminsOfFundraisingChangeRequest(input: {
+  partner: FundraisingPartner
+  request: FundraisingChangeRequest
+  isReply?: boolean
+}): Promise<{ ok: boolean; logMessage?: string; subject: string; to: string[] }> {
+  const recipients = resolveAdminNotificationRecipients()
+  const { request } = input
+  const subject = `SELPIC Fundraising — ${input.isReply ? 'Partner reply' : 'Change request'} (${
+    input.partner.organizationName
+  }) · ${formatChangeRequestKind(request.kind)}`.slice(0, 500)
+
+  const proposed = request.proposed
+  const proposedLines = proposed
+    ? Object.entries(proposed)
+        .filter(([, v]) => Boolean(v))
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n')
+    : ''
+
+  const result = await sendAdminInboundEmail({
+    subjectPrefix: subject,
+    headline: input.isReply
+      ? 'Partner replied to a change request'
+      : 'New fundraising change request',
+    intro: input.isReply
+      ? 'The organisation submitted a reply. Review the queue, verify details, then apply changes in Partner Registry.'
+      : 'A partner submitted a change request. It appears in Partner Registry → Change requests. Do not auto-apply — verify, send a form if needed, then Save bank/contact on the partner form.',
+    rows: [
+      { label: 'Organisation', value: input.partner.organizationName },
+      { label: 'Partner ID', value: input.partner.id },
+      { label: 'Request ID', value: request.id },
+      { label: 'Kind', value: formatChangeRequestKind(request.kind) },
+      { label: 'Status', value: formatChangeRequestStatus(request.status) },
+      { label: 'Contact', value: `${input.partner.contactName} <${input.partner.contactEmail}>` },
+    ],
+    bodyText: [
+      request.message ? `Partner message:\n${request.message}` : '',
+      proposedLines ? `Proposed details:\n${proposedLines}` : '',
+      request.partnerReply ? `Partner reply:\n${request.partnerReply}` : '',
+      request.attachments?.length
+        ? `Attachments:\n${request.attachments.map((a) => `- ${a.fileName}${a.fileUrl ? ` · ${a.fileUrl}` : ''}`).join('\n')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    adminPath: '/admin/fundraising/partners#change-requests',
+    replyTo: input.partner.contactEmail,
+    footerNote: 'Fundraising Quick Action badge counts open change requests + pending applications.',
+  })
+
+  return { ...result, subject, to: recipients }
+}
+
+/** Issue D22 form (PDF email + Documents), then partner completes and uploads reply. */
+export async function sendPartnerChangeRequestPack(input: {
+  partner: FundraisingPartner
+  request: FundraisingChangeRequest
+  adminNote?: string
+}): Promise<{ ok: boolean; logMessage?: string; subject: string; documentId?: string }> {
+  const settings = await loadFundraisingSettingsFromDb()
+  const kindLabel = formatChangeRequestKind(input.request.kind)
+  const adminNote = String(input.adminNote || '').trim()
+
+  const docs = await issueFundraisingDocuments({
+    types: ['D22'],
+    partner: input.partner,
+    settings,
+    email: true,
+    extra: {
+      changeRequestId: input.request.id,
+      changeRequestKindLabel: kindLabel,
+      partnerMessage: [input.request.message, adminNote ? `SELPIC note: ${adminNote}` : '']
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+  })
+
+  const doc = docs[0]
+  const ok = Boolean(doc && doc.status !== 'Failed')
+  const subject = `SELPIC Fundraising — ${FUNDRAISING_DOCUMENT_LABELS.D22} (${input.partner.organizationName})`
+
+  if (!ok) {
+    return {
+      ok: false,
+      logMessage: 'Failed to email D22 Partnership Change Request Form',
+      subject,
+      documentId: doc?.id,
+    }
+  }
+
+  return { ok: true, subject, documentId: doc?.id }
+}
+
+export async function notifyAdminsOfGrantAccountUpdate(input: {
+  partner: FundraisingPartner
+  settings: FundraisingSettings
+  kind: 'registered' | 'updated'
+  updatedAt: string
+}): Promise<{ ok: boolean; logMessage?: string; subject: string; to: string[] }> {
+  const base = siteBaseUrl()
+  const partnersUrl = `${base}/admin/fundraising/partners`
+  const payoutUrl = `${base}/admin/fundraising/payout`
+  const recipients = resolveAdminNotificationRecipients()
+  const subject = `SELPIC Community Fundraising — D17 Admin Grant Account Alert (${input.partner.organizationName})`.slice(
+    0,
+    500
+  )
+
+  const doc = generateFundraisingDoc('D17', {
+    partner: input.partner,
+    settings: input.settings,
+    extra: {
+      kind: input.kind,
+      updatedAt: input.updatedAt,
+      partnersUrl,
+      payoutUrl,
+      contactEmail: input.partner.contactEmail,
+      bankName: input.partner.bankName,
+    },
+    status: 'Generated',
+  })
+
+  const result = await sendEmailViaResendServer({
+    to: recipients,
+    subject,
+    html: doc.htmlBody,
+    replyTo: input.partner.contactEmail,
+    skipBranding: true,
+    skipTracking: true,
+  })
+
+  doc.status = result.ok ? 'Sent' : 'Failed'
+  doc.sentAt = result.ok ? new Date().toISOString() : undefined
+  doc.updatedAt = new Date().toISOString()
+  void upsertFundraisingDocumentRow(doc).catch((e) =>
+    console.warn('[fundraising] D17 document persist failed:', e)
+  )
+
+  if (!result.ok) console.warn('[admin-inbound] grant account alert (D17) failed:', result.logMessage)
+  return { ...result, subject, to: recipients }
+}
+
+export async function sendPartnerGrantAccountConfirmation(input: {
+  partner: FundraisingPartner
+  settings: FundraisingSettings
+  kind: 'registered' | 'updated'
+  updatedAt: string
+}): Promise<{ ok: boolean; logMessage?: string; subject: string }> {
+  const support = COMPANY_CONTACT.email
+  const subject = `SELPIC Community Fundraising — Official Grant Account Updated (${input.partner.organizationName})`.slice(
+    0,
+    500
+  )
+
+  const doc = generateFundraisingDoc('D16', {
+    partner: input.partner,
+    settings: input.settings,
+    extra: {
+      kind: input.kind,
+      updatedAt: input.updatedAt,
+    },
+    status: 'Generated',
+  })
+
+  // Grant Account confirmation: full HTML security notice (no PDF) — registration-style email.
+  const result = await sendEmailViaResendServer({
+    to: input.partner.contactEmail,
+    subject,
+    html: doc.htmlBody,
+    replyTo: support,
+    skipBranding: true,
+    skipTracking: true,
+  })
+
+  doc.status = result.ok ? 'Sent' : 'Failed'
+  doc.sentAt = result.ok ? new Date().toISOString() : undefined
+  doc.updatedAt = new Date().toISOString()
+  void upsertFundraisingDocumentRow(doc).catch((e) =>
+    console.warn('[fundraising] D16 document persist failed:', e)
+  )
+
+  if (!result.ok) console.warn('[fundraising] grant account partner email (D16) failed:', result.logMessage)
+  return { ...result, subject }
 }
 
 export async function notifyAdminsOfNewOrder(order: OrderRecord) {

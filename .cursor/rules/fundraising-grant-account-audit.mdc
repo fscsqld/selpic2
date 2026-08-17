@@ -1,0 +1,36 @@
+---
+description: Durable Official Grant Account change + email audit trail for dispute resolution
+globs: app/api/admin/fundraising/**/*.ts,app/admin/fundraising/**/*.tsx,lib/fundraising/**/*.ts,docs/fundraising*.sql
+alwaysApply: false
+---
+
+# Official Grant Account — audit trail & email send history (ops)
+
+## Product need
+
+When SELPIC registers or changes **Official Grant Account** (Partner Registry), keep an **admin-visible, durable history**.
+
+1. **Change records** — who/what/when (`changedBy: 'admin'`), Partner ID, organisation, old → new values.
+2. **Email send records** — partner confirmation (D16) + admin alert (D17).
+
+Partner Lookup requests do **not** mutate bank fields; they only notify admins.
+
+## Required behaviour
+
+### On successful admin partner save with bank change
+
+After `upsertFundraisingPartnerRow` in `PUT /api/admin/fundraising`:
+
+1. Append `fundraising_grant_account_events` with `changedBy: 'admin'`, `kind: registered | updated`.
+2. Log D16/D17 send outcomes on that event.
+3. Do not block partner save if audit/email logging fails after persist — warn server-side.
+
+### Admin UI
+
+- Show history on Fundraising Partners (Official Grant Account history).
+- Filter by partner; Sync from server.
+
+## Success criteria
+
+Admin can answer: “When did this BSB/account change, who triggered it, what were old vs new details, and did confirmation/alert emails send?”
+---
