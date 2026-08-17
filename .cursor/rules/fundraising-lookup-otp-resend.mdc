@@ -1,0 +1,43 @@
+---
+description: Lookup OTP auto-send vs Resend — never block an explicit Resend because of a wrong code
+globs: lib/fundraising/lookupAuth.ts,lib/fundraising/lookupOtpPolicy.ts,app/api/fundraising/lookup/otp/route.ts,app/fundraising/lookup/**
+alwaysApply: false
+---
+
+# Fundraising Lookup OTP email
+
+## Invariant
+
+Opening a valid Lookup link auto-emails one code. **Resend verification code must send a new email** (short double-click debounce only). Failed code entry must not restart the email cooldown.
+
+`updated_at` on `fundraising_lookup_otps` is last **issue** time, not last verify attempt.
+
+## Why Resend looked broken
+
+1. Page load minted/sent OTP (`reason: auto`, 60s cooldown).
+2. Partner typed an old/wrong code → verify used to bump `updated_at`.
+3. Resend reused that timestamp as “just sent” and skipped email (`emailed: false`).
+4. If the first send failed after upsert, cooldown still blocked retry until discard.
+
+## Required behaviour
+
+| Path | Email |
+|------|--------|
+| Auto (page load / Strict Mode) | Skip if issued < 60s and still valid |
+| Manual Resend | Send unless issued < 12s (double-click) |
+| Attempts ≥ 5 or expired | Always mint + send |
+| Resend API send failure | Delete unsent OTP so retry is immediate |
+
+Client POST body: `{ token, reason: 'auto' | 'manual' }`.
+
+## Cousins
+
+- Invalid/rotated token (Reset Access Link) → 400, no email
+- Inactive partner → same
+- Previous codes die when a new OTP is minted — copy must say use the latest email
+- Spam folder / wrong `contactEmail`
+- Localhost vs `www.selpic.com.au` Lookup URL (partner-facing host rule)
+
+## Tests
+
+`npx tsx scripts/verify-fundraising-lookup-otp.ts`
