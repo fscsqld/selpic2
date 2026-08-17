@@ -171,6 +171,10 @@ function isErrorMessage(message: string): boolean {
   return /missing|invalid|fail|could not|error|inactive|expired|limit/i.test(message)
 }
 
+function isWarningMessage(message: string): boolean {
+  return /already sent recently|just requested|check your inbox/i.test(message)
+}
+
 function LookupPortalChrome({
   orgName,
   showEndSession,
@@ -327,7 +331,7 @@ export default function FundraisingLookupClient() {
       const res = await fetch('/api/fundraising/lookup/otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, reason }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not send verification code')
@@ -622,7 +626,9 @@ export default function FundraisingLookupClient() {
                 className={`mt-3 text-sm rounded-lg px-3 py-2 border ${
                   isErrorMessage(message)
                     ? 'text-red-800 bg-red-50 border-red-100'
-                    : 'text-emerald-800 bg-emerald-50 border-emerald-100'
+                    : isWarningMessage(message)
+                      ? 'text-amber-900 bg-amber-50 border-amber-100'
+                      : 'text-emerald-800 bg-emerald-50 border-emerald-100'
                 }`}
               >
                 {message}

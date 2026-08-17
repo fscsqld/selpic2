@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server'
 
-import { issueLookupOtpWithCode } from '@/lib/fundraising/lookupAuth'
+import {
+  discardUnsentLookupOtp,
+  issueLookupOtpWithCode,
+} from '@/lib/fundraising/lookupAuth'
+import { parseLookupOtpIssueReason } from '@/lib/fundraising/lookupOtpPolicy'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => null)) as { token?: string } | null
+    const body = (await req.json().catch(() => null)) as { token?: string; reason?: string } | null
     const token = String(body?.token || '').trim()
     if (!token) return NextResponse.json({ ok: false, error: 'Missing access token.' }, { status: 400 })
+    const reason = parseLookupOtpIssueReason(body?.reason)
 
-    const issued = await issueLookupOtpWithCode(token)
+    const issued = await issueLookupOtpWithCode(token, { reason })
     if (!issued.ok) {
       return NextResponse.json(
         {
@@ -29,7 +34,10 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         emailed: false,
-        message: `A verification code was already sent recently to ${masked}. Check your inbox (and spam), or wait about a minute before using Resend.`,
+        message:
+          reason === 'manual'
+            ? `A new code was just requested for ${masked}. Check your inbox (and spam). If nothing arrives, wait a few seconds and click Resend again.`
+            : `A verification code was already sent recently to ${masked}. Check your inbox (and spam), or use Resend verification code if you need a new one.`,
         expiresAt: issued.expiresAt,
         organizationName: issued.partner.organizationName,
       })
@@ -41,13 +49,15 @@ export async function POST(req: Request) {
       html: `
         <p>Your one-time verification code is:</p>
         <p style="font-size:28px;font-weight:700;letter-spacing:0.2em;">${issued.otp}</p>
-        <p>This code expires in 10 minutes. SELPIC puts trust and transparency with our community partners first.</p>
+        <p>This code expires in 10 minutes. Previous codes for this link no longer work — use the latest email.</p>
+        <p>SELPIC puts trust and transparency with our community partners first.</p>
         <p>If you did not request access, you can ignore this email.</p>
       `,
       skipTracking: true,
     })
 
     if (!email.ok) {
+      await discardUnsentLookupOtp(token)
       return NextResponse.json(
         { ok: false, error: email.logMessage || 'Failed to send verification email.' },
         { status: 500 }
@@ -57,7 +67,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       emailed: true,
-      message: `A verification code was sent to ${masked}.`,
+      message:
+        reason === 'manual'
+          ? `A new verification code was sent to ${masked}. Use this latest code — previous codes no longer work.`
+          : `A verification code was sent to ${masked}.`,
       expiresAt: issued.expiresAt,
       organizationName: issued.partner.organizationName,
     })
