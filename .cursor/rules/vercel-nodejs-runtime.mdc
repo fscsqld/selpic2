@@ -1,0 +1,35 @@
+# Vercel / Node.js runtime for the homepage
+
+## Invariant
+
+The **SELPIC storefront** (repo root, deployed on Vercel) must build and run on a
+**supported** Node.js major. As of 2026-07, Vercel deprecates Node **20** for new
+Builds/Functions on **2026-10-01**. Prefer **`24.x`** (Active LTS on Vercel).
+
+## Source of truth
+
+1. Root [`package.json`](mdc:package.json) → `"engines": { "node": "24.x" }`
+   (overrides Vercel Project Settings on the next deployment).
+2. [`.nvmrc`](mdc:.nvmrc) / [`.node-version`](mdc:.node-version) → `24` for local/CI.
+3. Do **not** pin `20.x` in `engines`, `.nvmrc`, CI, or `Dockerfile.vercel` for the
+   homepage unless the user explicitly accepts container self-maintenance.
+
+## Cousin pitfalls
+
+- Project Settings still on 20 while `engines` says 24 → **engines wins** after deploy.
+- Local Node 20 + repo engines 24 → develop on Node 24 when possible; Vercel uses engines.
+- Accounting sandbox (`apps/accounting-sandbox`) is **not** the Vercel homepage deploy —
+  do not couple its runtime to storefront releases unless asked.
+- Existing live deployments keep serving after the cutoff; **new** deploys fail if still on 20.
+- Container (`Dockerfile.vercel` on Node 20) avoids the platform cutoff but you own security patches — avoid for the shop.
+
+## Do
+
+- Keep `engines.node` on a currently supported Vercel major (`24.x` or later LTS).
+- After changing engines, remind that **one production deploy** is required for the change to apply.
+- Align `@types/node` major with the engines target when bumping.
+
+## Do not
+
+- Revert homepage `engines` to `20.x` to “match local” after Oct 2026.
+- Import accounting-sandbox into the storefront build to “fix” Node issues.

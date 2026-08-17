@@ -23,6 +23,12 @@ export const DASHBOARD_IMPORTANT_ACTIONS = [
   'promo_code_deleted',
   'media_uploaded',
   'media_deleted',
+  'fundraising_partner_updated',
+  'fundraising_partner_deleted',
+  'fundraising_settings_updated',
+  'fundraising_settlement_paid',
+  'fundraising_document_sent',
+  'fundraising_maintenance_run',
 ] as const satisfies ReadonlyArray<ActivityLog['action']>
 
 export type DashboardImportantAction = (typeof DASHBOARD_IMPORTANT_ACTIONS)[number]
@@ -103,6 +109,18 @@ export function formatImportantActivityTitle(log: ActivityLog): string {
       return 'Media uploaded'
     case 'media_deleted':
       return 'Media deleted'
+    case 'fundraising_partner_updated':
+      return 'Fundraising partner updated'
+    case 'fundraising_partner_deleted':
+      return 'Fundraising partner deleted'
+    case 'fundraising_settings_updated':
+      return 'Fundraising settings updated'
+    case 'fundraising_settlement_paid':
+      return 'Fundraising settlement marked paid'
+    case 'fundraising_document_sent':
+      return 'Fundraising document emailed'
+    case 'fundraising_maintenance_run':
+      return 'Fundraising maintenance run'
     default:
       return 'Admin activity'
   }
@@ -152,6 +170,7 @@ export function importantActivityTone(action: ActivityLog['action']): DashboardA
     case 'cms_content_deleted':
     case 'promo_code_deleted':
     case 'media_deleted':
+    case 'fundraising_partner_deleted':
       return 'danger'
     case 'password_changed':
     case 'permissions_updated':
@@ -161,12 +180,17 @@ export function importantActivityTone(action: ActivityLog['action']): DashboardA
     case 'product_updated':
     case 'cms_content_updated':
     case 'promo_code_updated':
+    case 'fundraising_partner_updated':
+    case 'fundraising_settings_updated':
+    case 'fundraising_settlement_paid':
+    case 'fundraising_maintenance_run':
       return 'warning'
     case 'admin_created':
     case 'product_created':
     case 'cms_content_created':
     case 'promo_code_created':
     case 'media_uploaded':
+    case 'fundraising_document_sent':
       return 'success'
     default:
       return 'info'

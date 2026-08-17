@@ -43,6 +43,7 @@
     "caniuse-lite": "^1.0.30001788",
     "clsx": "^2.0.0",
     "framer-motion": "^10.18.0",
+    "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.12.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.292.0",
@@ -63,12 +64,15 @@
     "zustand": "^4.4.6"
   },
   "devDependencies": {
-    "@types/node": "^20.19.39",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "dotenv": "^17.4.0",
     "eslint": "^8",
     "eslint-config-next": "^15.5.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

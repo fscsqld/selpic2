@@ -1,17 +1,26 @@
 import type { MetadataRoute } from 'next'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
 export default function robots(): MetadataRoute.Robots {
-  // Keep a single canonical host for Search Console and avoid local/preview confusion.
-  const base = 'https://selpic.com.au'
+  // Match the live primary host (www). Apex redirects to www in Vercel Domains.
+  const base = getPublicSiteUrl()
   return {
     rules: [
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin/', '/api/', '/auth/callback']
-      }
+        disallow: [
+          '/admin/',
+          '/api/',
+          '/auth/callback',
+          '/forgot-password',
+          '/reset-password',
+          '/auth/forgot-password',
+          '/auth/reset-password',
+        ],
+      },
     ],
     host: base,
-    sitemap: [`${base}/sitemap.xml`]
+    sitemap: [`${base}/sitemap.xml`],
   }
 }

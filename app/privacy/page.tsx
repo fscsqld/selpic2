@@ -121,6 +121,7 @@ export default function PrivacyPolicy() {
                 <li>Create an account on our website.</li>
                 <li>Contact us for customer support or inquiries.</li>
                 <li>Subscribe to our newsletter or marketing communications.</li>
+                <li>Apply for or manage a Community Fundraising Partnership (organisation and contact details, Official Grant Account information, and related partnership communications).</li>
                 <li>We may also collect non-personal information automatically through cookies and similar tracking technologies as you browse our website.</li>
               </ul>
             )}
@@ -151,6 +152,7 @@ export default function PrivacyPolicy() {
                 <li>To provide necessary customer support and send essential order updates and notifications.</li>
                 <li>To improve our products, services, and website experience (e.g., through analytics).</li>
                 <li>To personalize your shopping experience and recommend products relevant to your preferences.</li>
+                <li>To administer Community Fundraising Partnerships, calculate and remit Fundraising Cashback Grants, and issue partnership statements.</li>
                 <li>To comply with legal obligations and prevent fraudulent activity.</li>
               </ul>
             )}
@@ -222,10 +224,20 @@ export default function PrivacyPolicy() {
             ) : (
               <ul className="list-disc list-inside text-gray-700 space-y-1">
                 <li>Security Measures: We implement industry-standard security measures, including SSL encryption for all data transmission, secure payment processing, and regular security audits.</li>
-                <li>Data Retention: We only retain personal information for as long as necessary to fulfil the purposes outlined in this policy or as required by law.</li>
+                <li>Data Retention: We only retain personal information for as long as necessary to fulfil the purposes outlined in this policy or as required by law. Under Australian Privacy Principle APP 11.2 (Privacy Act 1988), when we no longer need personal information for a purpose permitted under the APPs, we take reasonable steps to destroy or de-identify it, unless an Australian law or a court/tribunal order requires retention.</li>
+                <li>Tax and company records: Where Australian tax law requires business records to be kept (ATO guidance generally at least 5 years) or company financial record-keeping applies (commonly discussed as up to 7 years), we retain those records for the required period.</li>
                 <li>Accuracy: We take reasonable steps to ensure that the personal information we collect and use is accurate, complete, and up-to-date.</li>
               </ul>
             )}
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Community Fundraising Partnerships</h3>
+              <p className="text-gray-700 leading-relaxed text-sm mb-3">
+                If your school or community organisation partners with SELPIC for Community Fundraising, we collect organisation and contact details, Partner Community Code activity totals, Official Grant Account details (including ABN and bank account information), and related grant statements for partnership administration and remittance. When a partnership ends (including suspension, termination, or non-renewal), we close operational access (code use for new fundraising orders and Partner Lookup for ongoing management). Personal information that is no longer needed is destroyed or de-identified consistent with APP 11.2. Grant payment, remittance, and related tax/business records are retained for the periods Australian law requires.
+              </p>
+              <p className="text-gray-700 leading-relaxed text-sm">
+                <strong>Family / customer accounts are separate.</strong> People who buy with a Partner Community Code must register or log in as ordinary SELPIC customers to place and pay for orders. The code only applies a community discount and attributes support to the partner organisation. Community Fundraising is a relationship between SELPIC and the organisation — it does not create, own, or control a customer&apos;s personal login. Ending a partnership does not close, suspend, or delete customer accounts. A customer who wants to leave SELPIC closes their own account themselves, the same way as any other retail customer. Order and account records remain governed by this Privacy Policy as retail customer information.
+              </p>
+            </div>
           </div>
 
           {/* 8. Access and Correction */}

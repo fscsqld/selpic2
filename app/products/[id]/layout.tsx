@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { readCatalogProducts } from '@/lib/server/catalogStore'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+const siteUrl = getPublicSiteUrl()
 
 function absoluteImageUrl(image?: string): string | undefined {
   if (!image) return undefined

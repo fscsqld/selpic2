@@ -32,6 +32,12 @@ function resolvePerformedBy(explicit?: string): string {
 /**
  * Record an admin operational change for super-admin oversight / disputes.
  * Writes local Activity Log immediately, then best-effort sync to Supabase.
+ *
+ * **Required for any new admin mutation** a super-admin must review later
+ * (who / what / when, including Fundraising). Prefer calling this from the
+ * browser after a successful save; include `field` + old/new when useful.
+ * Add a matching `ActivityLogAction` and (if high-signal) list it in
+ * `DASHBOARD_IMPORTANT_ACTIONS`. Do not rely on domain-only local logs alone.
  */
 export function logAdminActivity(input: LogAdminActivityInput): string | null {
   if (typeof window === 'undefined') return null

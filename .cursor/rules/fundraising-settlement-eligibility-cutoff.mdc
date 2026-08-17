@@ -1,0 +1,34 @@
+---
+description: Fundraising grant settlement eligibility cutoff (Stripe vs bank) — fundraising attribution only
+globs: lib/fundraising/**,app/admin/fundraising/**
+alwaysApply: false
+---
+
+# Settlement eligibility cutoff (implemented)
+
+**Scope:** Fundraising grant attribution only (`lib/fundraising/netSales.ts`, `settlementEligibility.ts`).  
+Does **not** change storefront checkout UX or retail order fulfilment for ordinary customers.
+
+## Checkout payment methods (unchanged for customers)
+
+1. **Stripe (card)** — paid at checkout; `paymentConfirmedAt` set on persist (`stripePaidOrder.ts`).
+2. **Bank transfer** — order `pending` until admin marks `paid`; then `paymentConfirmedAt` is set (`updateOrderStatus`).
+
+## Attribution rules
+
+- Eligible timestamp = `paymentConfirmedAt` (legacy paid-like orders fall back to `createdAtIso`).
+- Quarter window = AU FY quarter bounds (Sydney calendar via existing helpers).
+- **Bank grace:** placed in quarter + confirmed by **12:00 noon Sydney next calendar day** after quarter end → still that quarter.
+- **Pending bank** (no confirmation) → excluded (`Awaiting deposit`); not in Ready netSales.
+- **Cancelled** (admin status `cancelled`) → excluded from grant totals.
+
+## Cancel / refund vs settlements
+
+- Admin dashboard cancel updates order status → **live** Grant Tracker / Report recalculation excludes it.
+- There is **no separate `refunded` OrderStatus** today; ops typically use **Cancelled**.
+- **Ready / Paid settlement rows are snapshots.** Cancel after Generate does **not** auto-rewrite a Ready/Paid row. Regenerate Ready before Mark Paid; after Paid, adjust in a later period (D3).
+
+## 7-day freeze
+
+See `fundraising-au-fy-quarterly-payout.mdc` — prefer Generate Settlement after freeze so cancels in the window are reflected in the locked snapshot.
+---

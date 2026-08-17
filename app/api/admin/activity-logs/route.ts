@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import type { ActivityLog, ActivityLogAction } from '@/lib/adminActivityLog'
+import {
+  SUPER_ADMIN_AUDIT_ACTIONS,
+  type ActivityLog,
+  type ActivityLogAction,
+} from '@/lib/adminActivityLog'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -16,29 +20,8 @@ type AdminActivityLogRow = {
   created_at: string
 }
 
-const ALLOWED_ACTIONS = new Set<string>([
-  'login',
-  'logout',
-  'password_changed',
-  'permissions_updated',
-  'status_toggled',
-  'admin_created',
-  'admin_deleted',
-  'profile_updated',
-  'username_changed',
-  'product_created',
-  'product_updated',
-  'product_deleted',
-  'product_stock_adjusted',
-  'cms_content_created',
-  'cms_content_updated',
-  'cms_content_deleted',
-  'promo_code_created',
-  'promo_code_updated',
-  'promo_code_deleted',
-  'media_uploaded',
-  'media_deleted',
-])
+/** Keep in sync with client ActivityLogAction / SUPER_ADMIN_AUDIT_ACTIONS. */
+const ALLOWED_ACTIONS = new Set<string>(SUPER_ADMIN_AUDIT_ACTIONS)
 
 function rowToClient(row: AdminActivityLogRow): ActivityLog {
   return {

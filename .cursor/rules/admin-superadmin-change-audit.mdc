@@ -1,0 +1,29 @@
+---
+description: Super-admin must see who changed what for any admin mutation worth review
+alwaysApply: true
+---
+
+# Super-admin audit for admin changes
+
+## Rule
+
+If an **admin** can change something that a **super-admin** may later need to review (disputes, mistakes, compliance), that mutation **must** call `logAdminActivity` from [`lib/logAdminActivity.ts`](mdc:lib/logAdminActivity.ts) after a successful save.
+
+Record **who** (logged-in admin username/email via the helper), **what** (action + description), **when** (automatic), and ideally **old → new** (`field` / `oldValue` / `newValue`) plus a stable `target` id.
+
+## Checklist for every new admin feature
+
+1. Add a dedicated `ActivityLogAction` in [`lib/adminActivityLog.ts`](mdc:lib/adminActivityLog.ts) (and `KNOWN_ACTIONS` / `SUPER_ADMIN_AUDIT_ACTIONS`).
+2. Call `logAdminActivity({ action, target, field?, oldValue?, newValue?, description })` on success.
+3. If the change is high-signal, add the action to `DASHBOARD_IMPORTANT_ACTIONS` in [`lib/adminDashboardRecentActivities.ts`](mdc:lib/adminDashboardRecentActivities.ts) and format its title/tone.
+4. Add the action to the Activity Log filter options in Admin Settings if that UI lists actions explicitly.
+5. Do **not** treat domain-only local logs (e.g. Fundraising `rateLogs` in Zustand) as enough for super-admin oversight across devices.
+
+## Already covered domains
+
+- Products, CMS, promo codes, media, staff account events
+- Fundraising: partner save/delete/lifecycle, settings, settlement paid, document send, maintenance batches
+
+## Not a substitute
+
+Domain trails (order `auditLog`, document send history, grant-account events) may still exist for ops — they do **not** replace the shared Activity Log for “which admin did this?”.

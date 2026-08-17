@@ -26,6 +26,8 @@ export async function GET() {
         gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || null,
         gitCommitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE || null,
         vercelDeploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
+        /** Confirms runtime after Node 20 → 24 upgrade (engines in package.json). */
+        nodeVersion: process.version,
       },
       supabase: {
         hasPublicEnv: hasUsableSupabaseBrowserEnv(),
@@ -35,6 +37,7 @@ export async function GET() {
         /** Runtime only — missing value does not fail `next build`. */
         secretConfigured: isCronSecretConfigured(),
         etsySyncPath: '/api/cron/etsy-sync',
+        fundraisingRenewalPath: '/api/cron/fundraising-renewal',
       },
     },
     { headers: { 'Cache-Control': 'no-store' } }

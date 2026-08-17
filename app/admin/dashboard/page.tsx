@@ -33,6 +33,7 @@ import {
   ExternalLink,
   RefreshCw,
   Shield,
+  HeartHandshake,
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
@@ -105,7 +106,7 @@ export default function AdminDashboard() {
   } = useStore()
   const { users } = useUserAuth()
   const inboundSummary = useAdminInboundStore((s) => s.summary)
-  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders') =>
+  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders' | 'fundraising') =>
     inboundSummary.items.find((i) => i.key === key)?.count ?? 0
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
   const router = useRouter()
@@ -539,6 +540,18 @@ export default function AdminDashboard() {
       href: '/admin/documents',
       color: 'bg-teal-500',
       requiredPermission: 'users:read'
+    },
+    {
+      title: 'Fundraising',
+      description:
+        inboundCount('fundraising') > 0
+          ? `${inboundCount('fundraising')} item${inboundCount('fundraising') === 1 ? '' : 's'} need attention (applications and/or change requests) — open Partner Registry`
+          : 'Community partners, grant tracker, change requests, and partnership documents',
+      icon: HeartHandshake,
+      href: '/admin/fundraising/partners',
+      color: 'bg-emerald-600',
+      badge: inboundCount('fundraising') > 0 ? inboundCount('fundraising') : undefined,
+      requiredPermission: 'analytics:read',
     },
     {
       title: 'Invoice preview',
@@ -1166,7 +1179,7 @@ export default function AdminDashboard() {
                   {t('admin.dashboard.sections.recentActivities')}
                 </h3>
                 <p className="mt-1 text-xs text-gray-500">
-                  Important account, product, CMS, promo, and media changes. Routine sign-ins stay in the full Activity Log.
+                  Important account, product, CMS, promo, media, and fundraising changes. Routine sign-ins stay in the full Activity Log.
                 </p>
               </div>
               {adminUser?.role === 'super_admin' && (
@@ -1181,7 +1194,7 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               {recentActivities.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  No important activity yet. Account, product, CMS, promo, and media changes will appear here.
+                  No important activity yet. Account, product, CMS, promo, media, and fundraising changes will appear here.
                 </p>
               ) : (
                 recentActivities.map((activity) => (

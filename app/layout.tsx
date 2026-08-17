@@ -3,10 +3,11 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
+import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 import ClientSwCacheReset from '@/components/ClientSwCacheReset'
 
 const inter = Inter({ subsets: ['latin'] })
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au'
+const siteUrl = getPublicSiteUrl()
 const siteName = 'Selpic'
 const siteTitle = 'Custom Stickers & Name Labels Australia | Selpic'
 const siteDescription =

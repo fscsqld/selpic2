@@ -1,0 +1,44 @@
+---
+description: Official Grant Account ABN field + AU compliance notes for fundraising
+globs: app/fundraising/lookup/**/*.tsx,app/api/fundraising/lookup/bank/**/*.ts,app/admin/fundraising/**/*.tsx,lib/fundraising/**
+alwaysApply: false
+---
+
+# Official Grant Account — ABN (Australian Business Number)
+
+## Product requirement
+
+SELPIC admins collect **ABN** (11 digits) on Partner Registry Official Grant Account for ATO-aligned transparency and D9/D10. Partners may propose ABN in a Lookup change request; they cannot persist bank/ABN themselves.
+
+- Label: `ABN (Australian Business Number)`
+- Placeholder: `e.g. 12 345 678 901`
+- Validate 11 digits (+ ABR checksum in app)
+- Note: required for Cashback Grant transfer documentation
+- Store on partner payload as `abn` (alongside `accountName`, `bsb`, `accountNumber`, `bankName` — flat fields matching existing payload; conceptually Official Grant Account / bank details)
+
+## Surfaces
+
+- Lookup: masked read-only summary + optional proposed ABN on change request
+- Admin Partners / Payout (show ABN; Copy Bank includes ABN)
+- Admin save API: audit + D16/D17 when bank/ABN changes
+- D9 / D10 statement header: show formatted `partner.abn`; if missing show **Not Provided — ABN Withholding May Apply**
+- D9 / D10 payment destination: **mask** BSB / account (last 4 only); account name may remain visible
+- Grant-account audit + **D16** (masked to partner) / **D17** (full to admin)
+
+## AU compliance notes (guidance — not legal advice)
+
+For **business-to-business grant / supplier-style payments** in Australia, typical practice includes:
+
+| Field / concept | Why it matters |
+|-----------------|----------------|
+| **ABN** | Identify the payee entity; withholding / Statement of Supplier rules if ABN not quoted on invoices for payments for supply |
+| **Legal / account name** | Must match the organisation entitled to the grant and the bank account |
+| **BSB + account number** | Bank transfer |
+| **GST registration status** (optional later) | Whether grant invoices/RCTI need GST; many school fundraising grants may be outside GST — confirm with accountant |
+| **Statement of Supplier** (if no ABN) | ATO form when paying an entity without ABN for a supply — may apply to some payees; prefer collecting ABN |
+| **RCTI / tax invoice (D11)** | Only if treating as taxable supply — already gated by `enableRcti` |
+| **Remittance advice (D10)** | Payee identity + amount + period — ABN on face of document helps audit |
+
+**Not usually required on this partner form for bank transfer alone:** TFN (sensitive; do not collect unless a separate payroll/withholding product needs it), full ASIC company extract, or director personal ID.
+
+Prefer **ABN + official account name + BSB/account** for this fundraising grant flow; escalate GST/RCTI to accounting when enabling D11.

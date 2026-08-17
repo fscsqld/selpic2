@@ -66,7 +66,16 @@ export class EmailTrackingService {
 
   private getBaseUrl(): string {
     const envSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim()
-    if (envSiteUrl) return envSiteUrl.replace(/\/$/, '')
+    if (envSiteUrl) {
+      try {
+        const u = new URL(envSiteUrl.includes('://') ? envSiteUrl : `https://${envSiteUrl}`)
+        if (u.hostname === 'selpic.com.au') u.hostname = 'www.selpic.com.au'
+        u.protocol = 'https:'
+        return u.origin
+      } catch {
+        return envSiteUrl.replace(/\/$/, '')
+      }
+    }
 
     if (typeof window !== 'undefined') {
       const origin = window.location.origin
@@ -77,7 +86,7 @@ export class EmailTrackingService {
       return origin
     }
 
-    return 'https://selpic.com.au'
+    return 'https://www.selpic.com.au'
   }
 
   // Initialize tracking for new email

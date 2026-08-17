@@ -24,6 +24,13 @@ export type ActivityLogAction =
   | 'promo_code_deleted'
   | 'media_uploaded'
   | 'media_deleted'
+  /** Fundraising / domain ops a super-admin must be able to review. */
+  | 'fundraising_partner_updated'
+  | 'fundraising_partner_deleted'
+  | 'fundraising_settings_updated'
+  | 'fundraising_settlement_paid'
+  | 'fundraising_document_sent'
+  | 'fundraising_maintenance_run'
 
 export interface ActivityLog {
   id: string
@@ -47,6 +54,8 @@ interface AdminActivityLogState {
   addLog: (log: Omit<ActivityLog, 'id' | 'timestamp'>, opts?: { skipRemote?: boolean }) => void
   mergeRemoteLogs: (remote: ActivityLog[]) => number
   getLogsByAdmin: (username: string) => ActivityLog[]
+  /** Match performedBy / target against any of these identities (username, email, …). */
+  getLogsByActors: (actors: string[]) => ActivityLog[]
   getLogsByAction: (action: ActivityLog['action']) => ActivityLog[]
   getRecentLogs: (limit?: number) => ActivityLog[]
   clearLogs: () => void
@@ -56,7 +65,8 @@ interface AdminActivityLogState {
   getUserAgent: () => string
 }
 
-const KNOWN_ACTIONS = new Set<string>([
+/** Actions that belong in the shared super-admin Activity Log (extend when adding admin mutations). */
+export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'login',
   'logout',
   'password_changed',
@@ -78,7 +88,15 @@ const KNOWN_ACTIONS = new Set<string>([
   'promo_code_deleted',
   'media_uploaded',
   'media_deleted',
-])
+  'fundraising_partner_updated',
+  'fundraising_partner_deleted',
+  'fundraising_settings_updated',
+  'fundraising_settlement_paid',
+  'fundraising_document_sent',
+  'fundraising_maintenance_run',
+] as const satisfies ReadonlyArray<ActivityLogAction>
+
+const KNOWN_ACTIONS = new Set<string>(SUPER_ADMIN_AUDIT_ACTIONS)
 
 function normalizeRemoteLog(raw: unknown): ActivityLog | null {
   if (!raw || typeof raw !== 'object') return null
@@ -149,9 +167,27 @@ export const useAdminActivityLog = create<AdminActivityLogState>()(
       },
 
       getLogsByAdmin: (username) => {
+        const key = username.trim().toLowerCase()
+        if (!key) return []
         return get().logs.filter(
-          (log) => log.performedBy === username || log.targetAdmin === username
+          (log) =>
+            log.performedBy.trim().toLowerCase() === key ||
+            (log.targetAdmin || '').trim().toLowerCase() === key
         )
+      },
+
+      getLogsByActors: (actors) => {
+        const keys = new Set(
+          actors
+            .map((a) => a.trim().toLowerCase())
+            .filter(Boolean)
+        )
+        if (!keys.size) return []
+        return get().logs.filter((log) => {
+          const by = log.performedBy.trim().toLowerCase()
+          const target = (log.targetAdmin || '').trim().toLowerCase()
+          return keys.has(by) || (target && keys.has(target))
+        })
       },
 
       getLogsByAction: (action) => {

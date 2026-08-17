@@ -33,7 +33,16 @@ export default function SeoProductJsonLd({
   products: SeoProduct[]
 }) {
   const json = useMemo(() => {
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://selpic.com.au').replace(/\/$/, '')
+    const raw = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.selpic.com.au').replace(/\/$/, '')
+    let siteUrl = raw
+    try {
+      const u = new URL(raw)
+      if (u.hostname === 'selpic.com.au') u.hostname = 'www.selpic.com.au'
+      u.protocol = 'https:'
+      siteUrl = u.origin
+    } catch {
+      siteUrl = 'https://www.selpic.com.au'
+    }
     const pageUrl = `${siteUrl}${pagePath.startsWith('/') ? pagePath : `/${pagePath}`}`
 
     const itemListElement = (products || [])

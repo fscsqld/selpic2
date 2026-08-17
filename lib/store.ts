@@ -240,6 +240,12 @@ export interface OrderRecord {
   shippingDeliveryTime?: string
   paymentMethod: 'card' | 'paypal' | 'bank' | 'cash' | 'stripe' | 'marketplace'
   paymentMethodName?: string
+  /**
+   * When payment was confirmed (ISO).
+   * Stripe: usually same as createdAtIso. Bank: when admin marks paid (deposit confirmed).
+   * Used by fundraising settlement attribution only — does not change customer checkout UX.
+   */
+  paymentConfirmedAt?: string
   status: OrderStatus
   customer: {
     name: string
@@ -905,6 +911,9 @@ export const useStore = create<Store>()(
             return {
               ...o,
               status,
+              ...(status === 'paid' && !o.paymentConfirmedAt
+                ? { paymentConfirmedAt: new Date().toISOString() }
+                : {}),
               auditLog: [...(o.auditLog || []), auditEntry]
             }
           }

@@ -47,21 +47,27 @@ export function normalizeLedgerOrder(order: OrderRecord): OrderRecord {
   if (!order.stripeCheckoutSessionId) return order
   const status = String(order.status || '').trim()
   const nextStatus = !status || status === 'pending' ? 'paid' : order.status
+  const confirmed =
+    order.paymentConfirmedAt ||
+    (nextStatus !== 'pending' && nextStatus !== 'cancelled' ? order.createdAtIso : undefined)
   return {
     ...order,
     status: nextStatus,
     paymentMethod: 'stripe',
+    ...(confirmed ? { paymentConfirmedAt: confirmed } : {}),
   }
 }
 
 export function draftToPersistedOrder(orderDraft: OrderDraft, stripeCheckoutSessionId: string): OrderRecord {
   const id = `ORD-${Date.now().toString(36)}`
+  const createdAtIso = new Date().toISOString()
   const base: OrderRecord = {
     id,
-    createdAtIso: new Date().toISOString(),
+    createdAtIso,
     ...orderDraft,
     stripeCheckoutSessionId,
     platformSource: 'website',
+    paymentConfirmedAt: orderDraft.paymentConfirmedAt || createdAtIso,
   }
   return normalizeLedgerOrder(base)
 }

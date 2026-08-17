@@ -1,0 +1,27 @@
+---
+description: Partner change requests use D22 Documents form + email instructions (no PDF attachment); D16/D17 audit on apply
+globs: app/fundraising/lookup/**/*.tsx,app/admin/fundraising/**/*.tsx,app/api/fundraising/lookup/change-requests/**/*.ts,lib/fundraising/documents.ts,lib/fundraising/d22FillablePdf.ts,lib/server/adminInboundNotify.ts
+alwaysApply: false
+---
+
+# Fundraising change requests — D22 Documents exchange
+
+## Best ops flow
+
+1. Partner Lookup: **intake message only** (no bank fields).
+2. Admin Partners → **Change request inbox** (triage) → **Open partner workspace** for that organization.
+3. In the **partner-scoped** panel: **Email D22 notice** (HTML instructions only — **no PDF email attachment**).
+4. System stores **D22** in partner **Documents**; email explains download + upload path.
+5. Partner downloads fillable D22 from Documents, completes it, uploads on the change request reply.
+6. Admin verifies attachments on that partner’s change requests → Partner form **Save** → **Mark applied**.
+7. If Official Grant Account changed: **D16** + **D17** + grant-account audit (`changedBy: admin`).
+
+## Admin UX (per partner)
+
+- Do **not** process full change-request actions in a mixed cross-partner list.
+- Inbox = triage + jump. Full actions + grant history focus on the **selected partner** in the editor.
+
+## Why Documents (not email PDF)
+
+Email PDF attachments were confusing (flat/unfillable history) and duplicated Documents. Keep one canonical fillable form in Lookup Documents.
+---

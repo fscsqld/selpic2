@@ -1,0 +1,35 @@
+---
+description: D9/D10 Official Grant Statement layout — ABN, GST note, audit footer
+globs: lib/fundraising/documents.ts,app/admin/fundraising/documents/**/*.tsx,app/admin/fundraising/payout/**/*.tsx
+alwaysApply: false
+---
+
+# D9 / D10 Official Grant Statement templates
+
+Update **D9** (Quarterly Community Support & Fundraising Cashback Grant Statement) and **D10** (Remittance / Payment Receipt) HTML for ATO-aligned transparency and partner audit retention.
+
+## Settlement cadence
+
+- Periods use **Australian financial-year quarters** (FY starts 1 July):
+  - Q1 Jul–Sep · Q2 Oct–Dec · Q3 Jan–Mar · Q4 Apr–Jun
+- Period id shape: `FY2025-26-Q1` (see `lib/fundraising/auFinancialQuarter.ts`)
+- **Target payout date:** 15th calendar day of the month after quarter end (roll to next Monday if Sat/Sun). No minimum payout amount.
+- Show period label + target payout date on D9.
+
+## Required content
+
+### Payment destination (especially D10; D9 may show intended payee)
+
+- Masked BSB / account (last 4)
+- Payment Date / Reference (D10)
+
+### ABN / GST
+
+- Formatted partner ABN or “Not Provided — ABN Withholding May Apply”
+- GST-free community support note as applicable
+
+### Audit footer
+
+- Retain for organisation files; SELPIC retains remittance evidence per AU tax/company rules
+
+Integrate in `buildFundraisingDocumentHtml` for D9/D10 and Sample Preview / payout Mark Paid generation paths.

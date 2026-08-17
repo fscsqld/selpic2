@@ -1,0 +1,27 @@
+---
+description: Official Grant Account — partners request; SELPIC admins register/update
+globs: app/fundraising/lookup/**/*.tsx,app/api/fundraising/lookup/bank/**/*.ts,app/admin/fundraising/**/*.tsx,lib/fundraising/grantAccountValidation.ts,lib/server/adminInboundNotify.ts
+alwaysApply: false
+---
+
+# Official Grant Account — controlled update (ops)
+
+## Product rule
+
+Partners **cannot** save Official Grant Account (ABN/BSB/account) from Lookup.
+
+1. Lookup shows **masked read-only** details (or “not registered”).
+2. Partner may **Request update** → `POST /api/fundraising/lookup/bank` emails SELPIC admins (no DB bank mutation).
+3. SELPIC admin verifies, enters bank/ABN on **Partner Registry**, Saves with **change reason**.
+4. Admin PUT `/api/admin/fundraising` persists partner, writes `fundraising_grant_account_events` with `changedBy: 'admin'`, sends **D16** (partner) + **D17** (admin).
+
+`PUT /api/fundraising/lookup/bank` returns **405**.
+
+## Admin validation
+
+Use `validateGrantAccountForm` / ABN checksum when completing Official Grant Account on Partner Registry before Mark Paid.
+
+## Phase 2 (backlog)
+
+Recognised BSB list — same as before; block Save on unrecognised BSB.
+---
