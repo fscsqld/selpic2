@@ -63,12 +63,15 @@
     "zustand": "^4.4.6"
   },
   "devDependencies": {
-    "@types/node": "^20.19.39",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "dotenv": "^17.4.0",
     "eslint": "^8",
     "eslint-config-next": "^15.5.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
