@@ -3,8 +3,8 @@ import { createHash, randomBytes, randomInt } from 'crypto'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import type { FundraisingPartner } from '@/lib/fundraising/types'
 import { LOOKUP_SESSION_HOURS } from '@/lib/fundraising/lookupConstants'
+import { buildPartnerFacingLookupUrl } from '@/lib/fundraising/partnerFacingSite'
 import { listFundraisingPartnersFromDb, upsertFundraisingPartnerRow } from '@/lib/fundraising/persistence'
-import { siteBaseUrl } from '@/lib/server/adminInboundNotify'
 
 const OTP_TTL_MS = 10 * 60 * 1000
 /** Min gap between verification emails for the same Lookup token (refresh / Strict Mode). */
@@ -28,7 +28,7 @@ export function hashOtp(otp: string, salt: string): string {
 }
 
 export function buildPartnerLookupUrl(token: string): string {
-  return `${siteBaseUrl()}/fundraising/lookup?token=${encodeURIComponent(token)}`
+  return buildPartnerFacingLookupUrl(token)
 }
 
 export function ensurePartnerLookupToken(partner: FundraisingPartner): FundraisingPartner {

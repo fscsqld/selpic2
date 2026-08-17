@@ -1,0 +1,47 @@
+---
+description: Partner-facing fundraising docs/emails always use https://www.selpic.com.au — never localhost or Vercel preview
+globs: lib/fundraising/**/*.ts,lib/publicSiteUrl.ts,app/admin/fundraising/**/*.tsx,app/api/admin/fundraising/**/*.ts,app/api/fundraising/**/*.ts,lib/server/adminInboundNotify.ts
+alwaysApply: false
+---
+
+# Fundraising partner-facing URLs
+
+## Invariant
+
+Official partner documents, Lookup links, PDFs, and partner emails **always** use `https://www.selpic.com.au`. Never `localhost`, LAN IPs, or `*.vercel.app`.
+
+Lookup is live on production. Do not tell operators to use `http://localhost:…/fundraising/lookup` in partner-facing copy.
+
+## Why this leaked
+
+Admin Documents / sample extras used `window.location.origin`. Generating on `http://localhost:3005` persisted that origin inside `htmlBody`. Lookup then showed:
+
+`Or copy this link: http://localhost:3005/fundraising/lookup?token=…`
+
+`siteBaseUrl()` also followed `NEXT_PUBLIC_SITE_URL` / `VERCEL_URL`, so local and preview deploys could mint non-public Lookup URLs.
+
+## Required helpers
+
+| Use | Helper |
+|-----|--------|
+| Lookup / partner docs / partner emails | `buildPartnerFacingLookupUrl` / `getPartnerFacingSiteUrl` (`lib/fundraising/partnerFacingSite.ts`, `lib/publicSiteUrl.ts`) |
+| HTML already stored or pasted | `healFundraisingDocumentHtml` / `rewriteHtmlUnsuitableOriginsToPublicSite` |
+| Admin-only inbound emails | `siteBaseUrl()` is OK for `/admin/…` links to staff — still heal any HTML that partners can see |
+
+Do **not** use `window.location.origin` or `siteBaseUrl()` for partner Lookup links.
+
+## Cousins to check when touching this
+
+- Admin Documents generate / sample preview / Send / resend
+- Welcome pack D2/D4 and renewal D18–D20
+- Stored `fundraising_documents.payload.htmlBody` (heal on read + write)
+- Lookup dashboard document viewer + PDF download
+- `NEXT_PUBLIC_SITE_URL=http://localhost:3005` in local `.env`
+- Vercel Preview `VERCEL_URL`
+- Apex `http://selpic.com.au` vs canonical `https://www.selpic.com.au`
+- Sample token preview (`samplepreviewtoken…`) — host must still be production; token is preview-only
+
+## Tests
+
+`npx tsx scripts/verify-fundraising-partner-facing-urls.ts`
+`npx tsx scripts/verify-fundraising-docs-smoke.ts`

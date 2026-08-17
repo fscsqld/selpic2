@@ -32,6 +32,7 @@ import {
 import { issueFundraisingDocuments } from '@/lib/fundraising/issueDocuments'
 import { buildFundraisingDocCoverHtml } from '@/lib/fundraising/documents'
 import { fundraisingDocNeedsPdfAttachment } from '@/lib/fundraising/pdfAttachmentPolicy'
+import { healFundraisingDocumentHtml } from '@/lib/fundraising/partnerFacingSite'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 import {
   applyStatusWithLegalRetention,
@@ -360,10 +361,11 @@ export async function PUT(req: Request) {
         const partners = await listFundraisingPartnersFromDb()
         const p = doc.partnerId ? partners.find((x) => x.id === doc.partnerId) : partner
         if (!p?.contactEmail) return NextResponse.json({ error: 'Partner email required' }, { status: 400 })
-        const htmlBody =
+        const htmlBody = healFundraisingDocumentHtml(
           typeof body?.document?.htmlBody === 'string' && body.document.htmlBody.trim()
             ? body.document.htmlBody
             : doc.htmlBody
+        )
         doc.htmlBody = htmlBody
         let attachments: { filename: string; content: string; contentType: string }[] | undefined
         const needsPdf = fundraisingDocNeedsPdfAttachment(doc.type)

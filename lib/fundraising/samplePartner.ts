@@ -1,3 +1,4 @@
+import { getPartnerFacingSiteUrl, buildPartnerFacingLookupUrl } from '@/lib/fundraising/partnerFacingSite'
 import type { FundraisingPartner, FundraisingSettings } from '@/lib/fundraising/types'
 import { DEFAULT_FUNDRAISING_SETTINGS } from '@/lib/fundraising/types'
 
@@ -40,7 +41,7 @@ export function sampleDocumentExtras(
   settings: FundraisingSettings,
   period?: string
 ): Record<string, string | number | undefined> {
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://www.selpic.com.au'
+  const base = getPartnerFacingSiteUrl()
   const token = partner.lookupToken || 'samplepreviewtoken'
   const net = 1250
   const rate = settings.donationRate ?? DEFAULT_FUNDRAISING_SETTINGS.donationRate
@@ -52,7 +53,7 @@ export function sampleDocumentExtras(
     donationRate: rate,
     parentDisplayRate: settings.parentDisplayRate,
     sampleKitRequested: partner.sampleKitRequested ? 'yes' : undefined,
-    lookupUrl: `${base}/fundraising/lookup?token=${encodeURIComponent(token)}`,
+    lookupUrl: buildPartnerFacingLookupUrl(token),
     period: period || undefined,
     netSales: net.toFixed(2),
     commission: ((net * rate) / 100).toFixed(2),
