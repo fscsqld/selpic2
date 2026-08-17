@@ -12,6 +12,9 @@ const partner = createSampleFundraisingPartner()
 const settings = DEFAULT_FUNDRAISING_SETTINGS
 const extras = sampleDocumentExtras(partner, settings, '2026-07')
 const types = Object.keys(FUNDRAISING_DOCUMENT_LABELS) as FundraisingDocumentType[]
+const lookupGuideTypes = new Set(['D2', 'D4', 'D18', 'D19', 'D20'])
+const localHostLeak = /localhost|127\.0\.0\.1|\.vercel\.app/i
+const publicLookup = 'https://www.selpic.com.au/fundraising/lookup'
 const footerNeedle =
   'Grant Policy: Total Community Support definition version: ' + TOTAL_COMMUNITY_SUPPORT_DEFINITION_VERSION
 const expectedMask = `BSB ${maskedBsbValue(partner.bsb)} / Acc ${maskedAccountValue(partner.accountNumber)}`
@@ -28,6 +31,8 @@ type Row = {
   d18CodeChange?: boolean | null
   d17ShowsFullAcc?: boolean | null
   partnerFacingLeak?: boolean
+  hasLocalhost?: boolean
+  lookupHostOk?: boolean | null
   error?: string
 }
 
@@ -65,11 +70,15 @@ for (const type of types) {
       partnerFacingLeak:
         (type === 'D9' || type === 'D10' || type === 'D13' || type === 'D16') &&
         (html.includes('>000-000<') || html.includes('>12345678<')),
+      hasLocalhost: localHostLeak.test(html),
+      lookupHostOk: lookupGuideTypes.has(type) ? html.includes(publicLookup) : null,
     }
     if (!checks.hasFooter || html.length < 200) checks.ok = false
     if (checks.hasMaskLine === false || checks.hasAbn === false) checks.ok = false
     if (checks.d21Ack === false || checks.d18CodeChange === false) checks.ok = false
     if (checks.partnerFacingLeak) checks.ok = false
+    if (checks.hasLocalhost) checks.ok = false
+    if (checks.lookupHostOk === false) checks.ok = false
     results.push(checks)
   } catch (e) {
     results.push({ type, ok: false, error: e instanceof Error ? e.message : String(e) })

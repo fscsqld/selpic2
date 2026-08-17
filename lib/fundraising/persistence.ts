@@ -10,6 +10,7 @@ import type {
   FundraisingSettings,
 } from '@/lib/fundraising/types'
 import { DEFAULT_FUNDRAISING_SETTINGS, FUNDRAISING_CHANGE_REQUEST_OPEN_STATUSES } from '@/lib/fundraising/types'
+import { healFundraisingDocument } from '@/lib/fundraising/partnerFacingSite'
 
 function nowIso() {
   return new Date().toISOString()
@@ -35,11 +36,12 @@ export async function upsertFundraisingDocumentRow(doc: FundraisingDocument): Pr
   if (!isSupabaseConfigured()) return { ok: false, error: 'Supabase not configured' }
   try {
     const admin = getSupabaseAdmin()
+    const healed = healFundraisingDocument(doc)
     const { error } = await admin.from('fundraising_documents').upsert({
-      id: doc.id,
-      partner_id: doc.partnerId || null,
-      doc_type: doc.type,
-      payload: doc,
+      id: healed.id,
+      partner_id: healed.partnerId || null,
+      doc_type: healed.type,
+      payload: healed,
       updated_at: nowIso(),
     })
     if (error) return { ok: false, error: error.message }
@@ -80,7 +82,10 @@ export async function listFundraisingDocumentsFromDb(): Promise<FundraisingDocum
   const admin = getSupabaseAdmin()
   const { data, error } = await admin.from('fundraising_documents').select('payload').order('updated_at', { ascending: false }).limit(500)
   if (error) throw new Error(error.message)
-  return (data || []).map((r) => r.payload as FundraisingDocument).filter(Boolean)
+  return (data || [])
+    .map((r) => r.payload as FundraisingDocument)
+    .filter(Boolean)
+    .map((doc) => healFundraisingDocument(doc))
 }
 
 export async function listFundraisingSettlementsFromDb(): Promise<FundraisingSettlement[]> {

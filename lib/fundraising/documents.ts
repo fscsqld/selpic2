@@ -1,6 +1,10 @@
 import { COMPANY_LEGAL, COMPANY_CONTACT } from '@/lib/companyLegal'
 import { digitsOnlyAbn, formatAbnDisplay } from '@/lib/fundraising/abn'
 import { LOOKUP_SESSION_HOURS } from '@/lib/fundraising/lookupConstants'
+import {
+  canonicalizePartnerFacingLookupUrl,
+  healFundraisingDocumentHtml,
+} from '@/lib/fundraising/partnerFacingSite'
 import { maskedAccountValue, maskedBsbValue } from '@/lib/fundraising/mask'
 import {
   FUNDRAISING_DOCUMENT_LABELS,
@@ -219,7 +223,10 @@ export function buildFundraisingDocumentHtml(input: {
   const parentOff = Number(input.extra?.parentDisplayRate ?? input.settings.parentDisplayRate)
   const period = input.period || String(input.extra?.period || '')
   const title = FUNDRAISING_DOCUMENT_LABELS[input.type]
-  const lookupUrl = input.extra?.lookupUrl ? String(input.extra.lookupUrl) : undefined
+  const lookupUrl = canonicalizePartnerFacingLookupUrl(
+    input.extra?.lookupUrl ? String(input.extra.lookupUrl) : undefined,
+    partner?.lookupToken
+  )
   const dashboardGuide = partnerDashboardGuideHtml(lookupUrl)
   const updatedAtDisplay = formatGrantAccountUpdatedAt(
     String(input.extra?.updatedAt || partner?.updatedAt || '')
@@ -629,7 +636,7 @@ export function buildFundraisingDocumentHtml(input: {
     `,
   }
 
-  return `
+  return healFundraisingDocumentHtml(`
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8" /><title>${esc(title)}</title></head>
@@ -645,7 +652,7 @@ export function buildFundraisingDocumentHtml(input: {
     <p style="margin:0;">Grant Policy: Total Community Support definition version: ${esc(TOTAL_COMMUNITY_SUPPORT_DEFINITION_VERSION)}</p>
   </footer>
 </body>
-</html>`
+</html>`)
 }
 
 /**

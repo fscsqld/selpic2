@@ -8,6 +8,7 @@ import { useAdminAuth } from '@/lib/adminAuth'
 import { logAdminActivity } from '@/lib/logAdminActivity'
 import { useFundraisingStore } from '@/lib/fundraising/store'
 import { generateFundraisingDoc } from '@/lib/fundraising/generateDoc'
+import { buildPartnerFacingLookupUrl } from '@/lib/fundraising/partnerFacingSite'
 import {
   FUNDRAISING_DOCUMENT_LABELS,
   FundraisingDocumentType,
@@ -22,6 +23,7 @@ import { useDocumentSendLogStore } from '@/lib/documentSendLogStore'
 import { fundraisingHtmlToPdfFile } from '@/lib/fundraising/htmlToPdfClient'
 import { buildFundraisingDocCoverPlainText } from '@/lib/fundraising/documents'
 import { fundraisingDocNeedsPdfAttachment } from '@/lib/fundraising/pdfAttachmentPolicy'
+import { healFundraisingDocumentHtml } from '@/lib/fundraising/partnerFacingSite'
 import {
   currentAuFyQuarterPeriodId,
 } from '@/lib/fundraising/auFinancialQuarter'
@@ -135,11 +137,6 @@ function DocumentsContent() {
     setHistoryPage(1)
   }, [historySearch, historyType, historyScope])
 
-  const clientSiteBase = () => {
-    if (typeof window !== 'undefined') return window.location.origin
-    return (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.selpic.com.au').replace(/\/$/, '')
-  }
-
   const buildDoc = (type: FundraisingDocumentType, forPartner = partner) => {
     const extras =
       forPartner.id === SAMPLE_PARTNER_ID
@@ -151,7 +148,7 @@ function DocumentsContent() {
             sampleKitRequested: forPartner.sampleKitRequested ? 'yes' : undefined,
             postalAddress: forPartner.postalAddress,
             lookupUrl: forPartner.lookupToken
-              ? `${clientSiteBase()}/fundraising/lookup?token=${encodeURIComponent(forPartner.lookupToken)}`
+              ? buildPartnerFacingLookupUrl(forPartner.lookupToken)
               : undefined,
             period: period || undefined,
           }
@@ -241,7 +238,9 @@ function DocumentsContent() {
       return
     }
 
-    const htmlToSend = documentId === previewId && editHtml ? editHtml : doc.htmlBody
+    const htmlToSend = healFundraisingDocumentHtml(
+      documentId === previewId && editHtml ? editHtml : doc.htmlBody
+    )
     if (documentId === previewId && dirty) {
       updateDocumentStatus(documentId, 'Generated', { htmlBody: editHtml })
     }

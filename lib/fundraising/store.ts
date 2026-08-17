@@ -19,6 +19,7 @@ import {
 import { maskAccount as maskAccountImpl, maskBsb as maskBsbImpl } from '@/lib/fundraising/mask'
 import { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
 import { resolvePartnerGrantRates } from '@/lib/fundraising/partnerRates'
+import { healFundraisingDocument, healFundraisingDocumentHtml } from '@/lib/fundraising/partnerFacingSite'
 
 function id(prefix: string): string {
   return newFundraisingId(prefix)
@@ -156,7 +157,7 @@ export const useFundraisingStore = create<FundraisingStore>()(
           return {
             settings: payload.settings ? { ...state.settings, ...payload.settings } : state.settings,
             partners,
-            documents: byId(state.documents, payload.documents),
+            documents: byId(state.documents, payload.documents).map((d) => healFundraisingDocument(d)),
             settlements: byId(state.settlements, payload.settlements),
             rates: Array.from(rateMap.values()),
           }
@@ -258,7 +259,7 @@ export const useFundraisingStore = create<FundraisingStore>()(
           period: input.period,
           status: input.status,
           title: input.title || FUNDRAISING_DOCUMENT_LABELS[input.type],
-          htmlBody: input.htmlBody,
+          htmlBody: healFundraisingDocumentHtml(input.htmlBody),
           snapshotData: input.snapshotData,
           sendLogId: input.sendLogId,
           id: input.id || id('fdoc'),
@@ -277,6 +278,7 @@ export const useFundraisingStore = create<FundraisingStore>()(
               ? {
                   ...d,
                   ...extra,
+                  ...(extra?.htmlBody ? { htmlBody: healFundraisingDocumentHtml(extra.htmlBody) } : {}),
                   status,
                   updatedAt: new Date().toISOString(),
                   sentAt: status === 'Sent' ? new Date().toISOString() : d.sentAt,
@@ -299,7 +301,15 @@ export const useFundraisingStore = create<FundraisingStore>()(
     }),
     {
       name: 'fundraising-store',
-      version: 1,
+      version: 2,
+      migrate: (persisted) => {
+        const state = persisted as { documents?: FundraisingDocument[] } | undefined
+        if (!state?.documents?.length) return persisted as never
+        return {
+          ...state,
+          documents: state.documents.map((d) => healFundraisingDocument(d)),
+        } as never
+      },
     }
   )
 )

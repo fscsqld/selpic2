@@ -1,5 +1,6 @@
 import { buildFundraisingDocumentHtml } from '@/lib/fundraising/documents'
 import { newFundraisingId } from '@/lib/fundraising/ids'
+import { healFundraisingDocumentHtml } from '@/lib/fundraising/partnerFacingSite'
 import {
   FUNDRAISING_DOCUMENT_LABELS,
   type FundraisingDocument,
@@ -48,13 +49,15 @@ export function generateFundraisingDoc(
     ...input.extra,
   }
 
-  const htmlBody = buildFundraisingDocumentHtml({
-    type: docCode,
-    partner,
-    settings: input.settings,
-    period: period || undefined,
-    extra,
-  })
+  const htmlBody = healFundraisingDocumentHtml(
+    buildFundraisingDocumentHtml({
+      type: docCode,
+      partner,
+      settings: input.settings,
+      period: period || undefined,
+      extra,
+    })
+  )
 
   const now = new Date().toISOString()
   return {
