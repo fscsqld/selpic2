@@ -971,7 +971,7 @@ Selpic Team`
                 </h2>
                 <p className="text-sm text-gray-600 mb-4">
                   {order.paymentMethod === 'bank'
-                    ? 'Bank transfer: send the receipt PDF after you confirm the customer deposit.'
+                    ? 'Bank transfer: Confirm Deposit sends a “payment confirmed” email automatically. Use this button if you also want to send the receipt PDF.'
                     : 'Sends the order receipt as a PDF attachment (same as checkout for card payments).'}
                 </p>
                 {order.receiptEmail?.sent ? (

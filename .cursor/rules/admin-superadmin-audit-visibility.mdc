@@ -1,0 +1,41 @@
+---
+description: Super-admin audit of staff admin changes for disputes and oversight
+globs: app/admin/**,lib/adminActivityLog.ts,lib/adminDashboardRecentActivities.ts,lib/logAdminActivity.ts,lib/store.ts,lib/contentStore.ts,lib/mediaStore.ts,app/admin/fundraising/**
+alwaysApply: false
+---
+
+# Super-admin visibility of staff admin changes
+
+## Intent
+
+Super admins must see **what regular admins changed** (who / what / when) for oversight and dispute evidence.
+
+- **Dashboard Recent Activities** = curated highlight (max 8)
+- **Admin Settings → Activity Log** = full review UI (super-admin only)
+- **Supabase `admin_activity_logs`** = shared durable store
+
+Standing rule for **all future admin mutations**: [`.cursor/rules/admin-superadmin-change-audit.mdc`](mdc:.cursor/rules/admin-superadmin-change-audit.mdc) (`alwaysApply`).
+
+## Logging
+
+- Helper: `lib/logAdminActivity.ts` → `logAdminActivity` / throttled CMS updates
+- Local: `admin-activity-log-store`
+- Remote: `POST/GET /api/admin/activity-logs` (authenticated admin JWT)
+- SQL: `supabase/migrations/20260806120000_admin_activity_logs.sql` (+ `docs/admin-activity-logs-supabase.sql`)
+
+## Instrumented mutations
+
+- Products: create / update / delete / non-order stock adjust (`lib/store.ts`)
+- CMS content: create / update (45s throttle) / delete (`lib/contentStore.ts`)
+- Promo codes: create / update / delete
+- Media: upload / delete (`lib/mediaStore.ts`)
+- Staff account events: existing `adminAuth` `addLog` (also syncs remote)
+- Fundraising: partner save/delete/lifecycle, settings, settlement paid, document send, maintenance (`app/admin/fundraising/**`)
+
+## Still domain-specific (supplementary, not a replacement)
+
+- Per-order `auditLog`, document send history, fundraising grant-account events / local `rateLogs`
+
+## Deploy note
+
+Apply `admin_activity_logs` SQL on the Supabase project before relying on cross-device merge.

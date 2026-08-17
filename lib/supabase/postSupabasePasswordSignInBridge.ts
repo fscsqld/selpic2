@@ -72,6 +72,30 @@ export async function postSupabasePasswordSignInBridge(
     adminUser: mapped,
   })
 
+  // Keep adminUsers roster in sync so Activity Log / admin pickers include this account
+  // (Supabase display name may differ from seed usernames like "superadmin").
+  {
+    const { adminUsers } = useAdminAuth.getState()
+    const sameIdentity = (u: (typeof adminUsers)[number]) =>
+      u.username === mapped.username ||
+      (!!mapped.email && !!u.email && u.email.toLowerCase() === mapped.email.toLowerCase())
+    const idx = adminUsers.findIndex(sameIdentity)
+    const nextUsers =
+      idx >= 0
+        ? adminUsers.map((u, i) =>
+            i === idx
+              ? {
+                  ...u,
+                  ...mapped,
+                  permissions: mapped.permissions?.length ? mapped.permissions : u.permissions,
+                  createdAt: u.createdAt || mapped.createdAt,
+                }
+              : u
+          )
+        : [...adminUsers, mapped]
+    useAdminAuth.setState({ adminUsers: nextUsers })
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('admin-auth-updated'))
     const { useAdminSession } = await import('@/lib/adminSession')

@@ -305,6 +305,22 @@ export const useMediaStore = create<MediaStore>()(
         // 첫 번째 확인 시작
         checkStorage(1)
         scheduleMediaSyncToServer()
+        if (typeof window !== 'undefined') {
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'media_uploaded',
+              target: file.id,
+              description: `Uploaded media “${file.name || file.id}”${file.productName ? ` · ${file.productName}` : ''}`,
+              newValue: {
+                id: file.id,
+                name: file.name,
+                category: file.category,
+                productId: file.productId,
+                usage: file.usage,
+              },
+            })
+          })
+        }
       },
 
       updateMediaFile: (id, updates) => {
@@ -366,6 +382,16 @@ export const useMediaStore = create<MediaStore>()(
               detail: { action: 'delete', deletedIds: ids, productIds },
             })
           )
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            const names = removed.map((f) => f.name || f.id).slice(0, 5).join(', ')
+            const more = removed.length > 5 ? ` (+${removed.length - 5} more)` : ''
+            logAdminActivity({
+              action: 'media_deleted',
+              target: ids.slice(0, 3).join(','),
+              description: `Deleted media: ${names || ids.join(',')}${more}`,
+              oldValue: removed.map((f) => ({ id: f.id, name: f.name, productId: f.productId })),
+            })
+          })
         }
         scheduleMediaSyncToServer()
       },

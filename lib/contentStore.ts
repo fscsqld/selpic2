@@ -1595,7 +1595,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'privacy',
     title: 'Data Security List',
-    content: 'SSL encryption for all data transmission, Secure payment processing, Regular security audits, Limited access to personal data, Secure data storage and backup',
+    content: 'SSL encryption for all data transmission, Secure payment processing, Regular security audits, Limited access to personal data, Secure data storage and backup, Data Retention: personal information is kept only as long as needed or as required by law; under APP 11.2 we take reasonable steps to destroy or de-identify personal information no longer needed unless Australian law requires retention (including tax/business records generally at least 5 years and company financial records where applicable commonly up to 7 years), Community Fundraising partnership records are handled as described in our Privacy Policy Community Fundraising section',
     order: 14,
     isActive: true,
     createdAt: new Date(),
@@ -1628,7 +1628,7 @@ const defaultContent: ContentItem[] = [
     type: 'text',
     section: 'privacy',
     title: 'Your Rights List',
-    content: 'Access your personal data, Correct inaccurate information, Delete your personal data, Object to data processing, Data portability, Withdraw consent',
+    content: 'Access your personal data, Correct inaccurate information, Request destruction or de-identification of personal information that is no longer needed (subject to Australian legal retention requirements), Object to data processing, Data portability, Withdraw consent',
     order: 17,
     isActive: true,
     createdAt: new Date(),
@@ -2084,7 +2084,7 @@ const defaultContent: ContentItem[] = [
     section: 'terms',
     title: 'Official Store and Marketplaces Content',
     content:
-      'Prices on our official store at https://selpic.com.au may differ from listings on external marketplaces (for example Etsy) due to platform fees and channel-specific promotions. The Best Price Guarantee and Selpic N community benefits apply exclusively to orders placed directly on our official website.',
+      'Prices on our official store at https://www.selpic.com.au may differ from listings on external marketplaces (for example Etsy) due to platform fees and channel-specific promotions. The Best Price Guarantee and Selpic N community benefits apply exclusively to orders placed directly on our official website.',
     order: 14.35,
     isActive: true,
     createdAt: new Date(),
@@ -4225,10 +4225,21 @@ export const useContentStore = create<ContentStore>()(
         set((state: ContentStore) => ({
           contentItems: dedupeHeaderLogoImageItems([...state.contentItems, newContent])
         }))
+        if (typeof window !== 'undefined') {
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'cms_content_created',
+              target: newContent.id,
+              description: `Created CMS “${newContent.title || newContent.section}” (${newContent.section})`,
+              newValue: { id: newContent.id, section: newContent.section, title: newContent.title },
+            })
+          })
+        }
       },
 
       updateContent: (id: string, updates: Partial<ContentItem>) => {
         console.log('콘텐츠 스토어 업데이트 시작:', id, updates)
+        const before = get().contentItems.find((item: ContentItem) => item.id === id)
         set((state: ContentStore) => {
           const updatedItems = state.contentItems.map((item: ContentItem) =>
             item.id === id
@@ -4245,12 +4256,36 @@ export const useContentStore = create<ContentStore>()(
           }
         })
         console.log('콘텐츠 스토어 업데이트 완료')
+        if (typeof window !== 'undefined') {
+          void import('@/lib/logAdminActivity').then(({ logAdminActivityThrottled }) => {
+            const label = before?.title || updates.title || before?.section || id
+            logAdminActivityThrottled(`cms-content:${id}`, {
+              action: 'cms_content_updated',
+              target: id,
+              description: `Updated CMS “${label}”`,
+              field: Object.keys(updates).join(','),
+            })
+          })
+        }
       },
 
       deleteContent: (id: string) => {
+        const before = get().contentItems.find((item: ContentItem) => item.id === id)
         set((state: ContentStore) => ({
           contentItems: state.contentItems.filter((item: ContentItem) => item.id !== id)
         }))
+        if (typeof window !== 'undefined') {
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'cms_content_deleted',
+              target: id,
+              description: `Deleted CMS “${before?.title || before?.section || id}”`,
+              oldValue: before
+                ? { id: before.id, section: before.section, title: before.title }
+                : { id },
+            })
+          })
+        }
       },
 
       toggleContentActive: (id: string) => {
@@ -5376,6 +5411,19 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'promo_code_created',
+              target: newCode.id,
+              description: `Created promo code ${normalizedCode}`,
+              newValue: {
+                id: newCode.id,
+                code: normalizedCode,
+                discountType: newCode.discountType,
+                discountValue: newCode.discountValue,
+              },
+            })
+          })
         }
       },
 
@@ -5388,6 +5436,7 @@ export const useContentStore = create<ContentStore>()(
           id,
           updates: normalizedUpdates
         })
+        const before = get().promoCodes.find((c: PromoCode) => c.id === id)
         set((state: ContentStore) => {
           const updated = state.promoCodes.map((code: PromoCode) =>
             code.id === id
@@ -5405,10 +5454,19 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'promo_code_updated',
+              target: id,
+              description: `Updated promo code ${before?.code || id}`,
+              newValue: normalizedUpdates,
+            })
+          })
         }
       },
 
       deletePromoCode: (id: string) => {
+        const existing = get().promoCodes.find((c: PromoCode) => c.id === id)
         set((state: ContentStore) => ({
           promoCodes: state.promoCodes.filter((code: PromoCode) => code.id !== id)
         }))
@@ -5418,6 +5476,16 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
+          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
+            logAdminActivity({
+              action: 'promo_code_deleted',
+              target: id,
+              description: `Deleted promo code ${existing?.code || id}`,
+              oldValue: existing
+                ? { id: existing.id, code: existing.code }
+                : { id },
+            })
+          })
         }
       },
 

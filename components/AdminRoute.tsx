@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useAdminSession } from '@/lib/adminSession'
@@ -13,6 +13,9 @@ interface AdminRouteProps {
   requiredPermissions?: string[]
 }
 
+const ADMIN_SESSION_CHECK_INTERVAL_MS = 30000
+const ADMIN_ACTIVITY_THROTTLE_MS = 15000
+
 export default function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
   const { isLoggedIn, adminUser, logout } = useAdminAuth()
   const { currentSessionId, isSessionValid, updateActivity } = useAdminSession()
@@ -20,6 +23,7 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
   const [hasHydrated, setHasHydrated] = useState(false)
   /** null = checking; true = allowed (or no Supabase session / no public env — legacy path). */
   const [registryAccessOk, setRegistryAccessOk] = useState<boolean | null>(null)
+  const lastActivityUpdateRef = useRef(0)
 
   // Wait for persisted admin auth to hydrate before deciding
   useEffect(() => {
@@ -95,31 +99,47 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     }
   }, [hasHydrated, isLoggedIn, adminUser, requiredPermissions, router, currentSessionId, isSessionValid, logout])
 
-  // Check session validity periodically
+  // Only real user interaction should extend idle time.
   useEffect(() => {
     if (!hasHydrated || !isLoggedIn || !currentSessionId) return
 
-    // Update activity on mount and periodically
-    if (currentSessionId) {
+    const markActivity = () => {
+      const now = Date.now()
+      if (now - lastActivityUpdateRef.current < ADMIN_ACTIVITY_THROTTLE_MS) return
+      lastActivityUpdateRef.current = now
       updateActivity(currentSessionId)
     }
 
-    // Check session validity every 30 seconds
-    const sessionCheckInterval = setInterval(() => {
-      if (currentSessionId) {
-        updateActivity(currentSessionId)
-        
-        // Check if session is still valid
-        if (!isSessionValid(currentSessionId)) {
-          console.log('Session expired, logging out...')
-          logout()
-          router.push('/admin/login')
-        }
+    const events: Array<keyof DocumentEventMap> = ['click', 'keydown', 'pointerdown', 'scroll', 'touchstart']
+    events.forEach((event) => document.addEventListener(event, markActivity, true))
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        markActivity()
       }
-    }, 30000)
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      events.forEach((event) => document.removeEventListener(event, markActivity, true))
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [hasHydrated, isLoggedIn, currentSessionId, updateActivity])
+
+  // Check session validity periodically without extending it automatically.
+  useEffect(() => {
+    if (!hasHydrated || !isLoggedIn || !currentSessionId) return
+
+    const sessionCheckInterval = setInterval(() => {
+      if (currentSessionId && !isSessionValid(currentSessionId)) {
+        console.log('Session expired, logging out...')
+        logout()
+        router.push('/admin/login')
+      }
+    }, ADMIN_SESSION_CHECK_INTERVAL_MS)
 
     return () => clearInterval(sessionCheckInterval)
-  }, [hasHydrated, isLoggedIn, currentSessionId, isSessionValid, updateActivity, logout, router])
+  }, [hasHydrated, isLoggedIn, currentSessionId, isSessionValid, logout, router])
 
   useEffect(() => {
     checkPermissions()
