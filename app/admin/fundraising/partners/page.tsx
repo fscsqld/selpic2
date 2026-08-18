@@ -538,10 +538,10 @@ function PartnersContent() {
         field: 'sampleKitStatus',
         oldValue: p.sampleKitStatus,
         newValue: 'dispatched',
-        description: `${adminUser?.username || adminUser?.email || 'Admin'} dispatched sample kit for ${p.organizationName} (${partnerId})`,
+        description: `${adminUser?.username || adminUser?.email || 'Admin'} dispatched personalised name-sticker sample for ${p.organizationName} (${partnerId})${p.sampleKitPrintName ? ` · print ${p.sampleKitPrintName}` : ''}`,
       })
     }
-    setMessage(result.ok ? `D5 Sample Kit Dispatch emailed to ${p.contactEmail}` : message || 'D5 failed')
+    setMessage(result.ok ? `D5 personalised sample dispatch emailed to ${p.contactEmail}` : message || 'D5 failed')
   }
 
   const markSuspended = async (partnerId: string, status: 'suspended' | 'terminated') => {
@@ -1327,9 +1327,11 @@ function PartnersContent() {
                   <div className="text-xs text-gray-500 mt-0.5">
                     {p.organizationType ? FUNDRAISING_ORG_TYPE_LABELS[p.organizationType] : '—'}
                     {p.sampleKitRequested || p.sampleKitStatus === 'requested'
-                      ? ' · Sample kit requested'
+                      ? p.sampleKitPrintName
+                        ? ` · Personalised sample requested (print: ${p.sampleKitPrintName})`
+                        : ' · Personalised sample requested'
                       : ''}
-                    {p.sampleKitStatus === 'dispatched' ? ' · Sample kit dispatched' : ''}
+                    {p.sampleKitStatus === 'dispatched' ? ' · Personalised sample dispatched' : ''}
                     {p.enableRcti ? ' · RCTI enabled' : ''}
                   </div>
                   <div className="text-gray-500 mt-1">
@@ -1397,7 +1399,7 @@ function PartnersContent() {
                             <option value="extend">Extend +1 year</option>
                             {(p.sampleKitRequested || p.sampleKitStatus === 'requested') &&
                               p.sampleKitStatus !== 'dispatched' && (
-                                <option value="d5">Dispatch sample kit (D5)</option>
+                                <option value="d5">Dispatch personalised sample (D5)</option>
                               )}
                             {p.renewalIntent !== 'declines' && (
                               <option value="d21">Send non-renewal (D21)</option>

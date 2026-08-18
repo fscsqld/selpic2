@@ -24,6 +24,7 @@ import {
   type FundraisingDocument,
 } from '@/lib/fundraising/types'
 import { FUNDRAISING_COPY } from '@/lib/fundraising/copy'
+import { SAMPLE_STICKER_PRINT_NAME_MAX, normalizeSampleKitRequest } from '@/lib/fundraising/sampleKitRequest'
 
 const ORG_OPTIONS = FUNDRAISING_ORG_TYPE_OPTIONS.map(
   (value) => [value, FUNDRAISING_ORG_TYPE_LABELS[value]] as const
@@ -59,8 +60,8 @@ const FAQ_ITEMS = [
     a: 'We provide ready-to-use copy, text snippets, and digital graphics (D6 Family Share Kit) after approval. You can easily copy and paste them into school newsletters, parent apps (e.g. Compass), or group chats. Remind families that they check out with their own SELPIC customer account — your code is only for the community discount.',
   },
   {
-    q: 'Can we request sample products for evaluation?',
-    a: 'Yes! During application or post-enrolment, eligible partners can request a complimentary Educator Sample Kit (D5) to evaluate our premium waterproof name labels firsthand.',
+    q: FUNDRAISING_COPY.sampleRequestFaqQ,
+    a: FUNDRAISING_COPY.sampleRequestFaqA,
   },
 ] as const
 
@@ -81,6 +82,8 @@ export default function FundraisingLandingPage() {
     suburb: '',
     state: '',
     postcode: '',
+    sampleKitRequested: false,
+    sampleKitPrintName: '',
   })
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -101,6 +104,13 @@ export default function FundraisingLandingPage() {
     setLoading(true)
     setNotice(null)
     try {
+      const sampleKit = normalizeSampleKitRequest({
+        requested: form.sampleKitRequested,
+        printName: form.sampleKitPrintName,
+      })
+      if (!sampleKit.ok) {
+        throw new Error(sampleKit.error)
+      }
       const res = await fetch('/api/fundraising/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,7 +124,8 @@ export default function FundraisingLandingPage() {
           suburb: form.suburb.trim(),
           state: form.state.trim(),
           postcode: form.postcode.trim(),
-          sampleKitRequested: false,
+          sampleKitRequested: form.sampleKitRequested,
+          sampleKitPrintName: form.sampleKitRequested ? form.sampleKitPrintName.trim() : '',
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -159,6 +170,8 @@ export default function FundraisingLandingPage() {
         suburb: '',
         state: '',
         postcode: '',
+        sampleKitRequested: false,
+        sampleKitPrintName: '',
       })
     } catch (err) {
       setNotice({
@@ -378,6 +391,47 @@ export default function FundraisingLandingPage() {
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3 space-y-3">
+              <label className="flex items-start gap-3 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-slate-300"
+                  checked={form.sampleKitRequested}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      sampleKitRequested: e.target.checked,
+                      sampleKitPrintName: e.target.checked ? f.sampleKitPrintName : '',
+                    }))
+                  }
+                />
+                <span>
+                  <span className="font-medium text-slate-800">{FUNDRAISING_COPY.sampleRequestCheckboxLabel}</span>
+                  <span className="block text-xs text-slate-600 mt-1 leading-relaxed">
+                    {FUNDRAISING_COPY.sampleRequestCheckboxHelp}
+                  </span>
+                </span>
+              </label>
+              {form.sampleKitRequested && (
+                <label className="block text-sm">
+                  <span className="font-medium text-slate-700">{FUNDRAISING_COPY.sampleRequestPrintNameLabel}</span>
+                  <input
+                    required
+                    maxLength={SAMPLE_STICKER_PRINT_NAME_MAX}
+                    placeholder="e.g. Chloe"
+                    value={form.sampleKitPrintName}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        sampleKitPrintName: Array.from(e.target.value).slice(0, SAMPLE_STICKER_PRINT_NAME_MAX).join(''),
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                  />
+                  <span className="block text-xs text-slate-500 mt-1">{FUNDRAISING_COPY.sampleRequestPrintNameHelp}</span>
+                </label>
+              )}
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
               {FUNDRAISING_COPY.applyPrivacyNote}{' '}

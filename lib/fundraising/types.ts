@@ -105,8 +105,11 @@ export interface FundraisingPartner {
   suburb?: string
   state?: string
   postcode?: string
+  /** True only when the organisation asked for a personalised name-sticker sample (never auto). */
   sampleKitRequested?: boolean
-  /** Sample kit fulfilment for D5 lifecycle */
+  /** Name to print on the sample sticker (required when sampleKitRequested). */
+  sampleKitPrintName?: string
+  /** Personalised sample fulfilment for D5 lifecycle */
   sampleKitStatus?: 'none' | 'requested' | 'dispatched'
   /** When true, D11 RCTI may be issued with Mark Paid */
   enableRcti?: boolean
@@ -232,7 +235,7 @@ export const FUNDRAISING_DOCUMENT_LABELS: Record<FundraisingDocumentType, string
   D2: 'Welcome & Enrolment Notice',
   D3: 'Partnership Terms Summary',
   D4: 'Partner Community Code Letter',
-  D5: 'Sample Kit Dispatch Note',
+  D5: 'Personalised Name-Sticker Sample Dispatch',
   D6: 'Family Share Kit',
   D7: 'Mid-period Community Impact Snapshot',
   D8: 'Grant Rate Change Notice',

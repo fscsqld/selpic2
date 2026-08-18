@@ -1,0 +1,36 @@
+---
+description: Fundraising samples are opt-in personalised name stickers, never a generic kit and never auto-sent
+globs: app/fundraising/**/*.tsx,app/api/fundraising/apply/**/*.ts,lib/fundraising/sampleKitRequest.ts,lib/fundraising/documents.ts,lib/fundraising/copy.ts
+alwaysApply: false
+---
+
+# Fundraising personalised name-sticker sample (D5)
+
+## Product invariant
+
+SELPIC sells **custom name stickers**. A sample is a **printed label with a nominated name**, shipped to the organisation contact address. There is **no generic blank Educator Sample Kit**.
+
+- Default on apply: **do not request, do not ship**.
+- Request only when the organisation ticks the optional box **and** enters a print name.
+- Never hard-code `sampleKitRequested: false` while FAQ promises a kit, and never hard-code `true` on every application.
+- Print name limit is `SAMPLE_STICKER_PRINT_NAME_MAX` (9) — same as `/stickers/customize` one-line names.
+- Address + phone on the application are the delivery/contact details. Do not invent a separate sample-shipping form unless asked.
+- Asking for a sample does **not** auto-dispatch. Admin still sends **D5** after review (`Dispatch personalised sample`).
+
+## Surfaces
+
+| Surface | Behaviour |
+|---------|-----------|
+| `/fundraising` apply | Optional checkbox + print-name field. FAQ matches this. |
+| `POST /api/fundraising/apply` | `normalizeSampleKitRequest` — reject requested-without-name; ignore leftover name if unchecked. |
+| D1 | Mentions the personalised request + print name only when requested. |
+| D5 | Print name, ship-to address, contact. Warn if print name missing. |
+| Admin Partners | Show requested/dispatched + print name. D5 option only when requested and not yet dispatched. |
+| Lookup | No in-portal sample request yet. FAQ: email SELPIC after approval. |
+
+## Do not
+
+- Promise a complimentary generic kit in FAQ, D1, or landing copy
+- Auto-flag every application as a sample request
+- Put Etsy/cron or accounting-sandbox work into this flow
+- Add partner self-serve bank PUT while touching this area

@@ -102,6 +102,7 @@ export const useFundraisingStore = create<FundraisingStore>()(
               state: input.state,
               postcode: input.postcode,
               sampleKitRequested: input.sampleKitRequested,
+              sampleKitPrintName: input.sampleKitPrintName,
               sampleKitStatus: input.sampleKitStatus,
               enableRcti: input.enableRcti,
               linkedPromoCode: String(input.linkedPromoCode || '').trim().toUpperCase(),
