@@ -1,12 +1,13 @@
 'use client'
 
 /**
- * CMS site_configs read/write uses {@link createSupabaseBrowserClientNoStore} only — same
- * NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY as the rest of the app, but every
- * request uses `cache: 'no-store'` so the browser does not reuse a stale PostgREST response.
+ * CMS reads: same-origin `/api/site-config/public` (service role) with a direct Supabase fallback.
+ * CMS writes: same-origin `/api/admin/site-config` (admin session + service role). Do not upsert
+ * `site_configs` from the browser — RLS blocks anon and legacy local admin has no JWT.
  */
 import { createSupabaseBrowserClientNoStore } from '@/lib/supabase/browser'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
+import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 
 function siteConfigSupabase() {
   return createSupabaseBrowserClientNoStore()
@@ -66,7 +67,7 @@ export function scheduleSiteConfigPersistString(serialized: string): void {
     const payload = pendingSerialized
     pendingSerialized = undefined
     if (!payload) return
-    void pushPersistStringToSupabase(payload)
+    void pushPersistStringToSupabase(payload).catch(() => {})
   }, DEBOUNCE_MS)
 }
 
@@ -82,7 +83,7 @@ export function scheduleSiteConfigStateUpsert(state: Record<string, unknown>): v
     const s = pendingState
     pendingState = undefined
     if (!s) return
-    void upsertSiteConfigValue(s)
+    void upsertSiteConfigValue(s).catch(() => {})
   }, DEBOUNCE_MS)
 }
 
@@ -110,7 +111,7 @@ export function flushPendingSiteConfigPersist(): void {
   const payload = pendingSerialized
   pendingSerialized = undefined
   if (!payload) return
-  void pushPersistStringToSupabase(payload)
+  void pushPersistStringToSupabase(payload).catch(() => {})
 }
 
 export function flushPendingSiteConfigState(): void {
@@ -119,7 +120,7 @@ export function flushPendingSiteConfigState(): void {
   const s = pendingState
   pendingState = undefined
   if (!s) return
-  void upsertSiteConfigValue(s)
+  void upsertSiteConfigValue(s).catch(() => {})
 }
 
 function flushAllPendingSiteConfigWrites(): void {
@@ -141,46 +142,46 @@ function installFlushHandlersOnce(): void {
 
 async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<void> {
   emitStatus({ kind: 'saving', source: 'state' })
+  const value = unwrapSiteConfigValue(state)
+  if (!value) {
+    const message = 'CMS payload must be a JSON object.'
+    emitStatus({ kind: 'error', source: 'state', at: Date.now(), message })
+    throw new Error(message)
+  }
   try {
-    const supabase = siteConfigSupabase()
-    const { data, error } = await supabase
-      .from('site_configs')
-      .upsert(
-        {
-          config_key: STOREFRONT_CMS_CONFIG_KEY,
-          value: state,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'config_key' }
-      )
-      .select('config_key')
-      .maybeSingle()
-    if (error) {
-      console.error('[siteConfig] Supabase upsert failed:', error)
-      emitStatus({ kind: 'error', source: 'state', at: Date.now(), message: error.message })
-      return
-    }
-    if (!data?.config_key) {
-      console.error(
-        '[siteConfig] upsert reported success but no row returned — table site_configs, RLS, or project URL/key를 확인하세요.'
-      )
-      emitStatus({
-        kind: 'error',
-        source: 'state',
-        at: Date.now(),
-        message: '저장 응답에 행이 없습니다. Supabase site_configs·RLS·환경변수를 확인하세요.',
-      })
-      return
+    const res = await fetch('/api/admin/site-config', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    })
+    const body = (await res.json().catch(() => null)) as { success?: boolean; message?: string } | null
+    if (!res.ok || !body?.success) {
+      const message =
+        (typeof body?.message === 'string' && body.message.trim()) ||
+        (res.status === 401
+          ? 'Sign in with a Supabase admin email. Legacy local admin cannot save CMS.'
+          : `Cloud save failed (${res.status})`)
+      console.error('[siteConfig] admin upsert failed:', res.status, body)
+      emitStatus({ kind: 'error', source: 'state', at: Date.now(), message })
+      throw new Error(message)
     }
     emitStatus({ kind: 'saved', source: 'state', at: Date.now() })
-  } catch (e) {
-    console.error('[siteConfig] upsert error', e)
-    emitStatus({
-      kind: 'error',
-      source: 'state',
-      at: Date.now(),
-      message: e instanceof Error ? e.message : 'Unknown error',
+    void import('@/lib/logAdminActivity').then(({ logAdminActivityThrottled }) => {
+      logAdminActivityThrottled('cms-blob:storefront_cms', {
+        action: 'cms_content_updated',
+        target: STOREFRONT_CMS_CONFIG_KEY,
+        description: 'Saved storefront CMS snapshot to site_configs',
+      })
     })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    if (getLastSiteConfigWriteStatus().kind !== 'error') {
+      console.error('[siteConfig] upsert error', e)
+      emitStatus({ kind: 'error', source: 'state', at: Date.now(), message })
+    }
+    throw e instanceof Error ? e : new Error(message)
   }
 }
 
@@ -192,13 +193,15 @@ async function pushPersistStringToSupabase(serialized: string): Promise<void> {
     if (!state || typeof state !== 'object') return
     await upsertSiteConfigValue(state as Record<string, unknown>)
   } catch (e) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
     console.error('[siteConfig] upsert error', e)
     emitStatus({
       kind: 'error',
       source: 'string',
       at: Date.now(),
-      message: e instanceof Error ? e.message : 'Unknown error',
+      message,
     })
+    throw e instanceof Error ? e : new Error(message)
   }
 }
 
@@ -219,7 +222,7 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
         const body = (await res.json()) as { success?: boolean; value?: unknown }
         if (body?.success) {
           if (body.value && typeof body.value === 'object' && !Array.isArray(body.value)) {
-            return body.value as Record<string, unknown>
+            return unwrapSiteConfigValue(body.value) ?? {}
           }
           // Empty row is still a successful canonical fetch; use empty object instead of "not fetched".
           if (body.value == null) {
@@ -247,26 +250,7 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
     }
     const rawValue = data?.value
     if (!rawValue) return {}
-
-    let raw: Record<string, unknown> | null = null
-    if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-      raw = rawValue as Record<string, unknown>
-    } else if (typeof rawValue === 'string') {
-      try {
-        const parsed = JSON.parse(rawValue)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          raw = parsed as Record<string, unknown>
-        }
-      } catch {
-        raw = null
-      }
-    }
-    if (!raw) return null
-    // Legacy rows may store persist shape `{ state: { ... } }`; canonical CMS is the inner object.
-    const inner = raw.state
-    return inner && typeof inner === 'object' && !Array.isArray(inner)
-      ? (inner as Record<string, unknown>)
-      : raw
+    return unwrapSiteConfigValue(rawValue)
   } catch (e) {
     console.warn('[siteConfig] direct fetch error', e)
   }
