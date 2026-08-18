@@ -18,6 +18,7 @@ import {
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 import { notifyAdminsOfFundraisingApplication } from '@/lib/server/adminInboundNotify'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
+import { normalizeSampleKitRequest } from '@/lib/fundraising/sampleKitRequest'
 
 const ORG_TYPES = new Set<string>(Object.keys(FUNDRAISING_ORG_TYPE_LABELS))
 
@@ -32,6 +33,7 @@ type ApplyBody = {
   state?: string
   postcode?: string
   sampleKitRequested?: boolean
+  sampleKitPrintName?: string
 }
 
 function formatPostal(b: ApplyBody): string {
@@ -53,7 +55,13 @@ export async function POST(req: Request) {
     const suburb = String(body?.suburb || '').trim()
     const state = String(body?.state || '').trim()
     const postcode = String(body?.postcode || '').trim()
-    const sampleKitRequested = Boolean(body?.sampleKitRequested)
+    const sampleKit = normalizeSampleKitRequest({
+      requested: body?.sampleKitRequested,
+      printName: body?.sampleKitPrintName,
+    })
+    if (!sampleKit.ok) {
+      return NextResponse.json({ ok: false, error: sampleKit.error }, { status: 400 })
+    }
 
     if (!organizationName || !contactName || !contactEmail || !phone) {
       return NextResponse.json({ ok: false, error: 'Please complete all required fields.' }, { status: 400 })
@@ -93,7 +101,9 @@ export async function POST(req: Request) {
       state,
       postcode,
       postalAddress,
-      sampleKitRequested,
+      sampleKitRequested: sampleKit.sampleKitRequested,
+      sampleKitPrintName: sampleKit.sampleKitPrintName,
+      sampleKitStatus: sampleKit.sampleKitStatus,
       linkedPromoCode: '',
       status: 'pending',
       createdAt: now,
@@ -107,7 +117,8 @@ export async function POST(req: Request) {
       extra: {
         organizationName,
         contactName,
-        sampleKitRequested: sampleKitRequested ? 'yes' : 'no',
+        sampleKitRequested: sampleKit.sampleKitRequested ? 'yes' : 'no',
+        sampleKitPrintName: sampleKit.sampleKitPrintName,
         postalAddress,
         organizationType: FUNDRAISING_ORG_TYPE_LABELS[organizationType],
       },
@@ -121,7 +132,11 @@ export async function POST(req: Request) {
       status: 'Generated',
       title: FUNDRAISING_DOCUMENT_LABELS.D1,
       htmlBody: html,
-      snapshotData: { organizationType, sampleKitRequested },
+      snapshotData: {
+        organizationType,
+        sampleKitRequested: sampleKit.sampleKitRequested,
+        sampleKitPrintName: sampleKit.sampleKitPrintName,
+      },
       createdAt: now,
       updatedAt: now,
     }
@@ -170,6 +185,8 @@ export async function POST(req: Request) {
       contactEmail,
       phone,
       postalAddress,
+      sampleKitRequested: sampleKit.sampleKitRequested,
+      sampleKitPrintName: sampleKit.sampleKitPrintName,
     })
 
     return NextResponse.json({
@@ -181,7 +198,11 @@ export async function POST(req: Request) {
       dbPersisted: !dbError,
       dbError,
       message: emailResult.ok
-        ? `Thank you for applying! We've sent a confirmation email to ${contactEmail}. Our team will review your application and send your code shortly.`
+        ? `Thank you for applying! We've sent a confirmation email to ${contactEmail}. Our team will review your application and send your code shortly.${
+            sampleKit.sampleKitRequested
+              ? ' We noted your personalised name-sticker sample request and will print it after review — it is not posted automatically with the application.'
+              : ''
+          }`
         : `Thank you for applying! We received your application, but the confirmation email could not be sent yet${emailError ? ` (${emailError})` : ''}. Our team will still review and contact you.`,
     })
   } catch (e) {

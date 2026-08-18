@@ -109,6 +109,14 @@ export const FUNDRAISING_COPY = {
     'Terminate this partnership and email D12 + D13?\n\nD12 includes the Australian privacy and record-retention notice for the organisation partnership (family customer accounts are separate). D13 is the final grant statement for your files.',
   applyPrivacyNote:
     'By applying, you agree that SELPIC may collect and use your organisation contact details to run the Community Fundraising Partnership. Families who buy with your code use their own SELPIC customer accounts. If the partnership later ends, we handle organisation information under the Privacy Act (APP 11.2) and retain grant/tax records as Australian law requires — without closing customer logins. See our Privacy Policy.',
+  sampleRequestFaqQ: 'Can we request sample products for evaluation?',
+  sampleRequestFaqA:
+    'SELPIC name labels are custom-printed with a child’s (or staff) name — there is no generic blank sample pack. If you would like a sample, tick the optional box on the application, enter one name to print (same 9-character limit as our name stickers), and use the delivery address and contact on the form. We only post a sample when you ask; it is not sent automatically with every application. After approval, email your SELPIC partnership contact with a name and address if you decide later.',
+  sampleRequestCheckboxLabel: 'Request a personalised name-sticker sample (optional)',
+  sampleRequestCheckboxHelp:
+    'We print one waterproof name label with a name you nominate and post it to this application address after we review your partnership. We do not send a generic kit, because every SELPIC name sticker is custom.',
+  sampleRequestPrintNameLabel: 'Name to print on the sample',
+  sampleRequestPrintNameHelp: 'One line, up to 9 characters — the same limit as our name stickers (e.g. Chloe).',
 } as const
 
 /** Display mapping helpers for settlement status badges */

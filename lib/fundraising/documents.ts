@@ -318,7 +318,11 @@ export function buildFundraisingDocumentHtml(input: {
     D1: `
       <p>Dear ${esc(contact)},</p>
       <p>Thank you for applying to the SELPIC Community Fundraising Partnership on behalf of <strong>${esc(org)}</strong>.</p>
-      <p>We have received your application${input.extra?.sampleKitRequested === 'yes' ? ' and your request for a free Educator Sample Kit' : ''}.</p>
+      <p>We have received your application${
+        input.extra?.sampleKitRequested === 'yes'
+          ? ` and your request for a personalised name-sticker sample printed with “${esc(String(input.extra?.sampleKitPrintName || partner?.sampleKitPrintName || 'the name you provided'))}”. We will post it to the address on this application after review — it is not a generic kit, because every SELPIC name label is custom-printed`
+          : ''
+      }.</p>
       <p>Our team will review your details and email your Partner Community Code after approval.</p>
       <p style="font-size:13px;color:#555;">SELPIC puts trust and transparency with our community partners first.</p>
     `,
@@ -357,8 +361,10 @@ export function buildFundraisingDocumentHtml(input: {
     `,
     D5: `
       <p>Dear ${esc(contact)},</p>
-      <p>Your Educator Sample Kit is being prepared for dispatch to:</p>
-      <p>${esc(partner?.postalAddress || String(input.extra?.postalAddress || 'Address on file'))}</p>
+      <p>A personalised name-sticker sample is being prepared for dispatch (not a generic blank kit).</p>
+      <p>Name to print: <strong>${esc(String(input.extra?.sampleKitPrintName || partner?.sampleKitPrintName || 'Not provided — confirm the name with the organisation before printing'))}</strong></p>
+      <p>Ship to: ${esc(partner?.postalAddress || String(input.extra?.postalAddress || 'Address on file'))}</p>
+      <p>Contact: ${esc(contact)}${partner?.phone ? ` · ${esc(partner.phone)}` : ''}</p>
     `,
     D6: `
       <p><strong>Share copy for ${esc(org)}</strong></p>

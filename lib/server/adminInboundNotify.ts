@@ -202,7 +202,15 @@ export async function notifyAdminsOfFundraisingApplication(input: {
   contactEmail: string
   phone: string
   postalAddress: string
+  sampleKitRequested?: boolean
+  sampleKitPrintName?: string
 }): Promise<{ ok: boolean; logMessage?: string }> {
+  const sampleRows = input.sampleKitRequested
+    ? [
+        { label: 'Sample', value: 'Personalised name-sticker sample requested' },
+        { label: 'Print name', value: input.sampleKitPrintName || '(missing — confirm before printing)' },
+      ]
+    : [{ label: 'Sample', value: 'Not requested' }]
   return sendAdminInboundEmail({
     subjectPrefix: `[SELPIC Fundraising] New partner application — ${input.organizationName}`.slice(0, 120),
     headline: 'New fundraising partnership application',
@@ -214,10 +222,13 @@ export async function notifyAdminsOfFundraisingApplication(input: {
       { label: 'Phone', value: input.phone },
       { label: 'Address', value: input.postalAddress },
       { label: 'Partner ID', value: input.id },
+      ...sampleRows,
     ],
     adminPath: '/admin/fundraising/partners',
     replyTo: input.contactEmail,
-    footerNote: 'Open Fundraising Partners to approve, assign a code, and send the welcome pack.',
+    footerNote: input.sampleKitRequested
+      ? 'Open Fundraising Partners to approve, then dispatch the personalised sample (D5) after the print name and address are confirmed.'
+      : 'Open Fundraising Partners to approve, assign a code, and send the welcome pack.',
   })
 }
 

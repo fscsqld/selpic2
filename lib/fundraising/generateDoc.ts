@@ -40,6 +40,7 @@ export function generateFundraisingDoc(
     parentDisplayRate: rates.parentDisplayRate,
     postalAddress: partner?.postalAddress,
     sampleKitRequested: partner?.sampleKitRequested ? 'yes' : undefined,
+    sampleKitPrintName: partner?.sampleKitPrintName,
     netSales: settlement?.netSales,
     commission: settlement?.commissionAmount,
     orderCount: settlement?.orderCount,

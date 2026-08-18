@@ -146,6 +146,7 @@ function DocumentsContent() {
             donationRate: settings.donationRate,
             parentDisplayRate: settings.parentDisplayRate,
             sampleKitRequested: forPartner.sampleKitRequested ? 'yes' : undefined,
+            sampleKitPrintName: forPartner.sampleKitPrintName,
             postalAddress: forPartner.postalAddress,
             lookupUrl: forPartner.lookupToken
               ? buildPartnerFacingLookupUrl(forPartner.lookupToken)
