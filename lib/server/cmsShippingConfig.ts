@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
+import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 import { shippingOptions as staticShippingOptions } from '@/lib/shippingOptions'
 import type { ShippingOptionForPricing, FreeShippingSettingsLike } from '@/lib/shipping/computeChargedShippingPrice'
 import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
@@ -65,19 +66,6 @@ function normalizeOption(raw: any): ShippingOptionForPricing | null {
   }
 }
 
-function parseCmsValue(value: unknown): Record<string, unknown> | null {
-  let normalized: unknown = value
-  if (typeof value === 'string') {
-    try {
-      normalized = JSON.parse(value)
-    } catch {
-      return null
-    }
-  }
-  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return null
-  return normalized as Record<string, unknown>
-}
-
 /**
  * Load active shipping options + free-shipping settings from storefront CMS.
  * Falls back to static defaults when CMS is unavailable.
@@ -93,7 +81,7 @@ export async function readCmsShippingConfig(): Promise<CmsShippingConfig> {
         .maybeSingle()
 
       if (!error && data) {
-        const obj = parseCmsValue(data.value)
+        const obj = unwrapSiteConfigValue(data.value)
         if (obj) {
           const rawOptions = Array.isArray(obj.shippingOptions) ? obj.shippingOptions : []
           const options = rawOptions

@@ -553,6 +553,17 @@ export default function ContentManagementPage() {
     }
   }
 
+  const notifyCloudSync = async () => {
+    const synced = await syncSiteConfigNow()
+    if (!synced) {
+      showNotificationToast(
+        'error',
+        'Changes saved locally, but cloud sync failed. Sign in with a Supabase admin email.'
+      )
+    }
+    return synced
+  }
+
   // Quick edit save function
   const handleQuickEditSave = async (data: any) => {
     console.log('Quick edit save started:', data)
@@ -1253,11 +1264,26 @@ export default function ContentManagementPage() {
               <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg p-6 border border-pink-200">
                 <CategoryManager
                   categoryItems={categoryItems}
-                  onAddCategory={addCategoryItem}
-                  onUpdateCategory={updateCategoryItem}
-                  onDeleteCategory={deleteCategoryItem}
-                  onToggleCategoryActive={toggleCategoryItemActive}
-                  onReorderCategory={reorderCategoryItem}
+                  onAddCategory={(category) => {
+                    addCategoryItem(category)
+                    void notifyCloudSync()
+                  }}
+                  onUpdateCategory={(id, updates) => {
+                    updateCategoryItem(id, updates)
+                    void notifyCloudSync()
+                  }}
+                  onDeleteCategory={(id) => {
+                    deleteCategoryItem(id)
+                    void notifyCloudSync()
+                  }}
+                  onToggleCategoryActive={(id) => {
+                    toggleCategoryItemActive(id)
+                    void notifyCloudSync()
+                  }}
+                  onReorderCategory={(fromIndex, toIndex) => {
+                    reorderCategoryItem(fromIndex, toIndex)
+                    void notifyCloudSync()
+                  }}
                   showNotification={showNotificationToast}
                 />
               </div>

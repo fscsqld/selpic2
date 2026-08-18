@@ -1,0 +1,26 @@
+---
+description: Storefront CMS must be saved via the admin site-config API, not browser upserts.
+globs: lib/siteConfigClient.ts,lib/siteConfigWritePayload.ts,app/api/admin/site-config/**,app/api/site-config/**,app/admin/content/**
+alwaysApply: false
+---
+
+# CMS site_configs writes
+
+## Invariant
+
+Admin CMS edits persist to `public.site_configs` (`config_key = storefront_cms`). The homepage reads that row via `GET /api/site-config/public`. Local Zustand is not canonical.
+
+## Write path
+
+- Browser **must not** `supabase.from('site_configs').upsert` (RLS blocks `anon`; legacy local admin has no JWT).
+- Writes go through `PUT /api/admin/site-config` (`requireSupabaseAdminUser` + service role).
+- Client: `lib/siteConfigClient.ts` → `upsertSiteConfigValue` → same-origin fetch with `credentials: 'same-origin'`.
+- Autosave stays admin-only (`SiteConfigStoreAutosave` on `/admin`).
+
+## Payload shape
+
+Store the unwrapped partialize object (not `{ state, version }`). Use `unwrapSiteConfigValue` / `parseSiteConfigWriteBody` from `lib/siteConfigWritePayload.ts` on read and write so string JSON and nested `{ state }` rows still work (homepage, shipping CMS, admin save).
+
+## Login
+
+CMS save requires a Supabase Auth session whose email is on `admin_email_registry`. Do not re-open anon INSERT policies. If save returns 401, tell the admin to sign in with their Supabase email (not `admin` / `selpic2024`).
