@@ -1038,20 +1038,80 @@ function PartnersContent() {
                 </button>
               )}
             </div>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Organization" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
-            <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.organizationType} onChange={(e) => setForm({ ...form, organizationType: e.target.value as FundraisingOrganizationType })}>
-              {Object.entries(FUNDRAISING_ORG_TYPE_LABELS)
-                .filter(([k]) => k !== 'daycare_kindergarten')
-                .map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Contact name" value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} />
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Contact email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <textarea className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Postal address" value={form.postalAddress} onChange={(e) => setForm({ ...form, postalAddress: e.target.value })} />
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Organisation name</span>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="e.g. Sunshine Community Group"
+                value={form.organizationName}
+                onChange={(e) => setForm({ ...form, organizationName: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Organisation type</span>
+              <select
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                value={form.organizationType}
+                onChange={(e) => setForm({ ...form, organizationType: e.target.value as FundraisingOrganizationType })}
+              >
+                {Object.entries(FUNDRAISING_ORG_TYPE_LABELS)
+                  .filter(([k]) => k !== 'daycare_kindergarten')
+                  .map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Contact name</span>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Organisation contact person"
+                value={form.contactName}
+                onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Contact email</span>
+              <input
+                type="email"
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="e.g. treasurer@school.qld.edu.au"
+                value={form.contactEmail}
+                onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Contact phone</span>
+              <input
+                type="tel"
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="e.g. 07 3000 0000"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Postal / delivery address</span>
+              <textarea
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                rows={2}
+                placeholder="Street, suburb, state, postcode"
+                value={form.postalAddress}
+                onChange={(e) => setForm({ ...form, postalAddress: e.target.value })}
+              />
+            </label>
             <div>
-              <input className="w-full border rounded-lg px-3 py-2 text-sm uppercase" placeholder="Partner Community Code (required when Active)" value={form.linkedPromoCode} onChange={(e) => setForm({ ...form, linkedPromoCode: e.target.value.toUpperCase() })} />
+              <label className="block text-xs">
+                <span className="font-medium text-gray-700">Partner Community Code</span>
+                <input
+                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm uppercase"
+                  placeholder="Required when Active — create in Content → Promo Codes first"
+                  value={form.linkedPromoCode}
+                  onChange={(e) => setForm({ ...form, linkedPromoCode: e.target.value.toUpperCase() })}
+                />
+              </label>
               {promoValid && (
                 <p className={`text-xs mt-1 ${promoValid.ok ? 'text-emerald-700' : 'text-amber-700'}`}>{promoValid.label}</p>
               )}
@@ -1063,25 +1123,68 @@ function PartnersContent() {
               )}
               <p className="text-xs text-gray-500 mt-1">Create the family discount code first in Content → Promo Codes (do not change checkout engine here). Changing an active partner&apos;s code emails a D18 notice (not the full D2/D3/D4 welcome pack). Official Grant Account is registered and updated only by SELPIC in this form (partners request changes from Lookup).</p>
             </div>
-            <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as FundraisingPartnerStatus })}>
-              <option value="pending">pending</option>
-              <option value="active">active</option>
-              <option value="suspended">suspended</option>
-              <option value="terminated">terminated</option>
-            </select>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Bank name" value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} />
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Account name" value={form.accountName} onChange={(e) => setForm({ ...form, accountName: e.target.value })} />
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Partnership status</span>
+              <select
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as FundraisingPartnerStatus })}
+              >
+                <option value="pending">pending</option>
+                <option value="active">active</option>
+                <option value="suspended">suspended</option>
+                <option value="terminated">terminated</option>
+              </select>
+            </label>
+            <p className="text-xs font-medium text-gray-800 pt-1">Official Grant Account</p>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Bank name</span>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Optional"
+                value={form.bankName}
+                onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">Account name</span>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Must match the organisation entitled to the grant"
+                value={form.accountName}
+                onChange={(e) => setForm({ ...form, accountName: e.target.value })}
+              />
+            </label>
             <div className="grid grid-cols-2 gap-2">
-              <input className="border rounded-lg px-3 py-2 text-sm" placeholder="BSB" value={form.bsb} onChange={(e) => setForm({ ...form, bsb: e.target.value })} />
-              <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Account number" value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} />
+              <label className="block text-xs">
+                <span className="font-medium text-gray-700">BSB</span>
+                <input
+                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="6 digits"
+                  value={form.bsb}
+                  onChange={(e) => setForm({ ...form, bsb: e.target.value })}
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="font-medium text-gray-700">Account number</span>
+                <input
+                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="6–10 digits"
+                  value={form.accountNumber}
+                  onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
+                />
+              </label>
             </div>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="ABN (Australian Business Number)"
-              value={form.abn}
-              onChange={(e) => setForm({ ...form, abn: e.target.value })}
-            />
-            <p className="text-xs text-gray-500 -mt-1">SELPIC registers Official Grant Account here after verifying the organisation. ABN is required for completeness. Partners can only request changes from Lookup.</p>
+            <label className="block text-xs">
+              <span className="font-medium text-gray-700">ABN (Australian Business Number)</span>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="e.g. 12 345 678 901"
+                value={form.abn}
+                onChange={(e) => setForm({ ...form, abn: e.target.value })}
+              />
+            </label>
+            <p className="text-xs text-gray-500">SELPIC registers Official Grant Account here after verifying the organisation. ABN is required for completeness. Partners can only request changes from Lookup.</p>
             <div className="grid grid-cols-3 gap-2">
               <label className="block text-xs">
                 <span className="font-medium text-gray-700">Fundraising Cashback Grant %</span>
