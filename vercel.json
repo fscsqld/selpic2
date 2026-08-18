@@ -1,5 +1,11 @@
 {
   "installCommand": "npm install --legacy-peer-deps",
+  "crons": [
+    {
+      "path": "/api/cron/fundraising-renewal",
+      "schedule": "0 20 * * *"
+    }
+  ],
   "redirects": [
     {
       "source": "/:path*",

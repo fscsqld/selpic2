@@ -188,10 +188,10 @@ function SettingsContent() {
           </label>
           <p className="text-xs text-gray-500">Net Sales definition: {settings.netSalesDefinitionVersion}</p>
           <p className="text-xs text-gray-500 rounded-lg bg-slate-50 border border-slate-100 p-3">
-            Automated D19: schedule a daily GET{' '}
-            <code className="text-[11px]">/api/cron/fundraising-renewal</code> with{' '}
-            <code className="text-[11px]">Authorization: Bearer CRON_SECRET</code>
-            (same pattern as Etsy sync). Manual batch is under Maintenance below.
+            Automated D19: Vercel Cron calls GET{' '}
+            <code className="text-[11px]">/api/cron/fundraising-renewal</code> once daily at 20:00 UTC
+            (morning in Australia). Production must have{' '}
+            <code className="text-[11px]">CRON_SECRET</code>. Manual batch is under Maintenance below.
           </p>
           <p className="text-xs text-gray-500 rounded-lg bg-amber-50 border border-amber-100 p-3 leading-relaxed">
             Partnership end emails (D12 / D21) include APP 11.2 + tax retention notice. Suspended/terminated partners are
@@ -258,8 +258,8 @@ function SettingsContent() {
         <div className="mt-8 bg-white border rounded-xl p-6 max-w-xl space-y-3">
           <h2 className="font-semibold text-slate-900">Maintenance</h2>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Occasional batch tools — not needed for day-to-day Partner Registry work. Prefer cron for renewals; use
-            classify only to backfill older ended partners.
+            Occasional batch tools — not needed for day-to-day Partner Registry work. Vercel runs D19 daily;
+            use this button only if a notice was missed. Classify is for backfilling older ended partners.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
