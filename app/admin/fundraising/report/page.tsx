@@ -117,18 +117,28 @@ function ReportContent() {
         )}
         <div className="flex flex-wrap gap-3 mb-6 items-end">
           <AuFyQuarterSelect value={period} onChange={setPeriod} />
-          <select className="border rounded-lg px-3 py-2 text-sm min-w-[12rem]" value={selectedCode} onChange={(e) => setCodeFilter(e.target.value)}>
-            {partnerOptions.length === 0 && <option value="">No partner codes</option>}
-            {partnerOptions.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            placeholder="Or type promo code"
-            value={codeFilter}
-            onChange={(e) => setCodeFilter(e.target.value.toUpperCase())}
-          />
+          <label className="block text-xs">
+            <span className="font-medium text-gray-700">Partner Community Code</span>
+            <select
+              className="mt-1 block border rounded-lg px-3 py-2 text-sm min-w-[12rem] bg-white"
+              value={selectedCode}
+              onChange={(e) => setCodeFilter(e.target.value)}
+            >
+              {partnerOptions.length === 0 && <option value="">No partner codes</option>}
+              {partnerOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs">
+            <span className="font-medium text-gray-700">Or type code</span>
+            <input
+              className="mt-1 block border rounded-lg px-3 py-2 text-sm"
+              placeholder="e.g. SUNSHINE10"
+              value={codeFilter}
+              onChange={(e) => setCodeFilter(e.target.value.toUpperCase())}
+            />
+          </label>
           <button
             type="button"
             disabled={busy || !selectedPartner}

@@ -8,7 +8,15 @@ alwaysApply: false
 
 When editing Partner Registry or other Fundraising admin forms:
 
-- Do **not** rely on placeholder-only inputs for fields that usually have a default value (especially number/date fields such as Donation %, Parent display %, Effective from).
-- Always show a **visible English label** above (or beside) the control so admins can tell fields apart after values are filled.
-- Prefer partnership vocabulary in labels: Fundraising Cashback Grant %, family discount display %, Official Grant Account, Partner Community Code, Change reason.
-- Placeholders may still hint at format; labels must remain readable when the input is non-empty.
+- Do **not** rely on placeholder-only inputs. Placeholders disappear once a value is filled — admins must still see which field is which.
+- Always show a **visible English label** above (or beside) the control. Match the Partner Registry pattern: `<label className="block text-xs">` + `<span className="font-medium text-gray-700">…</span>` + control with `mt-1`.
+- Prefer partnership vocabulary: Fundraising Cashback Grant %, family discount display %, Official Grant Account, Partner Community Code, Change reason.
+- Placeholders may still hint at **format** (e.g. BSB 6 digits, ABN `12 345 678 901`); they must not be the only name of the field.
+
+## Partner Registry editor (`#partner-editor`)
+
+Required visible labels (keep in sync with `scripts/verify-fundraising-admin-form-labels.ts`):
+
+Organisation name, Organisation type, Contact name, Contact email, Contact phone, Postal / delivery address, Partner Community Code, Partnership status, Official Grant Account (section heading), Bank name, Account name, BSB, Account number, ABN (Australian Business Number), Fundraising Cashback Grant %, Family discount display %, Rate effective from, Change reason.
+
+Search filters on the partner list may stay placeholder + `aria-label` (the control’s job is search, not a stored identity field).
