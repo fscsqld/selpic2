@@ -1,0 +1,32 @@
+---
+description: D19 daily cron is in vercel.json; never add sub-daily (Etsy */10) jobs on Hobby
+globs: vercel.json,app/api/cron/**/*.ts,app/admin/fundraising/settings/**/*.tsx,lib/fundraising/runFundraisingRenewalCron.ts
+alwaysApply: false
+---
+
+# Fundraising D19 renewal scheduling
+
+## Shipped
+
+| Piece | Location |
+|-------|----------|
+| Who to email | `shouldSendRenewalNotice` (Active, lead window / 14 days past end, no intent, not already notified this term) |
+| Batch send | `runFundraisingRenewalNotices` → D19 once, then `renewalNoticeSentAt` |
+| Vercel Cron | `vercel.json` → `GET /api/cron/fundraising-renewal` at `0 20 * * *` (20:00 UTC ≈ morning Australia) |
+| Auth | `Authorization: Bearer CRON_SECRET` (must be set in Vercel Production) |
+| Admin backup | Settings → Maintenance → **Run due renewals (D19)** |
+| Per-partner | Partners row → Send renewal (D19) |
+
+Partners list does not have the batch button.
+
+## Hobby invariant
+
+Hobby allows **at most one run per calendar day** per cron. `*/10 * * * *` (Etsy) failed deploy and was removed in `855b126`. D19 is daily, so it is legal in `vercel.json`.
+
+Guard: `npx tsx scripts/verify-vercel-crons-hobby.ts`
+
+## Do not
+
+- Add `/api/cron/etsy-sync` (or any sub-daily schedule) to `vercel.json` on Hobby
+- Put the batch “Run due renewals” button back on the Partners list header without asking
+- Treat missing `CRON_SECRET` as a code bug — it is a Production env var; the route returns 503 if unset

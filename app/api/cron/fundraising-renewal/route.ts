@@ -7,9 +7,10 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Daily (or external) cron: send D19 partnership renewal notices.
+ * Daily D19 partnership renewal notices.
  * Requires `CRON_SECRET` — `Authorization: Bearer <CRON_SECRET>`.
- * Not wired in vercel.json on Hobby; use external scheduler or Admin → Partners → “Run renewal notices”.
+ * Wired in vercel.json as `0 20 * * *` (once daily, Hobby-legal; 20:00 UTC ≈ morning Australia).
+ * Do not add Etsy 10-minute crons here — that blocked Hobby deploys. Backup: Settings → Maintenance → Run due renewals.
  */
 export async function GET(request: Request) {
   if (!isCronSecretConfigured()) {
