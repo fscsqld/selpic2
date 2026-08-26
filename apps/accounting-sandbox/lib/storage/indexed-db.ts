@@ -31,9 +31,34 @@ interface ApiUsageLog {
 }
 
 import type { FinancialPeriod, PeriodCarryForward } from './period-types'
+import { isValidPeriodId, periodIdToCalendarBounds } from '../period-management/period-utils'
+import type { LeaveRecord, LeaveStatus } from './leave-types'
+import type { LodgmentSnapshot } from './lodgment-snapshot-types'
+import type { IndividualTaxWorksheetRecord } from './tax-worksheet-types'
+import { normalizeWorksheetRecord, worksheetRecordId } from './tax-worksheet-types'
+import type { PaymentSummaryEntry, PaymentSummaryTotals } from './payment-summary-types'
+import {
+  exportLodgmentPreferences,
+  importLodgmentPreferences,
+  clearLodgmentPreferences,
+} from './backup-preferences'
+import type { JournalEntry } from '@/src/shared/types/journal-entry'
+import type {
+  BankReconciliationSession,
+  CustomerInvoice,
+  PaymentAllocation,
+  VendorBill,
+} from '@/src/shared/types/subledger'
+import {
+  extractPayslipIdFromPayrollTx,
+  isOrphanPayrollTransaction,
+  isPayrollJournalTransaction,
+  payslipIdsLinkedToTimesheet,
+} from '@/lib/payroll/payroll-transaction-links'
 
 const DB_NAME = 'selpic-accounting'
-const DB_VERSION = 16 // Increment version to add payslips store
+const DB_VERSION = 23 // Staff attendance (clock in / out)
+export const BACKUP_SCHEMA_VERSION = 4
 const STORE_NAME = 'statements'
 const CASH_EXPENSES_STORE = 'cashExpenses'
 const RECEIPTS_STORE = 'receipts'
@@ -50,10 +75,32 @@ const INCOMING_ORDERS_STORE = 'incomingOrders' // Inbox for orders from homepage
 const TIMESHEETS_STORE = 'timesheets' // Timesheet management
 const EMPLOYEES_STORE = 'employees' // Employee management
 const PAYSLIPS_STORE = 'payslips' // Payslip management
+const LEAVE_RECORDS_STORE = 'leaveRecords' // Employee leave requests
+const ATTENDANCE_STORE = 'attendanceRecords' // Staff clock in / out
+const LODGMENT_SNAPSHOTS_STORE = 'lodgmentSnapshots' // ATO lodgment entry snapshots
+const PAYMENT_SUMMARIES_STORE = 'paymentSummaries' // Employer PAYG payment summaries
+const TAX_WORKSHEETS_STORE = 'taxWorksheets' // Rental + CGT worksheets per FY
 const TRANSACTIONS_STORE = 'transactions' // Standalone transactions (e.g., payroll)
+const JOURNAL_ENTRIES_STORE = 'journalEntries' // Manual and system journal entries
+const CUSTOMER_INVOICES_STORE = 'customerInvoices'
+const VENDOR_BILLS_STORE = 'vendorBills'
+const PAYMENT_ALLOCATIONS_STORE = 'paymentAllocations'
+const BANK_RECONCILIATIONS_STORE = 'bankReconciliations'
 
 class IndexedDBStorage {
   private db: IDBDatabase | null = null
+
+  private async assertWritableDate(date: string): Promise<void> {
+    if (!date) return
+    const { assertDateNotInLockedPeriod } = await import('../period-management/storage-guard')
+    await assertDateNotInLockedPeriod(date)
+  }
+
+  private async assertWritableDates(dates: string[]): Promise<void> {
+    for (const date of dates) {
+      await this.assertWritableDate(date)
+    }
+  }
 
   /**
    * Initialize IndexedDB
@@ -270,6 +317,125 @@ class IndexedDBStorage {
         } else if (db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
           console.log('[IndexedDB] ✓ Transactions store already exists')
         }
+
+        // Leave records store (employee leave management)
+        if (newVersion >= 17 && !db.objectStoreNames.contains(LEAVE_RECORDS_STORE)) {
+          try {
+            const leaveStore = db.createObjectStore(LEAVE_RECORDS_STORE, { keyPath: 'id' })
+            leaveStore.createIndex('employeeId', 'employeeId', { unique: false })
+            leaveStore.createIndex('status', 'status', { unique: false })
+            leaveStore.createIndex('startDate', 'startDate', { unique: false })
+            leaveStore.createIndex('createdAt', 'createdAt', { unique: false })
+            console.log('[IndexedDB] ✅ Leave records store created successfully')
+          } catch (error) {
+            console.error('[IndexedDB] ❌ Error creating leave records store:', error)
+            throw error
+          }
+        } else if (db.objectStoreNames.contains(LEAVE_RECORDS_STORE)) {
+          console.log('[IndexedDB] ✓ Leave records store already exists')
+        }
+
+        // ATO lodgment snapshots (finalize / copy sheet history)
+        if (newVersion >= 18 && !db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+          try {
+            const snapStore = db.createObjectStore(LODGMENT_SNAPSHOTS_STORE, { keyPath: 'id' })
+            snapStore.createIndex('kind', 'kind', { unique: false })
+            snapStore.createIndex('periodKey', 'periodKey', { unique: false })
+            snapStore.createIndex('createdAt', 'createdAt', { unique: false })
+            snapStore.createIndex('finalizedAt', 'finalizedAt', { unique: false })
+            console.log('[IndexedDB] ✅ Lodgment snapshots store created successfully')
+          } catch (error) {
+            console.error('[IndexedDB] ❌ Error creating lodgment snapshots store:', error)
+            throw error
+          }
+        } else if (db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+          console.log('[IndexedDB] ✓ Lodgment snapshots store already exists')
+        }
+
+        if (newVersion >= 19 && !db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+          try {
+            const journalStore = db.createObjectStore(JOURNAL_ENTRIES_STORE, { keyPath: 'id' })
+            journalStore.createIndex('date', 'date', { unique: false })
+            journalStore.createIndex('status', 'status', { unique: false })
+            journalStore.createIndex('source', 'source', { unique: false })
+            journalStore.createIndex('createdAt', 'createdAt', { unique: false })
+            console.log('[IndexedDB] ✅ Journal entries store created successfully')
+          } catch (error) {
+            console.error('[IndexedDB] ❌ Error creating journal entries store:', error)
+            throw error
+          }
+        } else if (db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+          console.log('[IndexedDB] ✓ Journal entries store already exists')
+        }
+
+        if (!db.objectStoreNames.contains(CUSTOMER_INVOICES_STORE)) {
+          const invoiceStore = db.createObjectStore(CUSTOMER_INVOICES_STORE, { keyPath: 'id' })
+          invoiceStore.createIndex('issueDate', 'issueDate', { unique: false })
+          invoiceStore.createIndex('dueDate', 'dueDate', { unique: false })
+          invoiceStore.createIndex('status', 'status', { unique: false })
+          invoiceStore.createIndex('customerName', 'customerName', { unique: false })
+          console.log('[IndexedDB] ✅ Customer invoices store created')
+        }
+
+        if (!db.objectStoreNames.contains(VENDOR_BILLS_STORE)) {
+          const billStore = db.createObjectStore(VENDOR_BILLS_STORE, { keyPath: 'id' })
+          billStore.createIndex('issueDate', 'issueDate', { unique: false })
+          billStore.createIndex('dueDate', 'dueDate', { unique: false })
+          billStore.createIndex('status', 'status', { unique: false })
+          billStore.createIndex('vendorName', 'vendorName', { unique: false })
+          console.log('[IndexedDB] ✅ Vendor bills store created')
+        }
+
+        if (!db.objectStoreNames.contains(PAYMENT_ALLOCATIONS_STORE)) {
+          const allocStore = db.createObjectStore(PAYMENT_ALLOCATIONS_STORE, { keyPath: 'id' })
+          allocStore.createIndex('documentId', 'documentId', { unique: false })
+          allocStore.createIndex('transactionId', 'transactionId', { unique: false })
+          allocStore.createIndex('type', 'type', { unique: false })
+          allocStore.createIndex('paymentDate', 'paymentDate', { unique: false })
+          console.log('[IndexedDB] ✅ Payment allocations store created')
+        }
+
+        if (!db.objectStoreNames.contains(BANK_RECONCILIATIONS_STORE)) {
+          const reconStore = db.createObjectStore(BANK_RECONCILIATIONS_STORE, { keyPath: 'id' })
+          reconStore.createIndex('periodId', 'periodId', { unique: true })
+          reconStore.createIndex('status', 'status', { unique: false })
+          reconStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+          console.log('[IndexedDB] ✅ Bank reconciliations store created')
+        }
+
+        if (newVersion >= 21 && !db.objectStoreNames.contains(PAYMENT_SUMMARIES_STORE)) {
+          const psStore = db.createObjectStore(PAYMENT_SUMMARIES_STORE, { keyPath: 'id' })
+          psStore.createIndex('financialYear', 'financialYear', { unique: false })
+          psStore.createIndex('employerName', 'employerName', { unique: false })
+          psStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+          console.log('[IndexedDB] ✅ Payment summaries store created')
+        } else if (db.objectStoreNames.contains(PAYMENT_SUMMARIES_STORE)) {
+          console.log('[IndexedDB] ✓ Payment summaries store already exists')
+        }
+
+        if (newVersion >= 22 && !db.objectStoreNames.contains(TAX_WORKSHEETS_STORE)) {
+          const wsStore = db.createObjectStore(TAX_WORKSHEETS_STORE, { keyPath: 'id' })
+          wsStore.createIndex('financialYear', 'financialYear', { unique: true })
+          wsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+          console.log('[IndexedDB] ✅ Tax worksheets store created')
+        } else if (db.objectStoreNames.contains(TAX_WORKSHEETS_STORE)) {
+          console.log('[IndexedDB] ✓ Tax worksheets store already exists')
+        }
+
+        if (newVersion >= 23 && !db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+          try {
+            const attendanceStore = db.createObjectStore(ATTENDANCE_STORE, { keyPath: 'id' })
+            attendanceStore.createIndex('employeeId', 'employeeId', { unique: false })
+            attendanceStore.createIndex('clockInAt', 'clockInAt', { unique: false })
+            attendanceStore.createIndex('createdAt', 'createdAt', { unique: false })
+            console.log('[IndexedDB] ✅ Attendance store created successfully')
+          } catch (error) {
+            console.error('[IndexedDB] ❌ Error creating attendance store:', error)
+            throw error
+          }
+        } else if (db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+          console.log('[IndexedDB] ✓ Attendance store already exists')
+        }
         
         console.log('[IndexedDB] ========================================')
         console.log('[IndexedDB] ✅ Upgrade completed. All stores:', Array.from(db.objectStoreNames))
@@ -297,7 +463,17 @@ class IndexedDBStorage {
             PERIOD_CARRY_FORWARD_STORE,
             INCOMING_ORDERS_STORE,
             TIMESHEETS_STORE,
-            EMPLOYEES_STORE
+            EMPLOYEES_STORE,
+            LEAVE_RECORDS_STORE,
+            ATTENDANCE_STORE,
+            LODGMENT_SNAPSHOTS_STORE,
+            PAYMENT_SUMMARIES_STORE,
+            TAX_WORKSHEETS_STORE,
+            JOURNAL_ENTRIES_STORE,
+            CUSTOMER_INVOICES_STORE,
+            VENDOR_BILLS_STORE,
+            PAYMENT_ALLOCATIONS_STORE,
+            BANK_RECONCILIATIONS_STORE,
           ]
           
           console.log('[IndexedDB] ========================================')
@@ -352,9 +528,12 @@ class IndexedDBStorage {
     // Validate transactions array
     if (!statement.transactions || !Array.isArray(statement.transactions)) {
       console.warn('[IndexedDB] Warning: Statement has no transactions array:', statement)
-      // Set empty array if transactions is missing
       statement.transactions = []
     }
+
+    await this.assertWritableDates(
+      statement.transactions.map((tx: { date?: string }) => tx.date).filter(Boolean) as string[]
+    )
 
     const id = `stmt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const storedStatement: StoredStatement = {
@@ -480,6 +659,16 @@ class IndexedDBStorage {
     if (!this.db) {
       await this.init()
     }
+
+    const existing = await this.getStatement(id)
+    if (!existing) {
+      throw new Error('Statement not found')
+    }
+
+    const mergedTransactions = updates.transactions ?? existing.transactions ?? []
+    await this.assertWritableDates(
+      mergedTransactions.map((tx: { date?: string }) => tx.date).filter(Boolean) as string[]
+    )
 
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -637,10 +826,22 @@ class IndexedDBStorage {
     receiptImageId?: string
     department?: string
     description?: string
+    paidBy?: 'company' | 'director'
+    fundedByDirector?: boolean
+    gstInfo?: {
+      isGSTIncluded: boolean
+      gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+      gstAmount?: number
+      netAmount?: number
+      confidence?: number
+      reasoning?: string
+    }
   }): Promise<string> {
     if (!this.db) {
       await this.init()
     }
+
+    await this.assertWritableDate(cashExpense.date)
 
     const id = `cash_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const storedCashExpense = {
@@ -669,6 +870,62 @@ class IndexedDBStorage {
         console.error('[IndexedDB] Error saving cash expense:', request.error)
         reject(request.error)
       }
+    })
+  }
+
+  /**
+   * Update an existing cash expense (category, GST claim flag, date, amount, etc.)
+   */
+  async updateCashExpense(
+    id: string,
+    updates: Partial<{
+      date: string
+      amount: number
+      merchant: string
+      category: string
+      receiptImageId?: string
+      department?: string
+      description?: string
+      gstInfo?: {
+        isGSTIncluded: boolean
+        gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+        gstAmount?: number
+        netAmount?: number
+        confidence?: number
+        reasoning?: string
+      }
+    }>
+  ): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    if (updates.date) {
+      await this.assertWritableDate(updates.date)
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([CASH_EXPENSES_STORE], 'readwrite')
+      const store = transaction.objectStore(CASH_EXPENSES_STORE)
+      const getReq = store.get(id)
+
+      getReq.onsuccess = () => {
+        const existing = getReq.result
+        if (!existing) {
+          reject(new Error(`Cash expense not found: ${id}`))
+          return
+        }
+        const next = { ...existing, ...updates, updatedAt: new Date().toISOString() }
+        const putReq = store.put(next)
+        putReq.onsuccess = () => resolve()
+        putReq.onerror = () => reject(putReq.error)
+      }
+      getReq.onerror = () => reject(getReq.error)
     })
   }
 
@@ -883,6 +1140,11 @@ class IndexedDBStorage {
     })
   }
 
+  async deleteAllCashExpenses(): Promise<void> {
+    const expenses = await this.getAllCashExpenses()
+    await Promise.all(expenses.map((expense: any) => this.deleteCashExpense(expense.id)))
+  }
+
   /**
    * Save business profile
    */
@@ -896,6 +1158,14 @@ class IndexedDBStorage {
     paygReportingCycle?: 'Monthly' | 'Quarterly'
     gstRegistered?: boolean
     fbtRegistered?: boolean
+    companyTaxRate?: number
+    smallBusinessEntity?: boolean
+    openingDirectorLoanBalance?: number
+    openingCapital?: number
+    openingRetainedEarnings?: number
+    openingCashBalance?: number
+    accountingBasis?: 'cash' | 'accrual'
+    autoPostArApJournals?: boolean
   }): Promise<void> {
     if (!this.db) {
       await this.init()
@@ -942,6 +1212,14 @@ class IndexedDBStorage {
     paygReportingCycle?: 'Monthly' | 'Quarterly'
     gstRegistered?: boolean
     fbtRegistered?: boolean
+    companyTaxRate?: number
+    smallBusinessEntity?: boolean
+    openingDirectorLoanBalance?: number
+    openingCapital?: number
+    openingRetainedEarnings?: number
+    openingCashBalance?: number
+    accountingBasis?: 'cash' | 'accrual'
+    autoPostArApJournals?: boolean
   } | null> {
     if (!this.db) {
       await this.init()
@@ -1004,18 +1282,116 @@ class IndexedDBStorage {
     })
   }
 
+  async getTransactionReceipt(receiptId: string): Promise<{ id: string; transactionId: string; blob: Blob; fileName: string; fileType: string; uploadedAt: string } | null> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([TRANSACTION_RECEIPTS_STORE], 'readonly')
+      const store = transaction.objectStore(TRANSACTION_RECEIPTS_STORE)
+      const request = store.get(receiptId)
+
+      request.onsuccess = async () => {
+        const receipt = request.result
+        if (!receipt) {
+          resolve(null)
+          return
+        }
+
+        try {
+          const response = await fetch(receipt.imageData)
+          const blob = await response.blob()
+          resolve({ ...receipt, blob })
+        } catch (error) {
+          reject(error)
+        }
+      }
+
+      request.onerror = () => {
+        reject(request.error)
+      }
+    })
+  }
+
+  async getTransactionReceiptByTransactionId(transactionId: string): Promise<any | null> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([TRANSACTION_RECEIPTS_STORE], 'readonly')
+      const store = transaction.objectStore(TRANSACTION_RECEIPTS_STORE)
+      const index = store.index('transactionId')
+      const request = index.get(transactionId)
+
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async deleteTransactionReceipt(receiptId: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([TRANSACTION_RECEIPTS_STORE], 'readwrite')
+      const store = transaction.objectStore(TRANSACTION_RECEIPTS_STORE)
+      const request = store.delete(receiptId)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
   /**
-   * Export all data to JSON
+   * Export all data to JSON (schema v2)
    */
   async exportAllData(): Promise<{
+    schemaVersion: number
     statements: any[]
     cashExpenses: any[]
     receipts: any[]
+    transactions: any[]
+    journalEntries: any[]
+    customerInvoices: CustomerInvoice[]
+    vendorBills: VendorBill[]
+    paymentAllocations: PaymentAllocation[]
+    bankReconciliations: BankReconciliationSession[]
+    periods: any[]
+    periodCarryForward: any[]
+    assets: any[]
+    auditTrail: any[]
+    employees: any[]
+    payslips: any[]
+    timesheets: any[]
+    leaveRecords: LeaveRecord[]
+    lodgmentSnapshots: LodgmentSnapshot[]
+    paymentSummaries: PaymentSummaryEntry[]
+    taxWorksheets: IndividualTaxWorksheetRecord[]
+    lodgmentPreferences: Record<string, string>
     businessProfile: any | null
     userMappings: any[]
     paygConfig: any
     directorName: string | null
     apiKey: string | null
+    openingDirectorLoanBalance: number | null
     exportDate: string
   }> {
     if (!this.db) {
@@ -1023,40 +1399,110 @@ class IndexedDBStorage {
     }
 
     try {
-      const [statements, cashExpenses, receipts, businessProfile] = await Promise.all([
-        this.getAllStatements(),
-        this.getAllCashExpenses(),
-        this.getAllReceipts(),
-        this.getBusinessProfile(),
-      ])
-
-      // Get user mappings from localStorage
-      const userMappings = typeof window !== 'undefined' 
-        ? JSON.parse(localStorage.getItem('user_mappings') || '[]')
-        : []
-
-      // Get PAYG config from localStorage
-      const paygConfig = typeof window !== 'undefined'
-        ? JSON.parse(localStorage.getItem('payg_config') || 'null')
-        : null
-
-      // Get Director name and API key from localStorage
-      const directorName = typeof window !== 'undefined'
-        ? localStorage.getItem('director_name')
-        : null
-      const apiKey = typeof window !== 'undefined'
-        ? localStorage.getItem('openai_api_key')
-        : null
-
-      return {
+      const [
         statements,
         cashExpenses,
         receipts,
+        transactions,
+        journalEntries,
+        customerInvoices,
+        vendorBills,
+        paymentAllocations,
+        bankReconciliations,
+        periods,
+        periodCarryForward,
+        assets,
+        auditTrail,
+        employees,
+        payslips,
+        timesheets,
+        leaveRecords,
+        lodgmentSnapshots,
+        paymentSummaries,
+        taxWorksheets,
+        businessProfile,
+      ] = await Promise.all([
+        this.getAllStatements(),
+        this.getAllCashExpenses(),
+        this.getAllReceipts(),
+        this.getAllTransactions(),
+        this.getAllJournalEntries(),
+        this.getAllCustomerInvoices(),
+        this.getAllVendorBills(),
+        this.getAllPaymentAllocations(),
+        this.getAllBankReconciliations(),
+        this.getAllPeriods(),
+        this.getCarryForwardHistory(),
+        this.getAllAssets(),
+        this.getAllAuditTrails(),
+        this.getAllEmployees(),
+        this.getAllPayslips(),
+        this.getAllTimesheets(),
+        this.getAllLeaveRecords(),
+        this.getLodgmentSnapshots(),
+        this.getPaymentSummaries(),
+        this.getAllTaxWorksheets(),
+        this.getBusinessProfile(),
+      ])
+
+      const userMappings =
+        typeof window !== 'undefined'
+          ? JSON.parse(
+              localStorage.getItem('selpic_user_mappings') ||
+                localStorage.getItem('user_mappings') ||
+                '[]'
+            )
+          : []
+
+      const paygConfig =
+        typeof window !== 'undefined'
+          ? JSON.parse(
+              localStorage.getItem('selpic_payg_config') ||
+                localStorage.getItem('payg_config') ||
+                'null'
+            )
+          : null
+
+      const directorName =
+        typeof window !== 'undefined' ? localStorage.getItem('director_name') : null
+
+      const openingDirectorLoanBalance =
+        typeof window !== 'undefined'
+          ? (() => {
+              const raw = localStorage.getItem('opening_director_loan_balance')
+              return raw ? Number(raw) : null
+            })()
+          : null
+
+      return {
+        schemaVersion: BACKUP_SCHEMA_VERSION,
+        statements,
+        cashExpenses,
+        receipts,
+        transactions,
+        journalEntries,
+        customerInvoices,
+        vendorBills,
+        paymentAllocations,
+        bankReconciliations,
+        periods,
+        periodCarryForward,
+        assets,
+        auditTrail,
+        employees,
+        payslips,
+        timesheets,
+        leaveRecords,
+        lodgmentSnapshots,
+        paymentSummaries,
+        taxWorksheets,
+        lodgmentPreferences: exportLodgmentPreferences(),
         businessProfile,
         userMappings,
         paygConfig,
         directorName,
-        apiKey: apiKey ? '***REDACTED***' : null, // Don't export actual API key
+        apiKey: null,
+        openingDirectorLoanBalance,
         exportDate: new Date().toISOString(),
       }
     } catch (err) {
@@ -1066,72 +1512,357 @@ class IndexedDBStorage {
   }
 
   /**
-   * Import all data from JSON
+   * Clear accounting ledger stores before a full restore or Settings wipe.
+   * Keeps business profile + API usage/balance (credentials stay in localStorage).
    */
-  async importAllData(data: {
-    statements?: any[]
-    cashExpenses?: any[]
-    receipts?: any[]
-    transactionReceipts?: any[]
-    businessProfile?: any
-    userMappings?: any[]
-    paygConfig?: any
-    directorName?: string | null
-    transactions?: any[]
-    openingDirectorLoanBalance?: number | null
-  }): Promise<void> {
+  async clearAllForRestoreImport(): Promise<void> {
     if (!this.db) {
       await this.init()
     }
 
+    await this.deleteAllStatements()
+    await this.deleteAllCashExpenses()
+    await this.clearStore(TRANSACTIONS_STORE)
+    await this.clearStore(JOURNAL_ENTRIES_STORE)
+    await this.clearStore(CUSTOMER_INVOICES_STORE)
+    await this.clearStore(VENDOR_BILLS_STORE)
+    await this.clearStore(PAYMENT_ALLOCATIONS_STORE)
+    await this.clearStore(BANK_RECONCILIATIONS_STORE)
+    await this.clearStore(PERIODS_STORE)
+    await this.clearStore(PERIOD_CARRY_FORWARD_STORE)
+    await this.clearStore(ASSETS_STORE)
+    await this.clearStore(AUDIT_TRAIL_STORE)
+    await this.clearStore(EMPLOYEES_STORE)
+    await this.clearStore(PAYSLIPS_STORE)
+    await this.clearStore(TIMESHEETS_STORE)
+    await this.clearStore(LEAVE_RECORDS_STORE)
+    await this.clearStore(ATTENDANCE_STORE)
+    await this.clearStore(LODGMENT_SNAPSHOTS_STORE)
+    await this.clearStore(PAYMENT_SUMMARIES_STORE)
+    await this.clearStore(TAX_WORKSHEETS_STORE)
+    await this.clearStore(RECEIPTS_STORE)
+    await this.clearStore(TRANSACTION_RECEIPTS_STORE)
+    await this.clearStore(INCOMING_ORDERS_STORE)
+
+    const { invalidatePeriodLockCache } = await import('../period-management/storage-guard')
+    invalidatePeriodLockCache()
+    const { clearBrowserLedgerCaches } = await import('./backup-preferences')
+    clearBrowserLedgerCaches()
+  }
+
+  /**
+   * Full ledger wipe used by Settings → Data Management.
+   * Same scope as restore-import wipe (IndexedDB + browser ledger caches).
+   */
+  async wipeAllAccountingData(): Promise<void> {
+    await this.clearAllForRestoreImport()
+  }
+
+  /**
+   * Full factory reset (PIN / System Reset): ledger wipe + profile + API usage stores.
+   */
+  async factoryResetAllData(): Promise<void> {
+    await this.wipeAllAccountingData()
+    await this.clearStore(BUSINESS_PROFILE_STORE)
+    await this.clearStore(USAGE_LOGGING_STORE)
+    await this.clearStore(API_USAGE_STORE)
+    await this.clearStore(API_BALANCE_STORE)
+  }
+
+  private async clearStore(storeName: string): Promise<void> {
+    if (!this.db?.objectStoreNames.contains(storeName)) return
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([storeName], 'readwrite')
+      const store = transaction.objectStore(storeName)
+      const request = store.clear()
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * Import all data from JSON
+   */
+  async importAllData(
+    data: {
+      schemaVersion?: number
+      statements?: any[]
+      cashExpenses?: any[]
+      receipts?: any[]
+      leaveRecords?: LeaveRecord[]
+      lodgmentSnapshots?: LodgmentSnapshot[]
+      paymentSummaries?: PaymentSummaryEntry[]
+      taxWorksheets?: IndividualTaxWorksheetRecord[]
+      lodgmentPreferences?: Record<string, string>
+      transactionReceipts?: any[]
+      businessProfile?: any
+      userMappings?: any[]
+      paygConfig?: any
+      directorName?: string | null
+      transactions?: any[]
+      journalEntries?: any[]
+      customerInvoices?: CustomerInvoice[]
+      vendorBills?: VendorBill[]
+      paymentAllocations?: PaymentAllocation[]
+      bankReconciliations?: BankReconciliationSession[]
+      periods?: any[]
+      periodCarryForward?: any[]
+      assets?: any[]
+      auditTrail?: any[]
+      employees?: any[]
+      payslips?: any[]
+      timesheets?: any[]
+      openingDirectorLoanBalance?: number | null
+    },
+    options: { replaceExisting?: boolean } = {}
+  ): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    const { replaceExisting = false } = options
+
     try {
-      // Import statements
+      if (replaceExisting) {
+        await this.clearAllForRestoreImport()
+      }
+
       if (data.statements && Array.isArray(data.statements)) {
         for (const statement of data.statements) {
           try {
             const { id, uploadedAt, ...statementData } = statement
-            await this.saveStatement(statementData)
+            await this.saveStatementPreservingId({ ...statementData, id, uploadedAt })
           } catch (err) {
             console.warn('[IndexedDB] Failed to import statement:', err)
           }
         }
       }
 
-      // Import cash expenses
       if (data.cashExpenses && Array.isArray(data.cashExpenses)) {
         for (const expense of data.cashExpenses) {
           try {
-            const { id, createdAt, source, ...expenseData } = expense
-            await this.saveCashExpense(expenseData)
+            await this.putRecord(CASH_EXPENSES_STORE, expense)
           } catch (err) {
             console.warn('[IndexedDB] Failed to import cash expense:', err)
           }
         }
       }
 
-      // Import receipts (cash expense receipts)
       if (data.receipts && Array.isArray(data.receipts)) {
         for (const receipt of data.receipts) {
           try {
-            const { id, uploadedAt, ...receiptData } = receipt
-            await this.saveReceiptImage(receiptData)
+            await this.putRecord(RECEIPTS_STORE, receipt)
           } catch (err) {
             console.warn('[IndexedDB] Failed to import receipt:', err)
           }
         }
       }
 
-      // Import transaction receipts (Blob storage)
+      if (data.transactions && Array.isArray(data.transactions)) {
+        for (const tx of data.transactions) {
+          try {
+            await this.putRecord(TRANSACTIONS_STORE, tx)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import transaction:', err)
+          }
+        }
+      }
+
+      if (data.journalEntries && Array.isArray(data.journalEntries)) {
+        for (const entry of data.journalEntries) {
+          try {
+            await this.putRecord(JOURNAL_ENTRIES_STORE, entry)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import journal entry:', err)
+          }
+        }
+      }
+
+      if (data.customerInvoices && Array.isArray(data.customerInvoices)) {
+        for (const invoice of data.customerInvoices) {
+          try {
+            await this.putRecord(CUSTOMER_INVOICES_STORE, invoice)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import customer invoice:', err)
+          }
+        }
+      }
+
+      if (data.vendorBills && Array.isArray(data.vendorBills)) {
+        for (const bill of data.vendorBills) {
+          try {
+            await this.putRecord(VENDOR_BILLS_STORE, bill)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import vendor bill:', err)
+          }
+        }
+      }
+
+      if (data.paymentAllocations && Array.isArray(data.paymentAllocations)) {
+        for (const allocation of data.paymentAllocations) {
+          try {
+            await this.putRecord(PAYMENT_ALLOCATIONS_STORE, allocation)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import payment allocation:', err)
+          }
+        }
+      }
+
+      if (data.bankReconciliations && Array.isArray(data.bankReconciliations)) {
+        for (const session of data.bankReconciliations) {
+          try {
+            await this.putRecord(BANK_RECONCILIATIONS_STORE, session)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import bank reconciliation:', err)
+          }
+        }
+      }
+
+      if (data.periods && Array.isArray(data.periods)) {
+        for (const period of data.periods) {
+          try {
+            await this.putRecord(PERIODS_STORE, period)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import period:', err)
+          }
+        }
+      }
+
+      if (data.periodCarryForward && Array.isArray(data.periodCarryForward)) {
+        for (const record of data.periodCarryForward) {
+          try {
+            await this.putRecord(PERIOD_CARRY_FORWARD_STORE, record)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import period carry-forward:', err)
+          }
+        }
+      }
+
+      if (data.assets && Array.isArray(data.assets)) {
+        for (const asset of data.assets) {
+          try {
+            await this.putRecord(ASSETS_STORE, asset)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import asset:', err)
+          }
+        }
+      }
+
+      if (data.auditTrail && Array.isArray(data.auditTrail)) {
+        for (const record of data.auditTrail) {
+          try {
+            await this.putRecord(AUDIT_TRAIL_STORE, record)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import audit record:', err)
+          }
+        }
+      }
+
+      if (data.employees && Array.isArray(data.employees)) {
+        for (const employee of data.employees) {
+          try {
+            await this.saveEmployee(employee)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import employee:', err)
+          }
+        }
+      }
+
+      if (data.payslips && Array.isArray(data.payslips)) {
+        for (const payslip of data.payslips) {
+          try {
+            await this.savePayslip(payslip)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import payslip:', err)
+          }
+        }
+      }
+
+      if (data.timesheets && Array.isArray(data.timesheets)) {
+        for (const timesheet of data.timesheets) {
+          try {
+            await this.saveTimesheet(timesheet)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import timesheet:', err)
+          }
+        }
+      }
+
+      if (data.leaveRecords && Array.isArray(data.leaveRecords)) {
+        for (const leave of data.leaveRecords) {
+          try {
+            const { id, createdAt, updatedAt, approvedAt, approvedBy, ...rest } = leave
+            await this.saveLeaveRecord({
+              ...rest,
+              id,
+              createdAt,
+              updatedAt,
+              ...(approvedAt ? { approvedAt } : {}),
+              ...(approvedBy ? { approvedBy } : {}),
+            })
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import leave record:', err)
+          }
+        }
+      }
+
+      if (data.lodgmentSnapshots && Array.isArray(data.lodgmentSnapshots)) {
+        for (const snapshot of data.lodgmentSnapshots) {
+          try {
+            const { id, createdAt, updatedAt, ...rest } = snapshot
+            await this.saveLodgmentSnapshot({
+              ...rest,
+              id,
+              createdAt,
+              updatedAt,
+            })
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import lodgment snapshot:', err)
+          }
+        }
+      }
+
+      if (data.paymentSummaries && Array.isArray(data.paymentSummaries)) {
+        for (const entry of data.paymentSummaries) {
+          try {
+            await this.putRecord(PAYMENT_SUMMARIES_STORE, entry)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import payment summary:', err)
+          }
+        }
+      }
+
+      if (data.taxWorksheets && Array.isArray(data.taxWorksheets)) {
+        for (const worksheet of data.taxWorksheets) {
+          try {
+            const { rentals, cgtEvents } = normalizeWorksheetRecord(worksheet)
+            await this.saveTaxWorksheet({
+              financialYear: worksheet.financialYear,
+              rentals,
+              cgtEvents,
+            })
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to import tax worksheet:', err)
+          }
+        }
+      }
+
+      importLodgmentPreferences(data.lodgmentPreferences)
+
       if (data.transactionReceipts && Array.isArray(data.transactionReceipts)) {
         for (const receiptMeta of data.transactionReceipts) {
           try {
-            // Convert Base64 back to Blob
             if (receiptMeta.imageData) {
               const response = await fetch(receiptMeta.imageData)
               const blob = await response.blob()
               const file = new File([blob], receiptMeta.fileName, { type: receiptMeta.fileType })
-              
-              // Save using transaction ID
               await this.saveTransactionReceipt(receiptMeta.transactionId, file)
             }
           } catch (err) {
@@ -1140,7 +1871,6 @@ class IndexedDBStorage {
         }
       }
 
-      // Import business profile
       if (data.businessProfile) {
         try {
           await this.saveBusinessProfile(data.businessProfile)
@@ -1149,46 +1879,86 @@ class IndexedDBStorage {
         }
       }
 
-      // Import user mappings to localStorage
       if (data.userMappings && Array.isArray(data.userMappings)) {
         if (typeof window !== 'undefined') {
+          localStorage.setItem('selpic_user_mappings', JSON.stringify(data.userMappings))
           localStorage.setItem('user_mappings', JSON.stringify(data.userMappings))
         }
       }
 
-      // Import PAYG config to localStorage
       if (data.paygConfig) {
         if (typeof window !== 'undefined') {
+          localStorage.setItem('selpic_payg_config', JSON.stringify(data.paygConfig))
           localStorage.setItem('payg_config', JSON.stringify(data.paygConfig))
         }
       }
 
-      // Import Director name to localStorage
       if (data.directorName) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('director_name', data.directorName)
         }
       }
 
-      // Import transactions to localStorage
-      if (data.transactions && Array.isArray(data.transactions)) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('accounting_transactions', JSON.stringify(data.transactions))
-        }
-      }
-
-      // Import opening director loan balance
       if (data.openingDirectorLoanBalance !== undefined && data.openingDirectorLoanBalance !== null) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem('opening_director_loan_balance', data.openingDirectorLoanBalance.toString())
+          localStorage.setItem(
+            'opening_director_loan_balance',
+            data.openingDirectorLoanBalance.toString()
+          )
         }
       }
 
-      console.log('[IndexedDB] Data import completed')
+      const { invalidatePeriodLockCache } = await import('../period-management/storage-guard')
+      invalidatePeriodLockCache()
+
+      console.log('[IndexedDB] Data import completed', {
+        schemaVersion: data.schemaVersion ?? 1,
+        replaceExisting,
+      })
     } catch (err) {
       console.error('[IndexedDB] Error importing data:', err)
       throw err
     }
+  }
+
+  private async putRecord(storeName: string, record: any): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(storeName)) {
+        resolve()
+        return
+      }
+
+      const transaction = this.db.transaction([storeName], 'readwrite')
+      const store = transaction.objectStore(storeName)
+      const request = store.put(record)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  private async saveStatementPreservingId(statement: StoredStatement): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([STORE_NAME], 'readwrite')
+      const store = transaction.objectStore(STORE_NAME)
+      const request = store.put(statement)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
@@ -1932,6 +2702,23 @@ class IndexedDBStorage {
   /**
    * Save or update a financial period
    */
+  async deletePeriod(periodId: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db.transaction([PERIODS_STORE], 'readwrite')
+      const store = transaction.objectStore(PERIODS_STORE)
+      const request = store.delete(periodId)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
   async savePeriod(period: FinancialPeriod): Promise<void> {
     if (!this.db) {
       await this.init()
@@ -2091,11 +2878,68 @@ class IndexedDBStorage {
         })
 
         console.log('[IndexedDB] Period locked:', periodId)
+        const { invalidatePeriodLockCache } = await import('../period-management/storage-guard')
+        invalidatePeriodLockCache()
         resolve()
       }
 
       request.onerror = () => {
         console.error('[IndexedDB] Error locking period:', request.error)
+        reject(request.error)
+      }
+    })
+  }
+
+  /**
+   * Unlock a period so open-period sync can repair openings (e.g. Jul locked at $0 cash
+   * while June Active still holds the real closing cash).
+   */
+  async unlockPeriod(periodId: string, unlockedBy: string = 'owner'): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise(async (resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const period = await this.getPeriod(periodId)
+      if (!period) {
+        reject(new Error(`Period ${periodId} not found`))
+        return
+      }
+
+      if (!period.isLocked) {
+        resolve()
+        return
+      }
+
+      period.isLocked = false
+      period.lockedAt = undefined
+      period.lockedBy = undefined
+      period.updatedAt = new Date().toISOString()
+
+      const transaction = this.db.transaction([PERIODS_STORE], 'readwrite')
+      const store = transaction.objectStore(PERIODS_STORE)
+      const request = store.put(period)
+
+      request.onsuccess = async () => {
+        await this.logAuditTrail({
+          transactionId: periodId,
+          action: 'period_unlocked',
+          userId: unlockedBy,
+          details: { periodId },
+        })
+        console.log('[IndexedDB] Period unlocked:', periodId)
+        const { invalidatePeriodLockCache } = await import('../period-management/storage-guard')
+        invalidatePeriodLockCache()
+        resolve()
+      }
+
+      request.onerror = () => {
+        console.error('[IndexedDB] Error unlocking period:', request.error)
         reject(request.error)
       }
     })
@@ -2129,17 +2973,16 @@ class IndexedDBStorage {
       // Get or create target period
       let toPeriod = await this.getPeriod(toPeriodId)
       if (!toPeriod) {
-        // Create new period if it doesn't exist
-        const now = new Date()
-        const year = now.getFullYear()
-        const month = now.getMonth() + 1
-        const startDate = new Date(year, month - 1, 1)
-        const endDate = new Date(year, month, 0) // Last day of month
+        if (!isValidPeriodId(toPeriodId)) {
+          reject(new Error(`Invalid target period id ${toPeriodId}`))
+          return
+        }
+        const bounds = periodIdToCalendarBounds(toPeriodId)!
 
         toPeriod = {
           id: toPeriodId,
-          startDate: startDate.toISOString().split('T')[0],
-          endDate: endDate.toISOString().split('T')[0],
+          startDate: bounds.startDate,
+          endDate: bounds.endDate,
           periodType: 'Monthly',
           openingDirectorLoanBalance: fromPeriod.closingDirectorLoanBalance,
           closingDirectorLoanBalance: fromPeriod.closingDirectorLoanBalance,
@@ -2474,6 +3317,89 @@ class IndexedDBStorage {
   }
 
   /**
+   * Link an approved order to a bank deposit transaction.
+   */
+  async updateIncomingOrderMatch(
+    id: string,
+    matchedTransactionId: string,
+    matchType: 'exact' | 'fuzzy' | 'manual',
+    matchedBy: string = 'owner'
+  ): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const dbTransaction = this.db.transaction([INCOMING_ORDERS_STORE], 'readwrite')
+      const store = dbTransaction.objectStore(INCOMING_ORDERS_STORE)
+      const getRequest = store.get(id)
+
+      getRequest.onsuccess = () => {
+        const order = getRequest.result
+        if (!order) {
+          reject(new Error('Order not found'))
+          return
+        }
+
+        order.matchedTransactionId = matchedTransactionId
+        order.matchType = matchType
+        order.matchedAt = new Date().toISOString()
+        order.matchedBy = matchedBy
+
+        const putRequest = store.put(order)
+        putRequest.onsuccess = () => resolve()
+        putRequest.onerror = () => reject(putRequest.error)
+      }
+
+      getRequest.onerror = () => reject(getRequest.error)
+    })
+  }
+
+  /**
+   * Remove bank deposit match from an incoming order.
+   */
+  async clearIncomingOrderMatch(id: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const dbTransaction = this.db.transaction([INCOMING_ORDERS_STORE], 'readwrite')
+      const store = dbTransaction.objectStore(INCOMING_ORDERS_STORE)
+      const getRequest = store.get(id)
+
+      getRequest.onsuccess = () => {
+        const order = getRequest.result
+        if (!order) {
+          reject(new Error('Order not found'))
+          return
+        }
+
+        delete order.matchedTransactionId
+        delete order.matchType
+        delete order.matchedAt
+        delete order.matchedBy
+
+        const putRequest = store.put(order)
+        putRequest.onsuccess = () => resolve()
+        putRequest.onerror = () => reject(putRequest.error)
+      }
+
+      getRequest.onerror = () => reject(getRequest.error)
+    })
+  }
+
+  /**
    * Delete incoming order
    */
   async deleteIncomingOrder(id: string): Promise<void> {
@@ -2736,11 +3662,33 @@ class IndexedDBStorage {
   }
 
   /**
-   * Delete timesheet
+   * Delete timesheet and cascade approved payslip + payroll journals
    */
   async deleteTimesheet(id: string): Promise<void> {
     if (!this.db) {
       await this.init()
+    }
+
+    try {
+      const timesheet = await this.getTimesheet(id)
+      if (timesheet) {
+        const payslips = await this.getAllPayslips()
+        const linkedPayslipIds = payslipIdsLinkedToTimesheet(payslips, {
+          id,
+          employeeName: timesheet.employeeName,
+          payPeriod: timesheet.payPeriod,
+          grossPay: timesheet.grossPay,
+        })
+        for (const payslipId of linkedPayslipIds) {
+          try {
+            await this.deletePayslip(payslipId)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to cascade delete payslip for timesheet:', payslipId, err)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[IndexedDB] Timesheet cascade lookup failed (continuing delete):', err)
     }
 
     return new Promise((resolve, reject) => {
@@ -2785,6 +3733,8 @@ class IndexedDBStorage {
     superannuationRate: number
     payFrequency: 'weekly' | 'fortnightly' | 'monthly'
     email?: string
+    /** Homepage admin username for SSO → My Payroll (path B) */
+    linkedAdminUsername?: string
     phone?: string
     address?: {
       street?: string
@@ -2795,6 +3745,8 @@ class IndexedDBStorage {
     startDate?: string
     endDate?: string
     isActive: boolean
+    annualLeaveBalance?: number
+    sickLeaveBalance?: number
     createdAt?: string
     updatedAt?: string
   }): Promise<string> {
@@ -2955,11 +3907,56 @@ class IndexedDBStorage {
   }
 
   /**
-   * Delete employee
+   * Delete employee and cascade their payslips, timesheets, and payroll journals
    */
   async deleteEmployee(id: string): Promise<void> {
     if (!this.db) {
       await this.init()
+    }
+
+    try {
+      const employee = await this.getEmployee(id).catch(() => null)
+      const payslips = await this.getAllPayslips()
+      const linkedPayslips = payslips.filter(
+        (ps: any) =>
+          ps.employeeId === id ||
+          (employee?.employeeId && ps.employeeId === employee.employeeId)
+      )
+      for (const payslip of linkedPayslips) {
+        if (payslip?.id) {
+          try {
+            await this.deletePayslip(payslip.id)
+          } catch (err) {
+            console.warn(
+              '[IndexedDB] Failed to cascade delete payslip for employee:',
+              payslip.id,
+              err
+            )
+          }
+        }
+      }
+
+      const timesheetsByDbId = await this.getAllTimesheets(id)
+      const timesheetsByCode = employee?.employeeId
+        ? await this.getAllTimesheets(employee.employeeId)
+        : []
+      const timesheetMap = new Map<string, any>()
+      for (const ts of [...timesheetsByDbId, ...timesheetsByCode]) {
+        if (ts?.id) timesheetMap.set(ts.id, ts)
+      }
+      for (const ts of timesheetMap.values()) {
+        try {
+          await this.deleteTimesheet(ts.id)
+        } catch (err) {
+          console.warn(
+            '[IndexedDB] Failed to cascade delete timesheet for employee:',
+            ts.id,
+            err
+          )
+        }
+      }
+    } catch (err) {
+      console.warn('[IndexedDB] Employee cascade lookup failed (continuing delete):', err)
     }
 
     return new Promise((resolve, reject) => {
@@ -2990,11 +3987,355 @@ class IndexedDBStorage {
   }
 
   /**
+   * Save leave record
+   */
+  async saveLeaveRecord(
+    record: Omit<LeaveRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string
+      createdAt?: string
+      updatedAt?: string
+    }
+  ): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LEAVE_RECORDS_STORE)) {
+        reject(new Error(`Store '${LEAVE_RECORDS_STORE}' does not exist. Please refresh the page.`))
+        return
+      }
+
+      const id = record.id || `leave_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const now = new Date().toISOString()
+      const data: LeaveRecord = {
+        employeeId: record.employeeId,
+        type: record.type,
+        startDate: record.startDate,
+        endDate: record.endDate,
+        hours: record.hours,
+        status: record.status,
+        reason: record.reason,
+        id,
+        createdAt: record.createdAt || now,
+        updatedAt: record.updatedAt || now,
+        ...(record.approvedAt ? { approvedAt: record.approvedAt } : {}),
+        ...(record.approvedBy ? { approvedBy: record.approvedBy } : {}),
+      }
+
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readwrite')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.put(data)
+
+      request.onsuccess = () => resolve(id)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * Get leave records for an employee
+   */
+  async getLeaveRecordsByEmployee(employeeId: string): Promise<LeaveRecord[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LEAVE_RECORDS_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readonly')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const index = store.index('employeeId')
+      const request = index.getAll(employeeId)
+
+      request.onsuccess = () => {
+        const records = (request.result || []) as LeaveRecord[]
+        records.sort(
+          (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        )
+        resolve(records)
+      }
+
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * Get all leave records (for backup export)
+   */
+  async getAllLeaveRecords(): Promise<LeaveRecord[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LEAVE_RECORDS_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readonly')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.getAll()
+
+      request.onsuccess = () => {
+        const records = (request.result || []) as LeaveRecord[]
+        records.sort(
+          (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        )
+        resolve(records)
+      }
+
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * Update leave record status and optionally deduct employee leave balance
+   */
+  async updateLeaveRecordStatus(
+    id: string,
+    status: LeaveStatus,
+    approvedBy: string = 'owner'
+  ): Promise<LeaveRecord> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    const record = await new Promise<LeaveRecord | null>((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readonly')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.get(id)
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+
+    if (!record) {
+      throw new Error('Leave record not found')
+    }
+
+    const previousStatus = record.status
+    const now = new Date().toISOString()
+    const updated: LeaveRecord = {
+      ...record,
+      status,
+      updatedAt: now,
+      ...(status === 'approved'
+        ? { approvedAt: now, approvedBy }
+        : { approvedAt: undefined, approvedBy: undefined }),
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readwrite')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.put(updated)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+
+    if (status === 'approved' && previousStatus !== 'approved' && record.type !== 'unpaid') {
+      await this.applyLeaveBalanceDeduction(record.employeeId, record.type, record.hours)
+    }
+
+    if (previousStatus === 'approved' && status !== 'approved' && record.type !== 'unpaid') {
+      await this.restoreLeaveBalance(record.employeeId, record.type, record.hours)
+    }
+
+    return updated
+  }
+
+  private async applyLeaveBalanceDeduction(
+    employeeId: string,
+    type: LeaveRecord['type'],
+    hours: number
+  ): Promise<void> {
+    const employee = await this.getEmployee(employeeId)
+    if (!employee) return
+
+    const balanceField = type === 'sick' ? 'sickLeaveBalance' : 'annualLeaveBalance'
+    const current = employee[balanceField] ?? 0
+    await this.saveEmployee({
+      ...employee,
+      [balanceField]: Math.max(0, current - hours),
+    })
+  }
+
+  private async restoreLeaveBalance(
+    employeeId: string,
+    type: LeaveRecord['type'],
+    hours: number
+  ): Promise<void> {
+    const employee = await this.getEmployee(employeeId)
+    if (!employee) return
+
+    const balanceField = type === 'sick' ? 'sickLeaveBalance' : 'annualLeaveBalance'
+    const current = employee[balanceField] ?? 0
+    await this.saveEmployee({
+      ...employee,
+      [balanceField]: current + hours,
+    })
+  }
+
+  /**
+   * Delete leave record (pending/rejected only; approved restores balance first)
+   */
+  async deleteLeaveRecord(id: string): Promise<void> {
+    const records = await new Promise<LeaveRecord | null>((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db!.transaction([LEAVE_RECORDS_STORE], 'readonly')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.get(id)
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+
+    if (records?.status === 'approved' && records.type !== 'unpaid') {
+      await this.restoreLeaveBalance(records.employeeId, records.type, records.hours)
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db.transaction([LEAVE_RECORDS_STORE], 'readwrite')
+      const store = transaction.objectStore(LEAVE_RECORDS_STORE)
+      const request = store.delete(id)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async saveAttendanceRecord(record: {
+    id?: string
+    employeeId: string
+    employeeName?: string
+    clockInAt: string
+    clockOutAt?: string
+    note?: string
+    source?: 'employee' | 'admin'
+    createdAt?: string
+    updatedAt?: string
+  }): Promise<string> {
+    if (!this.db) await this.init()
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      if (!this.db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+        reject(
+          new Error(
+            `Store '${ATTENDANCE_STORE}' does not exist. Please refresh the page.`
+          )
+        )
+        return
+      }
+      const id =
+        record.id || `att_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+      const now = new Date().toISOString()
+      const data = {
+        ...record,
+        id,
+        source: record.source || 'employee',
+        createdAt: record.createdAt || now,
+        updatedAt: now,
+      }
+      const tx = this.db.transaction([ATTENDANCE_STORE], 'readwrite')
+      const store = tx.objectStore(ATTENDANCE_STORE)
+      const req = store.put(data)
+      req.onsuccess = () => resolve(id)
+      req.onerror = () => reject(req.error)
+    })
+  }
+
+  async getAttendanceRecords(employeeId?: string): Promise<any[]> {
+    if (!this.db) await this.init()
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      if (!this.db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+        resolve([])
+        return
+      }
+      const tx = this.db.transaction([ATTENDANCE_STORE], 'readonly')
+      const store = tx.objectStore(ATTENDANCE_STORE)
+      const req = employeeId
+        ? store.index('employeeId').getAll(employeeId)
+        : store.getAll()
+      req.onsuccess = () => {
+        const rows = (req.result || []) as any[]
+        rows.sort(
+          (a, b) =>
+            new Date(b.clockInAt || 0).getTime() -
+            new Date(a.clockInAt || 0).getTime()
+        )
+        resolve(rows)
+      }
+      req.onerror = () => reject(req.error)
+    })
+  }
+
+  async deleteAttendanceRecord(id: string): Promise<void> {
+    if (!this.db) await this.init()
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      if (!this.db.objectStoreNames.contains(ATTENDANCE_STORE)) {
+        reject(new Error(`Store '${ATTENDANCE_STORE}' does not exist`))
+        return
+      }
+      const tx = this.db.transaction([ATTENDANCE_STORE], 'readwrite')
+      const store = tx.objectStore(ATTENDANCE_STORE)
+      const req = store.delete(id)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+  }
+
+  /**
    * Save transaction (standalone, e.g., from payroll)
    */
   async saveTransaction(transaction: any): Promise<string> {
     if (!this.db) {
       await this.init()
+    }
+
+    if (transaction?.date) {
+      await this.assertWritableDate(transaction.date)
     }
 
     return new Promise((resolve, reject) => {
@@ -3084,6 +4425,34 @@ class IndexedDBStorage {
         console.error('[IndexedDB] Error getting transactions:', request.error)
         reject(request.error)
       }
+    })
+  }
+
+  /**
+   * Update a standalone transaction by id
+   */
+  async updateTransaction(id: string, updates: any): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    const allTransactions = await this.getAllTransactions()
+    const existing = allTransactions.find((tx: any) => tx.id === id)
+    if (!existing) {
+      throw new Error(`Transaction not found: ${id}`)
+    }
+
+    const nextDate = updates.date ?? existing.date
+    await this.assertWritableDate(existing.date)
+    if (nextDate !== existing.date) {
+      await this.assertWritableDate(nextDate)
+    }
+
+    await this.saveTransaction({
+      ...existing,
+      ...updates,
+      id,
+      updatedAt: new Date().toISOString(),
     })
   }
 
@@ -3200,103 +4569,767 @@ class IndexedDBStorage {
   }
 
   /**
-   * Delete payslip and related transactions
+   * Delete one standalone transaction (payroll journals live here, not in statements).
+   */
+  async deleteStandaloneTransaction(id: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const existing = localStorage.getItem('payroll_transactions')
+        if (existing) {
+          const list = JSON.parse(existing)
+          if (Array.isArray(list)) {
+            localStorage.setItem(
+              'payroll_transactions',
+              JSON.stringify(list.filter((tx: any) => tx?.id !== id))
+            )
+          }
+        }
+      } catch (err) {
+        console.warn('[IndexedDB] Failed to prune localStorage payroll_transactions:', err)
+      }
+    }
+
+    if (!this.db?.objectStoreNames.contains(TRANSACTIONS_STORE)) {
+      return
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+      const transaction = this.db.transaction([TRANSACTIONS_STORE], 'readwrite')
+      const store = transaction.objectStore(TRANSACTIONS_STORE)
+      const request = store.delete(id)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * Delete payroll journal rows linked to a payslip id.
+   */
+  async deletePayrollTransactionsForPayslip(payslipId: string): Promise<number> {
+    const allTransactions = await this.getAllTransactions()
+    const related = allTransactions.filter((tx: any) => {
+      if (!isPayrollJournalTransaction(tx)) {
+        // Still allow legacy rows matched only by reference/id pattern
+      }
+      const linkedId = extractPayslipIdFromPayrollTx(tx)
+      if (linkedId === payslipId) return true
+      return (
+        tx.reference === `PAYROLL_${payslipId}` ||
+        tx.id?.startsWith(`${payslipId}_entry_`) ||
+        (typeof tx.reference === 'string' && tx.reference.includes(payslipId))
+      )
+    })
+
+    for (const tx of related) {
+      if (tx?.id) {
+        await this.deleteStandaloneTransaction(tx.id)
+      }
+    }
+    return related.length
+  }
+
+  /**
+   * Remove payroll journals whose payslip no longer exists (orphans from old test deletes).
+   * Also strips payroll rows wrongly embedded inside bank statements, and when HR is empty
+   * (no employees + no timesheets) clears ALL payslips + payroll journals.
+   */
+  async purgeOrphanPayrollTransactions(): Promise<number> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    let removed = 0
+
+    const employees = await this.getAllEmployees().catch(() => [])
+    const timesheets = await this.getAllTimesheets().catch(() => [])
+    const hrEmpty = employees.length === 0 && timesheets.length === 0
+
+    // HR UI empty → wipe leftover payslips + every payroll journal (old test residue)
+    if (hrEmpty) {
+      const payslips = await this.getAllPayslips().catch(() => [])
+      for (const ps of payslips) {
+        if (ps?.id) {
+          try {
+            await this.deletePayslip(ps.id)
+            removed += 1
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to delete leftover payslip:', ps.id, err)
+          }
+        }
+      }
+
+      const leftover = await this.getAllTransactions()
+      for (const tx of leftover) {
+        if (isPayrollJournalTransaction(tx) && tx?.id) {
+          await this.deleteStandaloneTransaction(tx.id)
+          removed += 1
+        }
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('payroll_transactions')
+        } catch {
+          /* ignore */
+        }
+      }
+    } else {
+      const payslips = await this.getAllPayslips()
+      const payslipIds = new Set(
+        payslips
+          .map((ps: any) => ps?.id)
+          .filter((id: unknown): id is string => typeof id === 'string')
+      )
+      const employeeIds = new Set<string>()
+      for (const emp of employees) {
+        if (emp?.id) employeeIds.add(emp.id)
+        if (emp?.employeeId) employeeIds.add(emp.employeeId)
+      }
+
+      // Payslips whose employee was deleted
+      for (const ps of payslips) {
+        if (!ps?.id) continue
+        const empKey = ps.employeeId
+        if (empKey && !employeeIds.has(empKey)) {
+          try {
+            await this.deletePayslip(ps.id)
+            removed += 1
+            payslipIds.delete(ps.id)
+          } catch (err) {
+            console.warn('[IndexedDB] Failed to delete orphan payslip:', ps.id, err)
+          }
+        }
+      }
+
+      const allTransactions = await this.getAllTransactions()
+      const orphans = allTransactions.filter((tx: any) =>
+        isOrphanPayrollTransaction(tx, payslipIds)
+      )
+      for (const tx of orphans) {
+        if (tx?.id) {
+          await this.deleteStandaloneTransaction(tx.id)
+          removed += 1
+        }
+      }
+    }
+
+    // Payroll journals must never live inside bank statement blobs
+    removed += await this.stripPayrollJournalsFromStatements()
+
+    if (removed > 0) {
+      console.log(`[IndexedDB] Purged ${removed} leftover payroll record(s) (hrEmpty=${hrEmpty})`)
+    }
+    return removed
+  }
+
+  /**
+   * Remove source=payroll / isPayrollTransaction rows from stored bank statements.
+   */
+  async stripPayrollJournalsFromStatements(): Promise<number> {
+    const statements = await this.getAllStatements()
+    let removed = 0
+    for (const statement of statements) {
+      const txs = Array.isArray(statement.transactions) ? statement.transactions : []
+      const kept = txs.filter((tx: any) => !isPayrollJournalTransaction(tx))
+      if (kept.length < txs.length) {
+        removed += txs.length - kept.length
+        await this.updateStatement(statement.id, { ...statement, transactions: kept })
+      }
+    }
+    return removed
+  }
+
+  /**
+   * Delete payslip and related payroll journal transactions
    */
   async deletePayslip(id: string): Promise<void> {
     if (!this.db) {
       await this.init()
     }
 
-    return new Promise(async (resolve, reject) => {
+    if (!this.db?.objectStoreNames.contains(PAYSLIPS_STORE)) {
+      throw new Error(`Store '${PAYSLIPS_STORE}' does not exist`)
+    }
+
+    const deletedCount = await this.deletePayrollTransactionsForPayslip(id)
+    console.log(
+      `[IndexedDB] Deleted ${deletedCount} payroll journal(s) for payslip ${id}`
+    )
+
+    return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'))
         return
       }
 
-      if (!this.db.objectStoreNames.contains(PAYSLIPS_STORE)) {
-        reject(new Error(`Store '${PAYSLIPS_STORE}' does not exist`))
+      const transaction = this.db.transaction([PAYSLIPS_STORE], 'readwrite')
+      const store = transaction.objectStore(PAYSLIPS_STORE)
+      const request = store.delete(id)
+
+      request.onsuccess = () => {
+        console.log('[IndexedDB] Payslip deleted:', id)
+        resolve()
+      }
+
+      request.onerror = () => {
+        console.error('[IndexedDB] Error deleting payslip:', request.error)
+        reject(request.error)
+      }
+    })
+  }
+
+  /**
+   * Save ATO lodgment snapshot (copy sheet freeze + checklist).
+   */
+  async saveLodgmentSnapshot(
+    snapshot: Omit<LodgmentSnapshot, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string
+      createdAt?: string
+      updatedAt?: string
+    }
+  ): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
         return
       }
 
-      try {
-        // 1. 먼저 관련 거래(Transactions) 삭제
-        // Payslip이 승인되면 PAYROLL_${payslipId} 형식의 reference를 가진 거래들이 생성됨
-        // 거래 ID 형식: ${payslipId}_entry_${index}
-        const allTransactions = await this.getAllTransactions()
-        console.log(`[IndexedDB] Total transactions in store: ${allTransactions.length}`)
-        console.log(`[IndexedDB] Searching for transactions related to payslip: ${id}`)
-        
-        const relatedTransactions = allTransactions.filter((tx: any) => {
-          const matchReference = tx.reference === `PAYROLL_${id}`
-          const matchId = tx.id?.startsWith(`${id}_entry_`)
-          const matchReferenceContains = tx.reference?.includes(id)
-          const matchPayrollTransaction = tx.isPayrollTransaction && tx.reference?.includes(id)
-          
-          const isMatch = matchReference || matchId || matchReferenceContains || matchPayrollTransaction
-          
-          if (isMatch) {
-            console.log(`[IndexedDB] Found related transaction:`, {
-              id: tx.id,
-              reference: tx.reference,
-              category: tx.category,
-              description: tx.description
-            })
-          }
-          
-          return isMatch
-        })
-
-        console.log(`[IndexedDB] Found ${relatedTransactions.length} related transactions for payslip ${id}`)
-
-        // 관련 거래 삭제
-        if (relatedTransactions.length > 0 && this.db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
-          const deletePromises = relatedTransactions.map((tx: any) => {
-            return new Promise<void>((resolveTx, rejectTx) => {
-              if (!this.db) {
-                rejectTx(new Error('Database not initialized'))
-                return
-              }
-
-              const txTransaction = this.db.transaction([TRANSACTIONS_STORE], 'readwrite')
-              const txStore = txTransaction.objectStore(TRANSACTIONS_STORE)
-              const deleteRequest = txStore.delete(tx.id)
-
-              deleteRequest.onsuccess = () => {
-                console.log(`[IndexedDB] ✅ Related transaction deleted: ${tx.id} (${tx.category})`)
-                resolveTx()
-              }
-
-              deleteRequest.onerror = () => {
-                console.error(`[IndexedDB] ❌ Error deleting transaction ${tx.id}:`, deleteRequest.error)
-                rejectTx(deleteRequest.error)
-              }
-            })
-          })
-
-          await Promise.all(deletePromises)
-          console.log(`[IndexedDB] ✅ All ${relatedTransactions.length} related transactions deleted successfully`)
-        } else if (relatedTransactions.length === 0) {
-          console.warn(`[IndexedDB] ⚠️ No related transactions found for payslip ${id}. This may be normal if payslip was not approved.`)
-        }
-
-        // 2. Payslip 삭제
-        const transaction = this.db.transaction([PAYSLIPS_STORE], 'readwrite')
-        const store = transaction.objectStore(PAYSLIPS_STORE)
-        const request = store.delete(id)
-
-        request.onsuccess = () => {
-          console.log('[IndexedDB] Payslip deleted:', id)
-          resolve()
-        }
-
-        request.onerror = () => {
-          console.error('[IndexedDB] Error deleting payslip:', request.error)
-          reject(request.error)
-        }
-      } catch (error) {
-        console.error('[IndexedDB] Error in deletePayslip:', error)
-        reject(error)
+      if (!this.db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+        reject(new Error(`Store '${LODGMENT_SNAPSHOTS_STORE}' does not exist. Please refresh the page.`))
+        return
       }
+
+      const id =
+        snapshot.id || `lodgment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const now = new Date().toISOString()
+      const data: LodgmentSnapshot = {
+        ...snapshot,
+        id,
+        createdAt: snapshot.createdAt || now,
+        updatedAt: now,
+      }
+
+      const transaction = this.db.transaction([LODGMENT_SNAPSHOTS_STORE], 'readwrite')
+      const store = transaction.objectStore(LODGMENT_SNAPSHOTS_STORE)
+      const request = store.put(data)
+
+      request.onsuccess = () => resolve(id)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  /**
+   * List lodgment snapshots, newest first.
+   */
+  async getLodgmentSnapshots(kind?: LodgmentSnapshot['kind']): Promise<LodgmentSnapshot[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([LODGMENT_SNAPSHOTS_STORE], 'readonly')
+      const store = transaction.objectStore(LODGMENT_SNAPSHOTS_STORE)
+      const request = kind ? store.index('kind').getAll(kind) : store.getAll()
+
+      request.onsuccess = () => {
+        const rows = (request.result || []) as LodgmentSnapshot[]
+        rows.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        resolve(rows)
+      }
+
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getLodgmentSnapshot(id: string): Promise<LodgmentSnapshot | null> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+        resolve(null)
+        return
+      }
+
+      const transaction = this.db.transaction([LODGMENT_SNAPSHOTS_STORE], 'readonly')
+      const store = transaction.objectStore(LODGMENT_SNAPSHOTS_STORE)
+      const request = store.get(id)
+
+      request.onsuccess = () => resolve((request.result as LodgmentSnapshot) || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async deleteLodgmentSnapshot(id: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      if (!this.db.objectStoreNames.contains(LODGMENT_SNAPSHOTS_STORE)) {
+        resolve()
+        return
+      }
+
+      const transaction = this.db.transaction([LODGMENT_SNAPSHOTS_STORE], 'readwrite')
+      const store = transaction.objectStore(LODGMENT_SNAPSHOTS_STORE)
+      const request = store.delete(id)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async savePaymentSummary(
+    entry: Omit<PaymentSummaryEntry, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string
+      createdAt?: string
+      updatedAt?: string
+    }
+  ): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(PAYMENT_SUMMARIES_STORE)) {
+        reject(new Error('Payment summaries store not available. Refresh the page.'))
+        return
+      }
+
+      const id =
+        entry.id || `ps_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+      const now = new Date().toISOString()
+      const data: PaymentSummaryEntry = {
+        ...entry,
+        id,
+        grossPayments: Math.round(entry.grossPayments * 100) / 100,
+        taxWithheld: Math.round(entry.taxWithheld * 100) / 100,
+        createdAt: entry.createdAt || now,
+        updatedAt: now,
+      }
+
+      const transaction = this.db.transaction([PAYMENT_SUMMARIES_STORE], 'readwrite')
+      const store = transaction.objectStore(PAYMENT_SUMMARIES_STORE)
+      const request = store.put(data)
+
+      request.onsuccess = () => resolve(id)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getPaymentSummaries(financialYear?: string): Promise<PaymentSummaryEntry[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(PAYMENT_SUMMARIES_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([PAYMENT_SUMMARIES_STORE], 'readonly')
+      const store = transaction.objectStore(PAYMENT_SUMMARIES_STORE)
+      const request = financialYear
+        ? store.index('financialYear').getAll(financialYear)
+        : store.getAll()
+
+      request.onsuccess = () => {
+        const rows = (request.result || []) as PaymentSummaryEntry[]
+        rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        resolve(rows)
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async deletePaymentSummary(id: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(PAYMENT_SUMMARIES_STORE)) {
+        resolve()
+        return
+      }
+
+      const transaction = this.db.transaction([PAYMENT_SUMMARIES_STORE], 'readwrite')
+      const store = transaction.objectStore(PAYMENT_SUMMARIES_STORE)
+      const request = store.delete(id)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async sumPaymentSummariesForYear(financialYear: string): Promise<PaymentSummaryTotals> {
+    const rows = await this.getPaymentSummaries(financialYear)
+    return {
+      grossPayments: Math.round(rows.reduce((s, r) => s + r.grossPayments, 0) * 100) / 100,
+      taxWithheld: Math.round(rows.reduce((s, r) => s + r.taxWithheld, 0) * 100) / 100,
+      count: rows.length,
+    }
+  }
+
+  async clearIndividualTaxData(): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+    await this.clearStore(PAYMENT_SUMMARIES_STORE)
+    await this.clearStore(TAX_WORKSHEETS_STORE)
+    clearLodgmentPreferences()
+  }
+
+  async getAllTaxWorksheets(): Promise<IndividualTaxWorksheetRecord[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(TAX_WORKSHEETS_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([TAX_WORKSHEETS_STORE], 'readonly')
+      const store = transaction.objectStore(TAX_WORKSHEETS_STORE)
+      const request = store.getAll()
+
+      request.onsuccess = () => {
+        const rows = (request.result || []) as IndividualTaxWorksheetRecord[]
+        resolve(
+          rows.map((raw) => {
+            const { rentals, cgtEvents } = normalizeWorksheetRecord(raw)
+            return { ...raw, rentals, cgtEvents }
+          })
+        )
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getTaxWorksheet(financialYear: string): Promise<IndividualTaxWorksheetRecord | null> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(TAX_WORKSHEETS_STORE)) {
+        resolve(null)
+        return
+      }
+
+      const transaction = this.db.transaction([TAX_WORKSHEETS_STORE], 'readonly')
+      const store = transaction.objectStore(TAX_WORKSHEETS_STORE)
+      const request = store.get(worksheetRecordId(financialYear))
+
+      request.onsuccess = () => {
+        const raw = request.result as IndividualTaxWorksheetRecord | undefined
+        if (!raw) {
+          resolve(null)
+          return
+        }
+        const { rentals, cgtEvents } = normalizeWorksheetRecord(raw)
+        resolve({ ...raw, rentals, cgtEvents })
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async saveTaxWorksheet(
+    data: Pick<IndividualTaxWorksheetRecord, 'financialYear' | 'rentals' | 'cgtEvents'>
+  ): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(TAX_WORKSHEETS_STORE)) {
+        reject(new Error('Tax worksheets store not available. Refresh the page.'))
+        return
+      }
+
+      const id = worksheetRecordId(data.financialYear)
+      const record: IndividualTaxWorksheetRecord = {
+        id,
+        financialYear: data.financialYear,
+        rentals: data.rentals,
+        cgtEvents: data.cgtEvents,
+        updatedAt: new Date().toISOString(),
+      }
+
+      const transaction = this.db.transaction([TAX_WORKSHEETS_STORE], 'readwrite')
+      const store = transaction.objectStore(TAX_WORKSHEETS_STORE)
+      const request = store.put(record)
+
+      request.onsuccess = () => resolve(id)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async saveJournalEntry(entry: JournalEntry): Promise<string> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    await this.assertWritableDate(entry.date)
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+        reject(new Error('Journal entries store not available'))
+        return
+      }
+
+      const transaction = this.db.transaction([JOURNAL_ENTRIES_STORE], 'readwrite')
+      const store = transaction.objectStore(JOURNAL_ENTRIES_STORE)
+      const request = store.put(entry)
+
+      request.onsuccess = () => resolve(entry.id)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getJournalEntry(id: string): Promise<JournalEntry | null> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+        resolve(null)
+        return
+      }
+
+      const transaction = this.db.transaction([JOURNAL_ENTRIES_STORE], 'readonly')
+      const store = transaction.objectStore(JOURNAL_ENTRIES_STORE)
+      const request = store.get(id)
+
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getAllJournalEntries(): Promise<JournalEntry[]> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([JOURNAL_ENTRIES_STORE], 'readonly')
+      const store = transaction.objectStore(JOURNAL_ENTRIES_STORE)
+      const request = store.getAll()
+
+      request.onsuccess = () => {
+        const entries = (request.result || []) as JournalEntry[]
+        resolve(
+          entries.sort(
+            (a, b) =>
+              new Date(b.date).getTime() - new Date(a.date).getTime() ||
+              b.createdAt.localeCompare(a.createdAt)
+          )
+        )
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async deleteJournalEntry(id: string): Promise<void> {
+    const entry = await this.getJournalEntry(id)
+    if (!entry) return
+    await this.assertWritableDate(entry.date)
+
+    return new Promise((resolve, reject) => {
+      if (!this.db || !this.db.objectStoreNames.contains(JOURNAL_ENTRIES_STORE)) {
+        resolve()
+        return
+      }
+
+      const transaction = this.db.transaction([JOURNAL_ENTRIES_STORE], 'readwrite')
+      const store = transaction.objectStore(JOURNAL_ENTRIES_STORE)
+      const request = store.delete(id)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async saveCustomerInvoice(invoice: CustomerInvoice): Promise<string> {
+    if (!this.db) await this.init()
+    await this.assertWritableDate(invoice.issueDate)
+    await this.putRecord(CUSTOMER_INVOICES_STORE, invoice)
+    return invoice.id
+  }
+
+  async getCustomerInvoice(id: string): Promise<CustomerInvoice | null> {
+    if (!this.db) await this.init()
+    return this.getRecord<CustomerInvoice>(CUSTOMER_INVOICES_STORE, id)
+  }
+
+  async getAllCustomerInvoices(): Promise<CustomerInvoice[]> {
+    if (!this.db) await this.init()
+    const rows = await this.getAllRecords<CustomerInvoice>(CUSTOMER_INVOICES_STORE)
+    return rows.sort(
+      (a, b) =>
+        new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime() ||
+        b.createdAt.localeCompare(a.createdAt)
+    )
+  }
+
+  async saveVendorBill(bill: VendorBill): Promise<string> {
+    if (!this.db) await this.init()
+    await this.assertWritableDate(bill.issueDate)
+    await this.putRecord(VENDOR_BILLS_STORE, bill)
+    return bill.id
+  }
+
+  async getVendorBill(id: string): Promise<VendorBill | null> {
+    if (!this.db) await this.init()
+    return this.getRecord<VendorBill>(VENDOR_BILLS_STORE, id)
+  }
+
+  async getAllVendorBills(): Promise<VendorBill[]> {
+    if (!this.db) await this.init()
+    const rows = await this.getAllRecords<VendorBill>(VENDOR_BILLS_STORE)
+    return rows.sort(
+      (a, b) =>
+        new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime() ||
+        b.createdAt.localeCompare(a.createdAt)
+    )
+  }
+
+  async savePaymentAllocation(allocation: PaymentAllocation): Promise<string> {
+    if (!this.db) await this.init()
+    await this.assertWritableDate(allocation.paymentDate)
+    await this.putRecord(PAYMENT_ALLOCATIONS_STORE, allocation)
+    return allocation.id
+  }
+
+  async getPaymentAllocationsForDocument(
+    type: 'ar' | 'ap',
+    documentId: string
+  ): Promise<PaymentAllocation[]> {
+    if (!this.db) await this.init()
+    const rows = await this.getAllRecords<PaymentAllocation>(PAYMENT_ALLOCATIONS_STORE)
+    return rows
+      .filter((row) => row.type === type && row.documentId === documentId)
+      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate))
+  }
+
+  async getAllPaymentAllocations(): Promise<PaymentAllocation[]> {
+    if (!this.db) await this.init()
+    return this.getAllRecords<PaymentAllocation>(PAYMENT_ALLOCATIONS_STORE)
+  }
+
+  async saveBankReconciliation(session: BankReconciliationSession): Promise<string> {
+    if (!this.db) await this.init()
+    await this.putRecord(BANK_RECONCILIATIONS_STORE, session)
+    return session.id
+  }
+
+  async getBankReconciliation(id: string): Promise<BankReconciliationSession | null> {
+    if (!this.db) await this.init()
+    return this.getRecord<BankReconciliationSession>(BANK_RECONCILIATIONS_STORE, id)
+  }
+
+  async getBankReconciliationByPeriod(
+    periodId: string
+  ): Promise<BankReconciliationSession | null> {
+    if (!this.db) await this.init()
+    const db = this.db
+    if (!db?.objectStoreNames.contains(BANK_RECONCILIATIONS_STORE)) {
+      return null
+    }
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([BANK_RECONCILIATIONS_STORE], 'readonly')
+      const store = transaction.objectStore(BANK_RECONCILIATIONS_STORE)
+      const index = store.index('periodId')
+      const request = index.get(periodId)
+
+      request.onsuccess = () => resolve((request.result as BankReconciliationSession) || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getAllBankReconciliations(): Promise<BankReconciliationSession[]> {
+    if (!this.db) await this.init()
+    const rows = await this.getAllRecords<BankReconciliationSession>(BANK_RECONCILIATIONS_STORE)
+    return rows.sort((a, b) => b.periodId.localeCompare(a.periodId))
+  }
+
+  private async getRecord<T>(storeName: string, id: string): Promise<T | null> {
+    if (!this.db?.objectStoreNames.contains(storeName)) return null
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        resolve(null)
+        return
+      }
+
+      const transaction = this.db.transaction([storeName], 'readonly')
+      const store = transaction.objectStore(storeName)
+      const request = store.get(id)
+
+      request.onsuccess = () => resolve((request.result as T) || null)
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  private async getAllRecords<T>(storeName: string): Promise<T[]> {
+    if (!this.db?.objectStoreNames.contains(storeName)) return []
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        resolve([])
+        return
+      }
+
+      const transaction = this.db.transaction([storeName], 'readonly')
+      const store = transaction.objectStore(storeName)
+      const request = store.getAll()
+
+      request.onsuccess = () => resolve((request.result || []) as T[])
+      request.onerror = () => reject(request.error)
     })
   }
 }

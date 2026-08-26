@@ -27,7 +27,8 @@ Homepage / admin work must never pull accounting sandbox modules into the storef
 
 ### DO
 
-- Develop accounting only under `apps/accounting-sandbox` with its own `package.json`, `tsconfig.json`, and `npm run dev` (typically port 3001)
+- Develop accounting only under `apps/accounting-sandbox` with its own `package.json`, `tsconfig.json`, and `npm run dev` (**port 3001**, not storefront 3000/3005)
+- Open **http://localhost:3001** to verify accounting UI. Root `npm run dev` is the storefront and will not show sandbox edits. After a Fast Refresh runtime error in the sandbox, hard-refresh 3001 (incomplete Grok edits have 500'd this app before).
 - Integrate with the storefront **only** via network boundaries:
   - `POST /api/accounting/**` proxy routes that `fetch` `ACCOUNTING_API_URL`
   - Env vars (e.g. `ACCOUNTING_API_URL`) — never deep module imports

@@ -1,0 +1,92 @@
+---
+description: Handoff — Period Management DL/cash/unlock (25–26 Aug 2026); resume next session
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Handoff — Period Management (resume here)
+
+**Do not delete this file** until the user confirms Period Management cash/unlock is fully verified in production-like use. Permanent invariants also live in:
+
+- `.cursor/rules/accounting-period-director-loan.mdc`
+- `.cursor/rules/accounting-period-management-calendar.mdc`
+- `.cursor/rules/accounting-stable-edits.mdc`
+
+Verify on **http://localhost:3001** only (not storefront).
+
+---
+
+## Confirmed fixture (user, Jun vs Jul 2026)
+
+| Period | Status | Opening DL | Closing DL | Opening Cash | Closing Cash |
+|--------|--------|------------|------------|--------------|--------------|
+| **2026-06** | Active | $10,281.89 | **$1,500.00** | $7,271.58 | **$690.87** |
+| **2026-07** (before fix) | Locked | $1,500 | $1,500 | **$0** wrong | **$0** wrong |
+| **2026-07** (correct empty month) | Active or after Unlock | $1,500 | $1,500 | **$690.87** | **$690.87** |
+
+- June DL drop $10,281.89 → $1,500 matches reimbursement (~$8,781.89); liability remaining $1,500 is legitimate.
+- Jul/Aug **DL $1,500** with no bank txs = correct roll from June closing (live chain / `throughPeriodId`).
+- Jul/Aug **Cash $0** while June still Active = **stale lock** bug (sync skips Locked; cash never carried).
+
+---
+
+## Done (this arc)
+
+### Director Loan
+- Monthly chain: Settings opening **once** on first DL-activity month; later months roll prior closing.
+- `throughPeriodId` keeps empty Jul/Aug on the chain (no bare Settings $1,000).
+- `seedOpeningsBeforePeriod` walks month-by-month (do not skip unlocked June).
+- Period UI: live chain openings/closings + bank / director-funded / reimbursement activity lines.
+- Cash Expense `fundedByDirector` hydrate + Paid by Director/Company persistence.
+
+### Cash book
+- Opening/Closing Cash = **company bank cash book** only (`calculatePeriodClosingBalances` excludes `isManualCashExpenseTx`).
+- Empty month (no bank statements): **Opening Cash = Closing Cash = prior month Closing Cash** (e.g. Jul = June’s $690.87).
+- After statement parse: `transactions` change → dashboard `syncAllOpenPeriods` updates **unlocked** months automatically.
+- Locked months do **not** update until Unlock & Recalculate.
+
+### Unlock / Close UX (`PeriodManagement.tsx`)
+- Accidental **Close Period & Carry Forward** → period Locked; **Unlock & Recalculate from Ledger** undoes lock and re-syncs from ledger (transactions are not deleted by Close).
+- Unlock walks back and also unlocks earlier Locked stubs stuck at open=close cash **$0** (e.g. Unlock Aug also unlocks Jul stub) then `syncOnceFromLedger`.
+- Display overlay: if Locked with Opening Cash $0, show rolled cash from last non-stub prior (skip Locked $0 stubs) + amber “stale” banner.
+- IndexedDB: `unlockPeriod` in `lib/storage/indexed-db.ts`.
+
+### Flicker
+- Period Management syncs **once on mount**; `PERIOD_CHANGED` only quiet IDB reload — never sync→event→sync loop.
+
+### All Periods help copy
+- User-facing: Active vs Locked, cash roll-forward, Close undo via Unlock.
+- **Do not** put OCR junk / UTC heal jargon in the UI (heal stays in code + calendar rule).
+
+---
+
+## Key files
+
+| Area | Path |
+|------|------|
+| Sync / seed | `lib/period-management/period-lock.ts` (`syncAllOpenPeriods`, `seedOpeningsBeforePeriod`) |
+| Chain / cash calc | `lib/period-management/period-utils.ts`, `period-director-loan-chain.ts` |
+| UI | `components/Settings/PeriodManagement.tsx` |
+| Unlock API | `lib/storage/indexed-db.ts` → `unlockPeriod` |
+| Dashboard auto-sync | `hooks/useAccountingDashboard.ts` → `syncAllOpenPeriods` on `transactions` |
+
+---
+
+## Tomorrow — start here
+
+1. Hard-refresh **3001** → Settings → Period Management.
+2. Select **2026-07** (and **2026-08**): expect Cash ≈ **$690.87** / **$690.87** when empty; DL **$1,500**.
+3. If still $0 in IDB: use **Unlock & Recalculate**; confirm persisted Opening/Closing Cash.
+4. Optional: spot-check Opening Cash vs bank statement closing for one FY after a real Jul parse (Active month must auto-update).
+5. Optional: dedicated “Recalculate periods” button without reintroducing sync loop.
+
+---
+
+## Do not
+
+- Re-attach `syncAllOpenPeriods` to every `PERIOD_CHANGED` listener.
+- Apply Settings DL opening on every unlocked month.
+- Treat empty Q1 (Jul–Sep AU FY) Cash $0 as “correct” when prior month has Closing Cash > 0 and this month was Locked early.
+- Delete this handoff or strip Unlock / cash-carry UX without user confirmation.
+- Put OCR/UTC internals back into All Periods UI copy.
+---

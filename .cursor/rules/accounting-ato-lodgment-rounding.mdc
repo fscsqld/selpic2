@@ -1,0 +1,43 @@
+---
+description: ATO whole-dollar lodgment rounding (BAS + income tax) vs ledger cents
+alwaysApply: false
+globs: apps/accounting-sandbox/**/ato-lodgment*,apps/accounting-sandbox/**/ato-gst-refund*,apps/accounting-sandbox/**/ato-lodgment-rounding*,apps/accounting-sandbox/**/balance-sheet*,apps/accounting-sandbox/**/compute-lodgment*
+---
+
+# ATO lodgment rounding (general — any taxpayer)
+
+## Official ATO rule (BAS + tax returns)
+
+- Enter **whole dollar** amounts on BAS / activity statements and income tax returns.
+- **Leave cents out** and **do not round up** to the next dollar (truncate / `Math.trunc`).
+- Keep **ledger books in cents**; round only when copying into ATO labels.
+- Company tax return: same — no cents on return labels.
+- Individual myTax labels: same whole-dollar practice for amounts entered on the return.
+- **Exception:** PAYG withholding *formula tables* (Schedule 1) use nearest dollar with 50c up — payroll calculators only.
+
+Sources: ATO “BAS and GST tips” / “Complete your BAS”; company tax return instructions.
+
+## Book vs bank (BAS refund class)
+
+1. Ledger ÷11 (or accounts method) may show a GST credit of e.g. **$18.45**.
+2. Lodged BAS label uses whole dollars → **$18**.
+3. ATO refunds **$18** into the bank (`NON_TAXABLE_ATO_GST_REFUND`).
+4. Balance Sheet: Cash = banked **$18**; clear cents gap (**$0.45**) from Total RE so Assets = L+E.
+5. SELPIC Q3 $18 is **one example** of this class — never hard-code $18 as the only banked amount.
+
+Helpers: `roundAtoWholeDollars`, `atoGstRefundRoundingGap(banked, ledgerEstimate)`.
+
+## Income tax year-end
+
+- CTR / myTax copy sheets must use `roundAtoWholeDollars` on label amounts.
+- Ledger CTR profit for Balance Sheet equity may stay in cents; lodgment sheet is whole dollars.
+- Do not “fix” a $0.45–$0.99 BS gap by changing GST Payable or cash Net — clear via ATO cents-left-out rounding when banked ≠ ledger estimate.
+
+## Wrong vs right
+
+| Topic | Wrong | Right |
+|-------|-------|--------|
+| BAS labels | `Math.round` to cents or nearest $ | Whole $ truncate |
+| Banked refund | Put $18.45 in Cash | Banked whole $ from statement |
+| Gap | Hard-code SELPIC $18 only | `estimate − banked` for any user |
+| Payroll W tables | Truncate | Nearest $ (50c up) — separate |

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Download, Printer, TrendingUp, TrendingDown, DollarSign, Calendar } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { formatDateAustralian } from '@/lib/utils/date-format'
-import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
+import { calculateBusinessMetrics, groupPlExpensesByCategory } from '@/lib/utils/business-calculations'
 import { ReportFooter } from './ReportFooter'
 import { 
   getCurrentAustralianQuarter,
@@ -129,43 +129,46 @@ export function IncomeStatementView({
     }
   }, [filteredTransactions, selectedPeriod, customStart, customEnd, periodStart, periodEnd])
 
-  // Calculate category breakdown
-  // ⚠️ IMPORTANT: Individual User mode - include all transactions (no business filter)
+  // Category breakdown — same P&L debit filter as Total Expenses
   const categoryBreakdown = useMemo(() => {
     const incomeByCategory: Record<string, number> = {}
-    const expensesByCategory: Record<string, number> = {}
-    
-    filteredTransactions.forEach(tx => {
+    const metricsAccountType =
+      accountType === 'sole_trader'
+        ? 'sole_trader'
+        : accountType === 'individual'
+          ? 'individual'
+          : 'company'
+
+    filteredTransactions.forEach((tx) => {
       if (accountType === 'individual') {
-        // Individual User: Include all transactions
         const category = tx.category || 'Uncategorized'
-        
         if (tx.credit && tx.category?.startsWith('INCOME_')) {
-          incomeByCategory[category] = (incomeByCategory[category] || 0) + Math.abs(tx.credit)
-        } else if (tx.debit && tx.category?.startsWith('EXPENSE_')) {
-          expensesByCategory[category] = (expensesByCategory[category] || 0) + Math.abs(tx.debit)
+          incomeByCategory[category] =
+            (incomeByCategory[category] || 0) + Math.abs(tx.credit)
         }
-      } else {
-        // Company/Sole Trader: Filter by business department
-        const isBusiness = tx.department !== 'personal' && 
-                          tx.department !== 'unknown' &&
-                          (tx.department === 'cleaning' || 
-                           tx.department === 'sticker' || 
-                           !tx.department)
-        
-        if (!isBusiness) return
-        
-        const category = tx.category || 'Uncategorized'
-        
-        if (tx.credit && tx.category?.startsWith('INCOME_')) {
-          incomeByCategory[category] = (incomeByCategory[category] || 0) + Math.abs(tx.credit)
-        } else if (tx.debit && tx.category?.startsWith('EXPENSE_')) {
-          expensesByCategory[category] = (expensesByCategory[category] || 0) + Math.abs(tx.debit)
-        }
+        return
+      }
+      const isBusiness =
+        tx.department !== 'personal' &&
+        tx.department !== 'unknown' &&
+        (tx.department === 'cleaning' ||
+          tx.department === 'sticker' ||
+          !tx.department)
+      if (!isBusiness) return
+      const category = tx.category || 'Uncategorized'
+      if (tx.credit && tx.category?.startsWith('INCOME_')) {
+        incomeByCategory[category] =
+          (incomeByCategory[category] || 0) + Math.abs(tx.credit)
       }
     })
-    
-    return { incomeByCategory, expensesByCategory }
+
+    return {
+      incomeByCategory,
+      expensesByCategory: groupPlExpensesByCategory(
+        filteredTransactions,
+        metricsAccountType
+      ),
+    }
   }, [filteredTransactions, accountType])
   
   const handlePrint = () => {
@@ -377,17 +380,23 @@ export function IncomeStatementView({
         </div>
         
         <div className="summary-box">
+          <p className="text-xs text-gray-500 mb-3">
+            GST figures below are for this <strong>same P&amp;L period</strong> (book estimate:
+            sales ÷ 11 − claimable purchases ÷ 11). Over a full financial year they are a{' '}
+            <strong>period total</strong>, not one annual ATO BAS remittance — GST is lodged per
+            BAS cycle (usually quarterly). ATO bank refunds/payments are cash settlement, not 1B.
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-gray-600 mb-1">GST Collected:</p>
+              <p className="text-sm text-gray-600 mb-1">GST Collected (1A):</p>
               <p className="font-semibold text-green-600">{formatCurrency(metrics.gstPayable)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-1">GST Claimable:</p>
+              <p className="text-sm text-gray-600 mb-1">GST Claimable (1B):</p>
               <p className="font-semibold text-red-600">{formatCurrency(metrics.gstClaimable)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Net GST Payable:</p>
+              <p className="text-sm text-gray-600 mb-1">Net GST (1A − 1B):</p>
               <p className={`font-semibold ${
                 metrics.gstPayable - metrics.gstClaimable >= 0 ? 'text-red-600' : 'text-green-600'
               }`}>

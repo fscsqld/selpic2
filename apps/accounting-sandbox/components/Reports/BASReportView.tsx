@@ -5,6 +5,12 @@ import { Download, Printer, Receipt, TrendingUp, TrendingDown, DollarSign, FileI
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
+import { isDirectorsLoanLedgerTransaction } from '@/lib/classification/directors-loan-ledger'
+import {
+  computeDirectorsLoanOpeningBase,
+  loadDirectorLoanAdvanceSettings,
+  resolvePriorPeriodDirectorAdvances,
+} from '@/lib/classification/directors-loan-balance'
 import { getReceipts, getReceiptSourceUrl } from '@/lib/storage/receipt-storage'
 import { ReportFooter } from './ReportFooter'
 
@@ -25,6 +31,8 @@ interface BASReportViewProps {
   periodStart?: string
   periodEnd?: string
   accountType?: 'individual' | 'company' | 'sole_trader'
+  /** When set, matches Biz Intel prior-advance resolution (same period). */
+  priorPeriodDirectorAdvances?: number
 }
 
 export function BASReportView({
@@ -33,6 +41,7 @@ export function BASReportView({
   periodStart,
   periodEnd,
   accountType = 'company',
+  priorPeriodDirectorAdvances,
 }: BASReportViewProps) {
   const [includeReceipts, setIncludeReceipts] = useState(false)
   // Director's Loan Ledger collapse state
@@ -52,10 +61,31 @@ export function BASReportView({
   }, [isDirectorsLoanLedgerExpanded])
   
   // Calculate all metrics using single source of truth
+  const resolvedPriorAdvances = useMemo(() => {
+    const settings = loadDirectorLoanAdvanceSettings()
+    return (
+      priorPeriodDirectorAdvances ??
+      resolvePriorPeriodDirectorAdvances(
+        transactions,
+        settings.manualPriorAdvances,
+        settings.autoMatchReimbursements
+      )
+    )
+  }, [transactions, priorPeriodDirectorAdvances])
+
   const metrics = useMemo(() => {
-    return calculateBusinessMetrics(transactions, openingDirectorLoanBalance, accountType)
-  }, [transactions, openingDirectorLoanBalance, accountType])
-  
+    return calculateBusinessMetrics(
+      transactions,
+      openingDirectorLoanBalance,
+      accountType,
+      resolvedPriorAdvances
+    )
+  }, [transactions, openingDirectorLoanBalance, accountType, resolvedPriorAdvances])
+
+  const ledgerOpeningBalance = useMemo(
+    () => computeDirectorsLoanOpeningBase(openingDirectorLoanBalance, resolvedPriorAdvances),
+    [openingDirectorLoanBalance, resolvedPriorAdvances]
+  )
   // Get all receipts for transactions
   const transactionReceipts = useMemo(() => {
     if (!includeReceipts) return []
@@ -105,21 +135,13 @@ export function BASReportView({
   // Filter Director's Loan transactions (Personal + Repayments)
   const directorsLoanTransactions = useMemo(() => {
     return transactions
-      .filter(tx => {
-        // Personal transactions
-        if (tx.department === 'personal') return true
-        // Director Loan Repayment
-        if (tx.category === 'EXPENSE_DIRECTOR_LOAN_REPAYMENT') return true
-        // Explicit Director's Loan
-        if (tx.category === 'LIABILITY_DIRECTORS_LOAN' || tx.isDirectorsLoan) return true
-        return false
-      })
+      .filter(isDirectorsLoanLedgerTransaction)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }, [transactions])
 
   // Calculate Director's Loan running balance
   const directorsLoanLedger = useMemo(() => {
-    let runningBalance = openingDirectorLoanBalance
+    let runningBalance = ledgerOpeningBalance
     return directorsLoanTransactions.map(tx => {
       let balanceChange = 0
       let transactionType = ''
@@ -140,6 +162,19 @@ export function BASReportView({
           transactionType = 'Loan Repayment'
           runningBalance -= tx.debit
         }
+      } else if (tx.category === 'NON_TAXABLE_DIRECTOR_REIMBURSEMENT') {
+        if (tx.debit) {
+          balanceChange = -tx.debit
+          transactionType =
+            resolvedPriorAdvances > 0.005
+              ? 'Prior-Period Reimbursement'
+              : 'Director Reimbursement'
+          runningBalance -= tx.debit
+        }
+      } else if (tx.fundedByDirector && tx.debit && tx.department !== 'personal') {
+        balanceChange = tx.debit
+        transactionType = 'Director-Funded Expense'
+        runningBalance += tx.debit
       } else if (tx.category === 'LIABILITY_DIRECTORS_LOAN' || tx.isDirectorsLoan) {
         if (tx.credit) {
           balanceChange = tx.credit
@@ -161,7 +196,7 @@ export function BASReportView({
         balance: runningBalance,
       }
     })
-  }, [directorsLoanTransactions, openingDirectorLoanBalance])
+  }, [directorsLoanTransactions, ledgerOpeningBalance, resolvedPriorAdvances])
 
   const handlePrint = () => {
     window.print()
@@ -263,7 +298,7 @@ export function BASReportView({
             <span className="font-semibold">{formatCurrency(metrics.totalIncome)}</span>
           </div>
           <div className="summary-row">
-            <span className="summary-label">1A - GST Collected (10% of Sales):</span>
+            <span className="summary-label">1A - GST Collected (sales ÷ 11):</span>
             <span className="font-semibold text-green-600">{formatCurrency(metrics.gstPayable)}</span>
           </div>
           <div className="summary-row">
@@ -343,7 +378,12 @@ export function BASReportView({
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm font-medium text-blue-900">Opening Balance:</p>
-                    <p className="text-lg font-bold text-blue-600">{formatCurrency(openingDirectorLoanBalance)}</p>
+                    <p className="text-lg font-bold text-blue-600">{formatCurrency(ledgerOpeningBalance)}</p>
+                    <p className="text-xs text-gray-500">
+                      {resolvedPriorAdvances > 0.005
+                        ? `Cash opening ${formatCurrency(openingDirectorLoanBalance)} + prior advances lodged ${formatCurrency(resolvedPriorAdvances)}`
+                        : `Opening at period start (rolled forward; Settings cash loan ${formatCurrency(openingDirectorLoanBalance)})`}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-blue-900">Closing Balance:</p>
@@ -372,7 +412,7 @@ export function BASReportView({
                       {/* Opening Balance Row */}
                       <tr className="bg-gray-50 font-semibold">
                         <td colSpan={4} className="text-right">Opening Balance</td>
-                        <td className="text-right">{formatCurrency(openingDirectorLoanBalance)}</td>
+                        <td className="text-right">{formatCurrency(ledgerOpeningBalance)}</td>
                       </tr>
                       
                       {directorsLoanLedger.map((entry, index) => (
@@ -429,7 +469,7 @@ export function BASReportView({
                     <DollarSign className="w-5 h-5 text-indigo-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-700">
-                        Opening Balance: <span className="text-blue-600 font-bold">{formatCurrency(openingDirectorLoanBalance)}</span>
+                        Opening Balance: <span className="text-blue-600 font-bold">{formatCurrency(ledgerOpeningBalance)}</span>
                       </p>
                       <p className="text-sm font-medium text-gray-700 mt-1">
                         Closing Balance: <span className={`font-bold ${

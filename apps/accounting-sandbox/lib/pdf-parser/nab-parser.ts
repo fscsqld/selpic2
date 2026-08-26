@@ -4,6 +4,14 @@
  * Implementation for parsing NAB bank statements
  */
 
+import {
+  isBankAdvisoryNotice,
+  isBankStatementBoilerplateLine,
+  stripBankStatementBoilerplate,
+} from '@/lib/classification/bank-advisory'
+import { extractFuelDescriptionLabel } from '@/lib/classification/australian-fuel-retailers'
+import { extractShippingDescriptionLabel } from '@/lib/classification/australian-shipping-providers'
+import { extractPlatformDescriptionLabel } from '@/lib/classification/platform-marketplace'
 import { PDFParser, ParsedStatement, BankTransaction } from './types'
 import pdfParse from 'pdf-parse'
 
@@ -170,10 +178,15 @@ export class NABParser implements PDFParser {
     let currentLine = ''
     let lastDate: string | null = null
     let pendingFee: { date: string; amount: number; description: string } | null = null
+    let previousBalance: number | null = null
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim()
       if (!line || line.length < 5) continue
+      if (isBankAdvisoryNotice(line) || isBankStatementBoilerplateLine(line)) {
+        console.log('[NAB-PARSER] Skipping non-transaction advisory line:', line.substring(0, 80))
+        continue
+      }
 
       // Check if we're entering the transaction section
       if (!inTransactionSection) {
@@ -205,32 +218,47 @@ export class NABParser implements PDFParser {
       if (dateMatch) {
         // Process previous transaction if exists
         if (currentLine && lastDate) {
-          const transaction = this.parseTransactionLine(currentLine, lastDate)
-          if (transaction) {
-            // Check if this transaction has a pending fee to merge
-            const mergedTransaction = this.mergeTransactionFee(transaction, pendingFee)
-            if (mergedTransaction) {
-              transactions.push(mergedTransaction)
-            transactionCount++
-            console.log(`[NAB-PARSER] ✅ Extracted transaction ${transactionCount}:`, {
-                date: mergedTransaction.date,
-                description: mergedTransaction.description.substring(0, 50),
-                debit: mergedTransaction.debit,
-                credit: mergedTransaction.credit,
-                balance: mergedTransaction.balance,
-                hasFee: !!pendingFee
-              })
-              pendingFee = null // Clear pending fee after merge
-        } else {
-              transactions.push(transaction)
-              transactionCount++
+          if (!isBankAdvisoryNotice(currentLine)) {
+            const transaction = this.parseTransactionLine(currentLine, lastDate, previousBalance)
+            if (transaction) {
+              if (transaction.balance != null) {
+                previousBalance = transaction.balance
+              }
+              // Check if this transaction has a pending fee to merge
+              const mergedTransaction = this.mergeTransactionFee(transaction, pendingFee)
+              if (mergedTransaction) {
+                transactions.push(mergedTransaction)
+                transactionCount++
+                console.log(`[NAB-PARSER] ✅ Extracted transaction ${transactionCount}:`, {
+                  date: mergedTransaction.date,
+                  description: mergedTransaction.description.substring(0, 50),
+                  debit: mergedTransaction.debit,
+                  credit: mergedTransaction.credit,
+                  balance: mergedTransaction.balance,
+                  hasFee: !!pendingFee,
+                })
+                pendingFee = null // Clear pending fee after merge
+              } else {
+                transactions.push(transaction)
+                transactionCount++
+              }
             }
+          } else {
+            console.log(
+              '[NAB-PARSER] Skipping advisory transaction line:',
+              currentLine.substring(0, 80)
+            )
           }
         }
 
         // Start new transaction
         lastDate = this.formatDate(dateMatch[1])
         currentLine = line
+
+        if (isBankAdvisoryNotice(currentLine)) {
+          currentLine = ''
+          continue
+        }
         
         // Check if this line is a transaction fee
         const feeInfo = this.detectTransactionFee(line, lastDate)
@@ -239,8 +267,13 @@ export class NABParser implements PDFParser {
           currentLine = '' // Don't process fee as main transaction
         }
       } else if (lastDate && currentLine) {
-        // Continuation of description (multi-line)
-        // Only append if it doesn't look like a new transaction or amount
+        // Continuation of description (multi-line) — never glue PDF footers onto merchant
+        if (
+          isBankStatementBoilerplateLine(line) ||
+          isBankAdvisoryNotice(line)
+        ) {
+          continue
+        }
         if (!this.looksLikeNewTransaction(line) && !this.looksLikeAmountLine(line)) {
           currentLine += ' ' + line
         }
@@ -256,9 +289,12 @@ export class NABParser implements PDFParser {
     }
 
     // Process last transaction
-    if (currentLine && lastDate) {
-      const transaction = this.parseTransactionLine(currentLine, lastDate)
+    if (currentLine && lastDate && !isBankAdvisoryNotice(currentLine)) {
+      const transaction = this.parseTransactionLine(currentLine, lastDate, previousBalance)
           if (transaction) {
+        if (transaction.balance != null) {
+          previousBalance = transaction.balance
+        }
         const mergedTransaction = this.mergeTransactionFee(transaction, pendingFee)
         if (mergedTransaction) {
           transactions.push(mergedTransaction)
@@ -317,21 +353,16 @@ export class NABParser implements PDFParser {
     return amountOnlyPattern.test(line.trim())
   }
 
-  /**
-   * Parse a single transaction line
-   * 
-   * NAB 실제 형식:
-   * - "02 Oct 25 EFTPOS 02/10 13:15RACQ\ $252.00 $3,041.25 CR"
-   *   → Debits: 비어있음, Credits: $252.00, Balance: $3,041.25 CR
-   * - "07 Oct 25 V8656 06/10 INTL TXN FEE-MC 24011345279 $1.06 $7,150.74 CR"
-   *   → Debits: $1.06, Credits: 비어있음, Balance: $7,150.74 CR
-   * 
-   * 즉, 2개의 금액만 있음: (Debits 또는 Credits 중 하나), Balance
-   */
   private parseTransactionLine(
     line: string,
-    date: string
+    date: string,
+    previousBalance: number | null = null
   ): BankTransaction | null {
+    if (isBankAdvisoryNotice(line)) {
+      console.log('[NAB-PARSER] Skipping advisory line in parseTransactionLine:', line.substring(0, 80))
+      return null
+    }
+
     console.log('[NAB-PARSER] Parsing transaction line:', {
       date,
       line: line.substring(0, 80)
@@ -359,10 +390,9 @@ export class NABParser implements PDFParser {
       }
     }
 
-    // Last amount is always the balance
-    const balance = amounts.length > 0 
-      ? this.parseAmount(amounts[amounts.length - 1])
-      : null
+    // Last amount is always the balance (may be refined in resolveDebitCredit)
+    const parsedBalance =
+      amounts.length > 0 ? this.parseAmount(amounts[amounts.length - 1]) : null
 
     // Extract description (everything between date and first amount)
     const datePattern = /^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4}/i
@@ -378,38 +408,10 @@ export class NABParser implements PDFParser {
     // If there are 2 amounts: First is Debit or Credit, Second is Balance
     // If there's 1 amount: It's the Balance (transaction amount must be inferred)
     
-    let debit: number | null = null
-    let credit: number | null = null
-
-    if (amounts.length >= 2) {
-      // Format: (Debits 또는 Credits), Balance
-      // First amount is the transaction amount (Debit or Credit)
-      // Second amount is the balance
-      const transactionAmount = this.parseAmount(amounts[0])
-      const absAmount = Math.abs(transactionAmount)
-      
-      // CRITICAL: Determine if it's Debit or Credit based on:
-      // 1. Description keywords (more reliable for NAB)
-      // 2. Balance suffix (CR = positive balance, doesn't directly indicate transaction type)
-      const isDebit = this.isDebitTransaction(description, amounts[0])
-      
-      if (isDebit) {
-        debit = absAmount
-        credit = null
-        console.log('[NAB-PARSER] Classified as DEBIT:', absAmount)
-      } else {
-        credit = absAmount
-        debit = null
-        console.log('[NAB-PARSER] Classified as CREDIT:', absAmount)
-      }
-    } else if (amounts.length === 1) {
-      // Only balance found - transaction amount must be inferred from description
-      // This is rare but possible
-      const isDebit = this.isDebitTransaction(description, '')
-      // We can't determine the amount, so we'll need to calculate from balance change
-      // For now, mark as unknown and let the system handle it
-      console.warn('[NAB-PARSER] Only balance found, transaction amount unknown')
-    }
+    const resolved = this.resolveDebitCredit(amounts, description, previousBalance)
+    const debit = resolved.debit
+    const credit = resolved.credit
+    const balance = resolved.balance ?? parsedBalance
 
     const cleanedDescription = this.cleanDescription(description)
 
@@ -493,6 +495,71 @@ export class NABParser implements PDFParser {
   }
 
   /**
+   * Resolve debit/credit from NAB column amounts and running balance.
+   * Prefers balance delta over keyword heuristics (corporate statements).
+   */
+  private resolveDebitCredit(
+    amounts: string[],
+    description: string,
+    previousBalance: number | null
+  ): { debit: number | null; credit: number | null; balance: number | null } {
+    const parsed = amounts.map((a) => this.parseAmount(a))
+    const balance = parsed.length > 0 ? parsed[parsed.length - 1] : null
+
+    // Three columns: Debits | Credits | Balance
+    if (parsed.length >= 3) {
+      const debitCol = parsed[parsed.length - 3]
+      const creditCol = parsed[parsed.length - 2]
+      const bal = parsed[parsed.length - 1]
+      if (debitCol > 0.001) {
+        console.log('[NAB-PARSER] 3-col → DEBIT:', debitCol)
+        return { debit: debitCol, credit: null, balance: bal }
+      }
+      if (creditCol > 0.001) {
+        console.log('[NAB-PARSER] 3-col → CREDIT:', creditCol)
+        return { debit: null, credit: creditCol, balance: bal }
+      }
+      return { debit: null, credit: null, balance: bal }
+    }
+
+    // Two columns: transaction amount + balance — use balance delta when possible
+    if (parsed.length === 2 && balance != null && previousBalance != null) {
+      const txAmount = Math.abs(parsed[0])
+      const delta = balance - previousBalance
+      if (Math.abs(delta) > 0.001) {
+        if (delta > 0) {
+          const creditAmt = Math.abs(txAmount) > 0.001 ? txAmount : delta
+          console.log('[NAB-PARSER] Balance delta → CREDIT:', creditAmt, `(Δ=${delta.toFixed(2)})`)
+          return { debit: null, credit: creditAmt, balance }
+        }
+        const debitAmt = Math.abs(txAmount) > 0.001 ? txAmount : Math.abs(delta)
+        console.log('[NAB-PARSER] Balance delta → DEBIT:', debitAmt, `(Δ=${delta.toFixed(2)})`)
+        return { debit: debitAmt, credit: null, balance }
+      }
+    }
+
+    // Two columns without prior balance — skip zero placeholder in debit column
+    if (parsed.length >= 2) {
+      let txAmount = Math.abs(parsed[0])
+      if (txAmount < 0.001 && parsed.length >= 3) {
+        txAmount = Math.abs(parsed[1])
+      }
+      if (txAmount > 0.001) {
+        const isDebit = this.isDebitTransaction(description, amounts[0])
+        if (isDebit) {
+          console.log('[NAB-PARSER] Keyword fallback → DEBIT:', txAmount)
+          return { debit: txAmount, credit: null, balance }
+        }
+        console.log('[NAB-PARSER] Keyword fallback → CREDIT:', txAmount)
+        return { debit: null, credit: txAmount, balance }
+      }
+    }
+
+    console.warn('[NAB-PARSER] Could not resolve debit/credit for line')
+    return { debit: null, credit: null, balance }
+  }
+
+  /**
    * Determine if transaction is a debit (expense/money out) based on description and amount
    * CRITICAL: This function must correctly identify money flow direction
    * 
@@ -549,7 +616,7 @@ export class NABParser implements PDFParser {
       // 이들은 NON_TAXABLE_TRANSFER로 처리되어야 함
       // 'MRS HEE KIM', 'KIM J', // 제거: 개인간 거래는 NON_TAXABLE_TRANSFER로 처리
       // 'REFUND FEES', 'REFUND', // 제거: 환불금은 NON_TAXABLE_TRANSFER로 처리
-      'INTEREST', 'CREDIT', 'INCOME', 'RECEIVE', 'RECEIPT',
+      'INT CREDIT', 'INTEREST CREDIT', 'CREDIT INTEREST', 'BANK INTEREST', 'INCOME', 'RECEIVE', 'RECEIPT',
       'SALARY', 'PAYMENT RECEIVED', 'DIRECT CREDIT',
       'SERVICE', 'CLEANING', // Customer payments
     ]
@@ -635,10 +702,9 @@ export class NABParser implements PDFParser {
       }
     }
 
-    // Default: if description is unclear, check if it looks like a payment/expense
-    // Most transactions in a mixed-use account are expenses unless clearly marked as deposits
-    console.log('[NAB-PARSER] No clear indicator, defaulting to DEBIT')
-    return true
+    // Ambiguous without balance context — prefer CREDIT (deposits misclassified as debits were common)
+    console.log('[NAB-PARSER] No clear indicator, defaulting to CREDIT (deposit)')
+    return false
   }
 
   /**
@@ -673,6 +739,14 @@ export class NABParser implements PDFParser {
           const yearNum = parseInt(year, 10)
           // Assume years 00-50 are 2000-2050, 51-99 are 1951-1999
           year = yearNum <= 50 ? `20${year}` : `19${year}`
+        }
+
+        // OCR dropped a digit: "267" from "2026" → 2026 (not 2067).
+        // Use tens digit: 267 → 2026, same as toIsoDateString.
+        if (year.length === 3 && /^2\d{2}$/.test(year)) {
+          const fixed = `202${year.charAt(1)}`
+          console.warn(`[NAB-PARSER] 3-digit year OCR fix: ${year} → ${fixed}`)
+          year = fixed
         }
 
         // Fix OCR errors: 2525, 2571, etc. → 2025
@@ -729,7 +803,22 @@ export class NABParser implements PDFParser {
    * "ONLINE S0990592579 LINKED ACC TRNS KIM J" → "LINKED ACC TRNS"
    */
   private cleanDescription(description: string): string {
-    let cleaned = description.trim()
+    const raw = stripBankStatementBoilerplate(description.trim())
+    if (!raw) return ''
+    const platformLabel = extractPlatformDescriptionLabel(raw)
+    if (platformLabel) {
+      return platformLabel
+    }
+    const shippingLabel = extractShippingDescriptionLabel(raw)
+    if (shippingLabel) {
+      return shippingLabel
+    }
+    const fuelLabel = extractFuelDescriptionLabel(raw)
+    if (fuelLabel) {
+      return fuelLabel
+    }
+
+    let cleaned = raw
     
     // Remove common NAB prefixes and patterns
     const prefixesToRemove = [
@@ -766,8 +855,8 @@ export class NABParser implements PDFParser {
       // Skip if it's all numbers or very short
       if (/^\d+$/.test(word) || word.length < 2) continue
       
-      // Take capitalized words or mixed case (likely business names)
-      if (/^[A-Z]/.test(word) || /^[A-Z][a-z]+/.test(word)) {
+      // Take merchant tokens — include digit-led brands (7-ELEVEN, 7-Eleven)
+      if (/^[A-Z0-9]/.test(word) || /^[A-Z][a-z]+/.test(word)) {
         merchantWords.push(word)
         // Usually merchant names are 1-5 words
         if (merchantWords.length >= 5) break
@@ -916,6 +1005,9 @@ export class NABParser implements PDFParser {
     // Transaction Fee 키워드 패턴
     const feeKeywords = [
       'INTL TXN FEE',
+      'INTNL TRAN FEE',
+      'INTNL TXN',
+      'NAB INTNL',
       'INTERNATIONAL TRANSACTION FEE',
       'FOREIGN CURRENCY FEE',
       'CURRENCY CONVERSION FEE',

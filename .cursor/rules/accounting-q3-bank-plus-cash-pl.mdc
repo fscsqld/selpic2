@@ -1,0 +1,27 @@
+---
+description: Q3 P&L is company bank + director cash — never fold those bank rows into Q4
+globs: apps/accounting-sandbox/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Q3 bank + cash P&L (do not “fix” as Q4 leakage)
+
+Selpic Q3 Jan–Mar 2026 **is supposed to show both**:
+
+- Company bank statement lines (5 txs, **Bank $304.38**)
+- Add Cash Expense (8 txs, **cash $7,265.81**)
+
+Real-Time P&L **$7,570.19** / net **−$7,570.19** and `Bank operating −$304.38 − cash $7,265.81` (no sales) are **correct**. A later “these amounts look wrong” request is not a date bug.
+
+## Do not
+
+- Month+3 / US-swap a **real Q3 bank file** into Apr–Jun because Q4 dominates the merged ledger
+- Treat Q4 “55 in P&L period” vs “This statement (50)” as a reason to **leave** those 5 in Q4 — that 5 is the stolen Q3 statement
+- Drop Stamp Zone cash duplicates (`cash_*` ×2) while doing date work
+
+## Do
+
+- Keep Q3 History at **13** (8 cash + 5 bank); Q4 parsed statement at **50**
+- Date-heal in memory (`healCompanyLedgerDates` / US phantom swap on display)
+- **Never persist** those folds into IndexedDB — that is why Grok edits looked like they “did not apply”
+---

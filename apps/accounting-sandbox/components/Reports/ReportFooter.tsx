@@ -2,21 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
-import { COMPANY_LEGAL } from '@/lib/companyLegal'
 
 interface BusinessProfile {
   companyName: string
-  domain?: string
   abn?: string
   acn?: string
 }
 
 export function ReportFooter() {
   const [companyInfo, setCompanyInfo] = useState<BusinessProfile>({
-    companyName: COMPANY_LEGAL.companyName,
-    domain: COMPANY_LEGAL.domain,
-    abn: COMPANY_LEGAL.abn,
-    acn: COMPANY_LEGAL.acn,
+    companyName: 'SELPIC PTY LTD',
+    abn: '79 694 194 011',
+    acn: '694 194 011',
   })
 
   useEffect(() => {
@@ -25,14 +22,14 @@ export function ReportFooter() {
         const profile = await indexedDBStorage.getBusinessProfile()
         if (profile) {
           setCompanyInfo({
-            companyName: profile.companyName || COMPANY_LEGAL.companyName,
-            domain: COMPANY_LEGAL.domain,
-            abn: profile.abn || COMPANY_LEGAL.abn,
-            acn: profile.acn || COMPANY_LEGAL.acn,
+            companyName: profile.companyName || 'SELPIC PTY LTD',
+            abn: profile.abn || '79 694 194 011',
+            acn: profile.acn || '694 194 011',
           })
         }
       } catch (err) {
         console.error('Failed to load company info:', err)
+        // Use defaults if loading fails
       }
     }
     loadCompanyInfo()
@@ -43,9 +40,6 @@ export function ReportFooter() {
       <div className="text-center text-sm text-gray-600">
         <p className="font-semibold text-gray-800">{companyInfo.companyName}</p>
         <div className="mt-1 space-y-0.5">
-          {companyInfo.domain && (
-            <p>{companyInfo.domain}</p>
-          )}
           {companyInfo.abn && (
             <p>ABN: {companyInfo.abn}</p>
           )}

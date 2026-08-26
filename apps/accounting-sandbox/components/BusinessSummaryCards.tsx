@@ -13,6 +13,12 @@ interface BusinessSummaryCardsProps {
   directorsLoanBalance: number
   personalSpendingNonDeductible: number
   openingDirectorLoanBalance?: number
+  priorPeriodDirectorAdvances?: number
+  directorLoanReimbursementTotal?: number
+  directorLoanInjectionTotal?: number
+  autoMatchPriorAdvances?: boolean
+  onPriorAdvancesChange?: (value: number) => void
+  onAutoMatchPriorAdvancesChange?: (value: boolean) => void
   onOpeningBalanceChange?: (value: number) => void
   onViewDirectorsLoanDetails?: (show: boolean) => void
   showDirectorsLoanFilter?: boolean
@@ -27,7 +33,13 @@ export function BusinessSummaryCards({
   gstClaimable = 0,
   directorsLoanBalance = 0,
   personalSpendingNonDeductible = 0,
-  openingDirectorLoanBalance = 1000,
+  openingDirectorLoanBalance = 0,
+  priorPeriodDirectorAdvances = 0,
+  directorLoanReimbursementTotal = 0,
+  directorLoanInjectionTotal = 0,
+  autoMatchPriorAdvances = true,
+  onPriorAdvancesChange,
+  onAutoMatchPriorAdvancesChange,
   onOpeningBalanceChange,
   onViewDirectorsLoanDetails,
   showDirectorsLoanFilter = false,
@@ -79,11 +91,29 @@ export function BusinessSummaryCards({
   const safePersonalSpending = Number.isFinite(personalSpendingNonDeductible) ? personalSpendingNonDeductible : 0
 
   const isIndividual = accountType === 'individual'
+  // Tax est. = cash − 1A / − 1B (GST-FREE stays at face via claimable 1B only)
+  const incomeExGst = Math.round((safeTotalIncome - safeGstPayable) * 100) / 100
+  const expensesExGst = Math.round((safeTotalExpenses - safeGstClaimable) * 100) / 100
+  const netExGst = Math.round((incomeExGst - expensesExGst) * 100) / 100
+  const showGstDual =
+    !isIndividual &&
+    (Math.abs(incomeExGst - safeTotalIncome) > 0.005 ||
+      Math.abs(expensesExGst - safeTotalExpenses) > 0.005 ||
+      Math.abs(netExGst - safeNetProfit) > 0.005)
+
   const summaryTitle = isIndividual ? 'Individual Summary' : 'Business Summary'
   const incomeLabel = isIndividual ? 'Total Income' : 'Total Business Income'
   const expensesLabel = isIndividual ? 'Total Expenses' : 'Total Tax Deductions'
-  const incomeSubLabel = isIndividual ? 'All Income' : 'Total Business'
-  const expensesSubLabel = isIndividual ? 'All Expenses' : 'Total Business'
+  const incomeSubLabel = isIndividual
+    ? 'All Income'
+    : showGstDual
+      ? 'Cash (GST incl.)'
+      : 'Total Business'
+  const expensesSubLabel = isIndividual
+    ? 'All Expenses'
+    : showGstDual
+      ? 'Cash (GST incl.) · FREE at face'
+      : 'Total Business'
 
   return (
     <div className="mb-8">
@@ -100,6 +130,14 @@ export function BusinessSummaryCards({
               <p className="text-xs text-gray-500 mt-1">
                 {incomeSubLabel}
               </p>
+              {showGstDual && (
+                <p className="text-xs text-gray-600 mt-1.5">
+                  Ex GST (est.):{' '}
+                  <span className="font-semibold text-green-800">
+                    {formatCurrency(incomeExGst)}
+                  </span>
+                </p>
+              )}
             </div>
             <TrendingUp className="w-8 h-8 text-green-600" />
           </div>
@@ -116,6 +154,14 @@ export function BusinessSummaryCards({
               <p className="text-xs text-gray-500 mt-1">
                 {expensesSubLabel}
               </p>
+              {showGstDual && (
+                <p className="text-xs text-gray-600 mt-1.5">
+                  Ex GST (est.):{' '}
+                  <span className="font-semibold text-blue-800">
+                    {formatCurrency(expensesExGst)}
+                  </span>
+                </p>
+              )}
             </div>
             <Receipt className="w-8 h-8 text-blue-600" />
           </div>
@@ -130,8 +176,20 @@ export function BusinessSummaryCards({
                 {formatCurrency(safeNetProfit)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Income - Expenses
+                {showGstDual ? 'Cash · Income − Expenses' : 'Income - Expenses'}
               </p>
+              {showGstDual && (
+                <p className="text-xs text-gray-600 mt-1.5">
+                  Tax (ex GST est.):{' '}
+                  <span
+                    className={`font-semibold ${
+                      netExGst >= 0 ? 'text-green-800' : 'text-red-800'
+                    }`}
+                  >
+                    {formatCurrency(netExGst)}
+                  </span>
+                </p>
+              )}
             </div>
             {safeNetProfit >= 0 ? (
               <TrendingUp className="w-8 h-8 text-green-600" />
@@ -151,7 +209,7 @@ export function BusinessSummaryCards({
                   {formatCurrency(safeGstPayable)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  10% of Total Business Income
+                  Taxable sales ÷ 11
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-yellow-600" />
@@ -169,7 +227,7 @@ export function BusinessSummaryCards({
                   {formatCurrency(safeGstClaimable)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  10% of Total Taxable Business Expenses
+                  Claimable purchases ÷ 11
                 </p>
               </div>
               <Receipt className="w-8 h-8 text-orange-600" />
@@ -235,9 +293,23 @@ export function BusinessSummaryCards({
                     </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Opening: {formatCurrency(openingDirectorLoanBalance)}
-                  </p>
+                  <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+                    <p>Opening (cash loan): {formatCurrency(openingDirectorLoanBalance)}</p>
+                    {accountType !== 'individual' && (
+                      <>
+                        <p>
+                          Prior advances (lodged): {formatCurrency(priorPeriodDirectorAdvances)}
+                          {autoMatchPriorAdvances ? ' · auto-matched to reimbursements' : ''}
+                        </p>
+                        {directorLoanInjectionTotal > 0 && (
+                          <p>Loan injections: +{formatCurrency(directorLoanInjectionTotal)}</p>
+                        )}
+                        {directorLoanReimbursementTotal > 0 && (
+                          <p>Reimbursements paid: −{formatCurrency(directorLoanReimbursementTotal)}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
                 
                 <p className="text-xs text-blue-600 mt-1 font-medium">

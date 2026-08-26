@@ -9,7 +9,7 @@ import { RealTimePLView } from '@/components/RealTimePLView'
 import { TaxProvision } from '@/components/TaxProvision'
 import { AssetManagement } from '@/components/AssetManagement'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
-import { ClassifiedTransaction } from '@/lib/pdf-parser/types'
+import type { ClassifiedTransaction } from '@/lib/dashboard/types'
 import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
 import { GSTCalculator } from '@/lib/gst-settlement/gst-calculator'
 

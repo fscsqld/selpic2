@@ -1,22 +1,24 @@
 /**
- * GST 요약 대시보드 컴포넌트
+ * GST Summary — same date window as P&L banner / ATO Lodgment.
+ * FY Net = period 1A−1B estimate (not one annual ATO remittance).
  */
 
 'use client'
 
 import { useMemo, useState } from 'react'
 import { Receipt, TrendingUp, TrendingDown, Download, Calendar } from 'lucide-react'
-import { gstCalculator } from '@/lib/gst-settlement'
+import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { generateBASReport, exportBASToExcel } from '@/lib/payg-withholding/bas-reporter'
-import { 
-  getCurrentAustralianQuarter, 
-  getCurrentMonthDates,
-  getAustralianQuarter,
-  getAustralianQuarterDates,
-  getAustralianFinancialYear
-} from '@/lib/utils/australian-financial-year'
+import { resolveReportingBasQuarter } from '@/lib/utils/reporting-period-resolve'
+import { parseTransactionDate } from '@/lib/utils/parse-transaction-date'
+import { breakdownGstByBasQuarter } from '@/lib/gst/gst-period-breakdown'
+import {
+  daysBetweenInclusive,
+  gstSummaryCadenceLabel,
+} from '@/lib/gst/gst-summary-cadence'
+
 
 interface GSTSummaryProps {
   transactions: Array<{
@@ -40,156 +42,137 @@ interface GSTSummaryProps {
       withholdingAmount?: number
     }
   }>
-  // Use calculated values from parent to ensure consistency
-  gstPayable?: number
-  gstClaimable?: number
+  viewPeriodId?: string | null
+  periodStartDate?: string
+  periodEndDate?: string
+  periodLabel?: string
+  accountType?: 'individual' | 'company' | 'sole_trader'
 }
 
-export function GSTSummary({ transactions, gstPayable, gstClaimable }: GSTSummaryProps) {
+export function GSTSummary({
+  transactions,
+  viewPeriodId = null,
+  periodStartDate,
+  periodEndDate,
+  periodLabel,
+  accountType = 'company',
+}: GSTSummaryProps) {
   const [periodType, setPeriodType] = useState<'monthly' | 'quarterly'>('quarterly')
 
-  // Get date range based on Australian Financial Year standards
   const dateRange = useMemo(() => {
-    if (periodType === 'quarterly') {
-      // Use current Australian quarter dates (standard period)
-      const currentQuarter = getCurrentAustralianQuarter()
+    if (periodStartDate && periodEndDate && periodType === 'quarterly') {
       return {
-        startDate: currentQuarter.startDateStr,
-        endDate: currentQuarter.endDateStr,
-      }
-    } else {
-      // Use current month dates (standard period)
-      const currentMonth = getCurrentMonthDates()
-      return {
-        startDate: currentMonth.startDateStr,
-        endDate: currentMonth.endDateStr,
+        startDate: periodStartDate,
+        endDate: periodEndDate,
+        label: periodLabel || `${periodStartDate} – ${periodEndDate}`,
       }
     }
-  }, [periodType])
 
-  // Filter transactions by the standard period date range
-  const filteredTransactions = useMemo(() => {
-    if (!dateRange) return transactions
-    
-    const startDate = new Date(dateRange.startDate)
-    const endDate = new Date(dateRange.endDate)
-    
-    return transactions.filter(tx => {
-      const txDate = new Date(tx.date)
-      return txDate >= startDate && txDate <= endDate
+    const bas = resolveReportingBasQuarter({
+      transactions,
+      viewPeriodId,
     })
-  }, [transactions, dateRange])
 
-  // Use provided values or calculate from transactions (fallback)
-  const calculatedGST = useMemo(() => {
-    // If values are provided from parent, use them (single source of truth)
-    // But we need to recalculate based on filtered transactions for accurate counts
-    if (gstPayable !== undefined && gstClaimable !== undefined) {
-      // Recalculate transaction counts from filtered transactions
+    if (periodType === 'quarterly') {
       return {
-        gstCollected: {
-          total: gstPayable,
-          transactionCount: filteredTransactions.filter(tx => {
-            const isBusiness = tx.department !== 'personal' && 
-                              tx.department !== 'unknown' &&
-                              (tx.department === 'cleaning' || 
-                               tx.department === 'sticker' || 
-                               !tx.department)
-            const isRefund = tx.category === 'INCOME_REFUND_REIMBURSEMENT' ||
-                            (tx.description?.toUpperCase().includes('REFUND') && tx.credit)
-            return isBusiness &&
-                   tx.credit && 
-                   tx.category?.startsWith('INCOME_') &&
-                   tx.category !== 'TRANSFER_INTERNAL' &&
-                   tx.category !== 'NON_TAXABLE_CASH_DEPOSIT' &&
-                   tx.category !== 'INCOME_CASH_DEPOSIT_REVIEW' &&
-                   !isRefund
-          }).length
-        },
-        gstPaid: {
-          total: gstClaimable,
-          transactionCount: filteredTransactions.filter(tx => {
-            const isBusiness = tx.department !== 'personal' && 
-                              tx.department !== 'unknown' &&
-                              (tx.department === 'cleaning' || 
-                               tx.department === 'sticker' || 
-                               !tx.department)
-            // Count business expense transactions (debits) that contribute to GST
-            // Exclude Director Loan Repayment
-            const isExpense = isBusiness &&
-                             tx.debit &&
-                             tx.category?.startsWith('EXPENSE_') &&
-                             tx.category !== 'TRANSFER_INTERNAL' &&
-                             tx.category !== 'LIABILITY_DIRECTORS_LOAN' &&
-                             tx.category !== 'LIABILITY_DIRECTORS_LOAN_WITHDRAWAL' &&
-                             tx.category !== 'EXPENSE_DIRECTOR_LOAN_REPAYMENT'
-            
-            // Count REFUNDS (credits) that reduce GST Paid
-            const isRefund = isBusiness &&
-                            tx.credit &&
-                            (tx.category === 'INCOME_REFUND_REIMBURSEMENT' ||
-                             tx.description?.toUpperCase().includes('REFUND') ||
-                             tx.description?.toUpperCase().includes('OFFICEWORKS'))
-            
-            return isExpense || isRefund
-          }).length
-        },
-        gstNet: gstPayable - gstClaimable,
-        gstRefund: gstClaimable > gstPayable,
-        period: dateRange ? {
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
-          type: periodType,
-          label: periodType === 'quarterly' 
-            ? (() => {
-                // Use the current quarter directly from getCurrentAustralianQuarter
-                const currentQuarter = getCurrentAustralianQuarter()
-                return `Q${currentQuarter.quarter} ${currentQuarter.financialYear}`
-              })()
-            : (() => {
-                const startDate = new Date(dateRange.startDate)
-                return startDate.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
-              })()
-        } : { startDate: '', endDate: '', type: 'quarterly' as const, label: '' }
+        startDate: bas.startDateStr,
+        endDate: bas.endDateStr,
+        label: `Q${bas.quarter} ${bas.financialYear}`,
       }
     }
 
-    // Fallback: Use gstCalculator if values not provided
-    if (!dateRange || filteredTransactions.length === 0) {
-      return null
+    if (viewPeriodId && /^\d{4}-\d{2}$/.test(viewPeriodId)) {
+      const [y, m] = viewPeriodId.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      return {
+        startDate: `${viewPeriodId}-01`,
+        endDate: `${viewPeriodId}-${String(lastDay).padStart(2, '0')}`,
+        label: viewPeriodId,
+      }
     }
 
-    return gstCalculator.calculateGSTNet(
-      filteredTransactions,
-      dateRange.startDate,
-      dateRange.endDate,
-      periodType
+    return {
+      startDate: bas.startDateStr,
+      endDate: bas.endDateStr,
+      label: `Q${bas.quarter} ${bas.financialYear}`,
+    }
+  }, [
+    transactions,
+    viewPeriodId,
+    periodType,
+    periodStartDate,
+    periodEndDate,
+    periodLabel,
+  ])
+
+  const filteredTransactions = useMemo(() => {
+    if (
+      periodStartDate &&
+      periodEndDate &&
+      periodType === 'quarterly' &&
+      dateRange.startDate === periodStartDate &&
+      dateRange.endDate === periodEndDate
+    ) {
+      return transactions
+    }
+
+    return transactions.filter((tx) => {
+      const txDate = parseTransactionDate(tx.date)
+      if (!txDate) return false
+      const start = parseTransactionDate(dateRange.startDate)
+      const end = parseTransactionDate(dateRange.endDate)
+      if (!start || !end) return true
+      const t = txDate.getTime()
+      return t >= start.getTime() && t <= end.getTime()
+    })
+  }, [transactions, dateRange, periodStartDate, periodEndDate, periodType])
+
+  const metrics = useMemo(() => {
+    if (filteredTransactions.length === 0) return null
+    return calculateBusinessMetrics(filteredTransactions, 0, accountType)
+  }, [filteredTransactions, accountType])
+
+  const quarterSlices = useMemo(() => {
+    const days = daysBetweenInclusive(dateRange.startDate, dateRange.endDate)
+    if (days <= 100) return []
+    return breakdownGstByBasQuarter(
+      filteredTransactions as any,
+      accountType === 'sole_trader' ? 'sole_trader' : accountType,
+      accountType !== 'individual'
     )
-  }, [filteredTransactions, dateRange, periodType, gstPayable, gstClaimable])
+  }, [filteredTransactions, dateRange, accountType])
 
-  const gstSummary = calculatedGST
+  const cadence = gstSummaryCadenceLabel(
+    dateRange.startDate,
+    dateRange.endDate,
+    periodType,
+    periodLabel
+  )
 
-  // Handle BAS export (GST 포함)
   const handleExportBAS = () => {
-    if (!dateRange || !gstSummary) return
+    if (!metrics) return
 
     const report = generateBASReport(
       filteredTransactions,
       dateRange.startDate,
       dateRange.endDate,
-      periodType
+      periodType,
+      accountType
     )
 
-    // Payroll transactions for PAYG section (filtered by period)
     const payrollTransactions = filteredTransactions
-      .filter(tx => tx.isPayrollTransaction && tx.requiresPAYG && tx.debit)
-      .map(tx => ({
+      .filter((tx) => tx.isPayrollTransaction && tx.requiresPAYG && tx.debit)
+      .map((tx) => ({
         date: tx.date,
         description: tx.description,
         grossAmount: Math.abs(tx.debit || 0),
         withholdingTax: 0,
         netAmount: Math.abs(tx.debit || 0),
-        recipientType: (tx.payrollType || 'employee') as 'employee' | 'director' | 'contractor' | 'partner',
+        recipientType: (tx.payrollType || 'employee') as
+          | 'employee'
+          | 'director'
+          | 'contractor'
+          | 'partner',
         hasABN: !tx.noABNWarning?.shouldWarn,
         category: tx.category || 'UNCATEGORIZED',
       }))
@@ -197,7 +180,7 @@ export function GSTSummary({ transactions, gstPayable, gstClaimable }: GSTSummar
     exportBASToExcel(report, payrollTransactions, 'bas-report-gst')
   }
 
-  if (!gstSummary) {
+  if (!metrics || filteredTransactions.length === 0) {
     return (
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
@@ -205,91 +188,110 @@ export function GSTSummary({ transactions, gstPayable, gstClaimable }: GSTSummar
           <h2 className="text-2xl font-semibold">GST Summary</h2>
         </div>
         <div className="text-center py-8 text-gray-500">
-          <p>No transactions found.</p>
-          <p className="text-sm mt-2">Upload bank statements to see GST summary.</p>
+          <p>No transactions found for this GST period.</p>
+          <p className="text-sm mt-2">
+            Select a P&amp;L period that matches your bank statement dates, then refresh.
+          </p>
         </div>
       </div>
     )
   }
 
-  const { gstCollected, gstPaid, gstNet, gstRefund } = gstSummary
+  const gstCollected = metrics.gstPayable
+  const gstPaid = metrics.gstClaimable
+  const gstNet = Math.round((gstCollected - gstPaid) * 100) / 100
+  const gstRefund = gstNet < 0
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Receipt className="w-6 h-6 text-green-600" />
             <h2 className="text-2xl font-semibold">GST Summary</h2>
           </div>
-          
-          {/* Period Toggle */}
+
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-500" />
-            <button
-              onClick={() => setPeriodType(periodType === 'quarterly' ? 'monthly' : 'quarterly')}
-              className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
-            >
-              {periodType === 'quarterly' ? 'Quarterly' : 'Monthly'}
-            </button>
+            <span className="px-3 py-1 text-sm border rounded bg-gray-50 text-gray-700">
+              {cadence}
+            </span>
+            {cadence !== 'FY / Period' && cadence !== 'Multi-quarter' && (
+              <button
+                type="button"
+                onClick={() =>
+                  setPeriodType(periodType === 'quarterly' ? 'monthly' : 'quarterly')
+                }
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+              >
+                Switch to {periodType === 'quarterly' ? 'Monthly' : 'Quarterly'}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Period Info */}
         <div className="text-sm text-gray-600 mb-4">
-          <p>Period: <span className="font-medium">{gstSummary.period.label}</span></p>
-          <p>{formatDateAustralian(gstSummary.period.startDate)} to {formatDateAustralian(gstSummary.period.endDate)}</p>
+          <p>
+            Period: <span className="font-medium">{dateRange.label}</span>
+          </p>
+          <p>
+            {formatDateAustralian(dateRange.startDate)} to{' '}
+            {formatDateAustralian(dateRange.endDate)}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Matches Business Summary and ATO Lodgment (income ÷ 11 / taxable expenses ÷ 11).
+          </p>
+          {(cadence === 'FY / Period' || cadence === 'Multi-quarter') && (
+            <p className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+              FY / multi-quarter Net is a <strong>period book estimate</strong> (Σ 1A − Σ 1B), not
+              one annual ATO remittance. ATO bank refunds/payments (e.g. ~$18 Q3 refund) are
+              settlement cash — outside this Net. Use BAS quarter for lodgment amounts.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* GST Collected */}
         <div className="card">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold">GST Collected</h3>
+            <h3 className="text-lg font-semibold">GST Collected (1A)</h3>
           </div>
           <p className="text-3xl font-bold text-green-600">
-            {formatCurrency(gstCollected.total)}
+            {formatCurrency(gstCollected)}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            {gstCollected.transactionCount} transactions
-          </p>
+          <p className="text-sm text-gray-500 mt-1">Taxable sales ÷ 11</p>
         </div>
 
-        {/* GST Paid */}
         <div className="card">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown className="w-5 h-5 text-red-600" />
-            <h3 className="text-lg font-semibold">GST Paid</h3>
+            <h3 className="text-lg font-semibold">GST Paid (1B)</h3>
           </div>
-          <p className="text-3xl font-bold text-red-600">
-            {formatCurrency(gstPaid.total)}
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            {gstPaid.transactionCount} transactions
-          </p>
+          <p className="text-3xl font-bold text-red-600">{formatCurrency(gstPaid)}</p>
+          <p className="text-sm text-gray-500 mt-1">Claimable purchases ÷ 11</p>
         </div>
 
-        {/* GST Net */}
         <div className="card">
           <div className="flex items-center gap-2 mb-2">
-            <Receipt className={`w-5 h-5 ${gstRefund ? 'text-blue-600' : 'text-purple-600'}`} />
+            <Receipt
+              className={`w-5 h-5 ${gstRefund ? 'text-blue-600' : 'text-purple-600'}`}
+            />
             <h3 className="text-lg font-semibold">GST Net</h3>
           </div>
-          <p className={`text-3xl font-bold ${gstRefund ? 'text-blue-600' : 'text-purple-600'}`}>
+          <p
+            className={`text-3xl font-bold ${gstRefund ? 'text-blue-600' : 'text-purple-600'}`}
+          >
             {formatCurrency(Math.abs(gstNet))}
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            {gstRefund ? 'Refund' : 'Payable'}
+            {gstRefund ? 'Refund (7C)' : 'Payable (1C)'}
           </p>
         </div>
 
-        {/* Export Button */}
         <div className="card flex flex-col justify-center">
           <button
+            type="button"
             onClick={handleExportBAS}
             className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
           >
@@ -298,6 +300,52 @@ export function GSTSummary({ transactions, gstPayable, gstClaimable }: GSTSummar
           </button>
         </div>
       </div>
+
+      {quarterSlices.length > 1 && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">
+            BAS quarter breakdown (explains FY totals)
+          </h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Each row is that quarter&apos;s 1A / 1B estimate. Sum of 1B across quarters matches FY
+            1B — it is <em>not</em> “ATO refund cash + last quarter”.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="py-2 pr-4 font-medium">Quarter</th>
+                  <th className="py-2 pr-4 font-medium">1A</th>
+                  <th className="py-2 pr-4 font-medium">1B</th>
+                  <th className="py-2 font-medium">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quarterSlices.map((slice) => {
+                  const net =
+                    Math.round((slice.gstPayable - slice.gstClaimable) * 100) / 100
+                  return (
+                    <tr
+                      key={`${slice.financialYear}-Q${slice.quarter}`}
+                      className="border-b border-gray-100"
+                    >
+                      <td className="py-2 pr-4">{slice.label}</td>
+                      <td className="py-2 pr-4">{formatCurrency(slice.gstPayable)}</td>
+                      <td className="py-2 pr-4">{formatCurrency(slice.gstClaimable)}</td>
+                      <td className="py-2">
+                        {formatCurrency(Math.abs(net))}{' '}
+                        <span className="text-xs text-gray-500">
+                          {net >= 0 ? 'payable' : 'refund'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

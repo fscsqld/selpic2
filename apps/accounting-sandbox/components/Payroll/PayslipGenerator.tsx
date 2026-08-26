@@ -12,7 +12,6 @@ import { generatePayslipPDF, preparePayslipPDFData } from '@/src/features/payrol
 import { Payslip } from '@/src/features/payroll/types'
 import { Employee } from '@/src/shared/types/employee'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
-import { COMPANY_LEGAL } from '@/lib/companyLegal'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { formatCurrency } from '@/lib/utils/currency-format'
 
@@ -31,9 +30,9 @@ export function PayslipGenerator({ payslip, employee, onSave }: PayslipGenerator
     acn?: string
     address?: string
   }>({
-    name: COMPANY_LEGAL.companyName,
-    abn: COMPANY_LEGAL.abn,
-    acn: COMPANY_LEGAL.acn,
+    name: 'SELPIC PTY LTD',
+    abn: '79 694 194 011',
+    acn: '694 194 011',
   })
   const [payPeriod, setPayPeriod] = useState({
     start: new Date().toISOString().split('T')[0],
@@ -49,9 +48,9 @@ export function PayslipGenerator({ payslip, employee, onSave }: PayslipGenerator
         const profile = await indexedDBStorage.getBusinessProfile()
         if (profile) {
           setCompanyInfo({
-            name: profile.companyName || COMPANY_LEGAL.companyName,
-            abn: profile.abn || COMPANY_LEGAL.abn,
-            acn: profile.acn || COMPANY_LEGAL.acn,
+            name: profile.companyName || 'SELPIC PTY LTD',
+            abn: profile.abn || '79 694 194 011',
+            acn: profile.acn || '694 194 011',
           })
         }
       } catch (err) {

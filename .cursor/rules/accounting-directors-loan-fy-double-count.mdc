@@ -1,0 +1,52 @@
+---
+description: Director's Loan card — avoid double-counting prior advances + cash
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Director's Loan Balance (Biz Intel card)
+
+## Formula (SSOT)
+
+`calculateBusinessMetrics` closing liability (positive = company owes director):
+
+\[
+\text{Balance} = \text{Opening} + \text{Prior advances} + \text{Loan injections} + \text{Director-funded cash} - \text{Reimbursements} \pm \text{personal}
+\]
+
+## SELPIC FY display that looked wrong
+
+| Line | Amount | Role |
+|------|--------|------|
+| Director-paid cash this period | $8,781.89 | + liability (setup costs) |
+| Prior advances (auto-matched) | $8,781.89 | was + again (bug) |
+| Loan injections | +$1,500 | bank Director Loan credit |
+| Reimbursements paid | −$8,781.89 | bank repayment |
+| **Shown balance** | **$10,281.89** | = $1,500 + **extra** $8,781.89 |
+
+Economically after repay: should be **~$1,500** (remaining bank loan), not $10,281.89.
+
+**Cause:** auto-match set prior = reimbursement total while the **same P&L window** already included those advances as Cash Expense `fundedByDirector`.
+
+## Fix
+
+`resolvePriorPeriodDirectorAdvances` when auto-match is on:
+
+\[
+\text{prior} = \max(0,\ \text{reimbursements} - \text{director-funded cash in window})
+\]
+
+Manual prior amount still wins when set.
+
+Also: `calculateBusinessMetrics` must **add** `fundedByDirector` cash debits to DL (otherwise FY only moves on bank loan/reimburse lines). See `accounting-directors-loan-period-display.mdc`.
+
+## Card lines (still correct as labels)
+
+- **Director-paid company costs** — sum of funded cash in period (informational).
+- **Prior advances** — residual lodgment plug after the fix (often $0 on Full statement / FY).
+- **Loan injections / Reimbursements** — period movement detail.
+
+## Do not
+
+- Auto-match prior = full reimbursement total when funded cash already sits in the ledger window
+- Treat $10,281.89 as correct FY closing when cash and repayments are both in-period

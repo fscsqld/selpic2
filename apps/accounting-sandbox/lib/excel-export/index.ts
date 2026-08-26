@@ -41,7 +41,9 @@ export function hasGST(category: string): boolean {
   // Categories that typically have GST
   const gstCategories = [
     'EXPENSE_OFFICE_SUPPLIES',
+    'EXPENSE_SOFTWARE_SUBSCRIPTIONS',
     'EXPENSE_MARKETING',
+    'EXPENSE_MERCHANT_FEES',
     'EXPENSE_RENT',
     'EXPENSE_UTILITIES',
     'EXPENSE_CLEANING_SUBCONTRACTOR',
@@ -61,6 +63,7 @@ export function hasGST(category: string): boolean {
     'LIABILITY_DIRECTORS_LOAN',
     'LIABILITY_DIRECTORS_LOAN_WITHDRAWAL',
     'EXPENSE_STARTUP_INCORPORATION', // Incorporation fees may not have GST
+    'EXPENSE_BANK_FEES_INTEREST',
     'TRANSFER_PARTNERSHIP_TO_COMPANY',
   ]
 
@@ -215,8 +218,11 @@ function getCategoryDisplayName(category: string): string {
     'EXPENSE_REPAIRS_MAINTENANCE': 'Repairs & Maintenance',
     'EXPENSE_OFFICE_EQUIPMENT': 'Office Equipment & Assets',
     'EXPENSE_OFFICE_SUPPLIES': 'Office Supplies',
+    'EXPENSE_SOFTWARE_SUBSCRIPTIONS': 'Software & Subscriptions',
+    'EXPENSE_BANK_FEES_INTEREST': 'Bank Fees & Interest',
     'EXPENSE_RENT': 'Rent',
     'EXPENSE_MARKETING': 'Marketing & Advertising',
+    'EXPENSE_MERCHANT_FEES': 'Merchant & Platform Fees',
     'EXPENSE_WAGES_SALARIES': 'Wages & Salaries',
     'EXPENSE_SUPERANNUATION': 'Superannuation',
     'EXPENSE_ATO_GST_BAS': 'ATO - GST & BAS',
@@ -231,6 +237,10 @@ function getCategoryDisplayName(category: string): string {
     
     // 이체 및 기타
     'NON_TAXABLE_TRANSFER': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
+    'NON_TAXABLE_ATO_GST_REFUND': 'ATO GST/BAS Refund',
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT': 'Erroneous Payment (Out)',
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN': 'Erroneous Payment Return (In)',
+    'NON_TAXABLE_DIRECTOR_REIMBURSEMENT': 'Director Reimbursement (Prior Period)',
     'TRANSFER_INTERNAL': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
     'TRANSFER_PARTNERSHIP_TO_COMPANY': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
     'UNCATEGORIZED': 'Uncategorized',
@@ -492,7 +502,7 @@ export function exportToExcel(
 }
 
 /**
- * Export summary to Excel
+ * Export summary to Excel (aligned with Biz Intel P&L / GST cards)
  */
 export function exportSummary(
   summary: {
@@ -502,25 +512,34 @@ export function exportSummary(
     totalGSTPayable: number
     totalGSTClaimable: number
     directorsLoanBalance: number
-    cleaningIncome: number
-    stickerIncome: number
+    cleaningIncome?: number
+    stickerIncome?: number
+    periodLabel?: string
+    rowCount?: number
   },
   fileName: string = 'financial-summary'
 ): void {
+  const netGst = summary.totalGSTPayable - summary.totalGSTClaimable
   const summaryData = [
+    ...(summary.periodLabel
+      ? [{ Metric: 'P&L Period', Amount: summary.periodLabel }]
+      : []),
+    ...(typeof summary.rowCount === 'number'
+      ? [{ Metric: 'Rows included', Amount: String(summary.rowCount) }]
+      : []),
     { Metric: 'Total Income', Amount: summary.totalIncome.toFixed(2) },
-    { Metric: 'Total Expenses', Amount: summary.totalExpenses.toFixed(2) },
+    { Metric: 'Total Expenses (Tax Deductions)', Amount: summary.totalExpenses.toFixed(2) },
     { Metric: 'Net Profit', Amount: summary.netProfit.toFixed(2) },
-    { Metric: 'Total GST Payable', Amount: summary.totalGSTPayable.toFixed(2) },
-    { Metric: 'Total GST Claimable', Amount: summary.totalGSTClaimable.toFixed(2) },
+    { Metric: 'GST Payable (1A)', Amount: summary.totalGSTPayable.toFixed(2) },
+    { Metric: 'GST Claimable (1B)', Amount: summary.totalGSTClaimable.toFixed(2) },
+    { Metric: 'Net GST (1A − 1B)', Amount: netGst.toFixed(2) },
     { Metric: "Director's Loan Balance", Amount: summary.directorsLoanBalance.toFixed(2) },
-    // Cleaning Income과 Sticker Income은 Trading Revenue로 통합되어 Total Income에 포함됨
   ]
 
   const workbook = XLSX.utils.book_new()
   const worksheet = XLSX.utils.json_to_sheet(summaryData)
 
-  worksheet['!cols'] = [{ wch: 25 }, { wch: 15 }]
+  worksheet['!cols'] = [{ wch: 36 }, { wch: 18 }]
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Financial Summary')
 

@@ -1,0 +1,92 @@
+/**
+ * ATO Lodgment Guide — types for copy-and-enter workflow (no electronic lodge).
+ */
+
+export type LodgmentTab = 'bas' | 'annual' | 'ctr'
+
+export type AccountTypeForLodgment = 'individual' | 'company' | 'sole_trader'
+
+export interface ATOFieldGuide {
+  /** Steps shown in the "Where in ATO" panel (English, matches ATO UI). */
+  atoPortal: 'osb' | 'mytax' | 'either'
+  atoSteps: string[]
+  helpUrl?: string
+}
+
+export type FieldEntryKind = 'auto' | 'review' | 'manual'
+
+export interface LodgmentField {
+  id: string
+  label: string
+  description?: string
+  section: 'gst' | 'payg' | 'income' | 'expense' | 'summary' | 'ctr' | 'tax'
+  amount: number
+  source: 'auto' | 'manual'
+  guide: ATOFieldGuide
+  /** When true, show as informational only (no amount to copy). */
+  readOnly?: boolean
+  myTaxLabel?: string
+  entryKind?: FieldEntryKind
+  atoScreenPath?: string
+  sortOrder?: number
+}
+
+export interface LodgmentValidation {
+  ok: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+export interface BasLodgmentResult {
+  kind: 'bas'
+  periodLabel: string
+  periodStart: string
+  periodEnd: string
+  periodType: 'monthly' | 'quarterly'
+  fields: LodgmentField[]
+  validation: LodgmentValidation
+  uncategorisedCount: number
+  uncategorisedAmount: number
+}
+
+export interface AnnualLodgmentResult {
+  kind: 'annual'
+  financialYear: string
+  periodStart: string
+  periodEnd: string
+  fields: LodgmentField[]
+  validation: LodgmentValidation
+  incomeByCategory: Record<string, number>
+  expensesByCategory: Record<string, number>
+  uncategorisedCount: number
+  /** GST-inclusive cash (Biz Intel) */
+  cashTotalIncome?: number
+  cashTotalExpenses?: number
+  cashNetProfit?: number
+  /** GST-exclusive tax basis (ATO Annual / myTax / CTR) */
+  taxTotalIncome?: number
+  taxTotalExpenses?: number
+  taxNetProfit?: number
+  gstOnIncome?: number
+  gstOnPurchases?: number
+}
+
+export interface CtrLodgmentOptions {
+  taxRate?: number
+  nonDeductibleAddBacks?: number
+  lossCarryForward?: number
+  otherAdjustments?: number
+}
+
+export interface CtrLodgmentResult {
+  kind: 'ctr'
+  financialYear: string
+  periodStart: string
+  periodEnd: string
+  fields: LodgmentField[]
+  validation: LodgmentValidation
+  uncategorisedCount: number
+  estimatedTaxRate: number
+}
+
+export type LodgmentResult = BasLodgmentResult | AnnualLodgmentResult | CtrLodgmentResult

@@ -1,0 +1,33 @@
+---
+description: Bank recon Opening rolls from prior month Statement closing
+globs: apps/accounting-sandbox/**/bank-reconciliation*,apps/accounting-sandbox/**/BankReconciliation*
+alwaysApply: false
+---
+
+# Bank Reconciliation — Opening roll-forward
+
+## Invariant
+
+`ledgerOpeningBalance` for month **M** = prior month **Statement closing** (completed recon preferred), **not** Business Profile FY Opening Cash ($0).
+
+Completing Jan/Feb must feed March Opening. With Mar bank lines Cleared 4/4 and Statement closing $795.62, Opening $100 → Difference ≈ **$0**.
+
+## Bug observed (26 Aug 2026)
+
+Every open session healed with `ledgerOpeningBalance: settingsOpeningCash` ($0). Jan/Feb Complete did not change March Difference **$100** (= Statement closing − month net only).
+
+**Still stuck after prior-month roll:** Feb was completed while Statement closing was wrongly **$0**, so stored prior close stayed $0 and March Opening stayed $0. Fix: `reconcileLedgerOpeningWithStatement` — Opening = Statement closing − this month bank net when running balances exist (Mar: $795.62 − $695.62 = **$100** → Diff **$0**).
+
+**Feb completed 0/0 at Statement closing $0:** No bank PDF lines that month (Cash Expense only). Empty month used Settings Opening $0 → Complete froze session. Heal completed empty months when live close (prior roll) > $0.
+
+## Do
+
+- `pickLedgerOpeningBalance` / `resolveLedgerOpeningForPeriod` / `reconcileLedgerOpeningWithStatement` in `lib/subledger/bank-reconciliation.ts`
+- Pass tx `balance` into BankReconciliationPanel
+- Ignore stored statement closing **$0** when bank lines exist
+- Hard-refresh 3001 after heal so open March session reloads
+
+## Accidental Mark complete
+
+UI: **Unlock & Edit reconciliation** (confirm) → `status: open`, cleared ticks kept. Same pattern as Period Management Unlock.
+---

@@ -93,7 +93,7 @@ export function TaxDashboard({
               <p className="text-2xl font-bold text-yellow-600">
                 {format(gstPayable)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">10% of Total Business Income</p>
+              <p className="text-xs text-gray-500 mt-1">Taxable sales ÷ 11</p>
             </div>
             <DollarSign className="w-8 h-8 text-yellow-600" />
           </div>
@@ -107,7 +107,7 @@ export function TaxDashboard({
               <p className="text-2xl font-bold text-orange-600">
                 {format(gstClaimable)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">10% of Total Taxable Business Expenses</p>
+              <p className="text-xs text-gray-500 mt-1">Claimable purchases ÷ 11</p>
             </div>
             <Receipt className="w-8 h-8 text-orange-600" />
           </div>

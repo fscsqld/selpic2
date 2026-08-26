@@ -1,0 +1,52 @@
+---
+description: P&L period selector — Full statement vs BAS quarter vs FY
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# P&L period banner (Biz Intel)
+
+## What each preset means
+
+| Preset | Date window | Use for |
+|--------|-------------|---------|
+| **Full statement** | Min→max date of all loaded bank + cash ledger rows (not payroll) | YTD / “everything we have uploaded” P&L |
+| **BAS Q1–Q4** | Standard AU quarter (Jul–Sep … Apr–Jun) for a listed FY | BAS / quarterly review |
+| **FY Jul–Jun** | Full Australian financial year | Company CTR / year-end income tax prep when ledger covers that year |
+| **Month / Custom** | User window | Ad-hoc |
+
+**Full statement ≠ automatic year-end tax year.**  
+Example: `07/12/2025 – 29/06/2026` is the span of saved statements, not `01/07/2025 – 30/06/2026`. Early FY months with no bank rows are simply absent.
+
+## What recalculates when the period changes
+
+Same filtered set `dashboardTransactions` = `filterBusinessLedgerForPeriod(ledger, start, end)` feeds:
+
+- Business Summary cards (income, deductions, net, GST 1A/1B, director loan)
+- Real-Time P&L, Tax Provision, expense charts, assets, GST Summary, FBT
+- Transaction History when scoped to the P&L period
+- Reports / ATO paths that align to `viewPeriod`
+
+Engine: `calculateBusinessMetrics(dashboardTransactions, …)` (SSOT).
+
+## Included / excluded in company P&L totals
+
+**Income:** business `INCOME_*` credits (not personal, not transfers, not share capital, not cash-deposit review, not expense refunds; ATO GST refund is not revenue).
+
+**Expenses:** P&L `EXPENSE_*` / cash expense codes (not director loan / reimbursement BS items, not transfers, not personal).
+
+**GST:** respects Settings GST registered + per-row tags when registered.
+
+**64 transactions** on the banner = rows in the date window (bank + cash), not “64 income lines.”
+
+## Quarter vs Full statement
+
+- Quarters use the **same** formulas on a **smaller** date filter.
+- Sum of Q2+Q3+Q4 may **not** equal Full statement if Full statement only covers part of Q2 (e.g. from 7 Dec) or includes cash outside a quarter.
+- Spot-check: switch to each BAS quarter → counts/sums; Full statement count should match History rows in that min–max range.
+
+## Do not
+
+- Treat Full statement as CTR FY without checking Jul–Jun coverage
+- Expect empty early-FY months to invent income
+- Mix payroll journals into Biz Intel P&L period filter

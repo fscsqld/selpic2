@@ -267,6 +267,14 @@ export function BusinessProfileForm() {
     }
   }
 
+  const handleGstRegisteredChange = (checked: boolean) => {
+    setProfile({ ...profile, gstRegistered: checked })
+  }
+
+  const handleFbtRegisteredChange = (checked: boolean) => {
+    setProfile({ ...profile, fbtRegistered: checked })
+  }
+
   const handleABNChange = (value: string) => {
     // Format ABN with spaces (XX XXX XXX XXX)
     const cleaned = value.replace(/\s/g, '')

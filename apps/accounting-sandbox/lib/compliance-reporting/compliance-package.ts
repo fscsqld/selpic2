@@ -10,8 +10,20 @@ import * as XLSX from 'xlsx'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
+import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
+import { computeBalanceSheetFromStorage } from '@/lib/utils/balance-sheet'
+import { computeTrialBalanceFromStorage } from '@/lib/utils/trial-balance'
+import { computeIncomeStatementFromStorage } from '@/lib/journal/income-statement'
+import { getAccountingSettings } from '@/lib/journal/accounting-basis'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import { PAYGTaxCalculator } from '@/lib/payg-withholding/tax-calculator'
+import { isDirectorsLoanLedgerTransaction } from '@/lib/classification/directors-loan-ledger'
+import {
+  computeDirectorsLoanOpeningBase,
+  loadDirectorLoanAdvanceSettings,
+  resolvePriorPeriodDirectorAdvances,
+} from '@/lib/classification/directors-loan-balance'
+import { roundAtoWholeDollars } from '@/lib/utils/ato-lodgment-rounding'
 
 export interface Transaction {
   id?: string
@@ -21,18 +33,23 @@ export interface Transaction {
   credit: number | null
   category?: string
   department?: string
+  source?: string
   isDirectorsLoan?: boolean
   isPayrollTransaction?: boolean
   requiresPAYG?: boolean
   payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: {
     shouldWarn: boolean
-    warningMessage: string
+    warningMessage?: string
     withholdingAmount?: number
   }
   gstInfo?: {
-    hasGST: boolean
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
+    netAmount?: number
+    hasGST?: boolean
+    reasoning?: string
   }
 }
 
@@ -50,99 +67,68 @@ export interface CompliancePackageData {
   periodEnd?: string
 }
 
+function filterTransactionsForPeriod(
+  transactions: Transaction[],
+  periodStart: string,
+  periodEnd: string
+): Transaction[] {
+  return transactions.filter((tx) => tx.date >= periodStart && tx.date <= periodEnd)
+}
+
+function sortCategoryEntries(record: Record<string, number>): [string, number][] {
+  return Object.entries(record).sort((a, b) => b[1] - a[1])
+}
+
 /**
- * Generate Trial Balance Excel
+ * Generate Trial Balance Excel (uses shared trial-balance.ts logic)
  */
-export function generateTrialBalance(data: CompliancePackageData): XLSX.WorkBook {
-  const { transactions, financialYear, companyName, abn } = data
-  
-  // Group transactions by category
-  const accountBalances: Record<string, { debit: number; credit: number }> = {}
-  
-  transactions.forEach(tx => {
-    const category = tx.category || 'UNCATEGORIZED'
-    const accountName = getAccountName(category)
-    
-    if (!accountBalances[accountName]) {
-      accountBalances[accountName] = { debit: 0, credit: 0 }
-    }
-    
-    if (tx.debit) {
-      accountBalances[accountName].debit += Math.abs(tx.debit)
-    }
-    if (tx.credit) {
-      accountBalances[accountName].credit += Math.abs(tx.credit)
-    }
+export async function generateTrialBalance(data: CompliancePackageData): Promise<XLSX.WorkBook> {
+  const { transactions, openingDirectorLoanBalance, companyName, abn, financialYear } = data
+
+  const profile = await indexedDBStorage.getBusinessProfile()
+  const accountType =
+    (profile?.accountType as 'individual' | 'company' | 'sole_trader' | undefined) || 'company'
+
+  const result = await computeTrialBalanceFromStorage({
+    transactions,
+    openingDirectorLoanBalance,
+    openingCapital: profile?.openingCapital ?? 0,
+    openingRetainedEarnings: profile?.openingRetainedEarnings ?? 0,
+    openingCashBalance: profile?.openingCashBalance ?? 0,
+    asAtDate: financialYear.end,
+    accountType,
   })
-  
-  // Calculate net balances
-  const trialBalanceData = Object.entries(accountBalances)
-    .map(([account, balances]) => {
-      const netBalance = balances.credit - balances.debit
-      return {
-        'Account': account,
-        'Debit': balances.debit,
-        'Credit': balances.credit,
-        'Net Balance': netBalance,
-        'Type': getAccountType(account),
-      }
-    })
-    .sort((a, b) => {
-      // Sort by account type order
-      const typeOrder: Record<string, number> = {
-        'Asset': 1,
-        'Liability': 2,
-        'Equity': 3,
-        'Revenue': 4,
-        'Expense': 5,
-      }
-      return (typeOrder[a.Type] || 99) - (typeOrder[b.Type] || 99)
-    })
-  
-  // Add totals row
-  const totalDebit = trialBalanceData.reduce((sum, row) => sum + row.Debit, 0)
-  const totalCredit = trialBalanceData.reduce((sum, row) => sum + row.Credit, 0)
-  const totalNet = totalCredit - totalDebit
-  
-  trialBalanceData.push({
-    'Account': 'TOTAL',
-    'Debit': totalDebit,
-    'Credit': totalCredit,
-    'Net Balance': totalNet,
-    'Type': '',
-  })
-  
-  // Create workbook with header
+
   const workbook = XLSX.utils.book_new()
-  
-  // Add header rows
+
   const headerData = [
     [companyName],
     [`ABN: ${abn}`],
-    [`Trial Balance - Financial Year ${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}`],
+    [
+      `Trial Balance - Financial Year ${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}`,
+    ],
+    [`As at ${formatDateAustralian(result.asAtDate)}`],
+    result.ledgerIntegrated ? ['Source: Ledger-integrated (transactions + journal entries)'] : [''],
     [''],
   ]
-  
-  // Combine header and data
+
   const allData = [
     ...headerData,
-    ['Account', 'Debit', 'Credit', 'Net Balance', 'Type'],
-    ...trialBalanceData.map(row => [row.Account, row.Debit, row.Credit, row['Net Balance'], row.Type]),
+    ['Account', 'Type', 'Debit', 'Credit'],
+    ...result.rows.map((row) => [row.account, row.type, row.debit, row.credit]),
+    ['TOTAL', '', result.totalDebit, result.totalCredit],
   ]
-  
+
   const worksheet = XLSX.utils.aoa_to_sheet(allData)
-  
-  // Set column widths
   worksheet['!cols'] = [
-    { wch: 40 }, // Account
-    { wch: 15 }, // Debit
-    { wch: 15 }, // Credit
-    { wch: 15 }, // Net Balance
-    { wch: 15 }, // Type
+    { wch: 40 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 15 },
   ]
-  
+
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Trial Balance')
-  
+
   return workbook
 }
 
@@ -153,17 +139,20 @@ export function generateDirectorsLoanReport(data: CompliancePackageData): XLSX.W
   const { transactions, openingDirectorLoanBalance, companyName, abn } = data
   
   // Filter Director's Loan transactions
+  const advanceSettings = loadDirectorLoanAdvanceSettings()
+  const priorAdvances = resolvePriorPeriodDirectorAdvances(
+    transactions,
+    advanceSettings.manualPriorAdvances,
+    advanceSettings.autoMatchReimbursements
+  )
+  const ledgerOpening = computeDirectorsLoanOpeningBase(openingDirectorLoanBalance, priorAdvances)
+
   const directorsLoanTransactions = transactions
-    .filter(tx => {
-      if (tx.department === 'personal') return true
-      if (tx.category === 'EXPENSE_DIRECTOR_LOAN_REPAYMENT') return true
-      if (tx.category === 'LIABILITY_DIRECTORS_LOAN' || tx.isDirectorsLoan) return true
-      return false
-    })
+    .filter(isDirectorsLoanLedgerTransaction)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   
   // Calculate running balance
-  let runningBalance = openingDirectorLoanBalance
+  let runningBalance = ledgerOpening
   const reportData = directorsLoanTransactions.map(tx => {
     const amount = Math.abs(tx.debit || tx.credit || 0)
     const isCredit = !!tx.credit
@@ -182,6 +171,8 @@ export function generateDirectorsLoanReport(data: CompliancePackageData): XLSX.W
       'Description': tx.description,
       'Transaction Type': tx.department === 'personal' 
         ? 'Personal Transaction' 
+        : tx.category === 'NON_TAXABLE_DIRECTOR_REIMBURSEMENT'
+        ? 'Prior-Period Reimbursement'
         : tx.category === 'EXPENSE_DIRECTOR_LOAN_REPAYMENT'
         ? 'Loan Repayment'
         : 'Loan Transaction',
@@ -193,7 +184,9 @@ export function generateDirectorsLoanReport(data: CompliancePackageData): XLSX.W
   
   // Add summary
   const summaryData = [
-    { 'Item': 'Opening Balance', 'Amount': openingDirectorLoanBalance },
+    { 'Item': 'Opening Balance (cash loan)', 'Amount': openingDirectorLoanBalance },
+    { 'Item': 'Prior period advances (lodged)', 'Amount': priorAdvances },
+    { 'Item': 'Ledger opening', 'Amount': ledgerOpening },
     { 'Item': 'Total Deposits (Credit)', 'Amount': directorsLoanTransactions.reduce((sum, tx) => sum + Math.abs(tx.credit || 0), 0) },
     { 'Item': 'Total Withdrawals (Debit)', 'Amount': directorsLoanTransactions.reduce((sum, tx) => sum + Math.abs(tx.debit || 0), 0) },
     { 'Item': 'Closing Balance', 'Amount': runningBalance },
@@ -258,23 +251,54 @@ export function generateDirectorsLoanReport(data: CompliancePackageData): XLSX.W
  * Generate BAS Package Excel
  */
 export async function generateBASPackage(data: CompliancePackageData): Promise<XLSX.WorkBook> {
-  const { transactions, periodStart, periodEnd, companyName, abn } = data
+  const { transactions, periodStart, periodEnd, companyName, abn, openingDirectorLoanBalance } = data
+
+  const profile = await indexedDBStorage.getBusinessProfile()
+  const accountType =
+    (profile?.accountType as 'individual' | 'company' | 'sole_trader' | undefined) || 'company'
+  const accountingSettings = await getAccountingSettings()
+
+  // Same GST claim tags as Biz Intel / Export BAS (Hanaone free, CrazyDomains claim, …)
+  const taggedTransactions = applyKnownPurchaseGstTags(transactions)
+
+  const periodTransactions =
+    periodStart && periodEnd
+      ? filterTransactionsForPeriod(taggedTransactions, periodStart, periodEnd)
+      : taggedTransactions
+
+  const advanceSettings = loadDirectorLoanAdvanceSettings()
+  const priorAdvances = resolvePriorPeriodDirectorAdvances(
+    periodTransactions,
+    advanceSettings.manualPriorAdvances,
+    advanceSettings.autoMatchReimbursements
+  )
+
+  const incomeStatement =
+    periodStart && periodEnd
+      ? await computeIncomeStatementFromStorage({
+          transactions: taggedTransactions,
+          periodStart,
+          periodEnd,
+          openingDirectorLoanBalance,
+          accountType,
+        })
+      : null
+
+  const metrics = incomeStatement
+    ? {
+        totalIncome: incomeStatement.totalIncome,
+        totalExpenses: incomeStatement.totalExpenses,
+        netProfit: incomeStatement.netProfit,
+        gstPayable: incomeStatement.gstPayable,
+        gstClaimable: incomeStatement.gstClaimable,
+      }
+    : calculateBusinessMetrics(periodTransactions, openingDirectorLoanBalance, accountType, priorAdvances)
   
-  // Filter transactions for the period
-  const periodTransactions = transactions.filter(tx => {
-    if (!periodStart || !periodEnd) return true
-    const txDate = new Date(tx.date)
-    const start = new Date(periodStart)
-    const end = new Date(periodEnd)
-    return txDate >= start && txDate <= end
-  })
-  
-  const metrics = calculateBusinessMetrics(periodTransactions, data.openingDirectorLoanBalance)
-  
-  // GST Summary
-  const gstCollected = metrics.gstPayable
-  const gstPaid = metrics.gstClaimable
+  // BAS Form Data — ATO whole dollars (leave cents out; do not round up)
+  const gstCollected = roundAtoWholeDollars(metrics.gstPayable)
+  const gstPaid = roundAtoWholeDollars(metrics.gstClaimable)
   const netGST = gstCollected - gstPaid
+  const g1Sales = roundAtoWholeDollars(metrics.totalIncome)
   
   // Calculate PAYG Withholding Tax
   const taxCalculator = new PAYGTaxCalculator()
@@ -315,13 +339,16 @@ export async function generateBASPackage(data: CompliancePackageData): Promise<X
       }
     })
   
-  // BAS Form Data (ATO format)
+  // BAS Form Data (ATO format — matches Biz Intel GST Summary)
   const basData = [
-    { 'Field': 'G1 Total sales and income', 'Amount': metrics.totalIncome },
+    { 'Field': 'G1 Total sales and income', 'Amount': g1Sales },
     { 'Field': '1A GST on sales', 'Amount': gstCollected },
     { 'Field': '1B GST on purchases', 'Amount': gstPaid },
-    { 'Field': '1C Net GST', 'Amount': netGST },
-    { 'Field': '4 PAYG Withholding', 'Amount': totalPAYGWithholding },
+    {
+      'Field': netGST < 0 ? '7C GST refund due' : '1C Net GST payable',
+      'Amount': Math.abs(netGST),
+    },
+    { 'Field': '4 PAYG Withholding', 'Amount': roundAtoWholeDollars(totalPAYGWithholding) },
   ]
   
   // Create workbook with header
@@ -333,6 +360,9 @@ export async function generateBASPackage(data: CompliancePackageData): Promise<X
     [`ABN: ${abn}`],
     ['BAS Summary'],
     periodStart && periodEnd ? [`Period: ${formatDateAustralian(periodStart)} to ${formatDateAustralian(periodEnd)}`] : [''],
+    incomeStatement?.ledgerIntegrated
+      ? [`Source: Ledger-integrated P&L (${accountingSettings.basis} basis)`]
+      : [''],
     [''],
     ['Field', 'Amount'],
   ]
@@ -382,173 +412,156 @@ export async function generateBASPackage(data: CompliancePackageData): Promise<X
 }
 
 /**
- * Helper: Get account name from category
- */
-function getAccountName(category: string): string {
-  const accountMap: Record<string, string> = {
-    // Revenue
-    'INCOME_TRADING_REVENUE': 'Trading Revenue',
-    'INCOME_REFUND_REIMBURSEMENT': 'Refunds & Reimbursements',
-    // Expenses
-    'EXPENSE_OFFICE_SUPPLIES': 'Office Supplies',
-    'EXPENSE_FUEL_TRAVEL': 'Fuel & Travel',
-    'EXPENSE_INSURANCE_PROFESSIONAL': 'Insurance',
-    'EXPENSE_REPAIRS_MAINTENANCE': 'Repairs & Maintenance',
-    'EXPENSE_OFFICE_EQUIPMENT_ASSETS': 'Office Equipment',
-    // Assets
-    'ASSET_FIXED': 'Fixed Assets',
-    // Liabilities
-    'LIABILITY_DIRECTORS_LOAN': "Director's Loan",
-    'EXPENSE_DIRECTOR_LOAN_REPAYMENT': "Director's Loan Repayment",
-  }
-  
-  return accountMap[category] || category.replace(/_/g, ' ')
-}
-
-/**
- * Helper: Get account type
- */
-function getAccountType(accountName: string): string {
-  if (accountName.includes('Asset') || accountName.includes('Equipment')) return 'Asset'
-  if (accountName.includes('Loan') || accountName.includes('Liability')) return 'Liability'
-  if (accountName.includes('Revenue') || accountName.includes('Income')) return 'Revenue'
-  if (accountName.includes('Expense') || accountName.includes('Cost')) return 'Expense'
-  return 'Other'
-}
-
-/**
  * Generate Financial Statements (P&L + Balance Sheet) Excel
  */
 export async function generateFinancialStatements(data: CompliancePackageData): Promise<XLSX.WorkBook> {
   const { transactions, openingDirectorLoanBalance, companyName, abn, financialYear } = data
-  
-  const metrics = calculateBusinessMetrics(transactions, openingDirectorLoanBalance)
-  
-  // Calculate Current Assets
-  // 1. Cash/Bank Balance: Use the last transaction's balance if available, otherwise calculate net
-  let cashBalance = 0
-  const lastTransaction = transactions
-    .filter(tx => (tx as any).balance !== null && (tx as any).balance !== undefined)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-  
-  if (lastTransaction && (lastTransaction as any).balance !== null) {
-    cashBalance = (lastTransaction as any).balance
-  } else {
-    // Calculate net cash flow (credits - debits)
-    const totalCredits = transactions
-      .filter(tx => tx.credit && tx.category !== 'NON_TAXABLE_CASH_DEPOSIT' && tx.category !== 'NON_TAXABLE_TRANSFER')
-      .reduce((sum, tx) => sum + Math.abs(tx.credit || 0), 0)
-    const totalDebits = transactions
-      .filter(tx => tx.debit && tx.category !== 'NON_TAXABLE_TRANSFER')
-      .reduce((sum, tx) => sum + Math.abs(tx.debit || 0), 0)
-    cashBalance = totalCredits - totalDebits
-  }
-  
-  // 2. Accounts Receivable (미수금): Credit transactions with receivable category
-  const accountsReceivable = transactions
-    .filter(tx => tx.credit && 
-                  (tx.category === 'INCOME_TRADING' || 
-                   tx.category === 'INCOME_SERVICE' ||
-                   tx.description?.toUpperCase().includes('RECEIVABLE') ||
-                   tx.description?.toUpperCase().includes('OUTSTANDING')))
-    .reduce((sum, tx) => sum + Math.abs(tx.credit || 0), 0)
-  
-  const currentAssets = cashBalance + accountsReceivable
-  
-  // Calculate Fixed Assets: Sum of all registered assets' current values
-  const allAssets = await indexedDBStorage.getAllAssets()
-  
-  // Calculate depreciation for each asset (matching AssetManagement logic)
-  const calculateAssetDepreciation = (asset: any): number => {
-    const purchaseDate = new Date(asset.purchaseDate)
-    const now = new Date()
-    const yearsElapsed = (now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-    
-    if (asset.depreciationMethod === 'straight-line') {
-      const annualDepreciation = asset.purchaseAmount / asset.usefulLife
-      return Math.min(annualDepreciation * yearsElapsed, asset.purchaseAmount)
-    } else {
-      // Diminishing value method (matching AssetManagement logic)
-      const rate = asset.depreciationRate || 20 // Default 20% per year
-      let currentValue = asset.purchaseAmount
-      let totalDepreciation = 0
-      
-      for (let year = 0; year < Math.floor(yearsElapsed); year++) {
-        const yearDepreciation = currentValue * (rate / 100)
-        totalDepreciation += yearDepreciation
-        currentValue -= yearDepreciation
-      }
-      
-      // Partial year
-      if (yearsElapsed % 1 > 0) {
-        const partialDepreciation = currentValue * (rate / 100) * (yearsElapsed % 1)
-        totalDepreciation += partialDepreciation
-      }
-      
-      return Math.min(totalDepreciation, asset.purchaseAmount)
-    }
-  }
-  
-  const totalAccumulatedDepreciation = allAssets.reduce((sum, asset) => {
-    return sum + calculateAssetDepreciation(asset)
-  }, 0)
-  
-  const fixedAssets = allAssets.reduce((sum, asset) => {
-    const depreciation = calculateAssetDepreciation(asset)
-    const currentValue = asset.purchaseAmount - depreciation
-    return sum + Math.max(0, currentValue)
-  }, 0)
-  
-  const totalAssets = currentAssets + fixedAssets
-  
-  // Calculate Equity
-  const retainedEarnings = metrics.netProfit // For now, use current period's net profit
-  const openingCapital = 0 // TODO: Add to Business Profile settings
-  const shareCapital = metrics.shareCapital || 0 // Share Capital from transactions
-  const totalEquity = retainedEarnings + openingCapital + shareCapital
-  
-  // Profit & Loss Statement
+
+  const profile = await indexedDBStorage.getBusinessProfile()
+  const accountType =
+    (profile?.accountType as 'individual' | 'company' | 'sole_trader' | undefined) || 'company'
+  const accountingSettings = await getAccountingSettings()
+
+  const [incomeStatement, bs] = await Promise.all([
+    computeIncomeStatementFromStorage({
+      transactions,
+      periodStart: financialYear.start,
+      periodEnd: financialYear.end,
+      openingDirectorLoanBalance,
+      accountType,
+    }),
+    computeBalanceSheetFromStorage({
+      transactions,
+      openingDirectorLoanBalance,
+      openingCapital: profile?.openingCapital ?? 0,
+      openingRetainedEarnings: profile?.openingRetainedEarnings ?? 0,
+      openingCashBalance: profile?.openingCashBalance ?? 0,
+      asAtDate: financialYear.end,
+      accountType,
+    }),
+  ])
+
+  // Retained earnings stay on cash P&L so BS export balances with bank + period-net GST.
+  // Primary "Current Period Profit" line is tax/CTR (ex GST) when not ledger-integrated.
+  const currentPeriodProfitCash = incomeStatement.ledgerIntegrated
+    ? incomeStatement.netProfit
+    : bs.equity.currentPeriodProfitCash
+  const currentPeriodProfitTax = incomeStatement.ledgerIntegrated
+    ? incomeStatement.netProfit
+    : bs.equity.currentPeriodProfit
+  const totalRetainedEarnings =
+    bs.equity.openingRetainedEarnings + currentPeriodProfitTax
+
+  const revenueLines = sortCategoryEntries(incomeStatement.incomeByCategory).map(
+    ([category, amount]) => [category, amount] as [string, number]
+  )
+  const expenseLines = sortCategoryEntries(incomeStatement.expensesByCategory).map(
+    ([category, amount]) => [category, amount] as [string, number]
+  )
+
   const plData = [
     ['Profit & Loss Statement'],
     [`Financial Year: ${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}`],
+    [`Period: ${formatDateAustralian(financialYear.start)} to ${formatDateAustralian(financialYear.end)}`],
+    incomeStatement.ledgerIntegrated
+      ? [`Source: Ledger-integrated (${accountingSettings.basis} basis)`]
+      : [''],
     [''],
     ['Revenue', ''],
-    ['Trading Revenue', metrics.totalIncome],
-    ['Total Revenue', metrics.totalIncome],
+    ...(revenueLines.length > 0
+      ? revenueLines
+      : [['Trading Revenue', incomeStatement.totalIncome] as [string, number]]),
+    ['Total Revenue', incomeStatement.totalIncome],
     [''],
     ['Expenses', ''],
-    ['Total Expenses', metrics.totalExpenses],
+    ...(expenseLines.length > 0
+      ? expenseLines
+      : [['Total Expenses', incomeStatement.totalExpenses] as [string, number]]),
+    ['Total Expenses', incomeStatement.totalExpenses],
     [''],
-    ['Net Profit/(Loss)', metrics.netProfit],
+    ['Net Profit/(Loss)', incomeStatement.netProfit],
   ]
-  
-  // Balance Sheet (with actual calculations)
+
   const balanceSheetData = [
     ['Balance Sheet'],
     [`As at ${financialYear.end}`],
+    bs.ledgerIntegrated ? ['Source: Ledger-integrated (transactions + journal entries)'] : [''],
     [''],
     ['Assets', ''],
     ['Current Assets', ''],
-    ['  Cash & Bank', cashBalance],
-    ['  Accounts Receivable', accountsReceivable],
-    ['Total Current Assets', currentAssets],
+    ['  Cash & Bank', bs.assets.cashAndBank],
+    ['  Accounts Receivable', bs.assets.accountsReceivable],
+    ...(bs.assets.directorsLoanReceivable > 0
+      ? [['  Director\'s Loan Receivable', bs.assets.directorsLoanReceivable]]
+      : []),
+    ['Total Current Assets', bs.assets.totalCurrentAssets],
     [''],
     ['Fixed Assets', ''],
-    ['  Accumulated Depreciation', totalAccumulatedDepreciation],
-    ['  Net Fixed Assets', fixedAssets],
-    ['Total Assets', totalAssets],
+    ['  Gross Fixed Assets', bs.assets.grossFixedAssets],
+    ['  Accumulated Depreciation', bs.assets.accumulatedDepreciation],
+    ['  Net Fixed Assets', bs.assets.netFixedAssets],
+    ['Total Assets', bs.assets.totalAssets],
     [''],
     ['Liabilities', ''],
-    ['Director\'s Loan', metrics.directorsLoanBalance],
-    ['Total Liabilities', metrics.directorsLoanBalance],
+    ['Director\'s Loan', bs.liabilities.directorsLoan],
+    ...(bs.liabilities.accountsPayable && bs.liabilities.accountsPayable > 0
+      ? [['Accounts Payable', bs.liabilities.accountsPayable]]
+      : []),
+    ...(bs.liabilities.gstPayableOutstanding > 0
+      ? [
+          [
+            bs.liabilities.gstLatestQuarterLabel
+              ? `GST Payable (${bs.liabilities.gstLatestQuarterLabel} due)`
+              : 'GST Payable (latest BAS due)',
+            bs.liabilities.gstPayableOutstanding,
+          ] as [string, number],
+        ]
+      : bs.liabilities.gstPayable > 0
+        ? [['GST Payable', bs.liabilities.gstPayable] as [string, number]]
+        : []),
+    ...(bs.liabilities.atoGstRefundInCash > 0
+      ? [
+          [
+            'Note: ATO GST refund in Cash & Bank (not a GST payable reduction)',
+            bs.liabilities.atoGstRefundInCash,
+          ] as [string, number],
+        ]
+      : []),
+    ...(bs.liabilities.paygWithholding > 0
+      ? [['PAYG Withholding Payable', bs.liabilities.paygWithholding]]
+      : []),
+    ['Total Liabilities', bs.liabilities.totalLiabilities],
     [''],
     ['Equity', ''],
-    ['Opening Capital', openingCapital],
-    ['Share Capital', shareCapital],
-    ['Retained Earnings', retainedEarnings],
-    ['Total Equity', totalEquity],
+    ['Opening Capital', bs.equity.openingCapital],
+    ['Share Capital', bs.equity.shareCapital],
+    ['Opening Retained Earnings', bs.equity.openingRetainedEarnings],
+    ['Current Period Profit/(Loss) (ex GST / CTR)', currentPeriodProfitTax],
+    ...(Math.abs(currentPeriodProfitCash - currentPeriodProfitTax) >= 0.01
+      ? [
+          [
+            'Reference: Net GST in cash P&L (1A - 1B) [not in totals]',
+            currentPeriodProfitCash - currentPeriodProfitTax,
+          ] as [string, number],
+          [
+            'Reference: Current Period Profit (cash / GST-incl.) [not in totals]',
+            currentPeriodProfitCash,
+          ] as [string, number],
+        ]
+      : []),
+    ['Total Retained Earnings (ex GST / CTR)', totalRetainedEarnings],
+    [
+      'Total Equity',
+      bs.equity.openingCapital + bs.equity.shareCapital + totalRetainedEarnings,
+    ],
     [''],
-    ['Total Liabilities & Equity', metrics.directorsLoanBalance + totalEquity],
+    [
+      'Total Liabilities & Equity',
+      bs.liabilities.totalLiabilities +
+        bs.equity.openingCapital +
+        bs.equity.shareCapital +
+        totalRetainedEarnings,
+    ],
   ]
   
   // Create workbook
@@ -579,6 +592,55 @@ export async function generateFinancialStatements(data: CompliancePackageData): 
   return workbook
 }
 
+export type ComplianceReportPeriod = {
+  start: string
+  end: string
+  label: string
+  isExactBasQuarter: boolean
+}
+
+/**
+ * Resolve the report window for compliance exports.
+ * Prefer exact banner/BAS quarter dates; do not expand a quarter to full FY.
+ */
+export function resolveComplianceReportPeriod(
+  data: Pick<CompliancePackageData, 'financialYear' | 'periodStart' | 'periodEnd'>
+): ComplianceReportPeriod {
+  const fy = data.financialYear
+  const start = (data.periodStart || fy.start).slice(0, 10)
+  const end = (data.periodEnd || fy.end).slice(0, 10)
+  const fyLabelStart = Number(fy.start.slice(0, 4))
+  const fyLabel = `${fyLabelStart}-${fyLabelStart + 1}`
+
+  const quarters: Array<{ q: 1 | 2 | 3 | 4; start: string; end: string }> = [
+    { q: 1, start: `${fyLabelStart}-07-01`, end: `${fyLabelStart}-09-30` },
+    { q: 2, start: `${fyLabelStart}-10-01`, end: `${fyLabelStart}-12-31` },
+    { q: 3, start: `${fyLabelStart + 1}-01-01`, end: `${fyLabelStart + 1}-03-31` },
+    { q: 4, start: `${fyLabelStart + 1}-04-01`, end: `${fyLabelStart + 1}-06-30` },
+  ]
+
+  for (const { q, start: qStart, end: qEnd } of quarters) {
+    if (start === qStart && end === qEnd) {
+      return {
+        start,
+        end,
+        label: `Q${q} ${fyLabel}`,
+        isExactBasQuarter: true,
+      }
+    }
+  }
+
+  return {
+    start,
+    end,
+    label:
+      start === fy.start.slice(0, 10) && end === fy.end.slice(0, 10)
+        ? `FY ${fyLabel}`
+        : `${start} → ${end}`,
+    isExactBasQuarter: false,
+  }
+}
+
 /**
  * Generate all compliance reports and return as workbooks
  */
@@ -591,7 +653,7 @@ export async function generateCompliancePackage(data: CompliancePackageData): Pr
 }> {
   // Generate reports (financialStatements and basPackage are now async)
   const financialStatements = await generateFinancialStatements(data)
-  const trialBalance = generateTrialBalance(data)
+  const trialBalance = await generateTrialBalance(data)
   const directorsLoanReport = generateDirectorsLoanReport(data)
   const basPackage = await generateBASPackage(data)
   

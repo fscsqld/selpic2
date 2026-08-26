@@ -1,10 +1,13 @@
 /**
  * GST Net 계산 엔진
- * GST Collected (수입) - GST Paid (지출) = GST Net
+ * Aligns with Biz Intel / calculateBusinessMetrics (income÷11, taxable expenses÷11).
  */
 
 import { GSTTransaction } from './types'
-import { formatDateAustralian } from '@/lib/utils/date-format'
+import { getAustralianQuarter, getAustralianQuarterDates } from '@/lib/utils/australian-financial-year'
+import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
+import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
+import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
 
 export interface GSTSummary {
   period: {
@@ -15,32 +18,36 @@ export interface GSTSummary {
   }
   
   gstCollected: {
-    total: number                    // 총 GST 징수액 (판매)
+    total: number                    // 1A GST on sales
     transactionCount: number
     transactions: GSTTransaction[]
   }
   
   gstPaid: {
-    total: number                    // 총 GST 납부액 (구매/비용)
+    total: number                    // 1B GST on purchases
     transactionCount: number
     transactions: GSTTransaction[]
   }
   
-  gstNet: number                     // GST Net = GST Collected - GST Paid
-  gstRefund: boolean                 // 환불 여부 (GST Net < 0)
+  gstNet: number                     // 1A − 1B
+  gstRefund: boolean
+  g1TotalSales?: number
 }
 
 export class GSTCalculator {
   /**
-   * 기간별 GST Net 계산
+   * 기간별 GST Net 계산 — same rules as on-screen GST Summary
    */
   calculateGSTNet(
     transactions: Array<{
+      reference?: string
       date: string
       description: string
       debit: number | null
       credit: number | null
       category?: string
+      department?: string
+      source?: string
       gstInfo?: {
         isGSTIncluded: boolean
         gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
@@ -50,57 +57,74 @@ export class GSTCalculator {
     }>,
     startDate: string,
     endDate: string,
-    periodType: 'monthly' | 'quarterly' = 'quarterly'
+    periodType: 'monthly' | 'quarterly' = 'quarterly',
+    accountType: 'individual' | 'company' | 'sole_trader' = 'company'
   ): GSTSummary {
-    // 기간 내 거래 필터링
-    const periodTransactions = transactions.filter(tx => {
-      const txDate = new Date(tx.date)
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      return txDate >= start && txDate <= end
+    const startIso = toIsoDateString(startDate) || startDate.slice(0, 10)
+    const endIso = toIsoDateString(endDate) || endDate.slice(0, 10)
+
+    const periodTransactions = transactions.filter((tx) => {
+      const iso = toIsoDateString(tx.date)
+      if (!iso) return false
+      return iso >= startIso && iso <= endIso
     })
 
-    // GST 포함 거래만 필터링
-    const gstTransactions: GSTTransaction[] = periodTransactions
-      .filter(tx => tx.gstInfo?.isGSTIncluded && tx.gstInfo.gstType === 'INCLUDED')
-      .map(tx => ({
-        transactionId: tx.reference || '',
-        date: tx.date,
-        description: tx.description,
-        amount: Math.abs(tx.debit || tx.credit || 0),
-        isGSTIncluded: true,
-        gstType: 'INCLUDED' as const,
-        gstAmount: tx.gstInfo?.gstAmount || 0,
-        netAmount: tx.gstInfo?.netAmount || 0,
-        gstRate: 0.10,
-        transactionType: tx.credit ? 'sale' : (tx.category?.startsWith('EXPENSE_') ? 'expense' : 'purchase'),
-        confidence: tx.gstInfo?.confidence || 0.5
-      }))
+    const metrics = calculateBusinessMetrics(periodTransactions, 0, accountType)
+    const label1A = Math.round(metrics.gstPayable * 100) / 100
+    const label1B = Math.round(metrics.gstClaimable * 100) / 100
+    const gstNet = Math.round((label1A - label1B) * 100) / 100
 
-    // GST Collected (수입에서 징수한 GST)
-    const gstCollectedTransactions = gstTransactions.filter(tx => 
-      tx.transactionType === 'sale' && tx.gstAmount && tx.gstAmount > 0
-    )
-    const gstCollected = gstCollectedTransactions.reduce(
-      (sum, tx) => sum + (tx.gstAmount || 0), 
-      0
-    )
+    // Detail rows for audit (optional) — claimable / income lines only
+    const saleRows: GSTTransaction[] = periodTransactions
+      .filter(
+        (tx) =>
+          tx.credit &&
+          (tx.category || '').startsWith('INCOME_') &&
+          tx.department !== 'personal'
+      )
+      .map((tx) => {
+        const amount = Math.abs(tx.credit || 0)
+        return {
+          transactionId: tx.reference || '',
+          date: tx.date,
+          description: tx.description,
+          amount,
+          isGSTIncluded: true,
+          gstType: 'INCLUDED' as const,
+          gstAmount: amount / 11,
+          netAmount: amount - amount / 11,
+          gstRate: 0.1,
+          transactionType: 'sale' as const,
+          confidence: 1,
+        }
+      })
 
-    // GST Paid (지출에서 납부한 GST)
-    const gstPaidTransactions = gstTransactions.filter(tx => 
-      (tx.transactionType === 'purchase' || tx.transactionType === 'expense') && 
-      tx.gstAmount && 
-      tx.gstAmount > 0
-    )
-    const gstPaid = gstPaidTransactions.reduce(
-      (sum, tx) => sum + (tx.gstAmount || 0), 
-      0
-    )
+    const purchaseRows: GSTTransaction[] = periodTransactions
+      .filter(
+        (tx) =>
+          tx.debit &&
+          (tx.category || '').startsWith('EXPENSE_') &&
+          tx.department !== 'personal' &&
+          isPurchaseGstClaimable(tx)
+      )
+      .map((tx) => {
+        const amount = Math.abs(tx.debit || 0)
+        const gstAmount = tx.gstInfo?.gstAmount ?? amount / 11
+        return {
+          transactionId: tx.reference || '',
+          date: tx.date,
+          description: tx.description,
+          amount,
+          isGSTIncluded: true,
+          gstType: 'INCLUDED' as const,
+          gstAmount,
+          netAmount: amount - gstAmount,
+          gstRate: 0.1,
+          transactionType: 'expense' as const,
+          confidence: 1,
+        }
+      })
 
-    // GST Net 계산
-    const gstNet = gstCollected - gstPaid
-
-    // Period label 생성 (BAS 리포트와 동일한 로직 사용)
     const periodLabel = this.generatePeriodLabel(startDate, endDate, periodType)
 
     return {
@@ -108,26 +132,24 @@ export class GSTCalculator {
         startDate,
         endDate,
         type: periodType,
-        label: periodLabel
+        label: periodLabel,
       },
       gstCollected: {
-        total: Math.round(gstCollected * 100) / 100,
-        transactionCount: gstCollectedTransactions.length,
-        transactions: gstCollectedTransactions
+        total: label1A,
+        transactionCount: saleRows.length,
+        transactions: saleRows,
       },
       gstPaid: {
-        total: Math.round(gstPaid * 100) / 100,
-        transactionCount: gstPaidTransactions.length,
-        transactions: gstPaidTransactions
+        total: label1B,
+        transactionCount: purchaseRows.length,
+        transactions: purchaseRows,
       },
-      gstNet: Math.round(gstNet * 100) / 100,
-      gstRefund: gstNet < 0
+      gstNet,
+      gstRefund: gstNet < 0,
+      g1TotalSales: Math.round(metrics.totalIncome * 100) / 100,
     }
   }
 
-  /**
-   * Period label 생성 (BAS 리포트와 동일한 로직)
-   */
   private generatePeriodLabel(
     startDate: string,
     endDate: string,
@@ -136,28 +158,9 @@ export class GSTCalculator {
     const start = new Date(startDate)
     
     if (periodType === 'quarterly') {
-      const month = start.getMonth() + 1
-      const year = start.getFullYear()
-      
-      // 호주 재정연도 기준 분기 계산
-      let quarter: number
-      let financialYear: string
-      
-      if (month >= 7 && month <= 9) {
-        quarter = 1
-        financialYear = `${year}-${year + 1}`
-      } else if (month >= 10 && month <= 12) {
-        quarter = 2
-        financialYear = `${year - 1}-${year}`
-      } else if (month >= 1 && month <= 3) {
-        quarter = 3
-        financialYear = `${year - 1}-${year}`
-      } else {
-        quarter = 4
-        financialYear = `${year - 1}-${year}`
-      }
-      
-      return `Q${quarter} ${financialYear}`
+      const { quarter, financialYear } = getAustralianQuarter(start)
+      const dates = getAustralianQuarterDates(quarter, financialYear)
+      return `Q${quarter} ${dates.financialYear}`
     } else {
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                          'July', 'August', 'September', 'October', 'November', 'December']
@@ -166,5 +169,4 @@ export class GSTCalculator {
   }
 }
 
-// Export singleton instance
 export const gstCalculator = new GSTCalculator()

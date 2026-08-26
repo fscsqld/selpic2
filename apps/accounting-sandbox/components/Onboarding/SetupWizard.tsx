@@ -156,72 +156,52 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   }
 
   const handleComplete = async () => {
-    // Validate API connection if on step 3
-    if (step === 3) {
-      if (!homepageApiUrl.trim()) {
-        setError('Homepage API URL is required')
-        return
-      }
-
-      // If connection test hasn't been done or failed, require it
-      if (!connectionTestResult || !connectionTestResult.success) {
-        setError('Please test the connection first and ensure it succeeds')
-        return
-      }
-    }
-
+    // Step 3 homepage URL is optional (order import retired; bank statements are revenue SSOT)
     setIsSaving(true)
     setError(null)
 
     try {
-      // Step 1: Save homepage API configuration to localStorage
       if (homepageApiUrl.trim()) {
         localStorage.setItem('homepage_api_url', homepageApiUrl.trim().replace(/\/$/, ''))
-        console.log('[SetupWizard] Saved homepage API URL:', homepageApiUrl.trim())
+      } else {
+        localStorage.removeItem('homepage_api_url')
       }
-      
+
       if (homepageApiKey.trim()) {
         localStorage.setItem('homepage_api_key', homepageApiKey.trim())
-        console.log('[SetupWizard] Saved homepage API Key')
       }
 
-      // Step 2: Initialize IndexedDB (this will create all stores including incomingOrders)
       console.log('[SetupWizard] Initializing IndexedDB...')
       await indexedDBStorage.init()
-      console.log('[SetupWizard] ✅ IndexedDB initialized successfully')
 
-      // Step 3: Save business profile
       const abnDigits = abn.replace(/\D/g, '')
+      const name = companyName.trim()
       await indexedDBStorage.saveBusinessProfile({
-        companyName: companyName.trim(),
-        abn: accountType === 'individual' ? '' : abnDigits, // Individual users don't need ABN
-        acn: accountType === 'individual' ? undefined : (acn ? acn.replace(/\D/g, '') : undefined),
-        accountType: accountType, // Save account type
+        companyName: name,
+        individualName: accountType === 'individual' ? name : undefined,
+        abn: accountType === 'individual' ? '' : abnDigits,
+        acn: accountType === 'individual' ? undefined : acn ? acn.replace(/\D/g, '') : undefined,
+        accountType,
         gstReportingCycle: 'Quarterly',
         paygReportingCycle: 'Quarterly',
-        isGSTRegistered: accountType !== 'individual', // Individual users don't need GST
+        isGSTRegistered: accountType !== 'individual',
         isFBTRegistered: false,
       })
-      console.log('[SetupWizard] ✅ Business profile saved')
 
-      // Step 4: Mark setup as complete
       localStorage.setItem('selpic_setup_complete', 'true')
-      localStorage.setItem('selpic_company_name', companyName.trim())
-      localStorage.setItem('selpic_abn', abnDigits)
-      if (acn) {
-        localStorage.setItem('selpic_acn', acn.replace(/\D/g, ''))
+      localStorage.setItem('selpic_company_name', name)
+      if (accountType !== 'individual') {
+        localStorage.setItem('selpic_abn', abnDigits)
+        if (acn) {
+          localStorage.setItem('selpic_acn', acn.replace(/\D/g, ''))
+        }
       }
 
-      // Step 5: Trigger profile update event
       window.dispatchEvent(new CustomEvent('businessProfileUpdated'))
-
-      console.log('[SetupWizard] ✅ Setup complete! Redirecting to main screen...')
-
-      // Step 6: Complete setup and redirect
       onComplete()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SetupWizard] ❌ Setup failed:', err)
-      setError(err.message || 'Failed to complete setup. Please try again.')
+      setError(err instanceof Error ? err.message : 'Failed to complete setup. Please try again.')
     } finally {
       setIsSaving(false)
     }
@@ -427,15 +407,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-blue-800">
-                <strong>Important:</strong> Connect to your SELPIC homepage to receive orders automatically. 
-                This will enable the Incoming Orders feature.
+                <strong>Note:</strong> Homepage order import into accounting is retired. Record sales from
+                bank statement deposits (e.g. Stripe payouts). Optional homepage URL below is only for
+                connection checks — it will not create Incoming Orders or synthetic income.
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Link2 className="w-4 h-4 inline mr-1" />
-                Homepage API URL *
+                Homepage URL (optional)
               </label>
               <input
                 type="url"
@@ -445,12 +426,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   setError(null)
                   setConnectionTestResult(null)
                 }}
-                placeholder="https://your-homepage.com or http://localhost:3000"
+                placeholder="https://your-homepage.com or http://localhost:3005"
                 className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
                 autoFocus
               />
               <p className="mt-2 text-sm text-gray-500">
-                Enter the base URL of your SELPIC homepage (e.g., http://localhost:3000)
+                Skip this step if you only use bank statements. Optional URL is for logout/SSO return only.
               </p>
             </div>
 
@@ -523,8 +504,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 Back
               </button>
               <button
-                onClick={handleComplete}
-                disabled={isSaving || !homepageApiUrl.trim() || !connectionTestResult?.success}
+                type="button"
+                onClick={() => void handleComplete()}
+                disabled={isSaving}
                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium"
               >
                 {isSaving ? (
@@ -534,7 +516,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   </>
                 ) : (
                   <>
-                    Complete Setup
+                    {homepageApiUrl.trim() ? 'Complete Setup' : 'Skip & Complete Setup'}
                     <CheckCircle className="w-5 h-5" />
                   </>
                 )}

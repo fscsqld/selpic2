@@ -1,0 +1,49 @@
+---
+description: Income Statement Expenses by Category must sum to Total Expenses
+alwaysApply: false
+globs: apps/accounting-sandbox/**/IncomeStatement*,apps/accounting-sandbox/**/business-calculations*
+---
+
+# Income Statement — Expenses by Category
+
+## Invariant
+
+For the same P&L period window:
+
+\[
+\sum \text{Expenses by Category} = \text{Total Expenses}
+\]
+
+(when vendor expense-reducing refunds are $0; refunds reduce Total Expenses only).
+
+## Confirmed SELPIC FY 2025–26 (01/07/2025–30/06/2026)
+
+| Category | Amount |
+|----------|--------|
+| OFFICE EQUIPMENT | $6,161.40 |
+| CLEANING SUBCONTRACTOR | $3,696.00 |
+| TRAVEL TRANSPORT | $1,516.08 |
+| ACCOUNTING PROFESSIONAL FEES | $1,133.00 |
+| FUEL TRAVEL | $945.92 |
+| STARTUP INCORPORATION | $661.85 |
+| FREIGHT SHIPPING | $642.80 |
+| OFFICE SUPPLIES | $242.08 |
+| TRAVEL ACCOMMODATION | $211.71 |
+| MARKETING | $85.18 |
+| MERCHANT FEES | $26.56 |
+| SOFTWARE SUBSCRIPTIONS | $22.50 |
+| BANK FEES INTEREST | $1.53 |
+| **Total** | **$15,346.61** |
+
+Cross-check: Revenue $14,419.48 − Expenses $15,346.61 = Net **−$927.13**.
+
+## Inclusion rules (same as `calculateBusinessMetrics` / `isPlExpenseDebit`)
+
+- Include: `EXPENSE_*` (and `CASH_EXPENSE_*`) business debits
+- Exclude: personal dept, director loan / `NON_TAXABLE_DIRECTOR_REIMBURSEMENT`, ATO GST refund (not an expense)
+- GST-free bank fee (NAB Intnl Tran Fee) **stays** in BANK FEES on P&L; only excluded from 1B
+
+## Code
+
+- `groupPlExpensesByCategory` / `sumPlExpenseCategories` — `lib/utils/business-calculations.ts`
+- UI — `components/Reports/IncomeStatementView.tsx`

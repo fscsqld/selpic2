@@ -1,0 +1,36 @@
+---
+description: Month-End Period must follow ledger activity, not empty FY start
+alwaysApply: false
+globs: apps/accounting-sandbox/**/month-end*,apps/accounting-sandbox/**/MonthEnd*
+---
+
+# Month-End Period vs FY banner
+
+## Bug (learned)
+
+Reports Income Statement period can be **FY 01/07/2025–30/06/2026**.  
+`viewPeriodId = firstMonthPeriodId(FY)` → **`2025-07`**.
+
+Month-End Checklist used that id, so it showed:
+
+`Period 2025-07 is still open for edits`
+
+even when **no bank/cash rows exist in July 2025**. Unrelated to statement parse or cash-expense dates.
+
+## Fix
+
+`resolveMonthEndPeriodId(transactions, preferred)`:
+
+1. Use `preferred` only if that month has ledger activity  
+2. Else latest `YYYY-MM` that has activity  
+3. Else calendar default month  
+
+## Do
+
+- Default Month-End to a month with bank/cash activity  
+- Allow manual Period override in the UI  
+
+## Do not
+
+- Pass FY start month into Month-End lock when that month is empty  
+- Treat empty July “still open” as a P&L error  

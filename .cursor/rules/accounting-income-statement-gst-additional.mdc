@@ -1,0 +1,41 @@
+---
+description: Income Statement Additional Information GST = same P&L period (FY estimate ≠ one BAS)
+alwaysApply: false
+globs: apps/accounting-sandbox/**/IncomeStatement*,apps/accounting-sandbox/**/business-calculations*
+---
+
+# Income Statement — Additional Information GST
+
+## Scope
+
+Same date window as the Income Statement header (e.g. FY **01/07/2025–30/06/2026**).
+
+| Line | Meaning |
+|------|---------|
+| GST Collected (1A) | Taxable sales in period ÷ 11 |
+| GST Claimable (1B) | Claimable purchases in period ÷ 11 (GST-free / ATO refund excluded) |
+| Net GST (1A − 1B) | Period book estimate — **not** one annual ATO remittance |
+
+## Confirmed SELPIC FY 2025–26
+
+| Field | Amount | OK? |
+|-------|--------|-----|
+| GST Collected | **$1,310.86** | Yes (FY 1A) |
+| GST Claimable | **$563.83** | Yes (FY 1B) |
+| Net GST | **$747.03** | Yes (1,310.86 − 563.83) |
+
+Cross-check with cash P&L: CTR / ex-GST Net (~−$1,674) + FY Net GST (~+$747) ≈ cash Net (−$927.13).
+
+## Do not confuse with
+
+| Screen | Window | Role |
+|--------|--------|------|
+| **Reports → BAS vs ATO Lodgment** | **One BAS quarter** | Match Online Services lodgment |
+| **Reports → Income Statement Additional Info** | **Same as P&L (often FY)** | Period GST estimate |
+| **Balance Sheet GST Payable** | **Latest BAS still due** | Liability (e.g. Q4 ~$765), not FY $747 |
+
+## Do not
+
+- Treat FY $747.03 as the amount to type into one quarterly BAS
+- Expect BAS block to show FY totals (BAS lodging is quarterly by ATO design)
+- Subtract ATO bank refund (~$18) from FY 1B / Net in this card

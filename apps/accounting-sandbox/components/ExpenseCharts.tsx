@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { strings } from '@/lib/i18n/strings'
+import { filterPlExpenseDebits } from '@/lib/utils/business-calculations'
+import { isCompanyBusinessDepartment } from '@/lib/classification/company-account'
 
 interface ExpenseChartsProps {
   transactions: Array<{
@@ -20,7 +22,18 @@ interface ExpenseChartsProps {
   accountType?: 'individual' | 'company' | 'sole_trader'
 }
 
-// Color palette for pie chart
+// Categories excluded from expense charts (transfers, erroneous payments — not P&L)
+const NON_PL_TRANSFER_CATEGORIES = new Set([
+  'TRANSFER_INTERNAL',
+  'NON_TAXABLE_TRANSFER',
+  'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT',
+  'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN',
+  'NON_TAXABLE_DIRECTOR_REIMBURSEMENT',
+  'NON_TAXABLE_ATO_GST_REFUND',
+  'INCOME_REFUND_REIMBURSEMENT', // credit-side refunds only; never plot as expense category
+  'LIABILITY_DIRECTORS_LOAN',
+])
+
 const COLORS = [
   '#0088FE', // Blue
   '#00C49F', // Green
@@ -61,8 +74,11 @@ function getCategoryDisplayName(category: string): string {
     'EXPENSE_REPAIRS_MAINTENANCE': strings.categories.expenseRepairsMaintenance,
     'EXPENSE_OFFICE_EQUIPMENT': strings.categories.expenseOfficeEquipment,
     'EXPENSE_OFFICE_SUPPLIES': strings.categories.expenseOffice,
+    'EXPENSE_SOFTWARE_SUBSCRIPTIONS': strings.categories.expenseSoftwareSubscriptions,
+    'EXPENSE_BANK_FEES_INTEREST': strings.categories.expenseBankFeesInterest,
     'EXPENSE_RENT': strings.categories.expenseRent,
     'EXPENSE_MARKETING': strings.categories.expenseMarketing,
+    'EXPENSE_MERCHANT_FEES': strings.categories.expenseMerchantFees,
     'EXPENSE_WAGES_SALARIES': strings.categories.expenseWagesSalaries,
     'EXPENSE_SUPERANNUATION': strings.categories.expenseSuperannuation,
     'EXPENSE_ATO_GST_BAS': strings.categories.expenseATOGSTBAS,
@@ -75,6 +91,9 @@ function getCategoryDisplayName(category: string): string {
     'EXPENSE_DIRECTORS_FEES': strings.categories.expenseDirectorsFees,
     'CASH_EXPENSE_PETTY': strings.categories.cashExpensePetty,
     'NON_TAXABLE_TRANSFER': strings.categories.internalTransfer,
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT': strings.categories.erroneousPaymentOut,
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN': strings.categories.erroneousPaymentReturn,
+    'NON_TAXABLE_DIRECTOR_REIMBURSEMENT': strings.categories.directorReimbursementPriorPeriod,
     'UNCATEGORIZED': strings.categories.uncategorized,
   }
   return categoryMap[category] || category
@@ -90,27 +109,25 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
     
     transactions
       .filter(tx => {
-        // For individual users, include all transactions
-        // For company/sole trader, filter by business department
+        // For individual users, include all debit expenses except non-P&L transfers
         if (accountType === 'individual') {
-          return tx.debit && 
-                 tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
-        } else {
-          // Include all business transactions (exclude personal)
-          const isBusiness = tx.department !== 'personal' && 
-                            tx.department !== 'unknown' &&
-                            (tx.department === 'cleaning' || 
-                             tx.department === 'sticker' || 
-                             !tx.department) // Include transactions without department as business
-          
-          return tx.debit && 
-                 isBusiness &&
-                 tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
+          return (
+            tx.debit &&
+            tx.category &&
+            tx.category.startsWith('EXPENSE_') &&
+            !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
+          )
         }
+        // Company/sole trader: business EXPENSE_* only (include general — same as P&L metrics)
+        const isBusiness = isCompanyBusinessDepartment(tx.department, accountType)
+
+        return (
+          !!tx.debit &&
+          isBusiness &&
+          !!tx.category &&
+          tx.category.startsWith('EXPENSE_') &&
+          !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
+        )
       })
       .forEach(tx => {
         const category = tx.category || 'UNCATEGORIZED'
@@ -138,21 +155,16 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
           return tx.debit && 
                  (tx.source === 'bank' || !tx.source) && // Default to bank if source not specified
                  tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
+                 !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
         } else {
-          const isBusiness = tx.department !== 'personal' && 
-                            tx.department !== 'unknown' &&
-                            (tx.department === 'cleaning' || 
-                             tx.department === 'sticker' || 
-                             !tx.department) // Include transactions without department as business
+          const isBusiness = isCompanyBusinessDepartment(tx.department, accountType)
           
           return tx.debit && 
                  isBusiness &&
                  (tx.source === 'bank' || !tx.source) && // Default to bank if source not specified
-                 tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
+                 !!tx.category &&
+                 tx.category.startsWith('EXPENSE_') &&
+                 !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
         }
       })
       .reduce((sum, tx) => sum + Math.abs(tx.debit || 0), 0)
@@ -165,21 +177,16 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
           return tx.debit && 
                  tx.source === 'manual' &&
                  tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
+                 !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
         } else {
-          const isBusiness = tx.department !== 'personal' && 
-                            tx.department !== 'unknown' &&
-                            (tx.department === 'cleaning' || 
-                             tx.department === 'sticker' || 
-                             !tx.department) // Include transactions without department as business
+          const isBusiness = isCompanyBusinessDepartment(tx.department, accountType)
           
           return tx.debit && 
                  isBusiness &&
                  tx.source === 'manual' &&
-                 tx.category &&
-                 tx.category !== 'TRANSFER_INTERNAL' &&
-                 tx.category !== 'NON_TAXABLE_TRANSFER'
+                 !!tx.category &&
+                 tx.category.startsWith('EXPENSE_') &&
+                 !NON_PL_TRANSFER_CATEGORIES.has(tx.category || '')
         }
       })
       .reduce((sum, tx) => sum + Math.abs(tx.debit || 0), 0)
@@ -219,17 +226,13 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={activeIndex !== null ? ({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%` : false}
+                  label={activeIndex !== null ? (({ name, percent }: any) => `${name}: ${(((percent ?? 0) as number) * 100).toFixed(1)}%`) : false}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
                   onClick={handlePieClick}
                   onMouseEnter={(_, index) => setActiveIndex(index)}
                   onMouseLeave={() => setActiveIndex(null)}
-                  activeIndex={activeIndex !== null ? activeIndex : undefined}
-                  activeShape={{
-                    outerRadius: 110,
-                  }}
                   style={{ cursor: 'pointer' }}
                 >
                   {categoryExpenses.map((entry, index) => (
@@ -243,10 +246,11 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number, name: string, props: any) => {
-                    const percent = ((value / totalExpenses) * 100).toFixed(1)
+                  formatter={(value: number | undefined, _name: string | undefined, props: any) => {
+                    const safeValue = value ?? 0
+                    const percent = ((safeValue / totalExpenses) * 100).toFixed(1)
                     return [
-                      `${formatCurrency(value)} (${percent}%)`,
+                      `${formatCurrency(safeValue)} (${percent}%)`,
                       props.payload.name
                     ]
                   }}
@@ -293,7 +297,7 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px' }}
               />
               <Legend />

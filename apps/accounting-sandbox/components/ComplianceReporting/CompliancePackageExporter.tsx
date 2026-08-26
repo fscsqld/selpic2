@@ -1,8 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Download, FileText, Package, Loader2, CheckCircle } from 'lucide-react'
-import { generateCompliancePackage, CompliancePackageData } from '@/lib/compliance-reporting/compliance-package'
+import { Download, Package, Loader2, CheckCircle } from 'lucide-react'
+import {
+  generateCompliancePackage,
+  CompliancePackageData,
+  resolveComplianceReportPeriod,
+} from '@/lib/compliance-reporting/compliance-package'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 
@@ -15,12 +19,23 @@ interface CompliancePackageExporterProps {
     credit: number | null
     category?: string
     department?: string
+    source?: string
     isDirectorsLoan?: boolean
     isPayrollTransaction?: boolean
     requiresPAYG?: boolean
+    payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
+    noABNWarning?: {
+      shouldWarn?: boolean
+      warningMessage?: string
+      withholdingAmount?: number
+    }
     gstInfo?: {
-      hasGST: boolean
+      isGSTIncluded?: boolean
+      gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
       gstAmount?: number
+      netAmount?: number
+      /** @deprecated legacy shape — prefer gstType */
+      hasGST?: boolean
     }
   }>
   openingDirectorLoanBalance: number
@@ -29,6 +44,12 @@ interface CompliancePackageExporterProps {
   acn?: string
   periodStart?: string
   periodEnd?: string
+}
+
+function periodFileSlug(label: string, start: string, end: string): string {
+  const fromLabel = label.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+  if (fromLabel) return fromLabel
+  return `${start}_${end}`.replace(/-/g, '')
 }
 
 export function CompliancePackageExporter({
@@ -43,23 +64,26 @@ export function CompliancePackageExporter({
   const [isGenerating, setIsGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
 
-  // Get current financial year
-  const getFinancialYear = () => {
+  /** Prefer P&L / banner window; else AU FY from those dates; never wall-clock alone. */
+  const resolveFinancialYear = () => {
+    const start = periodStart?.slice(0, 10)
+    const end = periodEnd?.slice(0, 10)
+    if (start && end) {
+      const mid = start
+      const y = Number(mid.slice(0, 4))
+      const m = Number(mid.slice(5, 7))
+      if (m >= 7) {
+        return { start: `${y}-07-01`, end: `${y + 1}-06-30` }
+      }
+      return { start: `${y - 1}-07-01`, end: `${y}-06-30` }
+    }
     const now = new Date()
     const month = now.getMonth() + 1
     const year = now.getFullYear()
-    
     if (month >= 7) {
-      return {
-        start: `${year}-07-01`,
-        end: `${year + 1}-06-30`,
-      }
-    } else {
-      return {
-        start: `${year - 1}-07-01`,
-        end: `${year}-06-30`,
-      }
+      return { start: `${year}-07-01`, end: `${year + 1}-06-30` }
     }
+    return { start: `${year - 1}-07-01`, end: `${year}-06-30` }
   }
 
   const handleExportPackage = async () => {
@@ -67,8 +91,8 @@ export function CompliancePackageExporter({
     setGenerated(false)
 
     try {
-      const financialYear = getFinancialYear()
-      
+      const financialYear = resolveFinancialYear()
+
       const packageData: CompliancePackageData = {
         transactions,
         openingDirectorLoanBalance,
@@ -76,49 +100,54 @@ export function CompliancePackageExporter({
         abn,
         acn,
         financialYear,
-        periodStart,
-        periodEnd,
+        // Prefer P&L banner dates for every sheet (do not expand a quarter to FY alone)
+        periodStart: periodStart || financialYear.start,
+        periodEnd: periodEnd || financialYear.end,
       }
 
-      // Generate all reports
-      const { financialStatements, trialBalance, directorsLoanReport, basPackage, auditTrail } = 
+      const reportPeriod = resolveComplianceReportPeriod(packageData)
+
+      const { financialStatements, trialBalance, directorsLoanReport, basPackage, auditTrail } =
         await generateCompliancePackage(packageData)
 
-      // Create ZIP file
       const zip = new JSZip()
 
-      // Convert workbooks to binary strings and add to ZIP
-      const financialStatementsBuffer = XLSX.write(financialStatements, { type: 'array', bookType: 'xlsx' })
+      const financialStatementsBuffer = XLSX.write(financialStatements, {
+        type: 'array',
+        bookType: 'xlsx',
+      })
       zip.file('Financial_Statements.xlsx', financialStatementsBuffer)
 
       const trialBalanceBuffer = XLSX.write(trialBalance, { type: 'array', bookType: 'xlsx' })
       zip.file('Trial_Balance.xlsx', trialBalanceBuffer)
 
-      const directorsLoanBuffer = XLSX.write(directorsLoanReport, { type: 'array', bookType: 'xlsx' })
+      const directorsLoanBuffer = XLSX.write(directorsLoanReport, {
+        type: 'array',
+        bookType: 'xlsx',
+      })
       zip.file('Directors_Loan_Report.xlsx', directorsLoanBuffer)
 
       const basPackageBuffer = XLSX.write(basPackage, { type: 'array', bookType: 'xlsx' })
       zip.file('BAS_Package.xlsx', basPackageBuffer)
 
-      // Add Audit Trail as JSON with header
       const auditTrailWithHeader = {
         companyName,
         abn,
         generatedAt: new Date().toISOString(),
+        period: reportPeriod.label,
+        periodStart: reportPeriod.start,
+        periodEnd: reportPeriod.end,
         totalEntries: auditTrail.length,
         entries: auditTrail,
       }
-      const auditTrailJson = JSON.stringify(auditTrailWithHeader, null, 2)
-      zip.file('Audit_Trail.json', auditTrailJson)
+      zip.file('Audit_Trail.json', JSON.stringify(auditTrailWithHeader, null, 2))
 
-      // Generate ZIP file
       const zipBlob = await zip.generateAsync({ type: 'blob' })
-      
-      // Download
+
       const url = URL.createObjectURL(zipBlob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `Accountant_Pack_FY${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}.zip`
+      link.download = `Accountant_Pack_${periodFileSlug(reportPeriod.label, reportPeriod.start, reportPeriod.end)}.zip`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -144,16 +173,25 @@ export function CompliancePackageExporter({
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-        <h4 className="font-semibold text-gray-900 mb-2">Annual Tax Package</h4>
-        <ul className="text-sm text-gray-700 space-y-1 mb-4">
-          <li>• Financial Statements (P&L + Balance Sheet) - Excel</li>
-          <li>• Trial Balance - Excel</li>
-          <li>• Director's Loan Report - Excel</li>
-        </ul>
+        <p className="text-sm text-teal-900 mb-4">
+          Uses the selected P&amp;L period for every sheet (same window as Biz Intel / Export BAS).
+          Choosing Q4 exports Q4 figures — not the full FY snapped from the start date.
+        </p>
 
-        <h4 className="font-semibold text-gray-900 mb-2">Quarterly BAS Package</h4>
+        <h4 className="font-semibold text-gray-900 mb-2">Financial package</h4>
         <ul className="text-sm text-gray-700 space-y-1 mb-4">
-          <li>• BAS Summary (ATO format: G1, 1A, 1B, 1C)</li>
+          <li>• Financial Statements (P&amp;L + Balance Sheet) - Excel</li>
+          <li>• Trial Balance - Excel</li>
+          <li>• Director&apos;s Loan Report - Excel</li>
+        </ul>
+        <p className="text-xs text-teal-800 mb-4">
+          P&amp;L, Balance Sheet, Trial Balance, and BAS G1 use ledger-integrated figures (bank
+          transactions + journal entries, including AR/AP accrual journals when enabled).
+        </p>
+
+        <h4 className="font-semibold text-gray-900 mb-2">BAS package</h4>
+        <ul className="text-sm text-gray-700 space-y-1 mb-4">
+          <li>• BAS Summary (ATO format: G1, 1A, 1B, 7C/1C) — same GST rules as Biz Intel</li>
           <li>• PAYG Withholding Summary</li>
         </ul>
 

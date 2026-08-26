@@ -1,0 +1,27 @@
+---
+description: NAB Intnl Tran Fee is GST-free (no BAS 1B) but still a bank fee expense
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# NAB international transaction fee — GST FREE
+
+## Confirmed (SELPIC)
+
+`Nab Intnl Tran Fee` (e.g. **$1.53** on **26/03/2026**, category **Bank Fees & Interest**):
+
+- **P&L**: yes — company bank fee expense (`EXPENSE_BANK_FEES_INTEREST`)
+- **BAS 1B / gstClaimable**: **no** — GST-free / not an AU taxable supply to claim
+- Manual GST-free overrides must survive refresh (`gstInfo.reasoning` starts with `Manual:`)
+
+## Implementation
+
+- Auto tag: `lib/gst/apply-known-purchase-gst.ts` (`GST_FREE_BANK_FEE_PATTERNS`)
+- Upload path: `buildGstInfoForRules` in `lib/ai-classifier/rule-based-classifier.ts`
+- Manual edit persist: patch **every** History statement that holds the row (not only `currentStatementId`)
+
+## Do not
+
+- Treat GST-free as “exclude from expenses” — fee still hits Real-Time P&L costs
+- Overwrite `Manual:` gstInfo on load
+- Persist GST edits only when a statement was Load-ed first

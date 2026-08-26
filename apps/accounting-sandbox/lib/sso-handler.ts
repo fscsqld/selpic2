@@ -5,12 +5,12 @@
  * 별도의 재로그인 없이 접근 가능하도록 함
  */
 
-interface SSOToken {
+export interface SSOToken {
   username: string
   role: 'admin' | 'super_admin' | 'staff'
   permissions: string[]
   timestamp: number
-  accessType?: 'admin' | 'staff' // 진입 타입 (관리자/직원)
+  accessType?: 'admin' | 'staff'
 }
 
 /**

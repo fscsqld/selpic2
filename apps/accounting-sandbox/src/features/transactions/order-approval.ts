@@ -9,6 +9,8 @@ import { Transaction } from '../../shared/types/transaction'
 import { OrderApprovalResult } from './types'
 import { checkDuplicateOrder } from './duplicate-detector'
 
+export { checkDuplicateOrder }
+
 /**
  * 주문 승인 처리
  * @param order - 승인할 주문

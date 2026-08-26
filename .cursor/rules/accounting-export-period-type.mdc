@@ -1,0 +1,33 @@
+---
+description: BAS / P&L export Period Type must match the actual date window
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Export period type vs P&L banner
+
+## Invariant
+
+**Period Type** (and Period label) on exported Excel must describe the **same start/end** as the Biz Intel P&L banner — not a binary Monthly/Quarterly flag derived from range length.
+
+| Banner selection | Period Type | Period label example |
+|------------------|-------------|----------------------|
+| Exact month | Monthly | March 2026 |
+| Exact BAS Q1–Q4 | Quarterly | Q4 2025-2026 |
+| Exact AU FY (1 Jul–30 Jun) | Financial Year | FY 2025-2026 |
+| Full statement / custom | Custom | 07/12/2025 – 29/06/2026 |
+
+## Bug class
+
+`daysDiff <= 35 ? monthly : quarterly` labeled **every** long window as Quarterly — including Financial Year. GST amounts could still be correct while the header lied.
+
+## Do
+
+- Classify with `resolveBasReportPeriodMeta` / exact month·quarter·FY matchers
+- Print via `formatBasPeriodTypeLabel`
+- Test FY + one custom range + Q1–Q4
+
+## Do not
+
+- Infer Period Type from day count alone
+- Snap FY to Q1 of 1 July (separate bug — see `accounting-export-bas-gst.mdc`)

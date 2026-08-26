@@ -1,0 +1,25 @@
+---
+description: P&L Period Excel must match Transaction History text and selected dates
+globs: apps/accounting-sandbox/lib/excel-export/**/*.{ts,tsx},apps/accounting-sandbox/hooks/useAccountingDashboard.ts,apps/accounting-sandbox/components/TransactionTable.tsx
+alwaysApply: false
+---
+
+# P&L Period Excel vs Transaction History
+
+## Invariant
+
+**Export Business Only (P&L Period)** is the same window as the P&L banner + History (bank ∩ dates + Cash Expense). Spreadsheet cells must match on-screen **text**: AU date `DD/MM/YYYY`, `getTransactionCategoryLabel`, `cleanTransactionDescription`, Company/Personal department names, debit/credit amounts.
+
+## Do
+
+- Filter dates with `filterTransactionsForDateRange` / `toIsoDateString` (DD/MM/YYYY still counts).
+- Exclude `personal` / `unknown` for Business Only — same gate as `calculateBusinessMetrics`. Do **not** remap personal → Company before that filter.
+- Put the selected period on row 1 of the workbook **and** in the filename.
+- GST: tagged FREE/EXCLUDED = 0; cash default GST-free; bank default inclusive ÷11.
+
+## Do not
+
+- Compare dates with `slice(0, 10)` on display strings.
+- Keep a second category/description map in `excel-export`.
+- Export the whole statement PDF span when a P&L banner range is set.
+---

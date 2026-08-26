@@ -1,0 +1,72 @@
+---
+description: Export BAS Report from GST Summary — same period estimates as on screen
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Export BAS Report (GST Summary button)
+
+## What is exported
+
+Clicking **Export BAS Report** on Biz Intel → GST Summary downloads an Excel file built by:
+
+1. `filteredTransactions` / `dateRange` already used for the on-screen GST cards  
+2. `generateBASReport(...)` → GST block from `calculateBusinessMetrics` (same as Biz Intel)  
+3. `exportBASToExcel(...)`
+
+So for the **current P&L period** (e.g. FY Jul–Jun), the GST sheet figures should match the screen:
+
+| Excel row | Screen |
+|-----------|--------|
+| G1 — Total sales (GST inclusive) | Business income underlying 1A |
+| 1A — GST on sales | GST Collected (1A) |
+| 1B — GST on purchases | GST Paid (1B) |
+| 1C / 7C | GST Net Payable / Refund |
+
+Example: screen 1A $1,310.86 · 1B $563.83 · Net $747.03 → Excel should show the same (±2dp rounding).
+
+## What else is in the file (not wrong, but easy to misread)
+
+- Header title mentions **PAYG Withholding** — historical template; GST section is still valid.
+- **PAYG summary / payroll detail** rows are usually empty when the ledger is bank+cash only (no payslip journals in the filter).
+- **Period Type** follows the **actual date window** (`resolveBasReportPeriodMeta`): Monthly / Quarterly / Financial Year / Custom — not a Monthly↔Quarterly toggle alone when the banner is FY.
+
+## Correct interpretation
+
+- Export = **book estimate for the selected date window**, same caveats as on-screen GST Net (not a filed ATO form; FY export is not one annual BAS lodgment).
+- Prefer **BAS quarter** P&L + export when preparing a real lodgment pack.
+
+## Bug fixed (Aug 2026) — Period Type
+
+**Symptom:** Financial Year export showed **Period Type: Quarterly** (and Period label sometimes looked quarter-like) while Start/End were still Jul–Jun. Quarters looked fine.
+
+**Cause:** `handleExportBAS` used `daysDiff > 35 ⇒ 'quarterly'`, and Excel printed that binary flag. Length ≠ BAS lodgment cycle. FY (~365 days) was always labeled Quarterly.
+
+**Fix:** `resolveBasReportPeriodMeta(start, end)` classifies from exact dates:
+- calendar month → Monthly  
+- exact BAS quarter → Quarterly  
+- exact AU FY (1 Jul–30 Jun) → **Financial Year**  
+- else → Custom  
+
+`exportBASToExcel` prints `formatBasPeriodTypeLabel(...)`. Never infer type from day-count alone.
+
+## Cousins (same class)
+
+- Full statement / custom spans labeled Quarterly because “long”  
+- GST Summary Monthly toggle still snaps when intentionally monthly  
+- ZIP BAS sheet period labels must stay aligned with the same window
+
+## Bug fixed (Aug 2026) — FY snap to Q1
+
+`generateBASReport(..., 'quarterly')` used to **snap any range to the BAS quarter of the start date**.  
+Exporting FY `2025-07-01…2026-06-30` became **Q1 Jul–Sep** → empty GST (file name `…_Q1_2025-2026_…`) while the screen still showed FY totals.
+
+**Fix:** snap to a named quarter only when start/end **exactly** match that quarter; otherwise keep the caller’s window.
+
+## Do not
+
+- Expect the Excel to list every income/expense line (GST export is summary + optional payroll detail)
+- Treat FY 1C in the file as “pay ATO this once for the year”
+- Assume PAYG zeros mean GST is wrong
+- Snap FY / Full statement exports to Q1 of 1 July
+- Label Period Type from day-count alone (`>35 days ⇒ Quarterly`)
