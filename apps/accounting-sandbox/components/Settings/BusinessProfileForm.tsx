@@ -568,9 +568,9 @@ export function BusinessProfileForm() {
             <p><strong>Debug Info:</strong></p>
             <p>Account Type: {profile.accountType || 'NOT SET'}</p>
             {profile.accountType === 'individual' ? (
-              <p>Individual Name: "{profile.individualName || ''}" (length: {(profile.individualName || '').length})</p>
+              <p>Individual Name: &quot;{profile.individualName || ''}&quot; (length: {(profile.individualName || '').length})</p>
             ) : (
-              <p>Company Name: "{profile.companyName || ''}" (length: {(profile.companyName || '').length})</p>
+              <p>Company Name: &quot;{profile.companyName || ''}&quot; (length: {(profile.companyName || '').length})</p>
             )}
             {profile.accountType !== 'individual' && (
               <>

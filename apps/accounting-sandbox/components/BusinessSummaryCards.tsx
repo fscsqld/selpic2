@@ -343,7 +343,7 @@ export function BusinessSummaryCards({
               : 'Personal Transactions (Excluded from Business)'}
           </h3>
           <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-            <strong>🔧 Important:</strong> Personal transactions (`department: 'personal'`) are <strong>COMPLETELY EXCLUDED</strong> from:
+            <strong>🔧 Important:</strong> Personal transactions (`department: {'\'personal\''}`) are <strong>COMPLETELY EXCLUDED</strong> from:
             <ul className="list-disc list-inside mt-1 space-y-0.5">
               {accountType === 'individual' ? (
                 <>
@@ -363,7 +363,7 @@ export function BusinessSummaryCards({
             {accountType !== 'individual' && (
               <>
                 <p className="mt-2 font-medium">For company accounts:</p>
-                <p>Personal expenses are automatically reflected in Director's Loan Balance. 
+                <p>Personal expenses are automatically reflected in Director&apos;s Loan Balance. 
                 Personal debits reduce the balance (Director owes Company), and personal credits increase it (Company owes Director).</p>
               </>
             )}

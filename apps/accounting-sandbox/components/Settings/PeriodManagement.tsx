@@ -293,7 +293,7 @@ export function PeriodManagement() {
   const settingsOpeningDirectorLoan = useMemo(() => {
     if (typeof window === 'undefined') return 0
     return Number(localStorage.getItem('opening_director_loan_balance') || '0') || 0
-  }, [periods.length, ledgerTransactions.length])
+  }, [])
 
   const liveDirectorLoanChain = useMemo(() => {
     const through =
@@ -308,15 +308,18 @@ export function PeriodManagement() {
     )
   }, [ledgerTransactions, settingsOpeningDirectorLoan, periods])
 
-  const closingDirectorLoanFor = (periodId: string, fallback: number) =>
-    liveDirectorLoanChain.get(periodId)?.closing ?? fallback
+  const closingDirectorLoanFor = useCallback(
+    (periodId: string, fallback: number) =>
+      liveDirectorLoanChain.get(periodId)?.closing ?? fallback,
+    [liveDirectorLoanChain]
+  )
 
   const openingDirectorLoanFor = (periodId: string, fallback: number) =>
     liveDirectorLoanChain.get(periodId)?.opening ?? fallback
 
   const selectedPeriodCaption = useMemo(
     () => formatDirectorLoanCaption(closingDirectorLoanFor(selectedPeriodId, selectedPeriod?.closingDirectorLoanBalance ?? 0)),
-    [selectedPeriodId, selectedPeriod?.closingDirectorLoanBalance, liveDirectorLoanChain]
+    [selectedPeriodId, selectedPeriod?.closingDirectorLoanBalance, closingDirectorLoanFor]
   )
 
   const selectedPeriodActivity = useMemo(

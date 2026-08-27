@@ -84,6 +84,7 @@ export function EmployeeAddForm({ onSave, onCancel }: EmployeeAddFormProps) {
         setFormData(prev => ({ ...prev, superannuationRate: 0.11 }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to type changes; other fields are guards
   }, [formData.type])
 
   // Full Name 변경 시 Account Name 자동 채우기
@@ -95,6 +96,7 @@ export function EmployeeAddForm({ onSave, onCancel }: EmployeeAddFormProps) {
         bankAccount: { ...prev.bankAccount, accountName: prev.name || '' }
       }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when name changes; accountName is a fill-once guard
   }, [formData.name])
 
   // BSB 변경 시 Bank Name 자동 채우기
@@ -109,6 +111,7 @@ export function EmployeeAddForm({ onSave, onCancel }: EmployeeAddFormProps) {
         }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when BSB changes; bankName is a fill-once guard
   }, [formData.bankAccount?.bsb])
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -569,7 +572,7 @@ export function EmployeeAddForm({ onSave, onCancel }: EmployeeAddFormProps) {
           </h3>
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-md mb-4">
             <p className="text-sm text-blue-800">
-              <strong>Note:</strong> Company is required to pay Superannuation contributions to the employee's chosen fund. 
+              <strong>Note:</strong> Company is required to pay Superannuation contributions to the employee&apos;s chosen fund. 
               This information is used for payroll processing.
             </p>
           </div>
@@ -603,7 +606,7 @@ export function EmployeeAddForm({ onSave, onCancel }: EmployeeAddFormProps) {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Employee's unique member number in the fund
+                Employee&apos;s unique member number in the fund
               </p>
             </div>
           </div>

@@ -306,7 +306,7 @@ export function EmployeeManagement() {
           <div className="text-center py-8 text-gray-500">
             <User className="w-12 h-12 mx-auto mb-2 text-gray-400" />
             <p>No employees added yet</p>
-            <p className="text-sm mt-1">Click "Add Employee" to get started</p>
+            <p className="text-sm mt-1">Click &quot;Add Employee&quot; to get started</p>
           </div>
         ) : (
           <div className="space-y-2">

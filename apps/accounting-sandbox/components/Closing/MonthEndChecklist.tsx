@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ClipboardCheck, CheckCircle2, AlertTriangle, Circle } from 'lucide-react'
 import { buildMonthEndChecklist, resolveMonthEndPeriodId, type MonthEndTask } from '@/lib/subledger/month-end-checklist'
 import type { FinancialPeriod } from '@/lib/storage/period-types'
@@ -47,7 +47,7 @@ export function MonthEndChecklist({
     })
   }, [transactions, preferredPeriodId])
 
-  const loadChecklist = async () => {
+  const loadChecklist = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await buildMonthEndChecklist(transactions, financialPeriods, periodId)
@@ -57,11 +57,11 @@ export function MonthEndChecklist({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [transactions, financialPeriods, periodId])
 
   useEffect(() => {
     void loadChecklist()
-  }, [transactions, financialPeriods, periodId])
+  }, [loadChecklist])
 
   return (
     <div className="card space-y-5">

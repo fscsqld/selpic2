@@ -399,6 +399,7 @@ export function TransactionTable({
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload receipts when localTransactions change; receipts in cleanup only
   }, [localTransactions]) // Use localTransactions instead of filteredTransactions
 
   const getCategoryLabel = (category?: string): string => {
@@ -1437,6 +1438,7 @@ export function TransactionTable({
                           className="relative group"
                           title="View receipt"
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable */}
                           <img
                             src={transactionReceipts[baseTxId]}
                             alt="Receipt"
@@ -1750,6 +1752,7 @@ export function TransactionTable({
                 
                 if (isImage) {
                   return (
+                    // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                     <img
                       src={receiptImage}
                       alt="Receipt"
@@ -1771,6 +1774,7 @@ export function TransactionTable({
                 } else {
                   // Fallback: try as image (supports external URLs)
                   return (
+                    // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                     <img
                       src={receiptImage}
                       alt="Receipt"

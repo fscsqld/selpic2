@@ -549,16 +549,20 @@ export function ATOLodgmentGuide({
     }
   }, [liveResultRaw, scopeValidation])
 
-  const activeResult = viewingSnapshot
-    ? {
-        kind: viewingSnapshot.kind,
-        periodLabel: viewingSnapshot.periodLabel,
-        periodStart: viewingSnapshot.periodStart,
-        periodEnd: viewingSnapshot.periodEnd,
-        fields: viewingSnapshot.fields,
-        validation: viewingSnapshot.validation,
-      }
-    : liveResult
+  const activeResult = useMemo(
+    () =>
+      viewingSnapshot
+        ? {
+            kind: viewingSnapshot.kind,
+            periodLabel: viewingSnapshot.periodLabel,
+            periodStart: viewingSnapshot.periodStart,
+            periodEnd: viewingSnapshot.periodEnd,
+            fields: viewingSnapshot.fields,
+            validation: viewingSnapshot.validation,
+          }
+        : liveResult,
+    [viewingSnapshot, liveResult]
+  )
 
   const storageKey =
     activeTab === 'bas' && basResult

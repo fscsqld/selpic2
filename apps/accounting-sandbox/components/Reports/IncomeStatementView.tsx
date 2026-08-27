@@ -404,7 +404,7 @@ export function IncomeStatementView({
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Director's Loan Balance:</p>
+              <p className="text-sm text-gray-600 mb-1">Director&apos;s Loan Balance:</p>
               <p className={`font-semibold ${
                 metrics.directorsLoanBalance >= 0 ? 'text-blue-600' : 'text-red-600'
               }`}>

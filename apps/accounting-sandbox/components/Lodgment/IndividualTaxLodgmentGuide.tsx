@@ -155,18 +155,22 @@ export function IndividualTaxLodgmentGuide({
     [transactions, financialYear, overrides]
   )
 
-  const activeResult = viewingSnapshot
-    ? {
-        kind: 'individual' as const,
-        financialYear,
-        periodStart: viewingSnapshot.periodStart,
-        periodEnd: viewingSnapshot.periodEnd,
-        fields: viewingSnapshot.fields,
-        validation: viewingSnapshot.validation,
-        uncategorisedCount: 0,
-        bankHints: liveResult.bankHints,
-      }
-    : liveResult
+  const activeResult = useMemo(
+    () =>
+      viewingSnapshot
+        ? {
+            kind: 'individual' as const,
+            financialYear,
+            periodStart: viewingSnapshot.periodStart,
+            periodEnd: viewingSnapshot.periodEnd,
+            fields: viewingSnapshot.fields,
+            validation: viewingSnapshot.validation,
+            uncategorisedCount: 0,
+            bankHints: liveResult.bankHints,
+          }
+        : liveResult,
+    [viewingSnapshot, financialYear, liveResult]
+  )
 
   const orderedFields = useMemo(
     () => sortFieldsByAtoOrder(activeResult.fields),
@@ -313,7 +317,7 @@ export function IndividualTaxLodgmentGuide({
       kind: 'individual',
       scopeMode: 'full',
     })
-  }, [activeResult, viewingSnapshot, transactions.length, liveResult.uncategorisedCount, entered])
+  }, [activeResult, viewingSnapshot, transactions.length, liveResult.uncategorisedCount, liveResult.periodStart, liveResult.periodEnd, entered])
 
   const renderFieldRow = (field: LodgmentField) => {
     const isSelected = selectedFieldId === field.id

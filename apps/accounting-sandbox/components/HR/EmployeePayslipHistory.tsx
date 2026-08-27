@@ -50,6 +50,7 @@ export function EmployeePayslipHistory({ employee }: EmployeePayslipHistoryProps
   useEffect(() => {
     loadPayslipHistory()
     loadCompanyInfo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when employee.id changes
   }, [employee.id])
 
   const loadCompanyInfo = async () => {

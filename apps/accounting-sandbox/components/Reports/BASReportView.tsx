@@ -351,7 +351,7 @@ export function BASReportView({
           <div className="flex items-center justify-between mb-4">
             <div className="section-title flex items-center gap-2">
               <DollarSign className="w-5 h-5" />
-              Director's Loan Ledger
+              Director&apos;s Loan Ledger
               {directorsLoanLedger.length > 0 && (
                 <span className="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
                   {directorsLoanLedger.length} {directorsLoanLedger.length === 1 ? 'transaction' : 'transactions'}
@@ -458,7 +458,7 @@ export function BASReportView({
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  <p>No Director's Loan transactions found for this period.</p>
+                  <p>No Director&apos;s Loan transactions found for this period.</p>
                 </div>
               )}
             </>
@@ -537,6 +537,7 @@ export function BASReportView({
                     
                     if (isImage) {
                       return (
+                        // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                         <img
                           src={receiptUrl}
                           alt={`Receipt for ${item.description}`}
@@ -567,6 +568,7 @@ export function BASReportView({
                     } else {
                       // Fallback: try to display as image
                       return (
+                        // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                         <img
                           src={receiptUrl}
                           alt={`Receipt for ${item.description}`}

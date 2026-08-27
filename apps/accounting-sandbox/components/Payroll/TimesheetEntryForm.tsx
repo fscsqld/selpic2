@@ -59,6 +59,7 @@ export function TimesheetEntryForm({
       setCurrentEmployeeId(token.username)
       setCurrentEmployeeName(token.username)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to seed SSO identity
   }, [])
 
   // 총 시간 및 급여 계산

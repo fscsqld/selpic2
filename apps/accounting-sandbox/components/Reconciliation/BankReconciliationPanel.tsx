@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Landmark, CheckCircle2, AlertTriangle, RefreshCw, Lock, Unlock } from 'lucide-react'
 import {
   completeBankReconciliation,
@@ -63,7 +63,7 @@ export function BankReconciliationPanel({
     return computeReconciliationDifference(session, periodTransactions)
   }, [session, periodTransactions])
 
-  const loadSession = async () => {
+  const loadSession = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -74,11 +74,11 @@ export function BankReconciliationPanel({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [periodId, transactions, openingCashBalance])
 
   useEffect(() => {
     void loadSession()
-  }, [periodId, transactions, openingCashBalance])
+  }, [loadSession])
 
   const handleToggle = async (key: string) => {
     if (!session) return

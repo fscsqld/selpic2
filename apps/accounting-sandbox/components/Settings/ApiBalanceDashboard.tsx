@@ -261,6 +261,7 @@ export function ApiBalanceDashboard({ apiKey, userApiKey }: ApiBalanceDashboardP
       const interval = setInterval(() => fetchUsage(false), 30000) // 30 seconds
       return () => clearInterval(interval)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when API key changes; fetchUsage closes over effectiveApiKey
   }, [effectiveApiKey])
 
   // Save Recent API Usage Logs collapse state to localStorage

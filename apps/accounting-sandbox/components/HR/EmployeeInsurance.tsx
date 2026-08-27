@@ -75,7 +75,7 @@ export function EmployeeInsurance({ employee, onUpdate }: EmployeeInsuranceProps
           <p className="text-sm text-blue-800">
             <strong>Note:</strong> This is the Superannuation Fund information for company contributions. 
             The company is required to pay Superannuation (currently {employee.superannuationRate ? (employee.superannuationRate * 100).toFixed(1) : '11'}%) 
-            of the employee's gross pay to this fund.
+            of the employee&apos;s gross pay to this fund.
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export function EmployeeInsurance({ employee, onUpdate }: EmployeeInsuranceProps
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Employee's unique member number in the Superannuation Fund
+              Employee&apos;s unique member number in the Superannuation Fund
             </p>
           </div>
         </div>

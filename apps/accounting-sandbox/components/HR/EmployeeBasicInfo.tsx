@@ -41,6 +41,7 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
         setFormData(prev => ({ ...prev, superannuationRate: 0.11 }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to type changes; other fields are guards
   }, [formData.type])
 
   // Full Name 변경 시 Account Name 자동 채우기
@@ -52,6 +53,7 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
         bankAccount: { ...prev.bankAccount, accountName: prev.name || '' }
       }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when name changes; accountName is a fill-once guard
   }, [formData.name])
 
   // BSB 변경 시 Bank Name 자동 채우기
@@ -66,6 +68,7 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
         }))
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when BSB changes; bankName is a fill-once guard
   }, [formData.bankAccount?.bsb])
 
   const handleSave = async () => {

@@ -253,7 +253,7 @@ export function ApiKeyForm({ onApiKeySet, onDirectorNameSet, onUserApiKeySet }: 
         <div className="border-t border-gray-200 pt-4 mt-4">
           <label htmlFor="user-api-key" className="block text-sm font-medium text-gray-700 mb-2">
             <Key className="w-4 h-4 inline mr-1" />
-            User's Own OpenAI API Key (Optional)
+            User&apos;s Own OpenAI API Key (Optional)
           </label>
           <p className="text-xs text-gray-500 mb-2">
             If provided, your own API key will be used instead of the system default. This helps manage API costs.

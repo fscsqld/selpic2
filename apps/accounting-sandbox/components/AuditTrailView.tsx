@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { History, User, Clock, Edit2, Trash2, Plus, FileText } from 'lucide-react'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
@@ -11,8 +11,8 @@ interface AuditTrailEntry {
   action: 'created' | 'updated' | 'deleted' | 'category_changed' | 'department_changed'
   userId: string
   userName: string
-  oldValue?: any
-  newValue?: any
+  oldValue?: unknown
+  newValue?: unknown
   description?: string
   timestamp: string
 }
@@ -26,11 +26,7 @@ export function AuditTrailView({ transactionId, showAll = false }: AuditTrailVie
   const [auditEntries, setAuditEntries] = useState<AuditTrailEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    loadAuditTrail()
-  }, [transactionId, showAll])
-
-  const loadAuditTrail = async () => {
+  const loadAuditTrail = useCallback(async () => {
     try {
       setIsLoading(true)
       let entries: AuditTrailEntry[] = []
@@ -47,7 +43,11 @@ export function AuditTrailView({ transactionId, showAll = false }: AuditTrailVie
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [transactionId, showAll])
+
+  useEffect(() => {
+    void loadAuditTrail()
+  }, [loadAuditTrail])
 
   const getActionIcon = (action: string) => {
     switch (action) {

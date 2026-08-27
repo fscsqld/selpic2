@@ -117,7 +117,7 @@ export function TaxDashboard({
         <div className="card bg-indigo-50 border-indigo-200">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <p className="text-sm text-gray-600 mb-1">Director's Loan Balance</p>
+              <p className="text-sm text-gray-600 mb-1">Director&apos;s Loan Balance</p>
               <p className={`text-2xl font-bold ${directorsLoanBalance >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
                 {format(Math.abs(directorsLoanBalance))}
               </p>
@@ -146,7 +146,7 @@ export function TaxDashboard({
         <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <h3 className="text-lg font-semibold text-red-800 mb-2">Non-Deductible Expenses</h3>
           <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-            <strong>💡 Note:</strong> Personal expenses are automatically reflected in Director's Loan Balance. 
+            <strong>💡 Note:</strong> Personal expenses are automatically reflected in Director&apos;s Loan Balance. 
             Personal debits reduce the balance (Director owes Company), and personal credits increase it (Company owes Director).
           </div>
           <div className="flex items-center justify-between">
@@ -156,7 +156,7 @@ export function TaxDashboard({
                 {format(personalSpendingNonDeductible)}
               </p>
               <p className="text-xs text-gray-600 mt-1">
-                Automatically synced to Director's Loan Balance above
+                Automatically synced to Director&apos;s Loan Balance above
               </p>
             </div>
             <AlertTriangle className="w-8 h-8 text-red-600" />

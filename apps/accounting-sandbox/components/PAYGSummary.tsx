@@ -66,7 +66,7 @@ export function PAYGSummary({ transactions }: PAYGSummaryProps) {
       dateRange.endDate,
       periodType
     )
-  }, [transactions, dateRange, periodType])
+  }, [transactions, dateRange, periodType, payrollTransactions.length])
 
   // If no payroll transactions, show empty state
   if (payrollTransactions.length === 0) {

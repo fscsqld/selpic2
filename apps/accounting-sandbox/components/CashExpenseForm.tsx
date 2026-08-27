@@ -454,6 +454,7 @@ export function CashExpenseForm({
               )}
               {receiptPreview && (
                 <div className="mt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable */}
                   <img
                     src={receiptPreview}
                     alt="Receipt preview"

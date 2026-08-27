@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { LogOut, User, Clock, DollarSign, FileText, AlertCircle, Lock, Trash2, ChevronDown, ChevronUp, XCircle } from 'lucide-react'
 import { getCurrentEmployeeSession, logoutEmployee, EmployeeSession } from '@/lib/auth/employee-auth'
 import { TimesheetEntryForm } from '@/components/Payroll/TimesheetEntryForm'
@@ -35,12 +35,12 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
     return true
   })
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logoutEmployee()
     if (onLogout) {
       onLogout()
     }
-  }
+  }, [onLogout])
 
   // 자동 로그아웃 타이머 (30분 비활성 시)
   useEffect(() => {
@@ -91,10 +91,11 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
         window.removeEventListener(event, handleActivity)
       })
     }
-  }, [session, employee, onLogout])
+  }, [session, employee, handleLogout])
 
   useEffect(() => {
     loadEmployeeData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
   // 타임시트 상태 업데이트 이벤트 리스너 (관리자가 승인/거부/삭제 시 실시간 반영)

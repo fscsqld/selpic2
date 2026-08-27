@@ -460,7 +460,7 @@ export function PINLock({ onUnlock, onSystemResetComplete }: PINLockProps) {
             onClick={handleRecoveryCodeAcknowledged}
             className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
           >
-            I've Saved My Recovery Code
+            I&apos;ve Saved My Recovery Code
           </button>
         </div>
       </div>
@@ -720,14 +720,14 @@ export function PINLock({ onUnlock, onSystemResetComplete }: PINLockProps) {
                     className="w-full px-3 py-2 text-center text-lg font-semibold border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono tracking-wider"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Choose a memorable 8-digit code. You'll need this if you forget your PIN.
+                    Choose a memorable 8-digit code. You&apos;ll need this if you forget your PIN.
                   </p>
                 </div>
               ) : (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-xs text-blue-800">
                     <strong>Auto-Generated:</strong> A random 8-digit recovery code will be created automatically. 
-                    You'll see it after setting your PIN.
+                    You&apos;ll see it after setting your PIN.
                   </p>
                 </div>
               )}
