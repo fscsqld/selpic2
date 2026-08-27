@@ -43,6 +43,11 @@ function isContractorExpenseCategory(category: string): boolean {
   )
 }
 
+/**
+ * ATO myTax “Motor vehicle expenses” only — fuel, vehicle, parking, tolls.
+ * Business airfare / travel–transport (e.g. EXPENSE_TRAVEL_TRANSPORT) must NOT
+ * land here; those fall through to All other expenses.
+ */
 function isMotorExpenseCategory(category: string): boolean {
   const key = category.toLowerCase()
   if (
@@ -50,7 +55,15 @@ function isMotorExpenseCategory(category: string): boolean {
     key.includes('hotel') ||
     key.includes('meal') ||
     key.includes('airfare') ||
-    key.includes('flight')
+    key.includes('air_fare') ||
+    key.includes('air-fare') ||
+    key.includes('flight') ||
+    key.includes('airline') ||
+    key.includes('air_travel') ||
+    key.includes('air-travel') ||
+    key.includes('travel_transport') ||
+    key.includes('travel-transport') ||
+    (key.includes('travel') && key.includes('transport'))
   ) {
     return false
   }
@@ -59,10 +72,8 @@ function isMotorExpenseCategory(category: string): boolean {
     key.includes('vehicle') ||
     key.includes('fuel') ||
     (key.includes('car') && !key.includes('care')) ||
-    key.includes('travel_transport') ||
     key.includes('parking') ||
-    key.includes('toll') ||
-    (key.includes('travel') && key.includes('transport'))
+    key.includes('toll')
   )
 }
 

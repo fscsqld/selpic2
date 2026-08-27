@@ -48,11 +48,12 @@ describe('buildMyTaxAnnualFields expense buckets', () => {
     // Contractor = subcontractor only — accounting fees excluded
     expect(amount('MYTAX_CONTRACTOR')).toBeCloseTo(3696, 2)
 
-    // Motor = fuel + travel transport — accommodation excluded
-    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 + 1516.08, 2)
+    // Motor = fuel only — business airfare (TRAVEL_TRANSPORT) is NOT motor
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92, 2)
 
     const other =
       3827.2 +
+      1516.08 +
       1133 +
       661.85 +
       642.8 +
@@ -73,5 +74,58 @@ describe('buildMyTaxAnnualFields expense buckets', () => {
     expect(sectionSum).toBeCloseTo(FY_EXPENSE_TOTAL, 2)
     expect(amount('MYTAX_TOTAL_EXPENSES')).toBeCloseTo(FY_EXPENSE_TOTAL, 2)
     expect(amount('MYTAX_NET_INCOME')).toBeCloseTo(1407.07, 2)
+  })
+
+  it('keeps real vehicle costs in motor and airfare out', () => {
+    const total = 945.92 + 1516.08 + 200 + 80
+    const fields = buildMyTaxAnnualFields(
+      {
+        totalIncome: 1000,
+        totalExpenses: total,
+        netProfit: 1000 - total,
+        gstPayable: 0,
+        gstClaimable: 0,
+      },
+      {
+        incomeByCategory: { INCOME_SALES_SERVICES: 1000 },
+        expensesByCategory: {
+          EXPENSE_FUEL_TRAVEL: 945.92,
+          EXPENSE_TRAVEL_TRANSPORT: 1516.08,
+          EXPENSE_MOTOR_VEHICLE: 200,
+          EXPENSE_TRAVEL_PARKING_TOLLS: 80,
+        },
+      }
+    )
+    const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
+
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 + 200 + 80, 2)
+    expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(1516.08, 2)
+  })
+
+  it('scales motor from fuel only when cash→tax scale is applied', () => {
+    const cashExpenses = 945.92 + 1516.08
+    const taxExpenses = cashExpenses - 100 // pretend $100 GST claimable on mix
+    const fields = buildMyTaxAnnualFields(
+      {
+        totalIncome: 1000,
+        totalExpenses: taxExpenses,
+        netProfit: 1000 - taxExpenses,
+        gstPayable: 0,
+        gstClaimable: 100,
+        cashTotalIncome: 1000,
+        cashTotalExpenses: cashExpenses,
+      },
+      {
+        incomeByCategory: { INCOME_SALES_SERVICES: 1000 },
+        expensesByCategory: {
+          EXPENSE_FUEL_TRAVEL: 945.92,
+          EXPENSE_TRAVEL_TRANSPORT: 1516.08,
+        },
+      }
+    )
+    const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
+    const scale = taxExpenses / cashExpenses
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 * scale, 2)
+    expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(1516.08 * scale, 2)
   })
 })
