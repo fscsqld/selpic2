@@ -83,8 +83,8 @@ Done (user confirmed fix reflected, 2026-08-26).
 
 - [x] **Cash Expense single-delete UI** (local + prod verified)
 - [x] **`tsc` debt cleanup** — **0 errors**; `ignoreBuildErrors` removed from `next.config.js` (2026-08-27)
-- [ ] Optional: clear `eslint.ignoreDuringBuilds` after lint debt
-- Rule: `.cursor/rules/accounting-tsc-debt.mdc`
+- [x] **ESLint during builds** — **0 errors** (~61 warnings); `ignoreDuringBuilds` removed (2026-08-27)
+- Rule: `.cursor/rules/accounting-tsc-debt.mdc`, `.cursor/rules/accounting-eslint-debt.mdc`
 
 ### Definition: “Deploy-related work complete”
 
