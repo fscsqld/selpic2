@@ -16,6 +16,12 @@ import {
 } from '@/lib/utils/australian-financial-year'
 import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
 
+function formatBasPeriodTypeLabel(type: string): string {
+  if (type === 'monthly') return 'Monthly'
+  if (type === 'quarterly') return 'Quarterly'
+  return type
+}
+
 export interface BASReport {
   period: {
     startDate: string
@@ -119,8 +125,8 @@ export function generateBASReport(
       superannuation?: number
     }
     gstInfo?: {
-      isGSTIncluded: boolean
-      gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+      isGSTIncluded?: boolean
+      gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
       gstAmount?: number
       netAmount?: number
     }

@@ -39,7 +39,7 @@ export interface Transaction {
   requiresPAYG?: boolean
   payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: {
-    shouldWarn: boolean
+    shouldWarn?: boolean
     warningMessage?: string
     withholdingAmount?: number
   }
@@ -108,7 +108,7 @@ export async function generateTrialBalance(data: CompliancePackageData): Promise
       `Trial Balance - Financial Year ${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}`,
     ],
     [`As at ${formatDateAustralian(result.asAtDate)}`],
-    result.ledgerIntegrated ? ['Source: Ledger-integrated (transactions + journal entries)'] : [''],
+    [''],
     [''],
   ]
 

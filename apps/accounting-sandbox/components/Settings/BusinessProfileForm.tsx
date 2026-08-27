@@ -9,11 +9,11 @@ interface BusinessProfile {
   individualName?: string
   
   // Company/Sole Trader fields
-  companyName: string
-  abn: string
+  companyName?: string
+  abn?: string
   acn?: string
-  gstReportingCycle: 'Monthly' | 'Quarterly'
-  paygReportingCycle: 'Monthly' | 'Quarterly'
+  gstReportingCycle?: 'Monthly' | 'Quarterly'
+  paygReportingCycle?: 'Monthly' | 'Quarterly'
   gstRegistered?: boolean
   fbtRegistered?: boolean
   

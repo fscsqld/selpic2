@@ -56,7 +56,7 @@ export function EmployeeManagement() {
       const employee: Employee = {
         id: editingEmployee?.id || `emp_${Date.now()}`,
         name: formData.name!,
-        employeeId: formData.employeeId,
+        employeeId: formData.employeeId || `EMP_${Date.now()}`,
         type: (formData.type as EmployeeType) || 'employee',
         taxFileNumber: formData.taxFileNumber,
         abn: formData.abn,

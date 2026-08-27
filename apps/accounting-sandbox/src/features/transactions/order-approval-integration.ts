@@ -106,7 +106,14 @@ export async function recordOrderToAccounting(
       occurredAt: order.transactionDate,
       customerName: order.metadata?.customerName || 'Unknown',
       customerEmail: order.metadata?.customerEmail || '',
-      items: order.metadata?.items || [],
+      items: (order.metadata?.items || []).map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice ?? item.price ?? 0,
+        totalPrice:
+          item.totalPrice ??
+          (item.unitPrice ?? item.price ?? 0) * item.quantity,
+      })),
       subtotal: order.amount,
       shipping: 0,
       discount: 0,

@@ -242,6 +242,9 @@ export async function createOrUpdatePeriod(
     throw new Error(`Period ${periodId} is locked and cannot be updated`)
   }
 
+  const carriedForwardReceivables = existingPeriod?.carriedForwardReceivables || []
+  const createdAt = existingPeriod?.createdAt || new Date().toISOString()
+
   const period: FinancialPeriod = existingPeriod || {
     id: periodId,
     startDate: bounds.startDate,
@@ -253,8 +256,8 @@ export async function createOrUpdatePeriod(
     closingCashBalance: closingBalances.closingCashBalance,
     isLocked: false,
     accountsReceivable: closingBalances.accountsReceivable,
-    carriedForwardReceivables: existingPeriod?.carriedForwardReceivables || [],
-    createdAt: existingPeriod?.createdAt || new Date().toISOString(),
+    carriedForwardReceivables,
+    createdAt,
     updatedAt: new Date().toISOString(),
   }
 

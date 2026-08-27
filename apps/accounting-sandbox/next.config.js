@@ -7,12 +7,9 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  // Phase A (internal protected deploy): allow ship while WIP type debt is cleaned up.
-  // Prefer fixing types over keeping this; remove once `tsc --noEmit` is green.
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // tsc --noEmit is green (2026-08-27); do not re-enable ignoreBuildErrors.
   eslint: {
+    // Prefer fixing lint over permanent ignore; leave on until eslint debt is cleared.
     ignoreDuringBuilds: true,
   },
 }

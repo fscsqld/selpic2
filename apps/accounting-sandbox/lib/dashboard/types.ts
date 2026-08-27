@@ -1,19 +1,22 @@
 import type { BankTransaction } from '@/lib/pdf-parser/types'
 
+export type LedgerTransactionSource = 'bank' | 'manual' | 'payroll' | 'order' | 'journal'
+
 export interface ClassifiedTransaction {
   id?: string
   date: BankTransaction['date']
   description: BankTransaction['description']
   debit: BankTransaction['debit']
   credit: BankTransaction['credit']
-  balance: BankTransaction['balance']
+  /** Optional — cash / manual rows often have balance 0 or omit */
+  balance?: BankTransaction['balance']
   reference?: BankTransaction['reference']
   entityType?: BankTransaction['entityType']
   category?: string
   confidence?: number | string
   department?: string
-  /** bank | manual | payroll | order — used by Biz Intel / History filters */
-  source?: string
+  /** bank | manual | payroll | order | journal — used by Biz Intel / History filters */
+  source?: LedgerTransactionSource
   isDirectorsLoan?: boolean
   isPreTradingExpense?: boolean
   isLearnedMapping?: boolean
@@ -21,16 +24,16 @@ export interface ClassifiedTransaction {
   isPayrollTransaction?: boolean
   payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: {
-    shouldWarn: boolean
-    warningMessage: string
+    shouldWarn?: boolean
+    warningMessage?: string
     withholdingAmount?: number
   }
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
-    confidence: number
+    confidence?: number
     reasoning?: string
   }
   capitalImprovementWarning?: boolean
@@ -44,6 +47,17 @@ export interface ClassifiedTransaction {
     reasoning?: string
     confidence: number
   }
+  fundedByDirector?: boolean
+  paidBy?: 'company' | 'director'
+  receiptImageId?: string
+  matchedEmployee?: {
+    id: string
+    name: string
+    employeeId: string
+    type: string
+  }
+  matchConfidence?: 'high' | 'medium' | 'low'
+  matchReason?: string
 }
 
 export type DashboardTab = 'dashboard' | 'history' | 'settings' | 'reports' | 'ato' | 'hr'

@@ -220,7 +220,7 @@ export function IncomeStatementView({
           <h1 className="text-3xl font-bold text-gray-900">Income Statement (Profit & Loss)</h1>
           {dateRange && (
             <p className="text-gray-600 mt-2">
-              Period: {formatDateAustralian(typeof dateRange.start === 'string' ? dateRange.start : dateRange.start.toISOString().split('T')[0])} to {formatDateAustralian(typeof dateRange.end === 'string' ? dateRange.end : dateRange.end.toISOString().split('T')[0])}
+              Period: {formatDateAustralian(dateRange.start)} to {formatDateAustralian(dateRange.end)}
             </p>
           )}
         </div>

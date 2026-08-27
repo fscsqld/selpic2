@@ -81,7 +81,7 @@ export function breakdownGstByBasQuarter(
     slices.push({
       financialYear: fy,
       quarter: quarter as 1 | 2 | 3 | 4,
-      label: q.label,
+      label: `Q${quarter} ${fy}`,
       startDate: q.startDateStr,
       endDate: q.endDateStr,
       gstPayable: roundMoney(metrics.gstPayable),

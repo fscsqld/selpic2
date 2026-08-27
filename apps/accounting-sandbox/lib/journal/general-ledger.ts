@@ -33,7 +33,7 @@ interface LedgerTransaction {
   credit?: number | null
   category?: string
   reference?: string
-  source?: 'bank' | 'manual' | 'payroll' | 'order' | 'journal'
+  source?: string
 }
 
 const BANK_ACCOUNT = 'ASSET_CASH'
@@ -61,7 +61,7 @@ function pushLine(
 
 export function transactionToLedgerLines(tx: LedgerTransaction): GeneralLedgerLine[] {
   const lines: GeneralLedgerLine[] = []
-  const source = tx.source || 'bank'
+  const source = (tx.source || 'bank') as GeneralLedgerLine['source']
   const sourceId = tx.id || `${tx.date}_${tx.description}`
   const category = tx.category || 'UNCATEGORIZED'
   const debit = Math.abs(tx.debit || 0)

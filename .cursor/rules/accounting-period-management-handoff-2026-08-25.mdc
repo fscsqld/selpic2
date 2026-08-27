@@ -74,6 +74,22 @@ Verify on **http://localhost:3001** only (not storefront).
 
 ## Tomorrow — start here
 
+**User verified 2026-08-27 (passed):**
+
+| Period | Status | Opening/Closing DL | Opening/Closing Cash |
+|--------|--------|--------------------|----------------------|
+| 2026-06 | Active | $10,281.89 → $1,500 | $7,271.58 → $690.87 |
+| 2026-07 | Active | $1,500 / $1,500 | $690.87 / $690.87 |
+| 2026-08 | Active | $1,500 / $1,500 | $690.87 / $690.87 |
+
+Jun reimbursements $8,781.89 confirmed. Empty Jul/Aug cash roll-forward OK (not $0).
+
+This handoff may be archived/deleted when convenient; permanent rules remain in director-loan / calendar / stable-edits mdc files.
+
+---
+
+## (Historical) Verify steps — done
+
 1. Hard-refresh **3001** → Settings → Period Management.
 2. Select **2026-07** (and **2026-08**): expect Cash ≈ **$690.87** / **$690.87** when empty; DL **$1,500**.
 3. If still $0 in IDB: use **Unlock & Recalculate**; confirm persisted Opening/Closing Cash.

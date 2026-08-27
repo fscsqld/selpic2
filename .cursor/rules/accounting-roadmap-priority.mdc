@@ -1,0 +1,59 @@
+---
+description: Accounting roadmap — what remains after Track A; work order (not only public B)
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Accounting — remaining work & priority (learned 2026-08-27)
+
+## Status snapshot
+
+| Track / item | Status |
+|--------------|--------|
+| **A — Internal deploy** (SSO, prod URL, Admin link, History, backup ops) | **Done** (A1–A4 done; Cash single-delete shipped) |
+| **Cash Expense single-delete** | **Done** |
+| **B — Public / multi-tenant accounting** | **Backlog only** — do **not** start until internal product is stable and user explicitly opens B |
+| **`tsc` debt** (~180) + remove `ignoreBuildErrors` | **Done 2026-08-27** (`tsc --noEmit` = 0) |
+
+Public (B) is **not** the only remaining accounting work.
+
+## Remaining (internal / product) — besides B
+
+1. **`tsc` cleanup** — agreed next *tech* debt; enables safe strict builds  
+2. **Period Management production-like verify** — **Done 2026-08-27** (Jun/Jul/Aug fixture passed; see handoff mdc)  
+3. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
+4. **Employee login** — form exists; real employee account + login deferred  
+5. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+6. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
+7. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
+
+## Recommended work order (when choosing “what next”)
+
+```
+1) User-facing ledger correctness still unconfirmed?
+   → Period Management verify (handoff fixture) BEFORE big refactors
+
+2) Else tech harden for internal ship quality?
+   → tsc 정리부터 (batch) → then drop ignoreBuildErrors
+
+3) Ops / roles when accounts exist?
+   → Payroll-only smoke, then employee login
+
+4) Only when user explicitly starts public product?
+   → Track B (tenancy → auth → onboarding → harden API)
+
+5) Nice-to-have modules?
+   → HR leave / WorkCover / audit IDB / AR-AP journals
+```
+
+## Do not
+
+- Start Track B because “only public is left” — that is false  
+- Mix homepage (`selpic2`) webpack with accounting  
+- Treat ignoreBuildErrors as permanent forever without a cleanup plan  
+
+## Resume phrases
+
+- Period QA: **「Period Management 확인부터」**  
+- Types: **「tsc 정리부터」**  
+- Public: **「Track B 시작」** (only when intentional)

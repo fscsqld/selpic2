@@ -99,8 +99,8 @@ interface Transaction {
     confidence: number
   }
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
   }

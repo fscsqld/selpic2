@@ -5,12 +5,15 @@
 import * as XLSX from 'xlsx'
 import type { LodgmentField } from '@/lib/ato-lodgment/types'
 import type { PaymentSummaryEntry } from '@/lib/storage/payment-summary-types'
+import type { IndividualTaxWorksheetRecord } from '@/lib/storage/tax-worksheet-types'
 
 export interface PersonalTaxExportInput {
   financialYear: string
   taxpayerName: string
   fields: LodgmentField[]
   paymentSummaries: PaymentSummaryEntry[]
+  /** Optional worksheet snapshot (included for callers; cover sheet may ignore). */
+  worksheet?: IndividualTaxWorksheetRecord | null
   transactionCount: number
   uncategorisedCount: number
 }

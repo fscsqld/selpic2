@@ -5,9 +5,15 @@
 import {
   computeIndividualLodgment,
   type IndividualManualOverrides,
-  type IndividualWorksheetHints,
 } from '@/lib/ato-lodgment/compute-individual-lodgment'
 import type { IndividualLodgmentResult } from '@/lib/ato-lodgment/types'
+
+export interface IndividualWorksheetHints {
+  rentalFromWorksheet: boolean
+  rentalPropertyCount: number
+  cgtFromWorksheet: boolean
+  cgtEventCount: number
+}
 
 export const INDIVIDUAL_OVERRIDES_UPDATED_EVENT = 'individualTaxOverridesUpdated'
 
@@ -96,8 +102,7 @@ export function computePersonalTaxLodgment(
   worksheetNets: WorksheetNets
 ): IndividualLodgmentResult {
   const effective = buildEffectiveIndividualOverrides(overrides, paymentTotals, worksheetNets)
-  const hints = buildIndividualWorksheetHints(overrides, worksheetNets)
-  return computeIndividualLodgment(transactions, financialYear, effective, hints)
+  return computeIndividualLodgment(transactions, financialYear, effective)
 }
 
 export function filterTransactionsByFinancialYear(

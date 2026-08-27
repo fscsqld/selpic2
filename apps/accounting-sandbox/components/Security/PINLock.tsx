@@ -601,7 +601,9 @@ export function PINLock({ onUnlock, onSystemResetComplete }: PINLockProps) {
                 {[0, 1, 2, 3].map((index) => (
                   <input
                     key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
+                    ref={(el) => {
+                      inputRefs.current[index] = el
+                    }}
                     type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -640,7 +642,9 @@ export function PINLock({ onUnlock, onSystemResetComplete }: PINLockProps) {
                 {[0, 1, 2, 3].map((index) => (
                   <input
                     key={index}
-                    ref={(el) => (confirmInputRefs.current[index] = el)}
+                    ref={(el) => {
+                      confirmInputRefs.current[index] = el
+                    }}
                     type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -794,7 +798,9 @@ export function PINLock({ onUnlock, onSystemResetComplete }: PINLockProps) {
                 {[0, 1, 2, 3].map((index) => (
                   <input
                     key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
+                    ref={(el) => {
+                      inputRefs.current[index] = el
+                    }}
                     type={showPin ? 'text' : 'password'}
                     inputMode="numeric"
                     pattern="[0-9]*"

@@ -15,7 +15,7 @@ export const PRIOR_PERIOD_DIRECTOR_ADVANCES_STORAGE_KEY = 'prior_period_director
 export const PRIOR_ADVANCES_AUTO_MATCH_STORAGE_KEY = 'prior_advances_auto_match_reimbursements'
 
 export function sumDirectorReimbursementDebits(
-  transactions: Array<Pick<Transaction, 'debit' | 'category'>>
+  transactions: Array<{ debit?: number | null; category?: string }>
 ): number {
   return transactions
     .filter((tx) => tx.category === 'NON_TAXABLE_DIRECTOR_REIMBURSEMENT' && tx.debit)

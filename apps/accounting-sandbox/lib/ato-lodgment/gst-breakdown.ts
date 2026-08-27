@@ -8,7 +8,6 @@
  */
 
 import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
-import { isDirectorReimbursementPayeeNarrative } from '@/lib/utils/business-calculations'
 
 type GstTx = {
   date: string
@@ -19,8 +18,8 @@ type GstTx = {
   department?: string
   source?: string
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
   }

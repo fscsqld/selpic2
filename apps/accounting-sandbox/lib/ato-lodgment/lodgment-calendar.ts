@@ -30,7 +30,8 @@ function basDueHint(periodEnd: string, cycle: 'Monthly' | 'Quarterly'): string {
 export function buildLodgmentCalendar(
   accountType: AccountTypeForLodgment,
   gstReportingCycle: 'Monthly' | 'Quarterly' = 'Quarterly',
-  financialYear?: string
+  financialYear?: string,
+  _options?: { hasPayroll?: boolean; hasFbt?: boolean }
 ): LodgmentCalendarItem[] {
   const fy = financialYear ?? getCurrentFinancialYearRange().financialYear
   const q = getCurrentAustralianQuarter()

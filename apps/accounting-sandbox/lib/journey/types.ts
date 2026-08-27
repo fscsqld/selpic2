@@ -5,6 +5,7 @@ export type JourneyStepId =
   | 'review'
   | 'period_lock'
   | 'ato_lodgment'
+  | 'review_reports'
 
 export type JourneyNavigateTarget =
   | 'settings'

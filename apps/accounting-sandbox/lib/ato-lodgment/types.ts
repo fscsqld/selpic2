@@ -2,9 +2,35 @@
  * ATO Lodgment Guide — types for copy-and-enter workflow (no electronic lodge).
  */
 
-export type LodgmentTab = 'bas' | 'annual' | 'ctr'
+export type LodgmentTab = 'bas' | 'annual' | 'ctr' | 'individual'
 
 export type AccountTypeForLodgment = 'individual' | 'company' | 'sole_trader'
+
+/** Bank-derived hints for personal myTax (advisory; payment summaries remain authoritative). */
+export interface IndividualBankHints {
+  salaryDeposits: number
+  interest: number
+  dividends: number
+  govtPayments: number
+  businessIncome: number
+  otherIncome: number
+  workDeductions: number
+  giftsDonations: number
+  taxAffairs: number
+  otherDeductions: number
+  paygWithheldHint: number
+}
+
+export interface IndividualLodgmentResult {
+  kind: 'individual'
+  financialYear: string
+  periodStart: string
+  periodEnd: string
+  fields: LodgmentField[]
+  validation: LodgmentValidation
+  uncategorisedCount: number
+  bankHints: IndividualBankHints
+}
 
 export interface ATOFieldGuide {
   /** Steps shown in the "Where in ATO" panel (English, matches ATO UI). */
@@ -89,4 +115,8 @@ export interface CtrLodgmentResult {
   estimatedTaxRate: number
 }
 
-export type LodgmentResult = BasLodgmentResult | AnnualLodgmentResult | CtrLodgmentResult
+export type LodgmentResult =
+  | BasLodgmentResult
+  | AnnualLodgmentResult
+  | CtrLodgmentResult
+  | IndividualLodgmentResult

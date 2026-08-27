@@ -29,8 +29,8 @@ interface GSTSummaryProps {
     category?: string
     department?: string
     gstInfo?: {
-      isGSTIncluded: boolean
-      gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+      isGSTIncluded?: boolean
+      gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
       gstAmount?: number
       netAmount?: number
     }
@@ -38,7 +38,7 @@ interface GSTSummaryProps {
     isPayrollTransaction?: boolean
     payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
     noABNWarning?: {
-      shouldWarn: boolean
+      shouldWarn?: boolean
       withholdingAmount?: number
     }
   }>

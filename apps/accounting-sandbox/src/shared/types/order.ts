@@ -22,7 +22,9 @@ export interface Order {
     items?: Array<{
       name: string
       quantity: number
-      price: number
+      price?: number
+      unitPrice?: number
+      totalPrice?: number
     }>
   }
 }

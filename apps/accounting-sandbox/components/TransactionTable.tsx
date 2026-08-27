@@ -57,8 +57,8 @@ interface Transaction {
   matchConfidence?: 'high' | 'medium' | 'low'
   matchReason?: string
   noABNWarning?: {
-    shouldWarn: boolean
-    warningMessage: string
+    shouldWarn?: boolean
+    warningMessage?: string
     withholdingAmount?: number
   }
   capitalImprovementWarning?: boolean
@@ -66,8 +66,8 @@ interface Transaction {
   receiptImageId?: string
   isUnusualCredit?: boolean // Indicates unusual but valid Credit transaction (e.g., refund from expense vendor)
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
     confidence?: number
@@ -86,7 +86,10 @@ interface Transaction {
 
 interface TransactionTableProps {
   transactions: Transaction[]
-  onTransactionUpdate?: (id: string, updates: Partial<Transaction>) => void
+  onTransactionUpdate?: (
+    id: string,
+    updates: Partial<Transaction>
+  ) => void | Promise<void>
   onCashExpenseDelete?: (cashExpenseId: string) => Promise<void>
   accountType?: 'individual' | 'company' | 'sole_trader'
   lockedPeriodIds?: Set<string>

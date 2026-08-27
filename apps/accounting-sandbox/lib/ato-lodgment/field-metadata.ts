@@ -217,7 +217,11 @@ function metaForField(
   fallbackKind: FieldEntryKind
 ): FieldMeta {
   const map =
-    tab === 'bas' ? BAS_FIELD_META : tab === 'ctr' ? CTR_FIELD_META : ANNUAL_FIELD_META
+    tab === 'bas'
+      ? BAS_FIELD_META
+      : tab === 'ctr'
+        ? CTR_FIELD_META
+        : ANNUAL_FIELD_META // annual + individual myTax-style fields
   const meta = map[fieldId]
   if (meta) return meta
 
@@ -238,7 +242,12 @@ function metaForField(
 
   return {
     entryKind: fallbackKind,
-    atoScreenPath: tab === 'bas' ? 'Activity statement' : tab === 'ctr' ? 'Company tax return' : 'myTax business schedule',
+    atoScreenPath:
+      tab === 'bas'
+        ? 'Activity statement'
+        : tab === 'ctr'
+          ? 'Company tax return'
+          : 'myTax',
     sortOrder: 900,
   }
 }

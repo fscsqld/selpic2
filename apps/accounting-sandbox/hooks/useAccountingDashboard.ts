@@ -116,8 +116,18 @@ function repairLedgerTransactionDates<T extends { date: string }>(txs: T[]): T[]
 }
 
 /** Category repair + known GST claim tags (Hanaone free, Crazy Domains claim, …). */
-function hydrateLedgerTransactions<T extends ClassifiedTransaction>(txs: T[]): T[] {
-  return applyKnownPurchaseGstTags(applyKnownExpenseCategoriesIfMissing(txs)) as T[]
+function hydrateLedgerTransactions<
+  T extends {
+    date: string
+    description?: string
+    debit?: number | null
+    credit?: number | null
+    category?: string
+  }
+>(txs: T[]): T[] {
+  return applyKnownPurchaseGstTags(
+    applyKnownExpenseCategoriesIfMissing(txs as ClassifiedTransaction[])
+  ) as T[]
 }
 
 export function useAccountingDashboard() {
@@ -702,7 +712,11 @@ export function useAccountingDashboard() {
             legacy.length,
             'transactions — keeping cache (use History → Recover if needed)'
           )
-          setTransactions(filterBankAdvisoryTransactions(legacy) as unknown as ClassifiedTransaction[])
+          setTransactions(
+            filterBankAdvisoryTransactions(
+              legacy as Array<{ description: string; debit: number | null; credit: number | null }>
+            ) as unknown as ClassifiedTransaction[]
+          )
           return
         }
       }
@@ -2921,7 +2935,6 @@ export function useAccountingDashboard() {
     handleJourneyNavigate,
     viewingPeriod,
     dashboardTransactions,
-    activeLedgerTransactions,
     metricsOpeningDirectorLoan,
     reportsScopeMode,
     handleReportsScopeModeChange,

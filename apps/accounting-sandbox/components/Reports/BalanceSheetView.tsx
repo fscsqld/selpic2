@@ -40,6 +40,7 @@ interface BalanceSheetViewProps {
   transactions: Transaction[]
   openingDirectorLoanBalance: number
   accountType?: 'individual' | 'company' | 'sole_trader'
+  asAtDate?: string
 }
 
 type AsAtPreset = 'today' | 'quarter' | 'year' | 'custom'

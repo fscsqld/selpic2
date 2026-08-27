@@ -29,6 +29,14 @@ export interface Transaction {
   fundedByDirector?: boolean
   source?: string
   id?: string
+  isPayrollTransaction?: boolean
+  requiresPAYG?: boolean
+  payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
+  noABNWarning?: {
+    shouldWarn?: boolean
+    warningMessage?: string
+    withholdingAmount?: number
+  }
   gstInfo?: {
     isGSTIncluded?: boolean
     gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'

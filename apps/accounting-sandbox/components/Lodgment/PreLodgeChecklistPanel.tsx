@@ -93,7 +93,7 @@ export function PreLodgeChecklistPanel({
               />
             )}
             <span>
-              {'label' in item ? item.label : item.id.replace(/_/g, ' ')}
+              {item.label}
               {item.severity === 'required' && !item.passed && (
                 <span className="ml-1 text-xs font-medium text-red-600">(required)</span>
               )}

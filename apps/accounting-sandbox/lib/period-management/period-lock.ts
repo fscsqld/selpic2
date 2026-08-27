@@ -138,12 +138,22 @@ export async function syncPeriodFromTransactions(
  * DL month only), not independently on every month.
  */
 export async function syncAllOpenPeriods(
-  allTransactions: Array<{ date: string; id?: string; description?: string; [key: string]: unknown }>,
+  allTransactions: Array<{
+    date: string
+    id?: string
+    description?: string
+    debit?: number | null
+    credit?: number | null
+    category?: string
+    department?: string
+    source?: string
+    fundedByDirector?: boolean
+  }>,
   settingsOpeningDirectorLoan = 0,
   settingsOpeningCash = 0,
   manualPriorOnFirstMonth = 0
 ): Promise<void> {
-  const hydrated = hydrateFundedByDirectorOnLedger(allTransactions as any[])
+  const hydrated = hydrateFundedByDirectorOnLedger(allTransactions)
   const storedPeriods = await indexedDBStorage.getAllPeriods()
   const lockedIds = getLockedPeriodIds(storedPeriods)
 

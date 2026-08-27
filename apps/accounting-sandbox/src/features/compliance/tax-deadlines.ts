@@ -6,14 +6,18 @@
 
 import { TaxDeadline } from './types'
 
+export type { TaxDeadline } from './types'
+
 export interface BusinessProfile {
-  companyName: string
-  abn: string
+  companyName?: string
+  abn?: string
   acn?: string
-  gstReportingCycle: 'Monthly' | 'Quarterly'
-  paygReportingCycle: 'Monthly' | 'Quarterly'
+  gstReportingCycle?: 'Monthly' | 'Quarterly'
+  paygReportingCycle?: 'Monthly' | 'Quarterly'
   gstRegistered?: boolean
   fbtRegistered?: boolean
+  individualName?: string
+  accountType?: 'individual' | 'company' | 'sole_trader'
 }
 
 /**
@@ -125,7 +129,7 @@ export function getUpcomingDeadlines(
     for (let i = 0; i < 2; i++) {
       const quarterIndex = (currentQuarter + i) % 4
       const quarterEnd = quarterEnds[quarterIndex]
-      const dueDate = calculateBASDeadline(quarterEnd, profile.gstReportingCycle)
+      const dueDate = calculateBASDeadline(quarterEnd, profile.gstReportingCycle || 'Quarterly')
       const daysRemaining = Math.ceil((dueDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
       
       if (daysRemaining >= -30 && daysRemaining <= 365) {
@@ -153,7 +157,7 @@ export function getUpcomingDeadlines(
     const currentQuarter = Math.floor(now.getMonth() / 3)
     const quarterIndex = (currentQuarter + i) % 4
     const quarterEnd = quarterEnds[quarterIndex]
-    const dueDate = calculatePAYGDeadline(quarterEnd, profile.paygReportingCycle)
+    const dueDate = calculatePAYGDeadline(quarterEnd, profile.paygReportingCycle || 'Quarterly')
     const daysRemaining = Math.ceil((dueDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
     
     if (daysRemaining >= -30 && daysRemaining <= 365) {

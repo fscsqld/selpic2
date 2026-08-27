@@ -130,7 +130,7 @@ export class WestpacParser implements PDFParser {
 
     return {
       bankName: 'Westpac',
-      accountNumber,
+      accountNumber: accountNumber ?? undefined,
       statementPeriod,
       openingBalance: balances.opening,
       closingBalance: balances.closing,

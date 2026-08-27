@@ -15,7 +15,7 @@ interface ExpenseChartsProps {
     credit: number | null
     category?: string
     department?: string
-    source?: 'bank' | 'manual'
+    source?: string
   }>
   onCategoryClick?: (category: string | null) => void
   selectedCategory?: string | null
@@ -246,19 +246,21 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number | undefined, _name: string | undefined, props: any) => {
-                    const safeValue = value ?? 0
+                  formatter={(value, _name, item) => {
+                    const safeValue = Number(value ?? 0)
                     const percent = ((safeValue / totalExpenses) * 100).toFixed(1)
+                    const payload = item?.payload as { name?: string } | undefined
                     return [
                       `${formatCurrency(safeValue)} (${percent}%)`,
-                      props.payload.name
+                      payload?.name ?? '',
                     ]
                   }}
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', padding: '8px' }}
                 />
                 <Legend
-                  formatter={(value, entry: any) => {
-                    const item = categoryExpenses.find(c => c.category === entry.payload.category)
+                  formatter={(value, entry) => {
+                    const payload = entry?.payload as { category?: string } | undefined
+                    const item = categoryExpenses.find((c) => c.category === payload?.category)
                     return `${value} (${formatCurrency(item?.value || 0)})`
                   }}
                 />
@@ -297,7 +299,7 @@ export function ExpenseCharts({ transactions, onCategoryClick, selectedCategory,
                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
-                formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
+                formatter={(value) => formatCurrency(Number(value ?? 0))}
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px' }}
               />
               <Legend />

@@ -10,10 +10,9 @@ type PatchableTx = {
   id?: string
   date: string
   description: string
-  debit?: number | null
-  credit?: number | null
-  balance?: number | null
-  [key: string]: unknown
+  debit?: number | null | undefined
+  credit?: number | null | undefined
+  balance?: number | null | undefined
 }
 
 /** Survives date corrections (fingerprint includes date). */

@@ -8,7 +8,7 @@ import {
   getAustralianQuarterDates,
   getCurrentAustralianQuarter,
   getCurrentMonthDates,
-  type AustralianQuarter,
+  isValidAustralianFinancialYear,
 } from '@/lib/utils/australian-financial-year'
 import { getCurrentFinancialYearRange } from '@/lib/ato-lodgment/compute-lodgment'
 import { generatePeriodIdFromDateString } from '@/lib/period-management/period-lock'
@@ -176,11 +176,11 @@ export function statementRangeFromTransactions(
 /** Pick BAS quarter that holds the majority of rows (ignores OCR/prior-year outliers). */
 function dominantBasQuarter(
   isoDates: string[]
-): { quarter: AustralianQuarter; financialYear: string; count: number } | null {
+): { quarter: 1 | 2 | 3 | 4; financialYear: string; count: number } | null {
   if (!isoDates.length) return null
   const counts = new Map<
     string,
-    { quarter: AustralianQuarter; financialYear: string; count: number }
+    { quarter: 1 | 2 | 3 | 4; financialYear: string; count: number }
   >()
   for (const iso of isoDates) {
     const { quarter, financialYear } = getAustralianQuarter(new Date(`${iso}T12:00:00`))
@@ -189,7 +189,7 @@ function dominantBasQuarter(
     if (prev) prev.count += 1
     else counts.set(key, { quarter, financialYear, count: 1 })
   }
-  let best: { quarter: AustralianQuarter; financialYear: string; count: number } | null =
+  let best: { quarter: 1 | 2 | 3 | 4; financialYear: string; count: number } | null =
     null
   for (const row of counts.values()) {
     if (!best || row.count > best.count) best = row
@@ -310,12 +310,16 @@ export function formatViewPeriodLabel(period: DashboardViewPeriod): string {
 
 export function listBasQuarterOptions(
   transactions: Array<{ date: string }>,
-  reference: Date = new Date()
+  reference: Date = new Date(),
+  extraFinancialYears: Array<string | undefined | null> = []
 ): Array<{ key: string; label: string; period: DashboardViewPeriod; txCount: number }> {
   const fySet = new Set<string>()
   for (const tx of transactions) {
     const iso = toIsoDateString(tx.date)
     if (iso) fySet.add(getAustralianFinancialYear(new Date(`${iso}T12:00:00`)))
+  }
+  for (const fy of extraFinancialYears) {
+    if (fy && isValidAustralianFinancialYear(fy)) fySet.add(fy)
   }
   // Only fall back to calendar FY when there is no ledger data yet
   if (fySet.size === 0) {

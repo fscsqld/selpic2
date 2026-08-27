@@ -295,8 +295,7 @@ export function BusinessSummaryCards({
                 ) : (
                   <div className="text-xs text-gray-500 mt-1 space-y-0.5">
                     <p>Opening (cash loan): {formatCurrency(openingDirectorLoanBalance)}</p>
-                    {accountType !== 'individual' && (
-                      <>
+                    <>
                         <p>
                           Prior advances (lodged): {formatCurrency(priorPeriodDirectorAdvances)}
                           {autoMatchPriorAdvances ? ' · auto-matched to reimbursements' : ''}
@@ -307,8 +306,7 @@ export function BusinessSummaryCards({
                         {directorLoanReimbursementTotal > 0 && (
                           <p>Reimbursements paid: −{formatCurrency(directorLoanReimbursementTotal)}</p>
                         )}
-                      </>
-                    )}
+                    </>
                   </div>
                 )}
                 

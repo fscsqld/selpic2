@@ -30,6 +30,15 @@ interface BasSnapshotComparePanelProps {
   /** Re-save live ledger fields over the current period’s snapshot (clears drift). */
   onUpdateCurrentSnapshot?: () => void | Promise<void>
   updateBusy?: boolean
+  /** Optional helpers for future drill-down (accepted for call-site compatibility). */
+  getQuarterTransactions?: (
+    periodKey: string,
+    start: string,
+    end: string
+  ) => Array<{ date: string; description: string; debit: number | null; credit: number | null }>
+  quarterRanges?:
+    | Array<{ key: string; start: string; end: string; label?: string }>
+    | Record<string, { start: string; end: string; label?: string }>
 }
 
 function formatSigned(n: number): string {

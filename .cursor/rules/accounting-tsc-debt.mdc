@@ -1,0 +1,35 @@
+---
+description: Accounting sandbox TypeScript debt — agreed next cleanup after Track A
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Accounting sandbox — TypeScript / `tsc` debt
+
+## Status (updated 2026-08-27)
+
+- `npx tsc --noEmit -p apps/accounting-sandbox/tsconfig.json` → **0 errors**
+- `typescript.ignoreBuildErrors` **removed** from `next.config.js`
+- `eslint.ignoreDuringBuilds` still true (separate lint debt)
+
+## Learned decision (2026-08-27)
+
+After Track A deploy + Cash Expense single-delete shipped, **`tsc` debt was cleaned** (~180 → 0) so production no longer depends on:
+
+```js
+typescript: { ignoreBuildErrors: true } // REMOVED
+```
+
+## Invariant
+
+Keep `tsc --noEmit` green. Do **not** re-add `ignoreBuildErrors` to ship. Fix types instead.
+
+## If errors return
+
+1. Batch by area (i18n keys, shared transaction types, payroll, BAS).
+2. Prefer shared type alignment over `any` / `@ts-ignore`.
+3. Respect accounting-app-independence.
+
+## Resume phrase
+
+User: **「tsc 정리부터」** / **「타입 오류 정리」** (maintenance only if count rises again)

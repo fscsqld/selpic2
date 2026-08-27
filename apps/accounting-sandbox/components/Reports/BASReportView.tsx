@@ -23,6 +23,7 @@ interface Transaction {
   category?: string
   department?: string
   isDirectorsLoan?: boolean
+  fundedByDirector?: boolean
 }
 
 interface BASReportViewProps {

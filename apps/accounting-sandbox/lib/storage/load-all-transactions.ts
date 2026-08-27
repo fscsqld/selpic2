@@ -6,6 +6,7 @@ import { dedupeTransactions } from '@/lib/dashboard/transaction-dedupe'
 import { filterBankAdvisoryTransactions, sanitizeBankTransactionDescriptions } from '@/lib/classification/bank-advisory'
 import { repairUsMisparsedAustralianDates } from '@/lib/utils/repair-us-misparsed-au-dates'
 import { repairStatementDateAnomalies } from '@/lib/utils/repair-statement-date-anomalies'
+import type { LedgerTransactionSource } from '@/lib/dashboard/types'
 import { indexedDBStorage } from './indexed-db'
 
 export interface LoadedTransaction {
@@ -19,7 +20,7 @@ export interface LoadedTransaction {
   department?: string
   confidence?: number | string
   reference?: string
-  source?: 'bank' | 'manual' | 'payroll' | 'order' | 'journal'
+  source?: LedgerTransactionSource
   receiptImageId?: string
   isDirectorsLoan?: boolean
   isPayrollTransaction?: boolean
@@ -46,7 +47,6 @@ export interface LoadedTransaction {
     reasoning?: string
   }
   fbtInfo?: Record<string, unknown>
-  [key: string]: unknown
 }
 
 export interface LoadAllTransactionsOptions {
@@ -77,14 +77,13 @@ export async function persistRepairedDatesToStatements(
   if (repairedDates.size === 0) return 0
 
   const storedStatements = await indexedDBStorage.getAllStatements()
-  const { toLoad } = statementsForLedgerLoad(storedStatements)
-  const statements = toLoad
+  const statements = storedStatements
   let updatedStatements = 0
 
   for (const statement of statements) {
     if (!statement.transactions?.length) continue
     let changed = false
-    const transactions = statement.transactions.map((tx) => {
+    const transactions = statement.transactions.map((tx: { date: string; id?: string; description?: string; debit?: number | null; credit?: number | null }) => {
       const key = transactionFingerprint(tx as LoadedTransaction)
       const newDate = repairedDates.get(key)
       if (newDate && tx.date !== newDate) {
@@ -245,7 +244,18 @@ export async function loadReportingTransactions(
 /**
  * Sync legacy localStorage cache from canonical IndexedDB data.
  */
-export function syncLegacyTransactionCache(transactions: LoadedTransaction[]): void {
+export function syncLegacyTransactionCache(
+  transactions: Array<{
+    id?: string
+    date: string
+    description?: string
+    debit?: number | null
+    credit?: number | null
+    category?: string
+    department?: string
+    source?: string
+  }>
+): void {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem('accounting_transactions', JSON.stringify(transactions))

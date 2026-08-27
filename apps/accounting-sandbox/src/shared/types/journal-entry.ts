@@ -10,7 +10,7 @@ export interface JournalLine {
 }
 
 export type JournalEntryStatus = 'posted' | 'reversed'
-export type JournalEntrySource = 'manual' | 'payroll' | 'reversal' | 'system'
+export type JournalEntrySource = 'manual' | 'payroll' | 'reversal' | 'system' | 'ar_ap'
 
 export interface JournalEntry {
   id: string

@@ -184,8 +184,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         accountType,
         gstReportingCycle: 'Quarterly',
         paygReportingCycle: 'Quarterly',
-        isGSTRegistered: accountType !== 'individual',
-        isFBTRegistered: false,
+        gstRegistered: accountType !== 'individual',
+        fbtRegistered: false,
       })
 
       localStorage.setItem('selpic_setup_complete', 'true')

@@ -48,6 +48,10 @@ export interface Employee {
     bsb?: string // BSB 번호
     accountNumber?: string // 계좌번호
   }
+  /** salary | hourly — fixed-salary pay runs use salaryAmount */
+  payBasis?: 'salary' | 'hourly'
+  /** Annual or period salary when payBasis === 'salary' */
+  salaryAmount?: number
   createdAt: string
   updatedAt: string
 }

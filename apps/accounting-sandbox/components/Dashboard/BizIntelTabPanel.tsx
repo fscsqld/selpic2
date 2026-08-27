@@ -563,7 +563,7 @@ export function BizIntelTabPanel({
                   periodStartDate={viewPeriod.startDate}
                   periodEndDate={viewPeriod.endDate}
                   periodLabel={formatViewPeriodLabel(viewPeriod)}
-                  accountType={accountType === 'individual' ? 'individual' : accountType}
+                  accountType={accountType}
                 />
               )}
 

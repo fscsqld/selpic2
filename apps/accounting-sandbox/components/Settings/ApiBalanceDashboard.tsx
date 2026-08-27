@@ -483,9 +483,9 @@ export function ApiBalanceDashboard({ apiKey, userApiKey }: ApiBalanceDashboardP
                       Remaining
                     </span>
                   </p>
-                  <Info 
+                    <Info 
                     className="w-4 h-4 text-amber-600 cursor-help" 
-                    title="This is an estimated value based on local logs. For accurate billing, check OpenAI Dashboard."
+                    aria-label="This is an estimated value based on local logs. For accurate billing, check OpenAI Dashboard."
                   />
                 </div>
                 {usageData.estimatedRemaining !== null ? (

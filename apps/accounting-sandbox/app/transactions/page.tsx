@@ -92,9 +92,16 @@ export default function TransactionsPage() {
     }
   }
 
-  const handleTransactionUpdate = async (updatedTransaction: ClassifiedTransaction) => {
+  const handleTransactionUpdate = async (
+    id: string,
+    updates: Partial<ClassifiedTransaction>
+  ): Promise<void> => {
     try {
-      await indexedDBStorage.updateTransaction(updatedTransaction.id || '', updatedTransaction)
+      const existing = transactions.find(
+        (tx) => tx.id === id || tx.reference === id
+      )
+      const merged = { ...(existing || { date: '', description: '', debit: null, credit: null }), ...updates, id }
+      await indexedDBStorage.updateTransaction(id, merged)
       await loadTransactions()
     } catch (error) {
       console.error('Failed to update transaction:', error)
@@ -216,7 +223,9 @@ export default function TransactionsPage() {
                         ? transactions.filter(tx => tx.category === selectedCategoryFilter)
                         : transactions
                   }
-                  onTransactionUpdate={handleTransactionUpdate}
+                  onTransactionUpdate={(id, updates) =>
+                    handleTransactionUpdate(id, updates as Partial<ClassifiedTransaction>)
+                  }
                   accountType={accountType}
                 />
               )}

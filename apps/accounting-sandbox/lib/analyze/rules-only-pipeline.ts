@@ -54,7 +54,7 @@ export function classifyTransactionsRulesOnly(
       id: transaction.reference || `tx_${Date.now()}_${index}`,
       category: classification.category,
       confidence: classification.confidence,
-      department: classification.department,
+      department: classification.department as ClassifiedBankTransaction['department'],
       isDirectorsLoan: false,
       isPreTradingExpense: false,
       requiresPAYG: false,

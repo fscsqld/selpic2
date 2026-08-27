@@ -259,8 +259,9 @@ export async function testAutomaticJournalEntries() {
   const grossPay = 1000 // $1,000
   const employee: Employee = {
     id: 'emp_test',
-    name: 'Test Employee',
-    type: 'employee',
+      name: 'Test Employee',
+      employeeId: 'EMP_TEST',
+      type: 'employee',
     superannuationRate: 0.115, // 11.5%
     payFrequency: 'monthly',
     isActive: true,

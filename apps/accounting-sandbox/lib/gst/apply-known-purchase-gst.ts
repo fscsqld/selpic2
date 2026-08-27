@@ -14,9 +14,18 @@ type Tx = {
   category?: string
   confidence?: number | string
   source?: string
+  date?: string
+  isPayrollTransaction?: boolean
+  requiresPAYG?: boolean
+  payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
+  noABNWarning?: {
+    shouldWarn?: boolean
+    warningMessage?: string
+    withholdingAmount?: number
+  }
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
     confidence?: number

@@ -34,10 +34,10 @@ interface PaymentEstimatesProps {
 
 export function PaymentEstimates({ transactions }: PaymentEstimatesProps) {
   const [businessProfile, setBusinessProfile] = useState<{
-    companyName: string
-    abn: string
-    gstReportingCycle: 'Monthly' | 'Quarterly'
-    paygReportingCycle: 'Monthly' | 'Quarterly'
+    companyName?: string
+    abn?: string
+    gstReportingCycle?: 'Monthly' | 'Quarterly'
+    paygReportingCycle?: 'Monthly' | 'Quarterly'
   } | null>(null)
 
   useEffect(() => {

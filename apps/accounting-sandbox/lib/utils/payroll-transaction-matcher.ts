@@ -156,18 +156,20 @@ export async function autoMatchPayrollTransactions(
 }>> {
   const employees = await loadAllEmployees()
   
-  return transactions.map(transaction => {
-    const match = matchPayrollTransaction(transaction, employees)
-    
-    if (match) {
-      return {
-        ...transaction,
-        matchedEmployee: match.employee,
-        matchConfidence: match.matchConfidence,
-        matchReason: match.matchReason
+  return Promise.all(
+    transactions.map(async (transaction) => {
+      const match = await matchPayrollTransaction(transaction, employees)
+
+      if (match) {
+        return {
+          ...transaction,
+          matchedEmployee: match.employee,
+          matchConfidence: match.matchConfidence,
+          matchReason: match.matchReason,
+        }
       }
-    }
-    
-    return transaction
-  })
+
+      return transaction
+    })
+  )
 }

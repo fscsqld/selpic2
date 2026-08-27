@@ -37,7 +37,10 @@ export async function patchBankStatementTransactionByKey(
     })
     if (!hit) continue
 
-    await indexedDBStorage.updateStatementTransactions(statement.id, nextTxs)
+    await indexedDBStorage.updateStatement(statement.id, {
+      ...statement,
+      transactions: nextTxs,
+    })
     return true
   }
 

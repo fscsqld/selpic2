@@ -829,8 +829,8 @@ class IndexedDBStorage {
     paidBy?: 'company' | 'director'
     fundedByDirector?: boolean
     gstInfo?: {
-      isGSTIncluded: boolean
-      gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+      isGSTIncluded?: boolean
+      gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
       gstAmount?: number
       netAmount?: number
       confidence?: number
@@ -887,8 +887,8 @@ class IndexedDBStorage {
       department?: string
       description?: string
       gstInfo?: {
-        isGSTIncluded: boolean
-        gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+        isGSTIncluded?: boolean
+        gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
         gstAmount?: number
         netAmount?: number
         confidence?: number
@@ -1257,6 +1257,7 @@ class IndexedDBStorage {
     openingCashBalance?: number
     accountingBasis?: 'cash' | 'accrual'
     autoPostArApJournals?: boolean
+    address?: string
   }): Promise<void> {
     if (!this.db) {
       await this.init()
@@ -1311,6 +1312,7 @@ class IndexedDBStorage {
     openingCashBalance?: number
     accountingBasis?: 'cash' | 'accrual'
     autoPostArApJournals?: boolean
+    address?: string
   } | null> {
     if (!this.db) {
       await this.init()
@@ -2697,6 +2699,7 @@ class IndexedDBStorage {
       | 'category_changed'
       | 'department_changed'
       | 'period_locked'
+      | 'period_unlocked'
       | 'period_carry_forward'
     userId: string
     userName?: string
@@ -4581,6 +4584,8 @@ class IndexedDBStorage {
     netPay: number
     payDate: string
     status: 'draft' | 'approved' | 'paid'
+    bankMatchedTransactionKey?: string
+    bankMatchedAt?: string
     createdAt?: string
     updatedAt?: string
   }): Promise<string> {

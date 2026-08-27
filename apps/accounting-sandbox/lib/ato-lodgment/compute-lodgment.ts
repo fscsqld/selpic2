@@ -41,8 +41,8 @@ type LodgmentTransaction = Transaction & {
   payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: { shouldWarn?: boolean; withholdingAmount?: number }
   gstInfo?: {
-    isGSTIncluded: boolean
-    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     gstAmount?: number
     netAmount?: number
   }

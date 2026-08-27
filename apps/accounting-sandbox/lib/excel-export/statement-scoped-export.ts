@@ -12,7 +12,7 @@ import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import { preferPeriodScopedRows } from '@/lib/storage/statement-transaction-scope'
 
-export type StatementExportRow = Record<string, unknown> & {
+export type StatementExportRow = {
   id?: string
   date: string
   description: string
@@ -26,8 +26,14 @@ export type StatementExportRow = Record<string, unknown> & {
   isPreTradingExpense?: boolean
   isPayrollTransaction?: boolean
   requiresPAYG?: boolean
-  payrollType?: string
+  payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: { shouldWarn?: boolean }
+  gstInfo?: {
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    netAmount?: number
+  }
 }
 
 export type StatementExportSource =
@@ -120,7 +126,12 @@ function mergeCashExpensesForPeriod(
 
 export type ResolveStatementExportOptions = {
   /** Fresh parse / load snapshot — preferred over possibly polluted IndexedDB rows */
-  overrideTransactions?: StatementExportRow[] | null
+  overrideTransactions?: Array<
+    Omit<StatementExportRow, 'debit' | 'credit'> & {
+      debit?: number | null
+      credit?: number | null
+    }
+  > | null
   overrideFileName?: string | null
   overridePeriod?: { startDate?: string; endDate?: string } | null
   /**
@@ -132,7 +143,12 @@ export type ResolveStatementExportOptions = {
    * Manual Cash Expenses from the live ledger. Included only when dateRangeFilter
    * is set (P&L Period exports), so Export Business Only matches Add Cash Expense.
    */
-  cashExpenses?: StatementExportRow[] | null
+  cashExpenses?: Array<
+    Omit<StatementExportRow, 'debit' | 'credit'> & {
+      debit?: number | null
+      credit?: number | null
+    }
+  > | null
 }
 
 function inIsoDateRange(
@@ -178,9 +194,13 @@ export async function resolveStatementForExcelExport(
     : null
 
   const rawFromOverride = options.overrideTransactions
-  const raw =
+  const raw: StatementExportRow[] =
     rawFromOverride && rawFromOverride.length > 0
-      ? rawFromOverride
+      ? rawFromOverride.map((tx) => ({
+          ...tx,
+          debit: tx.debit ?? null,
+          credit: tx.credit ?? null,
+        }))
       : Array.isArray(statement?.transactions)
         ? (statement!.transactions as StatementExportRow[])
         : []
@@ -193,9 +213,16 @@ export async function resolveStatementForExcelExport(
     filtered = filtered.filter((tx) =>
       inIsoDateRange(tx.date, range.startDate, range.endDate)
     )
+    const cashNormalized: StatementExportRow[] | null = options.cashExpenses
+      ? options.cashExpenses.map((tx) => ({
+          ...tx,
+          debit: tx.debit ?? null,
+          credit: tx.credit ?? null,
+        }))
+      : null
     filtered = mergeCashExpensesForPeriod(
       filtered,
-      options.cashExpenses,
+      cashNormalized,
       range,
       accountType,
       businessOnly
