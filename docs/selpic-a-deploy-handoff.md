@@ -140,18 +140,20 @@ Do **not** start until Track A checklist is done.
 ### Suggested build order (when starting B)
 
 1. **Tenancy & storage** — server-side or synced ledger; never “one PC IndexedDB = product”  
-2. **Auth** — real accounts (Supabase/Clerk/etc.); replace unsigned SSO  
-3. **Onboarding B** — empty Setup → profile → first statement; no Selpic-internal HR defaults required  
-4. **Hardening** — rate-limit `/api/analyze`, keyed API usage, no open analyze  
-5. **Billing / limits** (if needed)  
-6. **Remove** internal-only paths or gate behind `internal` flag  
-7. **QA** — fresh browser, two users, wipe/restore, no cross-tenant leak  
+2. **Auth** — real accounts (Supabase/Clerk/etc.); replace unsigned SSO; include **employee** role (not only tenant admin)  
+3. **Employee mobile My Payroll** — **required** (learned 2026-08-27): staff check own payslips/timesheets on personal phone via server; **no** Import Backup on phones; least privilege (no full ledger). Spec: `.cursor/rules/accounting-track-b-employee-mobile-payroll.mdc`  
+4. **Onboarding B** — empty Setup → profile → first statement; no Selpic-internal HR defaults required  
+5. **Hardening** — rate-limit `/api/analyze`, keyed API usage, no open analyze  
+6. **Billing / limits** (if needed)  
+7. **Remove** internal-only paths or gate behind `internal` flag  
+8. **QA** — fresh browser, two users, wipe/restore, no cross-tenant leak; **phone employee login without Import**
 
 ### Explicit non-goals for B until designed
 
 - Auto factory reset on user switch without confirmation  
 - Sharing one Vercel SSO–protected company DB as “public SaaS”  
 - Coupling public app into homepage webpack  
+- Telling employees to Import the company backup onto personal phones (Track A workaround must not become B design)  
 
 ---
 
@@ -165,6 +167,6 @@ Track A deploy + Cash delete are done. Remaining work is **not only** public Tra
 |---------------|------|
 | **「Period Management 확인부터」** | Confirm Jul/Aug cash/DL fixture (handoff 2026-08-25) |
 | **「tsc 정리부터」** | Type debt → then remove `ignoreBuildErrors` |
-| **「Track B 시작」** | Public multi-tenant — only when user explicitly wants B |
+| **「Track B 시작」** | Public multi-tenant — only when user explicitly wants B; **must include** employee mobile My Payroll (see `accounting-track-b-employee-mobile-payroll.mdc`) |
 
 Do **not** assume “only public left.”

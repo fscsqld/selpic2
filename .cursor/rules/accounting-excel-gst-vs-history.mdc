@@ -1,0 +1,34 @@
+---
+description: Learned — Excel GST vs History; live books OK; Excel-only bug fixed 2026-08-27
+globs: apps/accounting-sandbox/**/excel-export/**,apps/accounting-sandbox/**/TransactionTable*,apps/accounting-sandbox/**/financial-summary*
+alwaysApply: false
+---
+
+# Excel GST vs live accounting data (learned + fixed 2026-08-27)
+
+## Impact verdict (user question)
+
+| Question | Answer |
+|----------|--------|
+| Are **live** P&L / History Claim GST / Biz Intel 1B / Export BAS / Annual GST hints wrong because of Excel `hasGST`? | **No** — those use `isPurchaseGstClaimable` + `applyKnownPurchaseGstTags` + `calculateBusinessMetrics` |
+| What was wrong? | **Downloaded General Ledger Excel** columns `GST (10%)` / `Net Amount` only (plus legacy unused `calculateFinancialSummary` GST path) |
+
+Ledger IndexedDB amounts (debit/credit) were never rewritten by Excel export.
+
+## Bugs confirmed
+
+1. **CrazyDomains** Startup — History Claim; Excel forced $0 via `noGSTCategories` includes `EXPENSE_STARTUP_INCORPORATION`  
+2. **Manual cash GST-free** (untagged `source: manual`) — History Free; Excel often ÷11 because `EXPENSE_*` matched `hasGST`  
+3. **Hanaone** freight — History Free; Excel ÷11  
+
+## Fix shipped
+
+- `gstAndNetForExport` — same claim rules as History (`isPurchaseGstClaimable` + `gstInfo.gstAmount`)  
+- `exportToExcel` uses it; `handleExportExcel` passes `source` + `gstInfo`  
+- Legacy `calculateFinancialSummary` expense GST aligned to `isPurchaseGstClaimable`  
+- `hasGST(category)` deprecated for export/1B  
+
+## Do not
+
+- Treat Excel GST mismatch as proof that BAS 1B on screen is wrong without checking metrics  
+- Reintroduce category-only GST for export

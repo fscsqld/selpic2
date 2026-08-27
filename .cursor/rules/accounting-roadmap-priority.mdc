@@ -13,36 +13,36 @@ alwaysApply: false
 | **A — Internal deploy** (SSO, prod URL, Admin link, History, backup ops) | **Done** (A1–A4 done; Cash single-delete shipped) |
 | **Cash Expense single-delete** | **Done** |
 | **B — Public / multi-tenant accounting** | **Backlog only** — do **not** start until internal product is stable and user explicitly opens B |
+| **B — Employee mobile My Payroll** | **Required inside B** (learned 2026-08-27) — see `accounting-track-b-employee-mobile-payroll.mdc` |
 | **`tsc` debt** (~180) + remove `ignoreBuildErrors` | **Done 2026-08-27** (`tsc --noEmit` = 0) |
 
-Public (B) is **not** the only remaining accounting work.
+Public (B) is **not** the only remaining accounting work. When B starts, **employee phone self-service** is mandatory — not optional polish.
 
 ## Remaining (internal / product) — besides B
 
-1. **`tsc` cleanup** — agreed next *tech* debt; enables safe strict builds  
-2. **Period Management production-like verify** — **Done 2026-08-27** (Jun/Jul/Aug fixture passed; see handoff mdc)  
-3. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
-4. **Employee login** — form exists; real employee account + login deferred  
-5. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
-6. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
-7. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
+1. **ATO lodgment GST-ex alignment** — **learned 2026-08-27** (all income + expense Annual/BAS/CTR; replace FY `scaleMap`). See `accounting-ato-rounding-gst-ex.mdc`. Resume: **「ATO GST-ex 정렬」**  
+2. **Export Business Only (P&L Period)** — **Fixed 2026-08-27**: uses `dashboardTransactions` (full History for period). See `accounting-export-pl-period-history.mdc`.  
+3. **Excel GST column vs History Claim GST** — **Fixed 2026-08-27**: `gstAndNetForExport` (= History 1B). Live books were never wrong — Excel-only. See `accounting-excel-gst-vs-history.mdc`.  
+4. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
+5. **Employee login** — form exists; real employee account + login deferred  
+6. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+7. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
+8. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
 
 ## Recommended work order (when choosing “what next”)
 
 ```
-1) User-facing ledger correctness still unconfirmed?
-   → Period Management verify (handoff fixture) BEFORE big refactors
+1) ATO copy figures wrong vs Xero-class / user asks tax basis?
+   → 「ATO GST-ex 정렬」 (per-line GST-ex for all Annual income+expense; BAS/CTR parity)
 
-2) Else tech harden for internal ship quality?
-   → tsc 정리부터 (batch) → then drop ignoreBuildErrors
-
-3) Ops / roles when accounts exist?
+2) Ops / roles when accounts exist?
    → Payroll-only smoke, then employee login
 
-4) Only when user explicitly starts public product?
-   → Track B (tenancy → auth → onboarding → harden API)
+3) Only when user explicitly starts public product?
+   → Track B (tenancy → auth **incl. employee role** → **mobile My Payroll** → onboarding → harden API)
+     Detail: `.cursor/rules/accounting-track-b-employee-mobile-payroll.mdc`
 
-5) Nice-to-have modules?
+4) Nice-to-have modules?
    → HR leave / WorkCover / audit IDB / AR-AP journals
 ```
 
@@ -51,9 +51,13 @@ Public (B) is **not** the only remaining accounting work.
 - Start Track B because “only public is left” — that is false  
 - Mix homepage (`selpic2`) webpack with accounting  
 - Treat ignoreBuildErrors as permanent forever without a cleanup plan  
+- Apply FY-wide cash→tax `scaleMap` as the long-term ATO model (user rejected; replace with per-line GST-ex)
 
 ## Resume phrases
 
-- Period QA: **「Period Management 확인부터」**  
-- Types: **「tsc 정리부터」**  
-- Public: **「Track B 시작」** (only when intentional)
+- ATO tax basis: **「ATO GST-ex 정렬」** / **「Annual per-line GST-ex」**  
+- P&L Excel rows: **「Export Business Only P&L History」** (row universe — done)  
+- Excel GST column: **「Excel GST = History 1B」** (done 2026-08-27)  
+- Period QA: **「Period Management 확인부터」** (done)  
+- Types: **「tsc 정리부터」** (done)  
+- Public: **「Track B 시작」** (only when intentional; includes employee mobile My Payroll)

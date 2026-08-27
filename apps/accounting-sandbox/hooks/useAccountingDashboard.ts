@@ -40,7 +40,7 @@ import {
 import { COMPANY_LEGAL } from '@/lib/companyLegal'
 import { exportToExcel, exportSummary, ExportTransaction } from '@/lib/excel-export'
 import {
-  resolveStatementForExcelExport,
+  filterPlPeriodHistoryForExport,
   type StatementExportRow,
 } from '@/lib/excel-export/statement-scoped-export'
 import { patchStatementTransactions, preferPeriodScopedRows } from '@/lib/storage/statement-transaction-scope'
@@ -1855,38 +1855,33 @@ export function useAccountingDashboard() {
     }
   }
 
-  const statementExportOptions = () => ({
-    overrideTransactions: exportStatementSnapshot?.transactions ?? null,
-    overrideFileName: exportStatementSnapshot?.fileName ?? null,
-    overridePeriod: exportStatementSnapshot?.period ?? null,
-    // Match Biz Intel P&L / GST banner (e.g. Q3 Jan–Mar), not the whole PDF span
-    dateRangeFilter:
-      viewPeriod?.startDate && viewPeriod?.endDate
-        ? { startDate: viewPeriod.startDate, endDate: viewPeriod.endDate }
-        : null,
-    // Add Cash Expense rows so P&L Period exports match on-screen company costs
-    cashExpenses: transactions.filter(
-      (tx) =>
-        (tx as { source?: string }).source === 'manual' ||
-        String((tx as { id?: string }).id || '').startsWith('cash_')
-    ) as StatementExportRow[],
-  })
-
-  // Excel export: active statement ∩ P&L period (+ Cash Expenses); not all History/payroll
+  // Excel export: same rows as on-screen P&L Transaction History (not one PDF only)
   const handleExportExcel = async (businessOnly: boolean = true) => {
     try {
-      const resolved = await resolveStatementForExcelExport(
-        currentStatementId,
-        accountType,
-        businessOnly,
-        statementExportOptions()
-      )
-      if (!resolved.ok) {
-        setError(resolved.error)
+      if (!viewPeriod?.startDate || !viewPeriod?.endDate) {
+        setError('Select a P&L period before exporting Excel.')
+        return
+      }
+      if (dashboardTransactions.length === 0) {
+        setError('No transactions in the selected P&L period.')
         return
       }
 
-      const exportData: ExportTransaction[] = resolved.transactions.map((tx) => ({
+      const filtered = filterPlPeriodHistoryForExport(
+        dashboardTransactions as StatementExportRow[],
+        accountType,
+        businessOnly
+      )
+      if (filtered.length === 0) {
+        setError(
+          businessOnly
+            ? 'No business transactions in the selected P&L period.'
+            : 'No transactions in the selected P&L period.'
+        )
+        return
+      }
+
+      const exportData: ExportTransaction[] = filtered.map((tx) => ({
         date: tx.date,
         description: tx.description,
         category: tx.category || 'UNCATEGORIZED',
@@ -1899,19 +1894,18 @@ export function useAccountingDashboard() {
             ? 'Pre-revenue'
             : 'Normal',
         balance: tx.balance || undefined,
+        source: tx.source,
+        gstInfo: tx.gstInfo,
       }))
 
-      const safeFile = String(resolved.fileName)
-        .replace(/\.[^.]+$/, '')
-        .replace(/[^\w\-]+/g, '_')
-        .slice(0, 40)
+      const periodSlug = `${viewPeriod.startDate}_to_${viewPeriod.endDate}`
       const fileName = businessOnly
-        ? `statement-business-${safeFile || 'export'}`
-        : `statement-all-${safeFile || 'export'}`
+        ? `pl-business-${periodSlug}`
+        : `pl-all-depts-${periodSlug}`
 
       exportToExcel(exportData, fileName)
       setLoadSuccessMessage(
-        `Exported ${exportData.length} row${exportData.length === 1 ? '' : 's'} from ${resolved.fileName} · P&L period ${resolved.periodLabel} (statement ∩ banner + cash)`
+        `Exported ${exportData.length} row${exportData.length === 1 ? '' : 's'} · P&L ${periodSlug} (matches Transaction History)`
       )
       setTimeout(() => setLoadSuccessMessage(null), 6000)
     } catch (err) {

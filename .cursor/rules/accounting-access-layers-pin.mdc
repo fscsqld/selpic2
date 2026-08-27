@@ -1,0 +1,114 @@
+---
+description: Learned — Super→Selpic A PIN gate vs Admin SSO vs employee login credentials
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Access layers (learned 2026-08-27 from user)
+
+## Three different secrets (do not conflate)
+
+| Layer | What | Where stored | Who uses |
+|-------|------|--------------|----------|
+| **1. Homepage Admin password** | Login to `/admin` | Storefront admin users | Super / accounting / payroll-only admins |
+| **2. Selpic A 4-digit PIN** | Unlock this browser’s accounting UI | `localStorage` key `selpic_a_pin` on accounting origin | Anyone opening Selpic A in that browser (Setup done) |
+| **3. Employee ID + password** | Staff Access `/employee/login` | IndexedDB employee record (password hashed) | Individual employees |
+
+## Real Super flow (user-confirmed)
+
+1. Homepage Admin login (Admin password)  
+2. Dashboard → Selpic A → Admin Access  
+3. New tab → `selpic-accounting.vercel.app` (SSO `?token=…` may be present)  
+4. **Often: 4-digit PIN + Confirm** → then full accounting UI  
+
+Code *intends* SSO (`role === 'admin' | 'super_admin'`) to skip PIN (`hasValidAdminToken` / `setIsUnlocked(true)`), but **user’s production path still shows PIN**. Treat PIN as a **real second gate** for Super until proven otherwise. Do not tell the user “SSO means no PIN.”
+
+PIN ≠ Admin password ≠ Employee password.
+
+## Employee credentials — intended ops (user, 2026-08-27)
+
+1. Super/accounting admin **registers** employee with initial Employee ID + password (HR Add Employee).  
+2. Admin tells the employee those temporary credentials.  
+3. Employee uses **Staff Access** → `/employee/login` → My Payroll.  
+4. Employee should **change their own password** after first login (ops expectation).
+
+### What the app supports today
+
+| Action | Who | Where | Supported? |
+|--------|-----|-------|------------|
+| Set initial password | Admin | Add Employee | ✅ |
+| Change password (for employee) | Admin | HR → employee edit → `EmployeePasswordManagement` (`isSelfChange={false}`) | ✅ |
+| Change **own** password | Employee | My Payroll → Change My Password (`isSelfChange={true}`; must enter current password) | ✅ |
+| Change Employee ID | Admin | HR → employee basic info | ✅ (tell employee new ID) |
+| Change **own** Employee ID | Employee | My Payroll | ❌ **not in UI** (ID is display-only) |
+
+Ops note: password self-change is the main self-service path. If the employee needs a new **ID**, admin changes it in HR and communicates it — do not claim employees can rename their own login ID in-app.
+
+## 4-digit PIN change (Super / accounting on that browser)
+
+PIN = this browser’s `localStorage` `selpic_a_pin` on the accounting origin. **Not** synced to homepage Admin password.
+
+| Method | How | Notes |
+|--------|-----|-------|
+| **Recovery code** | On Enter PIN screen → Reset PIN → enter 8-digit recovery code from first PIN setup → then set a **new** 4-digit PIN | Primary intended recovery/change path |
+| **Clear PIN (dev-style)** | PIN lock UI has Clear PIN Storage | Clears lock; next open can set a new PIN — treat carefully |
+| **System / factory reset** | Clears `selpic_a_pin` among other keys | Heavy-handed; not day-to-day PIN change |
+| **Settings → Change PIN while unlocked** | — | ❌ **No dedicated in-app “Change PIN” settings screen** found |
+
+Same PIN applies to whoever unlocks **this browser’s** Selpic A (Super and accounting managers sharing that PC/profile share one PIN). Different PC/browser = different PIN store (A4).
+
+## Different PC — accounting manager (user ops, 2026-08-27)
+
+Homepage Admin account is **central** (same username/password on any PC).  
+Selpic A PIN + IndexedDB ledger are **per browser / per PC**.
+
+**First time that manager opens Selpic A on a new PC (same prod URL):**
+
+1. Homepage Admin login (existing Admin password — not re-created).  
+2. Selpic A → Admin Access.  
+3. On that PC, if no `selpic_a_pin` yet → **Set PIN** (first-time register on this browser) + save recovery code.  
+4. Later visits on that PC → **Enter** the PIN they set there (not Super’s PIN from another PC).
+
+**Ledger data on the new PC:** usually **empty** until **Import Backup** (or they only use Super’s official PC — A4).  
+PIN setup ≠ restoring company statements/cash/HR. Do both when the second PC must hold the real ledger.
+
+## Employee turnover / replacement (user ops, 2026-08-27)
+
+| Situation | What to do |
+|-----------|------------|
+| **New hire** | HR → Add Employee → new Employee ID + initial password → tell employee → they Staff-login → change own password |
+| **Same person, password forgotten** | Admin resets password in HR (or employee self-change if they still know current) — not a full “re-register” unless record was deleted |
+| **Person left / replaced** | Prefer **deactivate** old employee (`isActive` off) so Staff login fails; **Add** the new person as a new HR row (new ID + password). Do not reuse old credentials casually |
+| **Re-register from scratch** | Only if the old record was wiped/deleted — then Add Employee again. Prefer deactivate + new record over editing the leaver’s row into the new hire |
+
+Staff login still only works on a browser whose IndexedDB has that employee record (same origin as company ledger / after Import).
+
+## Personal phone / mobile self-service (user ops, 2026-08-27)
+
+**Today (Track A — browser IndexedDB):** employees generally **cannot** open My Payroll on a personal phone and see real payslips.
+
+| Device | Why |
+|--------|-----|
+| Official PC (ledger present) | Staff login → My Payroll works |
+| Personal phone / home PC | Empty IndexedDB → no HR employee row / no payslip data → login fails or empty |
+
+Do **not** tell staff to Import the company backup onto personal phones (full ledger + other employees’ data — wrong for privacy/security).
+
+**Current practical options:**
+
+1. Staff checks payslips on the **company PC** (or shared machine that already has the ledger).  
+2. Admin **exports / prints / sends** payslip files from HR on the official PC (if used that way).  
+3. True “phone anytime” cloud My Payroll = **Track B** (server-backed auth + data) — backlog; not built yet.  
+   **When B starts, this is a required feature** — full spec: `.cursor/rules/accounting-track-b-employee-mobile-payroll.mdc`  
+   (employee-scoped API, personal phone OK, **no** company Import on phones, no full-ledger PIN for staff).
+
+Payroll-only Admin Access → My Payroll still needs the **same browser’s** HR IndexedDB; phone alone does not fix that (Track A).
+
+## Do not
+
+- Equate PIN with Admin password or payroll-only SSO  
+- Claim Staff login uses homepage Admin credentials  
+- Assume SSO always skips PIN in the user’s environment  
+- Claim employees can self-edit Employee ID (only password self-change today)  
+- Assume a new PC automatically has PIN or ledger from another PC  
+- Tell leavers’ credentials to stay active “because re-register is optional” — deactivate old Staff access

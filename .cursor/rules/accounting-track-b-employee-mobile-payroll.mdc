@@ -1,0 +1,78 @@
+---
+description: Track B backlog — employee mobile My Payroll (server-backed; learned 2026-08-27)
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Track B — Employee mobile My Payroll (learned 2026-08-27)
+
+**Status:** Backlog only. Implement when user explicitly starts **「Track B 시작」**. Do not build on Track A IndexedDB as a fake “phone portal.”
+
+## Problem learned from Track A (current truth)
+
+| Fact | Implication |
+|------|-------------|
+| Ledger + HR + payslips live in **browser IndexedDB per origin** | Personal phone ≠ company PC data |
+| Staff `/employee/login` reads **local** employee rows | Phone Staff login fails or shows empty My Payroll |
+| Full **Import Backup** onto a phone | Wrong — exposes full company ledger + other employees |
+| Payslip PDF download on company PC | Current workaround (admin/employee on official machine) |
+
+User expectation for later: **employees check personal payslips / timesheets on their own phone** without importing the company backup.
+
+## Track B product requirement (must ship with B auth/storage)
+
+**Employee self-service on personal devices** is a **first-class Track B feature**, not an afterthought.
+
+### Invariant
+
+An authenticated **employee** (or payroll-scoped user) must be able to open My Payroll on a **personal phone or home browser** and see **only their own** HR/payslip/timesheet data from the **server-backed tenant**, with **no** requirement to Import Backup or share the company PIN/ledger PC.
+
+### Required capabilities
+
+1. **Server-backed employee identity** — Employee ID + password (or magic link / SSO later) stored/verified on server for that tenant — not only IndexedDB hash on one PC.  
+2. **Mobile-usable My Payroll** — Responsive Staff / My Payroll UI on phone browsers (payslips list, download/view payslip, timesheet entry if product keeps it).  
+3. **Least privilege** — Employee token must **not** unlock full accounting (statements, cash, other employees, BAS, backups). Separate roles: `tenant_admin` / `accountant` vs `employee`.  
+4. **No full-ledger sync to phone** — Phone gets employee-scoped API responses only; never “restore company backup to mobile.”  
+5. **Deactivate on turnover** — Leaving employee’s server login disabled; replacement gets new credentials (same ops intent as Track A HR deactivate + Add).  
+6. **Optional notify** — Email/push when payslip published (nice-to-have after core read path).
+
+### Explicit non-goals (do not “solve” mobile this way)
+
+- Instruct staff to Import company backup on personal devices  
+- Share company Selpic A PIN as “employee login”  
+- Rely on unsigned homepage SSO alone as the phone employee portal  
+- Copy entire tenant IndexedDB into mobile Safari/Chrome as the product model  
+
+### Edge cases to design for when building B
+
+- Employee opens prod URL on phone with empty local cache → must still work via API  
+- Two employees same phone browser → session isolation / logout clear  
+- Accountant PC offline vs phone online → server is SSOT for payslips the employee sees  
+- Tenant A employee must never see Tenant B payslips  
+- Deactivated / terminated employee → login rejected; old sessions invalidated  
+- Password reset without admin sitting at company PC (email reset or admin portal)  
+- Payslip PDF generation: server or client from API payload — must not require local HR IndexedDB  
+
+### Suggested placement in Track B build order
+
+After **tenancy & storage** and **real auth**, before or with **onboarding polish**:
+
+1. Tenancy & server ledger  
+2. Auth (tenant admin + **employee role**)  
+3. **Employee mobile My Payroll API + UI** ← this requirement  
+4. Onboarding / harden analyze / billing  
+
+### Acceptance checks (when B is built)
+
+- [ ] Fresh phone browser, no Import → employee login succeeds against server  
+- [ ] Sees only own payslips/timesheets  
+- [ ] Cannot open full Dashboard ledger with employee credentials  
+- [ ] Second employee on same device after logout sees only their data  
+- [ ] Deactivated employee cannot log in  
+- [ ] Company PC Import/backup remains admin ops — not required for staff phones  
+
+## Related docs
+
+- `.cursor/rules/accounting-access-layers-pin.mdc` — Track A access layers + phone limitation today  
+- `.cursor/rules/accounting-roadmap-priority.mdc` — B is backlog until explicit start  
+- `docs/selpic-a-deploy-handoff.md` — Track B section  

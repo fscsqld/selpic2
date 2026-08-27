@@ -1,6 +1,6 @@
 /**
- * Excel export uses one bank statement (+ optional Cash Expenses for P&L period),
- * never the full merged History of every statement / payroll.
+ * P&L Period Excel export — same row universe as Biz Intel Transaction History
+ * for the selected From–To (all History bank + cash in range when not statement-scoped).
  */
 
 import {
@@ -156,11 +156,26 @@ function inIsoDateRange(
   startDate: string,
   endDate: string
 ): boolean {
-  const d = String(date || '').slice(0, 10)
-  const s = String(startDate || '').slice(0, 10)
-  const e = String(endDate || '').slice(0, 10)
+  // Lazy import avoided — dates on dashboard are usually YYYY-MM-DD; AU DD/MM/YYYY also appear
+  const d = normalizeExportDateKey(date)
+  const s = normalizeExportDateKey(startDate)
+  const e = normalizeExportDateKey(endDate)
   if (!d || !s || !e) return true
   return d >= s && d <= e
+}
+
+function normalizeExportDateKey(date: string): string {
+  const raw = String(date || '').trim()
+  if (!raw) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  // DD/MM/YYYY → YYYY-MM-DD
+  const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (m) {
+    const dd = m[1].padStart(2, '0')
+    const mm = m[2].padStart(2, '0')
+    return `${m[3]}-${mm}-${dd}`
+  }
+  return raw.slice(0, 10)
 }
 
 /**
@@ -256,4 +271,56 @@ export async function resolveStatementForExcelExport(
     // Same Hanaone-free / CrazyDomains-claim tags as Biz Intel (raw IDB may lack gstInfo)
     transactions: applyKnownPurchaseGstTags(filtered),
   }
+}
+
+/**
+ * Filter on-screen P&L / History rows for Excel export.
+ * Input should already be the same set as `dashboardTransactions` (period History).
+ * Applies business-department filter when businessOnly; does not re-scope to one PDF.
+ */
+export function filterPlPeriodHistoryForExport<T extends StatementExportRow>(
+  periodHistoryRows: T[],
+  accountType: LedgerAccountType,
+  businessOnly: boolean
+): T[] {
+  const tagged = applyKnownPurchaseGstTags(
+    periodHistoryRows as StatementExportRow[]
+  ) as T[]
+  return applyBusinessFilter(tagged, accountType, businessOnly) as T[]
+}
+
+/**
+ * @deprecated Prefer filterPlPeriodHistoryForExport(dashboardTransactions).
+ * Kept for statement-only tooling / tests that still build from raw bank + cash.
+ */
+export function buildStatementExportRows(
+  bankRows: StatementExportRow[],
+  accountType: LedgerAccountType,
+  businessOnly: boolean,
+  options: {
+    dateRangeFilter?: { startDate: string; endDate: string } | null
+    cashExpenses?: StatementExportRow[] | null
+    statementPeriod?: { startDate?: string; endDate?: string } | null
+  } = {}
+): StatementExportRow[] {
+  const range = options.dateRangeFilter
+  let rows = finalizeExportRows(
+    bankRows,
+    accountType,
+    businessOnly,
+    options.statementPeriod || null
+  )
+  if (range?.startDate && range?.endDate) {
+    rows = rows.filter((tx) =>
+      inIsoDateRange(tx.date, range.startDate, range.endDate)
+    )
+    rows = mergeCashExpensesForPeriod(
+      rows,
+      options.cashExpenses,
+      range,
+      accountType,
+      businessOnly
+    )
+  }
+  return applyKnownPurchaseGstTags(rows)
 }

@@ -753,7 +753,7 @@ export function BizIntelTabPanel({
                 <button
                   onClick={() => onExportExcel(false)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                  title="Export rows in the selected P&L period from this bank statement"
+                  title="Export rows in the selected P&L period (matches Transaction History)"
                 >
                   <Download className="w-5 h-5" />
                   Export Transactions (Excel)
@@ -763,7 +763,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={() => onExportExcel(true)}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="Business rows · statement ∩ P&L period"
+                    title="Business rows · same as Transaction History for the selected P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export Business Only (P&amp;L Period)
@@ -771,7 +771,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={() => onExportExcel(false)}
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="All departments · statement ∩ P&L period"
+                    title="All departments · same as Transaction History for the selected P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export All Depts (P&amp;L Period)
@@ -779,7 +779,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={onExportSummary}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="Financial summary · statement ∩ P&L period"
+                    title="Financial summary · matches Biz Intel cards for the selected P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export Financial Summary (P&amp;L Period)
@@ -787,7 +787,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={onExportBAS}
                     className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="BAS · statement ∩ P&L period (aligns with GST Summary)"
+                    title="BAS · aligns with GST Summary for the selected P&L period"
                   >
                     <Receipt className="w-5 h-5" />
                     Export BAS (P&amp;L Period)

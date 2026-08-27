@@ -4,7 +4,8 @@
  * Calculates financial metrics from transactions
  */
 
-import { calculateGST, hasGST } from '../excel-export'
+import { calculateGST } from '../excel-export'
+import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
 
 export interface FinancialSummary {
   totalIncome: number
@@ -26,6 +27,12 @@ export interface Transaction {
   category?: string
   department?: string
   isDirectorsLoan?: boolean
+  source?: string
+  gstInfo?: {
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    isGSTIncluded?: boolean
+  }
 }
 
 /**
@@ -105,17 +112,19 @@ export function calculateFinancialSummary(
       stickerExpenses = 0 // No separate sticker expenses
     }
 
-    // GST calculations (only for business transactions)
+    // GST calculations (only for business transactions) — same claim rules as History / BAS 1B
     if (isBusinessTransaction) {
-      // GST on income (payable)
-      if (tx.credit && tx.category?.startsWith('INCOME_') && hasGST(tx.category)) {
-        const gst = calculateGST(tx.credit)
-        totalGSTPayable += gst
+      if (tx.credit && tx.category?.startsWith('INCOME_')) {
+        if (tx.gstInfo?.gstType !== 'FREE' && tx.gstInfo?.gstType !== 'EXCLUDED') {
+          totalGSTPayable += calculateGST(tx.credit)
+        }
       }
-      // GST on expenses (claimable)
-      if (tx.debit && tx.category?.startsWith('EXPENSE_') && hasGST(tx.category)) {
-        const gst = calculateGST(tx.debit)
-        totalGSTClaimable += gst
+      if (tx.debit && tx.category?.startsWith('EXPENSE_') && isPurchaseGstClaimable(tx)) {
+        const tagged = tx.gstInfo?.gstAmount
+        totalGSTClaimable +=
+          typeof tagged === 'number' && Number.isFinite(tagged)
+            ? Math.abs(tagged)
+            : calculateGST(tx.debit)
       }
     }
   }

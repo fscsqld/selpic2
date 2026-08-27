@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildStatementExportRows } from '@/lib/excel-export/statement-scoped-export'
-import type { StatementExportRow } from '@/lib/excel-export/statement-scoped-export'
-import { buildGeneralLedgerSheet, gstAndNetForExport } from '@/lib/excel-export'
-import { cleanTransactionDescription } from '@/lib/dashboard/clean-transaction-description'
-import { getTransactionCategoryLabel } from '@/lib/dashboard/category-labels'
-import { formatDateAustralian } from '@/lib/utils/date-format'
+import {
+  buildStatementExportRows,
+  filterPlPeriodHistoryForExport,
+  type StatementExportRow,
+} from '@/lib/excel-export/statement-scoped-export'
+import { gstAndNetForExport } from '@/lib/excel-export'
+import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
 
 function row(partial: Partial<StatementExportRow> & { id: string; date: string }): StatementExportRow {
   return {
@@ -18,23 +19,73 @@ function row(partial: Partial<StatementExportRow> & { id: string; date: string }
   }
 }
 
-describe('P&L Period Excel vs Transaction History', () => {
-  const q3 = { startDate: '2026-01-01', endDate: '2026-03-31' }
+describe('Export Business Only = P&L History', () => {
+  const fy = { startDate: '2025-07-01', endDate: '2026-06-30' }
 
-  it('includes AU-format dates that sit inside the selected P&L window', () => {
-    const rows = buildStatementExportRows(
-      [
-        row({ id: 'in', date: '15/01/2026', credit: 110, category: 'INCOME_SALES_CLEANING' }),
-        row({ id: 'out', date: '15/04/2026', credit: 50, category: 'INCOME_SALES_CLEANING' }),
-      ],
-      'company',
-      true,
-      { dateRangeFilter: q3 }
-    )
-    expect(rows.map((r) => r.id)).toEqual(['in'])
+  it('filterPlPeriodHistoryForExport keeps all History rows in the period (not one PDF)', () => {
+    const history = [
+      row({ id: 's1_a', date: '2025-12-07', debit: 1516.08, category: 'EXPENSE_TRAVEL_TRANSPORT' }),
+      row({ id: 's1_b', date: '2026-01-15', credit: 100, category: 'EQUITY_SHARE_CAPITAL' }),
+      row({ id: 's2_stripe', date: '2026-04-14', credit: 220, category: 'INCOME_SALES_CLEANING' }),
+      row({ id: 's2_fuel', date: '2026-05-01', debit: 84.04, category: 'EXPENSE_FUEL_TRAVEL' }),
+      row({
+        id: 'cash_stamp',
+        date: '2026-01-29',
+        debit: 2334.2,
+        source: 'manual',
+        category: 'EXPENSE_OFFICE_EQUIPMENT',
+      }),
+      row({
+        id: 'outside',
+        date: '2026-07-01',
+        debit: 10,
+        category: 'EXPENSE_BANK_FEES',
+      }),
+    ]
+    // Caller already scoped to FY (dashboardTransactions); helper only filters business
+    const inFy = history.filter((tx) => tx.date >= fy.startDate && tx.date <= fy.endDate)
+    const rows = filterPlPeriodHistoryForExport(inFy, 'company', true)
+    expect(rows.map((r) => r.id).sort()).toEqual([
+      'cash_stamp',
+      's1_a',
+      's1_b',
+      's2_fuel',
+      's2_stripe',
+    ])
+    expect(rows).toHaveLength(5)
   })
 
-  it('merges Cash Expense in the period and drops cash outside it', () => {
+  it('excludes personal department from Export Business Only', () => {
+    const rows = filterPlPeriodHistoryForExport(
+      [
+        row({ id: 'biz', date: '2026-02-01', debit: 10, category: 'EXPENSE_OFFICE_SUPPLIES' }),
+        row({
+          id: 'pers',
+          date: '2026-02-02',
+          debit: 40,
+          department: 'personal',
+          category: 'EXPENSE_MEALS_ENTERTAINMENT',
+        }),
+      ],
+      'company',
+      true
+    )
+    expect(rows.map((r) => r.id)).toEqual(['biz'])
+  })
+
+  it('Export All Depts keeps personal when businessOnly=false', () => {
+    const rows = filterPlPeriodHistoryForExport(
+      [
+        row({ id: 'biz', date: '2026-02-01', debit: 10 }),
+        row({ id: 'pers', date: '2026-02-02', debit: 40, department: 'personal' }),
+      ],
+      'company',
+      false
+    )
+    expect(rows.map((r) => r.id).sort()).toEqual(['biz', 'pers'])
+  })
+
+  it('legacy buildStatementExportRows still merges cash in range (tooling)', () => {
     const bank = [
       row({ id: 'b1', date: '2026-02-01', debit: 20, category: 'EXPENSE_OFFICE_SUPPLIES' }),
     ]
@@ -55,116 +106,89 @@ describe('P&L Period Excel vs Transaction History', () => {
       }),
     ]
     const rows = buildStatementExportRows(bank, 'company', true, {
-      dateRangeFilter: q3,
+      dateRangeFilter: { startDate: '2026-01-01', endDate: '2026-03-31' },
       cashExpenses: cash,
     })
     expect(rows.map((r) => r.id).sort()).toEqual(['b1', 'cash_in'])
   })
 
-  it('does not clip Dec–Jun P&L exports down to the last Q4 PDF period', () => {
-    const raw = [
-      row({ id: 'dec_bank', date: '2025-12-20', debit: 10, category: 'EXPENSE_BANK_FEES_INTEREST' }),
-      row({ id: 'q4_bank', date: '2026-04-14', debit: 20, category: 'EXPENSE_FUEL_TRAVEL' }),
-    ]
-    const cash = [
-      row({
-        id: 'cash_air',
-        date: '2025-12-07',
-        debit: 1516.08,
-        source: 'manual',
-        category: 'EXPENSE_TRAVEL_TRANSPORT',
-      }),
-    ]
-    const rows = buildStatementExportRows(raw, 'company', true, {
-      statementPeriod: { startDate: '2026-04-01', endDate: '2026-06-29' },
-      dateRangeFilter: { startDate: '2025-12-07', endDate: '2026-06-29' },
-      cashExpenses: cash,
-    })
-    expect(rows.map((r) => r.id).sort()).toEqual(['cash_air', 'dec_bank', 'q4_bank'])
-  })
-
-  it('excludes personal department from Export Business Only (same as P&L)', () => {
-    const rows = buildStatementExportRows(
+  it('AU-format dates in history still count for business filter path', () => {
+    const rows = filterPlPeriodHistoryForExport(
       [
-        row({ id: 'biz', date: '2026-02-01', debit: 10, category: 'EXPENSE_OFFICE_SUPPLIES' }),
-        row({
-          id: 'pers',
-          date: '2026-02-02',
-          debit: 40,
-          department: 'personal',
-          category: 'EXPENSE_MEALS_ENTERTAINMENT',
-        }),
+        row({ id: 'in', date: '15/01/2026', credit: 110, category: 'INCOME_SALES_CLEANING' }),
       ],
       'company',
-      true,
-      { dateRangeFilter: q3 }
+      true
     )
-    expect(rows.map((r) => r.id)).toEqual(['biz'])
+    expect(rows.map((r) => r.id)).toEqual(['in'])
+  })
+})
+
+describe('Excel GST = History Claim GST (1B)', () => {
+  it('CrazyDomains Startup shows claimable GST (not category-forced $0)', () => {
+    const [tagged] = applyKnownPurchaseGstTags([
+      row({
+        id: 'crazy',
+        date: '2026-03-25',
+        description: 'Crazydomains Website Ho',
+        debit: 50.85,
+        category: 'EXPENSE_STARTUP_INCORPORATION',
+        source: 'bank',
+      }),
+    ])
+    const { gst, net } = gstAndNetForExport(tagged)
+    expect(gst).toBeCloseTo(50.85 / 11, 2)
+    expect(net).toBeCloseTo(50.85 - 50.85 / 11, 2)
   })
 
-  it('writes the selected P&L period on the sheet and AU dates/labels matching History', () => {
-    const { allRows } = buildGeneralLedgerSheet(
-      [
-        {
-          date: '2026-02-15',
-          description: 'STRIPE PAYOUT SELPIC 15022026',
-          category: 'INCOME_SALES_CLEANING',
-          debit: null,
-          credit: 220,
-          department: 'cleaning',
-          status: 'Normal',
-          source: 'bank',
-        },
-      ],
-      {
-        periodLabel: 'Q3 Jan–Mar 2026',
-        periodStart: '2026-01-01',
-        periodEnd: '2026-03-31',
-        accountType: 'company',
-      }
+  it('untagged manual cash expense is GST-free (no Excel ÷11)', () => {
+    const { gst, net } = gstAndNetForExport(
+      row({
+        id: 'cash_free',
+        date: '2026-01-29',
+        description: 'Stamp Zone',
+        debit: 2334.2,
+        source: 'manual',
+        category: 'EXPENSE_OFFICE_EQUIPMENT',
+      })
     )
-
-    expect(allRows[0][0]).toBe('P&L Period')
-    expect(allRows[0][1]).toBe('Q3 Jan–Mar 2026')
-    expect(allRows[0][2]).toBe('01/01/2026 to 31/03/2026')
-    expect(allRows[0][3]).toBe(1)
-
-    const data = allRows[3]
-    expect(data[0]).toBe(formatDateAustralian('2026-02-15'))
-    expect(data[1]).toBe(cleanTransactionDescription('STRIPE PAYOUT SELPIC 15022026'))
-    expect(data[1]).toBe('Stripe')
-    expect(data[2]).toBe(getTransactionCategoryLabel('INCOME_SALES_CLEANING'))
-    expect(data[6]).toBe(220)
-    expect(data[7]).toBe('Company')
-  })
-
-  it('does not invent GST on GST-free cash expenses', () => {
-    const { gst, net } = gstAndNetForExport({
-      date: '2026-02-01',
-      description: 'Petty',
-      category: 'CASH_EXPENSE_PETTY',
-      debit: 55,
-      credit: null,
-      department: 'cleaning',
-      status: 'Normal',
-      source: 'manual',
-      gstInfo: { gstType: 'FREE', gstAmount: 0, netAmount: 55 },
-    })
     expect(gst).toBe(0)
-    expect(net).toBe(55)
+    expect(net).toBeCloseTo(2334.2, 2)
   })
 
-  it('uses inclusive ÷11 GST for untagged bank purchases (same as BAS default)', () => {
-    const { gst } = gstAndNetForExport({
-      date: '2026-02-01',
-      description: 'Officeworks',
-      category: 'EXPENSE_OFFICE_SUPPLIES',
-      debit: 110,
-      credit: null,
-      department: 'cleaning',
-      status: 'Normal',
-      source: 'bank',
-    })
-    expect(gst).toBe(10)
+  it('Hanaone freight is GST-free after known tags', () => {
+    const [tagged] = applyKnownPurchaseGstTags([
+      row({
+        id: 'hana',
+        date: '2026-03-25',
+        description: 'Hanaone Express',
+        debit: 129.6,
+        category: 'EXPENSE_FREIGHT_SHIPPING',
+        source: 'bank',
+      }),
+    ])
+    const { gst, net } = gstAndNetForExport(tagged)
+    expect(gst).toBe(0)
+    expect(net).toBeCloseTo(129.6, 2)
+  })
+
+  it('manual Claim override keeps GST in Excel', () => {
+    const { gst } = gstAndNetForExport(
+      row({
+        id: 'cash_claim',
+        date: '2026-01-19',
+        description: 'Case',
+        debit: 152.1,
+        source: 'manual',
+        category: 'EXPENSE_OFFICE_SUPPLIES',
+        gstInfo: {
+          gstType: 'INCLUDED',
+          isGSTIncluded: true,
+          gstAmount: 152.1 / 11,
+          netAmount: 152.1 - 152.1 / 11,
+        },
+      })
+    )
+    expect(gst).toBeCloseTo(152.1 / 11, 2)
   })
 })

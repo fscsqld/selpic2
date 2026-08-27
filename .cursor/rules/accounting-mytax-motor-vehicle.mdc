@@ -32,7 +32,7 @@ Path: `myTax → Business/sole trader → Expenses → Motor vehicle expenses`
 
 P&L category Travel–Transport **$1,516.08** unchanged — only Annual bucket map changed.
 
-Scale: `expenseScale = totalExpensesExGst / cashTotalExpenses` (FY: 14782.78 / 15346.61).
+**Broader ATO work (user 2026-08-27):** all income + expense lodgment lines → **per-line GST-ex** (no FY `scaleMap`) — `accounting-ato-rounding-gst-ex.mdc`. Motor $ will change again when that ships.
 
 ## Do not
 

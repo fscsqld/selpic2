@@ -7,6 +7,8 @@
 import * as XLSX from 'xlsx'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { strings } from '@/lib/i18n/strings'
+import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
+import { roundMoney } from '@/lib/utils/currency-format'
 
 export interface ExportTransaction {
   date: string
@@ -18,6 +20,57 @@ export interface ExportTransaction {
   department: string
   status: string
   balance?: number
+  /** Needed so Excel GST matches History Claim GST (1B) */
+  source?: string
+  gstInfo?: {
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    netAmount?: number
+  }
+}
+
+/**
+ * GST / net for General Ledger Excel — must match Transaction History Claim GST (1B).
+ * Do NOT use category-only hasGST() for this.
+ */
+export function gstAndNetForExport(tx: {
+  debit?: number | null
+  credit?: number | null
+  category?: string
+  source?: string
+  gstInfo?: ExportTransaction['gstInfo']
+}): { gst: number; net: number } {
+  const amount = Math.abs(tx.debit || tx.credit || 0)
+  if (amount < 0.0005) return { gst: 0, net: 0 }
+
+  const cat = tx.category || ''
+
+  if (tx.debit && cat.startsWith('EXPENSE_')) {
+    if (!isPurchaseGstClaimable(tx)) {
+      return { gst: 0, net: roundMoney(amount) }
+    }
+    const tagged = tx.gstInfo?.gstAmount
+    const gst =
+      typeof tagged === 'number' && Number.isFinite(tagged)
+        ? roundMoney(Math.abs(tagged))
+        : roundMoney(amount / 11)
+    return { gst, net: roundMoney(amount - gst) }
+  }
+
+  if (tx.credit && cat.startsWith('INCOME_')) {
+    if (tx.gstInfo?.gstType === 'FREE' || tx.gstInfo?.gstType === 'EXCLUDED') {
+      return { gst: 0, net: roundMoney(amount) }
+    }
+    const tagged = tx.gstInfo?.gstAmount
+    const gst =
+      typeof tagged === 'number' && Number.isFinite(tagged) && tx.gstInfo?.gstType === 'INCLUDED'
+        ? roundMoney(Math.abs(tagged))
+        : roundMoney(amount / 11)
+    return { gst, net: roundMoney(amount - gst) }
+  }
+
+  return { gst: 0, net: roundMoney(amount) }
 }
 
 /**
@@ -35,7 +88,8 @@ export function calculateGST(amount: number, isInclusive: boolean = true): numbe
 }
 
 /**
- * Check if category has GST
+ * @deprecated Category-only guess — wrong for CrazyDomains/Startup, Hanaone, manual FREE.
+ * Use gstAndNetForExport / isPurchaseGstClaimable instead. Kept for rare legacy callers.
  */
 export function hasGST(category: string): boolean {
   // Categories that typically have GST
@@ -284,8 +338,7 @@ export function exportToExcel(
   // Prepare main transaction data with cleaned descriptions
   const mainData = transactions.map((tx) => {
     const amount = tx.debit || tx.credit || 0
-    const gst = hasGST(tx.category) ? calculateGST(Math.abs(amount)) : 0
-    const netAmount = Math.abs(amount) - gst
+    const { gst, net: netAmount } = gstAndNetForExport(tx)
 
     return {
       Date: formatDateAustralian(tx.date), // Australian format: DD/MM/YYYY
