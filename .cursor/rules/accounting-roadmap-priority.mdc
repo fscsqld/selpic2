@@ -23,11 +23,12 @@ Public (B) is **not** the only remaining accounting work. When B starts, **emplo
 1. **ATO lodgment GST-ex alignment** — **learned 2026-08-27** (all income + expense Annual/BAS/CTR; replace FY `scaleMap`). See `accounting-ato-rounding-gst-ex.mdc`. Resume: **「ATO GST-ex 정렬」**  
 2. **Export Business Only (P&L Period)** — **Fixed 2026-08-27**: uses `dashboardTransactions` (full History for period). See `accounting-export-pl-period-history.mdc`.  
 3. **Excel GST column vs History Claim GST** — **Fixed 2026-08-27**: `gstAndNetForExport` (= History 1B). Live books were never wrong — Excel-only. See `accounting-excel-gst-vs-history.mdc`.  
-4. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
-5. **Employee login** — form exists; real employee account + login deferred  
-6. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
-7. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
-8. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
+4. **Export BAS period UX** — **Done 2026-08-27**: FY → quarter picker; uses `gstReportingCycle`. See `accounting-export-pl-siblings.mdc`.  
+5. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
+6. **Employee login** — form exists; real employee account + login deferred  
+7. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+8. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
+9. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
 
 ## Recommended work order (when choosing “what next”)
 
@@ -58,6 +59,7 @@ Public (B) is **not** the only remaining accounting work. When B starts, **emplo
 - ATO tax basis: **「ATO GST-ex 정렬」** / **「Annual per-line GST-ex」**  
 - P&L Excel rows: **「Export Business Only P&L History」** (row universe — done)  
 - Excel GST column: **「Excel GST = History 1B」** (done 2026-08-27)  
+- BAS Excel: **「BAS export = BAS period UX」** (done 2026-08-27)  
 - Period QA: **「Period Management 확인부터」** (done)  
 - Types: **「tsc 정리부터」** (done)  
 - Public: **「Track B 시작」** (only when intentional; includes employee mobile My Payroll)

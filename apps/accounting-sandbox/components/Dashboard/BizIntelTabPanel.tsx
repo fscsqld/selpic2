@@ -44,6 +44,10 @@ import { filterTransactionsForPeriod } from '@/lib/period-management/period-lock
 import { DashboardPeriodSelector } from '@/components/Dashboard/DashboardPeriodSelector'
 import type { DashboardViewPeriod } from '@/lib/dashboard/view-period-range'
 import { filterTransactionsForDateRange, formatViewPeriodLabel } from '@/lib/dashboard/view-period-range'
+import {
+  resolveBasExportPeriodDecision,
+  type BasExportPeriodOption,
+} from '@/lib/export/bas-export-period'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { isDirectorsLoanLedgerTransaction } from '@/lib/classification/directors-loan-ledger'
 import { sumDirectorFundedCashDebits } from '@/lib/cash-expense/funded-by-director'
@@ -98,7 +102,15 @@ export interface BizIntelTabPanelProps {
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
   onExportExcel: (businessOnly: boolean) => void | Promise<void>
   onExportSummary: () => void | Promise<void>
-  onExportBAS: () => void | Promise<void>
+  onExportBAS: (override?: {
+    startDate: string
+    endDate: string
+    periodType: 'monthly' | 'quarterly'
+    fileSlug?: string
+    label?: string
+    matchesPlBanner?: boolean
+  }) => void | Promise<void>
+  gstReportingCycle?: 'Monthly' | 'Quarterly'
   onTransactionUpdate: (id: string, updates: Partial<ClassifiedTransaction>) => Promise<void>
   onSwitchViewPeriodToData?: () => void
   onChangeViewPeriod?: (period: DashboardViewPeriod) => void
@@ -179,6 +191,7 @@ export function BizIntelTabPanel({
   onExportExcel,
   onExportSummary,
   onExportBAS,
+  gstReportingCycle = 'Quarterly',
   onTransactionUpdate,
   onSwitchViewPeriodToData,
   onChangeViewPeriod,
@@ -192,6 +205,10 @@ export function BizIntelTabPanel({
   const [showCashExpenseForm, setShowCashExpenseForm] = useState(false)
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null)
   const [showDirectorsLoanFilter, setShowDirectorsLoanFilter] = useState(false)
+  const [basPeriodPicker, setBasPeriodPicker] = useState<{
+    title: string
+    options: BasExportPeriodOption[]
+  } | null>(null)
   /** Prefer the last uploaded/loaded statement; user can switch to full History */
   const [historyScope, setHistoryScope] = useState<'statement' | 'all_history'>('statement')
   /** Default: same date window as P&L banner (not the full statement / all months) */
@@ -785,9 +802,34 @@ export function BizIntelTabPanel({
                     Export Financial Summary (P&amp;L Period)
                   </button>
                   <button
-                    onClick={onExportBAS}
+                    onClick={() => {
+                      const decision = resolveBasExportPeriodDecision(
+                        viewPeriod,
+                        gstReportingCycle
+                      )
+                      if (decision.kind === 'error') {
+                        onClearError()
+                        window.alert(decision.message)
+                        return
+                      }
+                      if (decision.kind === 'need_picker') {
+                        setBasPeriodPicker({
+                          title: decision.title,
+                          options: decision.options,
+                        })
+                        return
+                      }
+                      void onExportBAS({
+                        startDate: decision.option.startDate,
+                        endDate: decision.option.endDate,
+                        periodType: decision.option.periodType,
+                        fileSlug: decision.option.fileSlug,
+                        label: decision.option.label,
+                        matchesPlBanner: decision.matchesPlBanner,
+                      })
+                    }}
                     className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="BAS · aligns with GST Summary for the selected P&L period"
+                    title="BAS for one GST quarter (or month) — pick when P&L is FY"
                   >
                     <Receipt className="w-5 h-5" />
                     Export BAS (P&amp;L Period)
@@ -1079,6 +1121,59 @@ export function BizIntelTabPanel({
               categories={[...CASH_EXPENSE_CATEGORIES]}
               getCategoryLabel={getCashExpenseCategoryLabel}
             />
+          )}
+
+          {/* BAS period picker — FY / multi-quarter must choose one lodgment period */}
+          {basPeriodPicker && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bas-period-picker-title"
+            >
+              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-5">
+                <h3
+                  id="bas-period-picker-title"
+                  className="text-lg font-semibold text-gray-900 mb-1"
+                >
+                  {basPeriodPicker.title}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  BAS is lodged per GST {gstReportingCycle === 'Monthly' ? 'month' : 'quarter'},
+                  not for the full P&amp;L range. Pick one period to export.
+                </p>
+                <ul className="space-y-2 max-h-72 overflow-y-auto mb-4">
+                  {basPeriodPicker.options.map((opt) => (
+                    <li key={opt.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 rounded-md border border-gray-200 hover:border-purple-400 hover:bg-purple-50 text-sm"
+                        onClick={() => {
+                          setBasPeriodPicker(null)
+                          void onExportBAS({
+                            startDate: opt.startDate,
+                            endDate: opt.endDate,
+                            periodType: opt.periodType,
+                            fileSlug: opt.fileSlug,
+                            label: opt.label,
+                            matchesPlBanner: false,
+                          })
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+                  onClick={() => setBasPeriodPicker(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
     </>
   )

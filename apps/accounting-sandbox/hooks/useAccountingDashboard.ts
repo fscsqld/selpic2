@@ -1966,8 +1966,15 @@ export function useAccountingDashboard() {
     }
   }
 
-  // BAS (P&L Period) — same rows + GST tags as Biz Intel GST Summary
-  const handleExportBAS = async () => {
+  // BAS (one GST reporting period — quarter or month). FY → picker in UI.
+  const handleExportBAS = async (override?: {
+    startDate: string
+    endDate: string
+    periodType: 'monthly' | 'quarterly'
+    fileSlug?: string
+    label?: string
+    matchesPlBanner?: boolean
+  }) => {
     try {
       if (!viewPeriod?.startDate || !viewPeriod?.endDate) {
         setError('Select a P&L period before exporting BAS.')
@@ -1978,14 +1985,25 @@ export function useAccountingDashboard() {
         return
       }
 
-      const startDate = viewPeriod.startDate
-      const endDate = viewPeriod.endDate
-      const startMs = new Date(`${startDate}T12:00:00`).getTime()
-      const endMs = new Date(`${endDate}T12:00:00`).getTime()
-      const daysDiff = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24))
-      const periodType: 'monthly' | 'quarterly' = daysDiff <= 35 ? 'monthly' : 'quarterly'
+      const startDate = override?.startDate || viewPeriod.startDate
+      const endDate = override?.endDate || viewPeriod.endDate
+      const periodType = override?.periodType || (gstReportingCycle === 'Monthly' ? 'monthly' : 'quarterly')
+      const fileSlug = override?.fileSlug || `${startDate}_to_${endDate}`
+      const label = override?.label || `${startDate}_to_${endDate}`
+      const matchesPlBanner =
+        override?.matchesPlBanner ??
+        (startDate === viewPeriod.startDate && endDate === viewPeriod.endDate)
 
-      const scoped = dashboardTransactions
+      const scoped = filterTransactionsForDateRange(
+        dashboardTransactions,
+        startDate,
+        endDate
+      )
+      if (scoped.length === 0) {
+        setError('No transactions in the selected BAS period.')
+        return
+      }
+
       const report = generateBASReport(
         scoped,
         startDate,
@@ -1995,7 +2013,6 @@ export function useAccountingDashboard() {
         gstRegistered
       )
 
-      // Bank statements rarely include payroll; keep empty rather than mixing History payroll
       const payrollTransactions = scoped
         .filter((tx) => tx.isPayrollTransaction && tx.requiresPAYG && tx.debit)
         .map((tx) => ({
@@ -2013,16 +2030,12 @@ export function useAccountingDashboard() {
           category: tx.category || 'UNCATEGORIZED',
         }))
 
-      const safeFile = String(
-        exportStatementSnapshot?.fileName || currentStatementId || 'pl-period'
-      )
-        .replace(/\.[^.]+$/, '')
-        .replace(/[^\w\-]+/g, '_')
-        .slice(0, 40)
-      const periodLabel = `${startDate}_to_${endDate}`
-      exportBASToExcel(report, payrollTransactions, `statement-bas-${safeFile || 'export'}`)
+      exportBASToExcel(report, payrollTransactions, `bas-${fileSlug}`)
+      const gstNote = matchesPlBanner
+        ? 'GST matches Biz Intel for this period'
+        : 'BAS period (not full P&L banner)'
       setLoadSuccessMessage(
-        `Exported BAS · P&L ${periodLabel} (${scoped.length} rows · GST matches Biz Intel)`
+        `Exported BAS · ${label} (${scoped.length} rows · ${gstNote})`
       )
       setTimeout(() => setLoadSuccessMessage(null), 6000)
     } catch (err) {

@@ -1,0 +1,77 @@
+---
+description: Learned — BAS is quarterly (or monthly); Export BAS correct behaviour (2026-08-27)
+globs: apps/accounting-sandbox/**/bas-reporter*,apps/accounting-sandbox/**/BizIntelTabPanel*,apps/accounting-sandbox/**/useAccountingDashboard*,apps/accounting-sandbox/**/ATOLodgment*
+alwaysApply: false
+---
+
+# BAS export — correct product model (learned 2026-08-27)
+
+## User fact
+
+**BAS is a lodgment form for a GST reporting period** — for most SELPIC setups **Quarterly** (AU quarters); Settings may set **Monthly**. It is **not** an annual / full-FY worksheet.
+
+Therefore Export BAS must produce **one BAS period’s** G1 / 1A / 1B (etc.), not “whatever the P&L banner happens to be.”
+
+## What is correct
+
+| Surface | Period meaning |
+|---------|----------------|
+| **P&L / History / Export Business·All Depts / Financial Summary** | User-selected **From–To** (month, quarter, FY, custom) |
+| **On-screen GST Summary (Biz Intel)** | Same banner window (helpful preview; may be FY) |
+| **Export BAS / ATO BAS tab** | **One BAS cycle**: Q1–Q4 (or one month if monthly) |
+
+**Correct Export BAS behaviour:**
+
+1. Use Business Profile **`gstReportingCycle`** (`Quarterly` | `Monthly`) — not “daysDiff ≤ 35” alone.  
+2. Resolve **which** BAS period to lodge:  
+   - If P&L banner **exactly equals** one BAS quarter (or month) → export that period (matches Biz Intel GST).  
+   - If P&L is **FY or multi-quarter** → **do not silently collapse to Q of start date**. Instead:  
+     - **Preferred:** prompt / period picker — “Which BAS quarter?” (Q1–Q4 of FY), or  
+     - Export **four quarterly sheets** (or zip) for the FY, or  
+     - Block with message: “Select a BAS quarter (or month) on the P&L period control before Export BAS.”  
+3. GST engine stays `applyKnownPurchaseGstTags` + `calculateBusinessMetrics` on **that BAS window only**.  
+4. Toast / filename: e.g. `BAS Q3 2025–26` / `bas-Q3-2025-2026` — never imply “full FY BAS.”  
+5. Do **not** advertise “GST matches Biz Intel” when banner ≠ BAS period.
+
+## What is wrong today (known)
+
+`handleExportBAS` + `generateBASReport` re-cut FY → **start date’s single quarter** without telling the user. That can look like a bug vs FY GST Summary, but the **intent** (one BAS period) is right; the **UX** (silent / misleading) is wrong.
+
+## What not to do
+
+- Force Export BAS to always equal **FY** GST Summary (that invents a non-ATO “annual BAS”).  
+- Use Annual/myTax totals as BAS labels.  
+- Leave toast “matches Biz Intel” on FY selection.
+
+## Sister: ATO Lodgment BAS tab
+
+Already period-aware (`BAS period` selector + `gstReportingCycle`). Biz Intel **Export BAS** should converge toward the same mental model.
+
+## Agreed UX (user 2026-08-27) — ask which quarter when FY
+
+**Preferred when P&L banner is a full Australian FY (Jul–Jun):**  
+show a **BAS quarter picker** (Q1–Q4 for that FY) before Export BAS, then export **only that quarter**.
+
+| P&L selection | Export BAS behaviour |
+|---------------|----------------------|
+| **FY 20xx–yy** | **Ask:** Which quarter? Q1 Jul–Sep / Q2 Oct–Dec / Q3 Jan–Mar / Q4 Apr–Jun → export chosen Q |
+| Exactly one BAS quarter already | Export that quarter — **no** extra prompt (matches Biz Intel GST) |
+| Exactly one calendar month + cycle Monthly | Export that month — no prompt |
+| Custom span covering **>1** BAS period (not full FY) | Same idea: ask which BAS period in range, or “narrow P&L to one quarter” |
+| Custom span = exactly one BAS period | Export — no prompt |
+
+Why picker on FY is right:
+
+- BAS lodgment is **per quarter** (or month), not annual.  
+- User often keeps FY on the banner for History/P&L, then needs a **BAS file for one Q**.  
+- Asking avoids silent Q1-of-start and avoids inventing a fake “FY BAS.”
+
+Do **not** auto-export all four quarters unless user later asks for a multi-file pack.
+
+## Implementation status (2026-08-27)
+
+**Shipped:** `resolveBasExportPeriodDecision` + Biz Intel modal picker + `handleExportBAS(override)`.
+
+- FY / multi-quarter → ask which Q (or months if Monthly cycle)
+- Exact one BAS period → export immediately; toast says matches Biz Intel when banner equals that period
+- Filename `bas-Q3-2025-2026` style

@@ -200,6 +200,7 @@ export default function AccountingDashboard() {
           onExportExcel={d.handleExportExcel}
           onExportSummary={d.handleExportSummary}
           onExportBAS={d.handleExportBAS}
+          gstReportingCycle={d.gstReportingCycle}
           onTransactionUpdate={d.handleTransactionUpdate}
           onSwitchViewPeriodToData={d.switchViewPeriodToTransactionData}
           onChangeViewPeriod={d.changeViewPeriod}
