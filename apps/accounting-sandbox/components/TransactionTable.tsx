@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Edit2, Check, X, CheckCircle, AlertCircle, Search, Download, FileText, ArrowLeftRight, Sparkles, AlertTriangle, Receipt, Image as ImageIcon, Upload, X as XIcon, Loader2, Lock } from 'lucide-react' //
+import { Edit2, Check, X, CheckCircle, AlertCircle, Search, Download, FileText, ArrowLeftRight, Sparkles, AlertTriangle, Receipt, Image as ImageIcon, Upload, X as XIcon, Loader2, Lock, Trash2 } from 'lucide-react' //
 import { formatDateAustralian, toDateInputValue } from '@/lib/utils/date-format'
 import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
 import { strings } from '@/lib/i18n/strings'
@@ -17,6 +17,10 @@ import {
   isPurchaseGstClaimable,
 } from '@/lib/gst/purchase-gst-claimable'
 import { cleanTransactionDescription } from '@/lib/dashboard/clean-transaction-description'
+import {
+  isManualCashExpenseRow,
+  resolveCashExpenseId,
+} from '@/lib/cash-expense/is-manual-cash-expense'
 
 // Get current user name (default: 사장님)
 const getCurrentUserName = (): string => {
@@ -83,6 +87,7 @@ interface Transaction {
 interface TransactionTableProps {
   transactions: Transaction[]
   onTransactionUpdate?: (id: string, updates: Partial<Transaction>) => void
+  onCashExpenseDelete?: (cashExpenseId: string) => Promise<void>
   accountType?: 'individual' | 'company' | 'sole_trader'
   lockedPeriodIds?: Set<string>
 }
@@ -260,6 +265,7 @@ function cleanDescription(description: string): string {
 export function TransactionTable({
   transactions,
   onTransactionUpdate,
+  onCashExpenseDelete,
   accountType = 'company',
   lockedPeriodIds,
 }: TransactionTableProps) {
@@ -275,6 +281,7 @@ export function TransactionTable({
   }
   // Local state to track transaction updates for immediate UI feedback
   const [localTransactions, setLocalTransactions] = useState<Transaction[]>(transactions)
+  const [deletingCashId, setDeletingCashId] = useState<string | null>(null)
   
   // Track which cells are being edited
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
@@ -1612,6 +1619,68 @@ export function TransactionTable({
                         </div>
                       </label>
                     )}
+                    {onCashExpenseDelete &&
+                      isManualCashExpenseRow(tx) &&
+                      resolveCashExpenseId(tx) && (
+                        <button
+                          type="button"
+                          disabled={
+                            isLocked || deletingCashId === resolveCashExpenseId(tx)
+                          }
+                          title={
+                            isLocked
+                              ? 'Locked period — cannot delete'
+                              : 'Delete Cash Expense'
+                          }
+                          className={`p-2 rounded-md transition-colors ${
+                            isLocked || deletingCashId === resolveCashExpenseId(tx)
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-red-50 hover:bg-red-100 text-red-600'
+                          }`}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            if (isLocked) {
+                              showLockedPeriodAlert()
+                              return
+                            }
+                            const cashId = resolveCashExpenseId(tx)
+                            if (!cashId) return
+                            const amountLabel = formatCurrency(tx.debit || 0)
+                            const ok = window.confirm(
+                              [
+                                'Delete this Cash Expense?',
+                                '',
+                                tx.description || 'Cash Expense',
+                                amountLabel,
+                                `Date: ${formatDateAustralian(tx.date)}`,
+                                '',
+                                'This removes it from the ledger (P&L / GST / Director Loan will update). Bank statement rows are not affected.',
+                              ].join('\n')
+                            )
+                            if (!ok) return
+                            try {
+                              setDeletingCashId(cashId)
+                              await onCashExpenseDelete(cashId)
+                            } catch (err) {
+                              console.error('[CashExpense] Delete failed:', err)
+                              alert(
+                                err instanceof Error
+                                  ? err.message
+                                  : 'Failed to delete Cash Expense. Try again.'
+                              )
+                            } finally {
+                              setDeletingCashId(null)
+                            }
+                          }}
+                        >
+                          {deletingCashId === resolveCashExpenseId(tx) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
                   </div>
                 </td>
               </tr>

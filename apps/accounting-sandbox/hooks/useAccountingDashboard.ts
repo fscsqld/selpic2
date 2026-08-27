@@ -491,37 +491,47 @@ export function useAccountingDashboard() {
       window.addEventListener('transactionsUpdated', handleTransactionsUpdated)
     }
 
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('transactionsUpdated', handleTransactionsUpdated)
-      }
-    }
-
-    // Load opening balance from localStorage
+    // Load opening balance from localStorage (non-blocking hint only)
     const savedOpeningBalance = localStorage.getItem('opening_director_loan_balance') ?? ''
     if (savedOpeningBalance) {
       try {
         const parsed = parseFloat(savedOpeningBalance)
-        if (!isNaN(parsed)) {
-          // Will be set via state below
+        if (Number.isNaN(parsed)) {
+          console.warn('[Frontend] opening_director_loan_balance is not a number')
         }
       } catch (err) {
         console.error('[Frontend] Failed to parse saved opening balance:', err)
       }
     }
 
-    // Initialize IndexedDB and load history (only if setup is complete)
-    // Setup Wizard에서 이미 초기화되었으므로, 여기서는 재초기화만 수행
+    // MUST run before the effect cleanup `return` — otherwise History stays empty forever
+    // while Run audit (direct IndexedDB read) still shows statements.
     if (setupComplete) {
-      indexedDBStorage.init().then(async () => {
-        await loadAllTransactions()
-        loadStatementHistory()
-        syncIncomingOrders()
-      }).catch((err) => {
-        console.error('Failed to initialize IndexedDB:', err)
-      })
+      indexedDBStorage
+        .init()
+        .then(async () => {
+          await loadAllTransactions()
+          await loadStatementHistory()
+          syncIncomingOrders()
+        })
+        .catch((err) => {
+          console.error('Failed to initialize IndexedDB:', err)
+        })
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('transactionsUpdated', handleTransactionsUpdated)
+      }
     }
   }, [setupComplete])
+
+  // History list is React state; re-read IndexedDB whenever the tab opens
+  // (covers cases where mount load was skipped or state was stale).
+  useEffect(() => {
+    if (!setupComplete || activeTab !== 'history') return
+    void loadStatementHistory()
+  }, [activeTab, setupComplete])
 
   // 🔧 주기적으로 새로운 주문 확인 (3초마다)
   useEffect(() => {
@@ -2235,6 +2245,31 @@ export function useAccountingDashboard() {
     [financialPeriods]
   )
 
+  /** Remove one Add Cash Expense row from IndexedDB and refresh ledger (P&L/GST follow). */
+  const handleCashExpenseDelete = async (cashExpenseId: string) => {
+    const id = typeof cashExpenseId === 'string' ? cashExpenseId.trim() : ''
+    if (!id) {
+      throw new Error('Cash expense id required')
+    }
+
+    const row = transactions.find((tx) => tx.id === id)
+    const dateToCheck = row?.date
+    if (dateToCheck && isDateInLockedPeriod(dateToCheck, lockedPeriodIds)) {
+      window.alert(
+        'This Cash Expense is in a locked period. Unlock the period in Period Management before deleting.'
+      )
+      return
+    }
+
+    try {
+      await indexedDBStorage.deleteCashExpense(id)
+      await loadCashExpenses()
+    } catch (err) {
+      console.error('Failed to delete cash expense:', err)
+      throw err
+    }
+  }
+
   /**
    * When a statement was just uploaded/loaded, Biz Intel / Lodgment / Reports
    * use that file only (not all History). OCR years (267→2026) are repaired;
@@ -2910,6 +2945,7 @@ export function useAccountingDashboard() {
     handleDuplicateFileChoice,
     handleFileUpload,
     handleCashExpenseSave,
+    handleCashExpenseDelete,
     handleTransactionUpdate,
     handleExportExcel,
     handleExportSummary,

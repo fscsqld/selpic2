@@ -1110,15 +1110,101 @@ class IndexedDBStorage {
     })
   }
 
-  /**
-   * Delete cash expense
-   */
-  async deleteCashExpense(id: string): Promise<void> {
+  async getCashExpense(id: string): Promise<any | null> {
     if (!this.db) {
       await this.init()
     }
 
     return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([CASH_EXPENSES_STORE], 'readonly')
+      const store = transaction.objectStore(CASH_EXPENSES_STORE)
+      const request = store.get(id)
+
+      request.onsuccess = () => {
+        resolve(request.result || null)
+      }
+
+      request.onerror = () => {
+        console.error('[IndexedDB] Error getting cash expense:', request.error)
+        reject(request.error)
+      }
+    })
+  }
+
+  async deleteReceiptImage(receiptId: string): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'))
+        return
+      }
+
+      const transaction = this.db.transaction([RECEIPTS_STORE], 'readwrite')
+      const store = transaction.objectStore(RECEIPTS_STORE)
+      const request = store.delete(receiptId)
+
+      request.onsuccess = () => {
+        console.log('[IndexedDB] Receipt image deleted:', receiptId)
+        resolve()
+      }
+
+      request.onerror = () => {
+        console.error('[IndexedDB] Error deleting receipt image:', request.error)
+        reject(request.error)
+      }
+    })
+  }
+
+  /**
+   * Delete cash expense (+ linked OCR receipt when present).
+   * Re-reads after delete — IDB delete() succeeds even when the key was missing.
+   */
+  async deleteCashExpense(id: string): Promise<void> {
+    if (!id || typeof id !== 'string') {
+      throw new Error('Cash expense id required')
+    }
+
+    const existing = await this.getCashExpense(id)
+    if (!existing) {
+      throw new Error(`Cash expense not found: ${id}`)
+    }
+
+    const receiptIds = new Set<string>()
+    if (typeof existing.receiptImageId === 'string' && existing.receiptImageId) {
+      receiptIds.add(existing.receiptImageId)
+    }
+    try {
+      const linked = await this.getReceiptByCashExpenseId(id)
+      if (linked?.id) receiptIds.add(String(linked.id))
+    } catch (err) {
+      console.warn('[IndexedDB] Could not look up receipt by cash expense id:', err)
+    }
+
+    for (const receiptId of receiptIds) {
+      try {
+        if (receiptId.startsWith('receipt_')) {
+          await this.deleteReceiptImage(receiptId)
+        } else {
+          await this.deleteTransactionReceipt(receiptId)
+        }
+      } catch (err) {
+        console.warn('[IndexedDB] Receipt cleanup failed (continuing):', receiptId, err)
+      }
+    }
+
+    if (!this.db) {
+      await this.init()
+    }
+
+    await new Promise<void>((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'))
         return
@@ -1138,6 +1224,11 @@ class IndexedDBStorage {
         reject(request.error)
       }
     })
+
+    const stillThere = await this.getCashExpense(id)
+    if (stillThere) {
+      throw new Error(`Cash expense delete failed: ${id} still present`)
+    }
   }
 
   async deleteAllCashExpenses(): Promise<void> {
@@ -1635,13 +1726,30 @@ class IndexedDBStorage {
       }
 
       if (data.statements && Array.isArray(data.statements)) {
+        let importedStatements = 0
+        const statementErrors: string[] = []
         for (const statement of data.statements) {
           try {
             const { id, uploadedAt, ...statementData } = statement
             await this.saveStatementPreservingId({ ...statementData, id, uploadedAt })
+            importedStatements += 1
           } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
             console.warn('[IndexedDB] Failed to import statement:', err)
+            statementErrors.push(`${statement?.fileName || statement?.id || 'statement'}: ${msg}`)
           }
+        }
+        // Wipe already ran — surface failure so UI does not look like a successful empty restore
+        if (data.statements.length > 0 && importedStatements === 0) {
+          throw new Error(
+            `Restore wiped the ledger but saved 0 of ${data.statements.length} statement(s). ${statementErrors.join('; ')}`
+          )
+        }
+        if (statementErrors.length > 0) {
+          console.warn(
+            `[IndexedDB] Partial statement restore: ${importedStatements}/${data.statements.length}`,
+            statementErrors
+          )
         }
       }
 

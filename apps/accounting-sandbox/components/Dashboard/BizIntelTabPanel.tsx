@@ -113,6 +113,7 @@ export interface BizIntelTabPanelProps {
     source: 'manual'
     claimAuGst?: boolean
   }) => Promise<void>
+  onCashExpenseDelete?: (cashExpenseId: string) => Promise<void>
   /** Active upload/load statement rows — Transaction History defaults to these */
   activeStatementSnapshot?: {
     statementId: string
@@ -182,6 +183,7 @@ export function BizIntelTabPanel({
   onSwitchViewPeriodToData,
   onChangeViewPeriod,
   onCashExpenseSave,
+  onCashExpenseDelete,
   activeStatementSnapshot = null,
   activeLedgerTransactions,
   isStatementLedgerScope = false,
@@ -601,6 +603,9 @@ export function BizIntelTabPanel({
                 Add Cash Expense
               </button>
             </div>
+            <p className="text-xs text-gray-500 mb-3 -mt-2">
+              To remove a Cash Expense: open Transaction History → red trash icon on that row (bank lines cannot be deleted this way).
+            </p>
             
             <div className="mb-4">
               <p className="text-gray-700">
@@ -1017,6 +1022,7 @@ export function BizIntelTabPanel({
                         : visibleHistoryTransactions
                 )}
                 onTransactionUpdate={onTransactionUpdate as any}
+                onCashExpenseDelete={onCashExpenseDelete}
                 accountType={accountType}
                 lockedPeriodIds={lockedPeriodIds}
               />

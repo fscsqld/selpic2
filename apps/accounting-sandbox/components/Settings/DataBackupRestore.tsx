@@ -88,10 +88,21 @@ export function DataBackupRestore({ onClearAllData }: DataBackupRestoreProps) {
       // Must wipe first — otherwise restore merges and doubles the ledger
       await indexedDBStorage.importAllData(data, { replaceExisting: true })
 
-      setSuccess('Backup restored. Reloading…')
+      const statementsAfter = await indexedDBStorage.getAllStatements()
+      const cashAfter = await indexedDBStorage.getAllCashExpenses()
+      const expectedStatements = Array.isArray(data.statements) ? data.statements.length : 0
+      if (expectedStatements > 0 && statementsAfter.length === 0) {
+        throw new Error(
+          `Restore finished but History is still empty (0 statements; backup had ${expectedStatements}). Use the exact URL https://selpic-accounting.vercel.app (not a long preview *.vercel.app link), then Import again.`
+        )
+      }
+
+      setSuccess(
+        `Backup restored: ${statementsAfter.length} statement(s), ${cashAfter.length} cash expense(s). Reloading…`
+      )
       setTimeout(() => {
         window.location.reload()
-      }, 1500)
+      }, 2000)
     } catch (err: unknown) {
       console.error('Failed to import data:', err)
       setError(err instanceof Error ? err.message : 'Failed to import data')

@@ -204,6 +204,7 @@ export default function AccountingDashboard() {
           onSwitchViewPeriodToData={d.switchViewPeriodToTransactionData}
           onChangeViewPeriod={d.changeViewPeriod}
           onCashExpenseSave={d.handleCashExpenseSave}
+          onCashExpenseDelete={d.handleCashExpenseDelete}
           activeStatementSnapshot={d.exportStatementSnapshot}
           isStatementLedgerScope={d.isStatementLedgerScope}
           reportsFyRange={d.reportsFyRange}
