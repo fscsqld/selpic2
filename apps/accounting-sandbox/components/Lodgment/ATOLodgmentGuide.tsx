@@ -45,6 +45,7 @@ import {
   type BasPeriodLiveData,
 } from '@/lib/ato-lodgment/bas-snapshot-compare'
 import { buildAnnualSnapshotCompareRow } from '@/lib/ato-lodgment/annual-snapshot-compare'
+import { buildCtrSnapshotCompareRow } from '@/lib/ato-lodgment/ctr-snapshot-compare'
 import { buildPreLodgeChecklist, fieldsToTsv, serializePreLodgeSummary } from '@/lib/ato-lodgment/pre-lodge-checklist'
 import {
   compareAnnualToBasRollup,
@@ -68,7 +69,7 @@ import {
 } from '@/lib/ato-lodgment/period-scope'
 import type { LodgmentField, LodgmentTab, LodgmentValidation } from '@/lib/ato-lodgment/types'
 import type { FinancialPeriod } from '@/lib/storage/period-types'
-import { viewPeriodMatchesRange, type DashboardViewPeriod } from '@/lib/dashboard/view-period-range'
+import { viewPeriodMatchesRange, resolveBasLodgmentQuarterForFiling, type DashboardViewPeriod } from '@/lib/dashboard/view-period-range'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import type { LodgmentSnapshot } from '@/lib/storage/lodgment-snapshot-types'
 import { ReportFooter } from '@/components/Reports/ReportFooter'
@@ -81,6 +82,7 @@ import { BasSnapshotComparePanel } from '@/components/Lodgment/BasSnapshotCompar
 import { AnnualSnapshotComparePanel } from '@/components/Lodgment/AnnualSnapshotComparePanel'
 import { CtrItem6FormPanel } from '@/components/Lodgment/CtrItem6FormPanel'
 import { CtrAnnualCrossHint } from '@/components/Lodgment/CtrAnnualCrossHint'
+import { CtrSnapshotComparePanel } from '@/components/Lodgment/CtrSnapshotComparePanel'
 import { CtrSummaryCard } from '@/components/Lodgment/CtrSummaryCard'
 import { LodgmentCollapsibleSection } from '@/components/Lodgment/LodgmentCollapsibleSection'
 import { LodgmentCalendar } from '@/components/Lodgment/LodgmentCalendar'
@@ -191,12 +193,18 @@ export function ATOLodgmentGuide({
   const defaultMonth = months[0]
   const isMonthlyBas = gstReportingCycle === 'Monthly'
 
-  /** Align defaults with Biz Intel / Reports (statement cluster + dashboard month). */
+  /** BAS default quarter follows P&L banner (exact Q) or banner end / ledger density. */
   const preferredPeriod = useMemo(() => {
-    const bas = resolveReportingBasQuarter({
-      transactions,
-      viewPeriodId,
-    })
+    const filing =
+      viewPeriod?.startDate && viewPeriod?.endDate
+        ? resolveBasLodgmentQuarterForFiling(viewPeriod, transactions, viewPeriodId)
+        : null
+    const bas =
+      filing?.quarter ??
+      resolveReportingBasQuarter({
+        transactions,
+        viewPeriodId,
+      })
     const fy = resolveReportingFinancialYearRange({
       transactions,
       viewPeriodId,
@@ -215,8 +223,9 @@ export function ATOLodgmentGuide({
       basLabel: `Q${bas.quarter} ${bas.financialYear}`,
       basStart: bas.startDateStr,
       basEnd: bas.endDateStr,
+      filingSource: filing?.source ?? 'density',
     }
-  }, [transactions, viewPeriodId, quarters])
+  }, [transactions, viewPeriodId, quarters, viewPeriod])
 
   const defaultQuarter =
     quarters.find((q) => `${q.financialYear}-Q${q.quarter}` === preferredPeriod.quarterKey) ??
@@ -579,6 +588,11 @@ export function ATOLodgmentGuide({
       ctrProfitOrLoss: ctrProfit,
     }
   }, [ctrResult, annualResult, accountType])
+
+  const ctrSnapshotRow = useMemo(() => {
+    if (!ctrResult) return null
+    return buildCtrSnapshotCompareRow(snapshots, financialYear, ctrResult.fields)
+  }, [snapshots, financialYear, ctrResult])
 
   const scopeValidation = useMemo((): LodgmentValidation => {
     const warnings: string[] = []
@@ -1785,6 +1799,15 @@ export function ATOLodgmentGuide({
           <CtrItem6FormPanel result={ctrResult} />
           <CtrSummaryCard result={ctrResult} taxRate={ctrTaxRate} />
         </>
+      )}
+
+      {activeTab === 'ctr' && ctrSnapshotRow && !viewingSnapshot && (
+        <CtrSnapshotComparePanel
+          row={ctrSnapshotRow}
+          onLoadSnapshot={(snap) => loadSnapshotById(snap.id)}
+          onUpdateSnapshot={() => saveSnapshot(false)}
+          updateBusy={snapshotBusy}
+        />
       )}
 
       <LodgmentFieldPanel

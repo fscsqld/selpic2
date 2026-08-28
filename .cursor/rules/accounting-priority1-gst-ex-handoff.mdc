@@ -51,14 +51,22 @@ Accountant PDF/CTR: **layout reference only** — user does **not** want varianc
 - Annual snapshot compare panel; CTR ↔ Annual L2 cross-hint
 - Pre-lodge checklist L1/L2/L3 copy per tab
 
+### 2nd-priority polish — **Done 2026-08-28**
+
+- Roadmap + handoff docs refreshed (Phase 1 complete)
+- `eslint` + `eslint-config-next` in `apps/accounting-sandbox` (fixes Vercel build warning)
+- `ctr-snapshot-compare.ts` + `CtrSnapshotComparePanel` (mirror Annual)
+- `resolveBasLodgmentQuarterForFiling` in `ATOLodgmentGuide` BAS tab defaults (FY banner → correct lodge quarter)
+
 ---
 
-## Verify after Steps 1–2
+## Verify after polish
 
 - Local **3001** + hard refresh prod after deploy  
-- Biz Intel cash totals **unchanged** vs before Step 1  
-- Ex-GST secondary lines ≈ Annual lodgment L2 for same period  
-- BAS picker + Lodgment 3-column panels still work  
+- Biz Intel cash totals **unchanged**  
+- BAS tab: FY banner selects lodge quarter (not FY sum)  
+- CTR tab: snapshot compare shows Item 6 L2 drift  
+- `npm run build` — no ESLint must be installed warning  
 
 ### Deploy
 

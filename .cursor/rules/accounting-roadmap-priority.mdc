@@ -13,20 +13,21 @@ alwaysApply: false
 | **A — Internal deploy** (SSO, prod URL, Admin link, History, backup ops) | **Done** (A1–A4 done; Cash single-delete shipped) |
 | **Cash Expense single-delete** | **Done** |
 | **Priority 1 core — per-line GST-ex + ATO Lodgment panels** | **Done** (scaleMap removed; BAS / Annual / CTR Item 6; L1/L2 hints on Lodgment) |
+| **Phase 1 polish — Steps 1–3** (L1/L2 labels, dashboard filter, export + lodgment UX) | **Done 2026-08-28** |
+| **2nd-priority polish** (roadmap docs, ESLint, CTR snapshot compare, BAS filing quarter) | **Done 2026-08-28** |
 | **B — Public / multi-tenant accounting** | **Backlog only** — do **not** start until internal product is stable and user explicitly opens B |
 | **B — Employee mobile My Payroll** | **Required inside B** — see `accounting-track-b-employee-mobile-payroll.mdc` |
 | **`tsc` debt** + remove `ignoreBuildErrors` | **Done** (`tsc --noEmit` = 0) |
 
 Public (B) is **not** the only remaining accounting work.
 
-## Next work — **strict order** (user 2026-08-28)
-
-Do these **in sequence**; do not skip ahead unless user explicitly reprioritizes.
+## Completed sequence (user 2026-08-28)
 
 ```
-Step 1) Biz Intel + Export L1/L2 layer labels — **Done 2026-08-28**
-Step 2) Wire filterBusinessLedgerForPeriod into useAccountingDashboard — **Done 2026-08-28**
-Step 3) Roadmap / handoff doc refresh — ongoing (rules updated in-session)
+Step 1) Biz Intel + Export L1/L2 layer labels — Done
+Step 2) Wire filterBusinessLedgerForPeriod into useAccountingDashboard — Done
+Step 3) Export period labels + Lodgment UX polish — Done
+2nd) Roadmap/handoff refresh, ESLint in sandbox, CTR snapshot compare, resolveBasLodgmentQuarterForFiling in BAS tab — Done
 ```
 
 ### Explicitly **not** in backlog
@@ -35,12 +36,11 @@ Step 3) Roadmap / handoff doc refresh — ongoing (rules updated in-session)
 
 ## Remaining (internal / product) — besides B
 
-1. **Steps 1–3 above** — current focus  
-2. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
-3. **Employee login** — form exists; real employee account + login deferred  
-4. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
-5. **HR / compliance TODOs** — leave store, WorkCover, etc. (unless user asks)  
-6. **Journal / AR-AP** — optional  
+1. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
+2. **Employee login** — form exists; real employee account + login deferred  
+3. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+4. **HR / compliance TODOs** — leave store, WorkCover, etc. (unless user asks)  
+5. **Journal / AR-AP** — optional  
 
 ### Done recently (do not restart)
 
@@ -49,20 +49,19 @@ Step 3) Roadmap / handoff doc refresh — ongoing (rules updated in-session)
 - `BasGstFormPanel`, `AnnualMyTaxFormPanel`, `CtrItem6FormPanel` + `lodgment-layer-hints`  
 - `view-period-range` helpers restored + BAS scoping tests  
 - `npm run dev:fresh` for local `.next` cache corruption  
+- Annual + CTR lodgment snapshot compare panels  
+- `resolveBasLodgmentQuarterForFiling` wired into BAS tab defaults  
 
 ## Recommended work order (when choosing “what next”)
 
 ```
-1) Resume internal polish?
-   → Step 1 (L1/L2 labels) → Step 2 (dashboard ledger filter) → Step 3 (docs)
-
-2) Ops / roles when accounts exist?
+1) Ops / roles when accounts exist?
    → Payroll-only smoke, then employee login
 
-3) Only when user explicitly starts public product?
+2) Only when user explicitly starts public product?
    → Track B (tenancy → auth incl. employee role → mobile My Payroll → onboarding → harden API)
 
-4) Nice-to-have modules?
+3) Nice-to-have modules?
    → HR leave / WorkCover / audit IDB / AR-AP journals
 ```
 
@@ -76,6 +75,5 @@ Step 3) Roadmap / handoff doc refresh — ongoing (rules updated in-session)
 
 ## Resume phrases
 
-- **Next polish:** **「순서대로」** / **「1번부터」** → Step 1 L1/L2 labels  
-- ATO tax basis detail: **「Annual per-line GST-ex」** (core done; labels remain)  
+- **Ops polish:** payroll-only smoke, employee login  
 - Public: **「Track B 시작」** (only when intentional)
