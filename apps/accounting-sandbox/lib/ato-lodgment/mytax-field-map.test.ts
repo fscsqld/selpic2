@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildMyTaxAnnualFields } from '@/lib/ato-lodgment/mytax-field-map'
+import {
+  buildAnnualMyTaxLedgerCents,
+  buildMyTaxAnnualFields,
+} from '@/lib/ato-lodgment/mytax-field-map'
+import { roundAtoWholeDollars } from '@/lib/utils/ato-lodgment-rounding'
 import { aggregateGstExclusiveByCategory } from '@/lib/gst/lodgment-gst-exclusive'
 
 /** SELPIC FY-style expense mix — build ex-GST maps via per-line rules. */
@@ -93,5 +97,36 @@ describe('buildMyTaxAnnualFields expense buckets', () => {
 
     expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(fuelEx + 200 + 80, 2)
     expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(1516.08, 2)
+  })
+
+  it('buildAnnualMyTaxLedgerCents aligns with field amounts and ATO trunc', () => {
+    const { incomeByCategory, expensesByCategory } = buildFyExGstMaps()
+    const expenseSum = Object.values(expensesByCategory).reduce((s, n) => s + n, 0)
+    const incomeSum = Object.values(incomeByCategory).reduce((s, n) => s + n, 0)
+    const metrics = {
+      totalIncome: incomeSum,
+      totalExpenses: expenseSum,
+      netProfit: incomeSum - expenseSum,
+      gstPayable: 1310.86,
+      gstClaimable: 563.83,
+    }
+
+    const ledger = buildAnnualMyTaxLedgerCents(metrics, {
+      incomeByCategory,
+      expensesByCategory,
+    })
+    const fields = buildMyTaxAnnualFields(metrics, {
+      incomeByCategory,
+      expensesByCategory,
+    })
+    const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
+
+    expect(ledger.grossPayments).toBeCloseTo(amount('MYTAX_GROSS_PAYMENTS'), 2)
+    expect(ledger.totalIncome).toBeCloseTo(amount('MYTAX_TOTAL_INCOME'), 2)
+    expect(ledger.totalExpenses).toBeCloseTo(amount('MYTAX_TOTAL_EXPENSES'), 2)
+    expect(ledger.netIncome).toBeCloseTo(amount('MYTAX_NET_INCOME'), 2)
+    expect(roundAtoWholeDollars(ledger.grossPayments)).toBe(
+      roundAtoWholeDollars(amount('MYTAX_GROSS_PAYMENTS'))
+    )
   })
 })

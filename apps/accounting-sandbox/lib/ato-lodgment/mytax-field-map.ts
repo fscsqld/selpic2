@@ -29,13 +29,25 @@ export interface MyTaxCategoryInput {
   expensesByCategory: Record<string, number>
 }
 
-/**
- * myTax / Annual worksheet fields for ATO copy-enter (L2 cents).
- */
-export function buildMyTaxAnnualFields(
+export interface AnnualMyTaxLedgerCents {
+  grossPayments: number
+  otherIncome: number
+  totalIncome: number
+  contractor: number
+  motor: number
+  purchases: number
+  otherExpenses: number
+  totalExpenses: number
+  netIncome: number
+  gstOnIncome: number
+  gstOnPurchases: number
+}
+
+/** Shared bucket splits for myTax Annual fields and ledger reconciliation. */
+export function computeMyTaxBucketAmounts(
   metrics: MyTaxMetricsInput,
   categories: MyTaxCategoryInput
-): LodgmentField[] {
+) {
   const { incomeByCategory, expensesByCategory } = categories
 
   const contractor = sumMatchingCategoryMap(
@@ -60,6 +72,50 @@ export function buildMyTaxAnnualFields(
     expensesByCategory,
     contractor + motor + purchases
   )
+
+  return {
+    grossPayments,
+    otherIncome,
+    contractor,
+    motor,
+    purchases,
+    otherExpenses,
+  }
+}
+
+/** L2 cents for Annual myTax form panel (ledger vs ATO whole $). */
+export function buildAnnualMyTaxLedgerCents(
+  metrics: MyTaxMetricsInput,
+  categories: MyTaxCategoryInput
+): AnnualMyTaxLedgerCents {
+  const buckets = computeMyTaxBucketAmounts(metrics, categories)
+  return {
+    ...buckets,
+    totalIncome: roundMoney(metrics.totalIncome),
+    totalExpenses: roundMoney(metrics.totalExpenses),
+    netIncome: roundMoney(metrics.netProfit),
+    gstOnIncome: roundMoney(metrics.gstPayable),
+    gstOnPurchases: roundMoney(metrics.gstClaimable),
+  }
+}
+
+/**
+ * myTax / Annual worksheet fields for ATO copy-enter (L2 cents).
+ */
+export function buildMyTaxAnnualFields(
+  metrics: MyTaxMetricsInput,
+  categories: MyTaxCategoryInput
+): LodgmentField[] {
+  const { incomeByCategory, expensesByCategory } = categories
+
+  const {
+    grossPayments,
+    otherIncome,
+    contractor,
+    motor,
+    purchases,
+    otherExpenses,
+  } = computeMyTaxBucketAmounts(metrics, categories)
 
   const core: LodgmentField[] = [
     {

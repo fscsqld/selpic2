@@ -70,6 +70,7 @@ import { LodgmentFieldPanel } from '@/components/Lodgment/LodgmentFieldPanel'
 import { BasGstFormPanel } from '@/components/Lodgment/BasGstFormPanel'
 import { BasPeriodSummaryCard } from '@/components/Lodgment/BasPeriodSummaryCard'
 import { AnnualIncomeSummaryCard } from '@/components/Lodgment/AnnualIncomeSummaryCard'
+import { AnnualMyTaxFormPanel } from '@/components/Lodgment/AnnualMyTaxFormPanel'
 import { BasSnapshotComparePanel } from '@/components/Lodgment/BasSnapshotComparePanel'
 import { CtrItem6FormPanel } from '@/components/Lodgment/CtrItem6FormPanel'
 import { CtrSummaryCard } from '@/components/Lodgment/CtrSummaryCard'
@@ -1653,7 +1654,10 @@ export function ATOLodgmentGuide({
       )}
 
       {activeTab === 'annual' && annualResult && !viewingSnapshot && (
-        <AnnualIncomeSummaryCard result={annualResult} />
+        <>
+          <AnnualMyTaxFormPanel result={annualResult} accountType={accountType} />
+          <AnnualIncomeSummaryCard result={annualResult} />
+        </>
       )}
 
       {activeTab === 'bas' && !viewingSnapshot && basCompareRows.length > 0 && (

@@ -24,7 +24,7 @@ import { analyzeGstSalesBreakdown, estimatePaygInstalment } from './gst-breakdow
 import { buildCtrItem6Fields, ctrItem6LedgerCents } from './ctr-item6-fields'
 import { basFieldGuide, ctrFieldGuide } from './field-guides'
 import { enrichLodgmentFields } from './field-metadata'
-import { buildMyTaxAnnualFields } from './mytax-field-map'
+import { buildAnnualMyTaxLedgerCents, buildMyTaxAnnualFields } from './mytax-field-map'
 import { roundAtoWholeDollars } from '@/lib/utils/ato-lodgment-rounding'
 import type {
   AccountTypeForLodgment,
@@ -584,19 +584,17 @@ export function computeAnnualLodgment(
   )
   const cashCategories = groupIncomeAndExpensesByCategory(filtered, bizType)
   const exGstCategories = aggregateGstExclusiveByCategory(filtered, bizType, true)
+  const myTaxMetrics = {
+    totalIncome: metrics.totalIncomeExGst,
+    totalExpenses: metrics.totalExpensesExGst,
+    netProfit: metrics.netProfitExGst,
+    gstPayable: metrics.gstPayable,
+    gstClaimable: metrics.gstClaimable,
+  }
 
   // ATO Annual / myTax — per-line GST-exclusive category maps (no scaleMap).
   const fields = enrichLodgmentFields(
-    buildMyTaxAnnualFields(
-      {
-        totalIncome: metrics.totalIncomeExGst,
-        totalExpenses: metrics.totalExpensesExGst,
-        netProfit: metrics.netProfitExGst,
-        gstPayable: metrics.gstPayable,
-        gstClaimable: metrics.gstClaimable,
-      },
-      exGstCategories
-    ),
+    buildMyTaxAnnualFields(myTaxMetrics, exGstCategories),
     'annual'
   )
 
@@ -620,6 +618,7 @@ export function computeAnnualLodgment(
     taxNetProfit: metrics.netProfitExGst,
     gstOnIncome: metrics.gstPayable,
     gstOnPurchases: metrics.gstClaimable,
+    annualLedgerCents: buildAnnualMyTaxLedgerCents(myTaxMetrics, exGstCategories),
   }
 }
 

@@ -102,6 +102,20 @@ export interface AnnualLodgmentResult {
   taxNetProfit?: number
   gstOnIncome?: number
   gstOnPurchases?: number
+  /** L2 cents for Annual myTax labels (ledger vs ATO whole $). */
+  annualLedgerCents?: {
+    grossPayments: number
+    otherIncome: number
+    totalIncome: number
+    contractor: number
+    motor: number
+    purchases: number
+    otherExpenses: number
+    totalExpenses: number
+    netIncome: number
+    gstOnIncome: number
+    gstOnPurchases: number
+  }
 }
 
 export interface CtrLodgmentOptions {
