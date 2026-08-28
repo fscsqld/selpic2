@@ -11,6 +11,12 @@ import {
   isValidAustralianFinancialYear,
 } from '@/lib/utils/australian-financial-year'
 import { getCurrentFinancialYearRange } from '@/lib/ato-lodgment/compute-lodgment'
+import { sortTransactionsChronologically } from '@/lib/dashboard/sort-transactions'
+import {
+  resolveReportingAnchorIso,
+  resolveReportingBasQuarter,
+} from '@/lib/utils/reporting-period-resolve'
+import type { AustralianQuarter } from '@/lib/utils/australian-financial-year'
 import { generatePeriodIdFromDateString } from '@/lib/period-management/period-lock'
 import { getPeriodDates } from '@/lib/period-management/period-utils'
 import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
@@ -96,6 +102,163 @@ export function mergeManualCashExpenses<T extends { date: string; id?: string; s
   return merged.sort((a, b) =>
     String(a.date || '').localeCompare(String(b.date || ''))
   )
+}
+
+function isPayrollLedgerRow(tx: {
+  source?: string
+  isPayrollTransaction?: boolean
+}): boolean {
+  return tx.source === 'payroll' || !!tx.isPayrollTransaction
+}
+
+/**
+ * Bank + Cash Expense rows inside the P&L banner — full History ledger, not
+ * only the last uploaded statement. Payroll journals stay out.
+ */
+export function filterBusinessLedgerForPeriod<
+  T extends {
+    date: string
+    source?: string
+    isPayrollTransaction?: boolean
+  },
+>(ledger: T[], startDate: string, endDate: string): T[] {
+  const rows = ledger.filter((tx) => !isPayrollLedgerRow(tx))
+  return sortTransactionsChronologically(
+    filterTransactionsForDateRange(rows, startDate, endDate)
+  )
+}
+
+/** True when the banner starts before / ends after the active statement's own dates. */
+export function viewPeriodExtendsBeyondStatement(
+  viewPeriod: Pick<DashboardViewPeriod, 'startDate' | 'endDate'>,
+  statementRows: Array<{ date: string }>
+): boolean {
+  const bounds = getTransactionDateBounds(statementRows)
+  if (!bounds) return false
+  const start = toIsoDateString(viewPeriod.startDate) || viewPeriod.startDate
+  const end = toIsoDateString(viewPeriod.endDate) || viewPeriod.endDate
+  return start < bounds.startDate || end > bounds.endDate
+}
+
+/** When start/end exactly match one BAS quarter window, return it. */
+export function matchExactBasQuarter(
+  startDate: string,
+  endDate: string
+): AustralianQuarter | null {
+  const start = toIsoDateString(startDate) || startDate
+  const end = toIsoDateString(endDate) || endDate
+  if (!start || !end) return null
+
+  const tryFy = (fy: string): AustralianQuarter | null => {
+    for (const q of [1, 2, 3, 4] as const) {
+      const dates = getAustralianQuarterDates(q, fy)
+      if (dates.startDateStr === start && dates.endDateStr === end) {
+        return dates
+      }
+    }
+    return null
+  }
+
+  const fyEnd = getAustralianFinancialYear(new Date(`${end}T12:00:00`))
+  const hit = tryFy(fyEnd)
+  if (hit) return hit
+  const fyStart = getAustralianFinancialYear(new Date(`${start}T12:00:00`))
+  if (fyStart !== fyEnd) return tryFy(fyStart)
+  return null
+}
+
+export interface AlignedReportingWindow {
+  startDate: string
+  endDate: string
+  label?: string
+  basQuarter?: AustralianQuarter | null
+  financialYear?: string
+  fromViewPeriod: boolean
+}
+
+/** Biz Intel banner dates for P&L / exports (may span FY or a single BAS quarter). */
+export function resolveAlignedReportingWindow(
+  viewPeriod: DashboardViewPeriod,
+  fallbackTransactions: Array<{ date?: unknown }> = [],
+  viewPeriodId?: string | null,
+  asOf?: Date
+): AlignedReportingWindow {
+  void fallbackTransactions
+  void viewPeriodId
+  void asOf
+  const healed = healViewPeriodDates(viewPeriod)
+  const startDate = toIsoDateString(healed.startDate) || healed.startDate
+  const endDate = toIsoDateString(healed.endDate) || healed.endDate
+  const exact = matchExactBasQuarter(startDate, endDate)
+
+  return {
+    startDate,
+    endDate,
+    label: exact ? `Q${exact.quarter} ${exact.financialYear}` : formatViewPeriodLabel(healed),
+    basQuarter: exact,
+    financialYear:
+      healed.financialYear ??
+      exact?.financialYear ??
+      getAustralianFinancialYear(new Date(`${endDate}T12:00:00`)),
+    fromViewPeriod: true,
+  }
+}
+
+/**
+ * BAS is lodged per cycle (usually one quarter). Biz Intel may show FY / Full statement
+ * totals — those must NOT be copied into ATO entry fields.
+ */
+export function resolveBasLodgmentQuarterForFiling(
+  viewPeriod: DashboardViewPeriod | null | undefined,
+  fallbackTransactions: Array<{ date?: unknown }> = [],
+  viewPeriodId?: string | null,
+  asOf?: Date
+): {
+  quarter: AustralianQuarter
+  source: 'exact_banner' | 'banner_end' | 'density'
+  plWindow: AlignedReportingWindow
+} {
+  if (viewPeriod?.startDate && viewPeriod?.endDate) {
+    const plWindow = resolveAlignedReportingWindow(
+      viewPeriod,
+      fallbackTransactions,
+      viewPeriodId,
+      asOf
+    )
+    if (plWindow.basQuarter) {
+      return { quarter: plWindow.basQuarter, source: 'exact_banner', plWindow }
+    }
+    const endIso =
+      plWindow.endDate ||
+      resolveReportingAnchorIso({
+        transactions: fallbackTransactions,
+        viewPeriodId,
+        asOf,
+      })
+    const { quarter, financialYear } = getAustralianQuarter(
+      new Date(`${endIso}T12:00:00`)
+    )
+    return {
+      quarter: getAustralianQuarterDates(quarter, financialYear),
+      source: 'banner_end',
+      plWindow,
+    }
+  }
+
+  const quarter = resolveReportingBasQuarter({
+    transactions: fallbackTransactions,
+    viewPeriodId,
+    asOf,
+  })
+  const plWindow: AlignedReportingWindow = {
+    startDate: quarter.startDateStr,
+    endDate: quarter.endDateStr,
+    label: `Q${quarter.quarter} ${quarter.financialYear}`,
+    basQuarter: quarter,
+    financialYear: quarter.financialYear,
+    fromViewPeriod: false,
+  }
+  return { quarter, source: 'density', plWindow }
 }
 
 export function viewPeriodMatchesRange(

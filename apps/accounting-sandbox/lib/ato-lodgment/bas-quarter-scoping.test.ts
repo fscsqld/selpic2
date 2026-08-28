@@ -48,7 +48,8 @@ describe('BAS quarter date scoping', () => {
       0,
       'company'
     )
-    expect(q4Result.fields.find((f) => f.id === 'G1')?.amount).toBeCloseTo(3526.6, 2)
+    expect(q4Result.fields.find((f) => f.id === 'G1')?.amount).toBe(3526)
+    expect(q4Result.basLedgerCents?.g1).toBeCloseTo(3526.6, 2)
   })
 
   it('keeps genuine January ISO expenses in Q3 only', () => {
@@ -75,6 +76,7 @@ describe('BAS quarter date scoping', () => {
       0,
       'company'
     )
-    expect(q3Result.fields.find((f) => f.id === '1B')?.amount).toBeCloseTo(54.55, 2)
+    expect(q3Result.fields.find((f) => f.id === '1B')?.amount).toBe(54)
+    expect(q3Result.basLedgerCents?.gstOnPurchases).toBeCloseTo(54.55, 2)
   })
 })

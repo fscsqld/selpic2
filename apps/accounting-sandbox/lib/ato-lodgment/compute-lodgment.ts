@@ -643,6 +643,9 @@ export function getQuartersInFinancialYear(financialYear: string): {
   })
 }
 
+/** @alias getQuartersInFinancialYear — used by BAS quarter scoping tests. */
+export const listBasQuartersInFinancialYear = getQuartersInFinancialYear
+
 export function buildLodgmentPeriodKey(
   kind: 'bas' | 'annual' | 'ctr',
   financialYear: string,
