@@ -106,10 +106,11 @@ describe('Biz Intel FY ↔ ATO Annual / CTR cash expense parity', () => {
 
     // ATO Annual / CTR lodge GST-exclusive (tax) totals — same universe, tax basis
     const annualExpenses = annual.fields.find((f) => f.id === 'MYTAX_TOTAL_EXPENSES')?.amount
-    const ctrExpenses = ctr.fields.find((f) => f.id === 'CTR_7_TOTAL_EXPENSES')?.amount
+    const ctrExpenses = ctr.fields.find((f) => f.id === 'CTR_6Q_TOTAL_EXPENSES')?.amount
 
     expect(annualExpenses).toBeCloseTo(bizMetrics.totalExpensesExGst, 2)
-    expect(ctrExpenses).toBeCloseTo(bizMetrics.totalExpensesExGst, 2)
+    // CTR Item 6Q is ATO whole dollars (trunc) — within $1 of L2 cents
+    expect(Math.abs((ctrExpenses ?? 0) - bizMetrics.totalExpensesExGst)).toBeLessThan(1.02)
     expect(annual.taxNetProfit).toBeCloseTo(bizMetrics.netProfitExGst, 2)
     expect(bizMetrics.netProfit).toBeCloseTo(14419.48 - expectedCashExpenses, 2)
   })

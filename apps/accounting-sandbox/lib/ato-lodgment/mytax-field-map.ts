@@ -2,11 +2,19 @@ import { getCategoryDisplayName } from '@/lib/utils/category-display'
 import { roundMoney } from '@/lib/utils/currency-format'
 import type { LodgmentField } from './types'
 import { myTaxFieldGuide } from './field-guides'
+import {
+  isContractorExpenseCategory,
+  isMotorExpenseCategory,
+  isPurchaseExpenseCategory,
+  isRepairsExpenseCategory,
+  otherExpenseTotalFromMap,
+  splitBusinessIncomeExGst,
+  sumMatchingCategoryMap,
+} from './lodgment-expense-buckets'
 
 /**
- * Totals passed here should already be the basis to lodge (GST-exclusive / tax
- * for ATO Annual & CTR). Optional cash* values scale category buckets onto that
- * basis so section lines still sum to the tax totals.
+ * Totals passed here must already be the GST-exclusive (L2 tax) basis.
+ * Category maps must come from `aggregateGstExclusiveByCategory` — no scaleMap.
  */
 export interface MyTaxMetricsInput {
   totalIncome: number
@@ -14,9 +22,6 @@ export interface MyTaxMetricsInput {
   netProfit: number
   gstPayable: number
   gstClaimable: number
-  cashTotalIncome?: number
-  cashTotalExpenses?: number
-  cashNetProfit?: number
 }
 
 export interface MyTaxCategoryInput {
@@ -24,153 +29,25 @@ export interface MyTaxCategoryInput {
   expensesByCategory: Record<string, number>
 }
 
-function isContractorExpenseCategory(category: string): boolean {
-  const key = category.toLowerCase()
-  if (
-    key.includes('accounting') ||
-    key.includes('bookkeep') ||
-    key.includes('legal') ||
-    key.includes('professional') ||
-    key.includes('consult')
-  ) {
-    return false
-  }
-  return (
-    key.includes('subcontractor') ||
-    key.includes('sub_contractor') ||
-    key.includes('contractor') ||
-    key.includes('commission')
-  )
-}
-
 /**
- * ATO myTax “Motor vehicle expenses” only — fuel, vehicle, parking, tolls.
- * Business airfare / travel–transport (e.g. EXPENSE_TRAVEL_TRANSPORT) must NOT
- * land here; those fall through to All other expenses.
- */
-function isMotorExpenseCategory(category: string): boolean {
-  const key = category.toLowerCase()
-  if (
-    key.includes('accommodation') ||
-    key.includes('hotel') ||
-    key.includes('meal') ||
-    key.includes('airfare') ||
-    key.includes('air_fare') ||
-    key.includes('air-fare') ||
-    key.includes('flight') ||
-    key.includes('airline') ||
-    key.includes('air_travel') ||
-    key.includes('air-travel') ||
-    key.includes('travel_transport') ||
-    key.includes('travel-transport') ||
-    (key.includes('travel') && key.includes('transport'))
-  ) {
-    return false
-  }
-  return (
-    key.includes('motor') ||
-    key.includes('vehicle') ||
-    key.includes('fuel') ||
-    (key.includes('car') && !key.includes('care')) ||
-    key.includes('parking') ||
-    key.includes('toll')
-  )
-}
-
-function isPurchaseExpenseCategory(category: string): boolean {
-  const key = category.toLowerCase()
-  if (key.includes('office_supplies') || key.includes('office-supplies')) {
-    return false
-  }
-  if (key.includes('supplies') && key.includes('office')) return false
-  return (
-    key.includes('inventory') ||
-    key.includes('cogs') ||
-    key.includes('cost_of_goods') ||
-    key.includes('purchases') ||
-    key.includes('stock') ||
-    (key.includes('supplies') && !key.includes('office'))
-  )
-}
-
-function sumMatching(
-  map: Record<string, number>,
-  match: (category: string) => boolean
-): number {
-  let total = 0
-  for (const [cat, amount] of Object.entries(map)) {
-    if (match(cat)) total += Math.abs(amount)
-  }
-  return roundMoney(total)
-}
-
-function otherExpenseTotal(map: Record<string, number>, excluded: number): number {
-  const total = Object.values(map).reduce((s, v) => s + Math.abs(v), 0)
-  return roundMoney(Math.max(0, total - excluded))
-}
-
-function scaleMap(map: Record<string, number>, scale: number): Record<string, number> {
-  if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.00001) return map
-  const out: Record<string, number> = {}
-  for (const [k, v] of Object.entries(map)) {
-    out[k] = roundMoney(Math.abs(v) * scale)
-  }
-  return out
-}
-
-function isPrimarySalesIncomeCategory(category: string): boolean {
-  const key = category.toLowerCase()
-  if (key.includes('other') || key.includes('interest') || key.includes('gov')) {
-    return false
-  }
-  return (
-    key.includes('sales') ||
-    key.includes('service') ||
-    key.includes('trading') ||
-    key.includes('revenue') ||
-    key === 'income' ||
-    key.endsWith('_income')
-  )
-}
-
-function splitBusinessIncome(map: Record<string, number>): {
-  grossPayments: number
-  otherIncome: number
-} {
-  let gross = 0
-  let other = 0
-  for (const [cat, amount] of Object.entries(map)) {
-    const value = Math.abs(amount)
-    if (isPrimarySalesIncomeCategory(cat)) gross += value
-    else other += value
-  }
-  return { grossPayments: roundMoney(gross), otherIncome: roundMoney(other) }
-}
-
-/**
- * myTax / Annual worksheet fields for ATO copy-enter.
- * Prefer GST-exclusive (tax) totals from the caller.
+ * myTax / Annual worksheet fields for ATO copy-enter (L2 cents).
  */
 export function buildMyTaxAnnualFields(
   metrics: MyTaxMetricsInput,
   categories: MyTaxCategoryInput
 ): LodgmentField[] {
-  const incomeScale =
-    metrics.cashTotalIncome && metrics.cashTotalIncome > 0.005
-      ? metrics.totalIncome / metrics.cashTotalIncome
-      : 1
-  const expenseScale =
-    metrics.cashTotalExpenses && metrics.cashTotalExpenses > 0.005
-      ? metrics.totalExpenses / metrics.cashTotalExpenses
-      : 1
+  const { incomeByCategory, expensesByCategory } = categories
 
-  const incomeByCategory = scaleMap(categories.incomeByCategory, incomeScale)
-  const expensesByCategory = scaleMap(categories.expensesByCategory, expenseScale)
-
-  const contractor = sumMatching(expensesByCategory, isContractorExpenseCategory)
-  const motor = sumMatching(expensesByCategory, isMotorExpenseCategory)
-  const purchases = sumMatching(expensesByCategory, isPurchaseExpenseCategory)
-  const split = splitBusinessIncome(incomeByCategory)
+  const contractor = sumMatchingCategoryMap(
+    expensesByCategory,
+    isContractorExpenseCategory
+  )
+  const motor = sumMatchingCategoryMap(expensesByCategory, isMotorExpenseCategory)
+  const purchases = sumMatchingCategoryMap(
+    expensesByCategory,
+    isPurchaseExpenseCategory
+  )
+  const split = splitBusinessIncomeExGst(incomeByCategory)
   const grossPayments =
     split.grossPayments > 0.005
       ? split.grossPayments
@@ -179,7 +56,7 @@ export function buildMyTaxAnnualFields(
     split.grossPayments > 0.005
       ? roundMoney(Math.max(0, metrics.totalIncome - grossPayments))
       : 0
-  const otherExpenses = otherExpenseTotal(
+  const otherExpenses = otherExpenseTotalFromMap(
     expensesByCategory,
     contractor + motor + purchases
   )
@@ -215,7 +92,7 @@ export function buildMyTaxAnnualFields(
       id: 'MYTAX_TOTAL_INCOME',
       label: 'Total business income (excluding GST)',
       description:
-        'Tax basis for ATO: cash income − GST on sales (1A). Not the Biz Intel GST-inclusive cash total.',
+        'Tax basis for ATO: per-line income ex GST. Not the Biz Intel GST-inclusive cash total.',
       section: 'summary',
       amount: roundMoney(metrics.totalIncome),
       source: 'auto',
@@ -281,7 +158,7 @@ export function buildMyTaxAnnualFields(
       id: 'MYTAX_TOTAL_EXPENSES',
       label: 'Total business expenses (excluding GST)',
       description:
-        'Tax basis: cash expenses − claimable GST (1B). GST-FREE stays at face. Not Biz Intel cash total.',
+        'Tax basis: per-line ex GST. GST-FREE stays at face. Not Biz Intel cash total.',
       section: 'expense',
       amount: roundMoney(metrics.totalExpenses),
       source: 'auto',

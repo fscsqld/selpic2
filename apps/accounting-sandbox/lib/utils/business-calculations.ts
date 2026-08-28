@@ -125,7 +125,7 @@ export function sumPlExpenseCategories(byCategory: Record<string, number>): numb
 }
 
 /** Vendor refunds that reduce deductible expenses — not ATO/loan/erroneous credits. */
-function isExpenseReducingRefund(tx: Transaction): boolean {
+export function isExpenseReducingRefund(tx: Transaction): boolean {
   const cat = tx.category || ''
   if (
     cat === 'NON_TAXABLE_ATO_GST_REFUND' ||

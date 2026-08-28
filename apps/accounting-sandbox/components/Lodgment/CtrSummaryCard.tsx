@@ -13,7 +13,10 @@ interface CtrSummaryCardProps {
 }
 
 export function CtrSummaryCard({ result, taxRate }: CtrSummaryCardProps) {
-  const profit = fieldAmount(result.fields, 'CTR_11_PROFIT_LOSS')
+  const profitField = result.fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')
+  const isLoss = profitField?.label.includes('(L)') ?? false
+  const profit = profitField?.amount ?? 0
+  const profitDisplay = isLoss ? -profit : profit
   const taxable = fieldAmount(result.fields, 'CTR_TAXABLE')
   const estimatedTax = fieldAmount(result.fields, 'CTR_TAX_EST')
   const paygWithheld = fieldAmount(result.fields, 'CTR_PAYG_WITHHELD')
@@ -27,7 +30,7 @@ export function CtrSummaryCard({ result, taxRate }: CtrSummaryCardProps) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
         <div>
           <p className="text-gray-500 text-xs">Accounting profit (ex GST)</p>
-          <p className="font-mono font-semibold">{formatCurrency(profit)}</p>
+          <p className="font-mono font-semibold">{formatCurrency(profitDisplay)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-xs">Taxable income</p>

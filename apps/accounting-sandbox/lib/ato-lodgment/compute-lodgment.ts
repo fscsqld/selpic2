@@ -18,8 +18,10 @@ import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
 import { repairUsMisparsedAustralianDates } from '@/lib/utils/repair-us-misparsed-au-dates'
 import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
 import { filterBankStatementTransactionsForLodgment } from '@/lib/ato-lodgment/lodgment-transaction-filter'
+import { aggregateGstExclusiveByCategory } from '@/lib/gst/lodgment-gst-exclusive'
 import { groupIncomeAndExpensesByCategory } from '@/lib/utils/trial-balance'
 import { analyzeGstSalesBreakdown, estimatePaygInstalment } from './gst-breakdown'
+import { buildCtrItem6Fields, ctrItem6LedgerCents } from './ctr-item6-fields'
 import { basFieldGuide, ctrFieldGuide } from './field-guides'
 import { enrichLodgmentFields } from './field-metadata'
 import { buildMyTaxAnnualFields } from './mytax-field-map'
@@ -571,13 +573,10 @@ export function computeAnnualLodgment(
     bizType,
     priorAdvances
   )
-  const { incomeByCategory, expensesByCategory } = groupIncomeAndExpensesByCategory(
-    filtered,
-    bizType
-  )
+  const cashCategories = groupIncomeAndExpensesByCategory(filtered, bizType)
+  const exGstCategories = aggregateGstExclusiveByCategory(filtered, bizType, true)
 
-  // ATO Annual / myTax business schedule expects GST-exclusive (tax) totals.
-  // Cash (GST-incl.) remains available for Biz Intel reconciliation.
+  // ATO Annual / myTax — per-line GST-exclusive category maps (no scaleMap).
   const fields = enrichLodgmentFields(
     buildMyTaxAnnualFields(
       {
@@ -586,11 +585,8 @@ export function computeAnnualLodgment(
         netProfit: metrics.netProfitExGst,
         gstPayable: metrics.gstPayable,
         gstClaimable: metrics.gstClaimable,
-        cashTotalIncome: metrics.totalIncome,
-        cashTotalExpenses: metrics.totalExpenses,
-        cashNetProfit: metrics.netProfit,
       },
-      { incomeByCategory, expensesByCategory }
+      exGstCategories
     ),
     'annual'
   )
@@ -604,8 +600,8 @@ export function computeAnnualLodgment(
     periodEnd: fyRange.endDate,
     fields,
     validation: validateAnnual(fields, count),
-    incomeByCategory,
-    expensesByCategory,
+    incomeByCategory: cashCategories.incomeByCategory,
+    expensesByCategory: cashCategories.expensesByCategory,
     uncategorisedCount: count,
     cashTotalIncome: metrics.totalIncome,
     cashTotalExpenses: metrics.totalExpenses,
@@ -673,12 +669,17 @@ function validateCtr(
   const errors: string[] = []
   const warnings: string[] = []
 
-  const income = fields.find((f) => f.id === 'CTR_6_TOTAL_INCOME')?.amount ?? 0
-  const expenses = fields.find((f) => f.id === 'CTR_7_TOTAL_EXPENSES')?.amount ?? 0
-  const profit = fields.find((f) => f.id === 'CTR_11_PROFIT_LOSS')?.amount ?? 0
+  const income = fields.find((f) => f.id === 'CTR_6S_TOTAL_INCOME')?.amount ?? 0
+  const expenses = fields.find((f) => f.id === 'CTR_6Q_TOTAL_EXPENSES')?.amount ?? 0
+  const profit = fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')?.amount ?? 0
+  const isLoss = (fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')?.label ?? '').includes('(L)')
 
-  if (Math.abs(roundMoney(income - expenses) - profit) > 0.02 && profit !== roundMoney(income - expenses)) {
-    // profit can be signed differently in display
+  if (
+    Math.abs(income - expenses - (isLoss ? -profit : profit)) > 1.02
+  ) {
+    warnings.push(
+      'Item 6S − Item 6Q does not match Item 6T — review per-line GST-ex totals.'
+    )
   }
 
   if (uncategorisedCount > 0) {
@@ -715,12 +716,24 @@ export function computeCtrLodgment(
     'company',
     priorAdvances
   )
+  const exGstCategories = aggregateGstExclusiveByCategory(filtered, 'company', true)
 
-  // CTR Items 6 / 7 / 11 — GST-exclusive tax basis (same as Biz Intel tax Net).
-  // ATO company tax return: whole dollars, leave cents out (do not round up).
-  const totalIncome = atoLabel(metrics.totalIncomeExGst)
-  const totalExpenses = atoLabel(metrics.totalExpensesExGst)
-  const profitOrLoss = atoLabel(metrics.netProfitExGst)
+  const item6Input = {
+    incomeByCategory: exGstCategories.incomeByCategory,
+    expensesByCategory: exGstCategories.expensesByCategory,
+    totalIncomeExGst: metrics.totalIncomeExGst,
+    totalExpensesExGst: metrics.totalExpensesExGst,
+    netProfitExGst: metrics.netProfitExGst,
+  }
+
+  const item6Fields = buildCtrItem6Fields(item6Input)
+
+  const totalIncome = item6Fields.find((f) => f.id === 'CTR_6S_TOTAL_INCOME')?.amount ?? 0
+  const totalExpenses = item6Fields.find((f) => f.id === 'CTR_6Q_TOTAL_EXPENSES')?.amount ?? 0
+  const profitOrLossSigned =
+    metrics.netProfitExGst >= 0
+      ? item6Fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')?.amount ?? 0
+      : -(item6Fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')?.amount ?? 0)
 
   const taxRate = options.taxRate ?? DEFAULT_CTR_TAX_RATE
   const addBacks = atoLabel(options.nonDeductibleAddBacks ?? 0)
@@ -728,7 +741,7 @@ export function computeCtrLodgment(
   const otherAdj = atoLabel(options.otherAdjustments ?? 0)
 
   const taxableBeforeLosses = atoLabel(
-    Math.max(0, profitOrLoss + addBacks + otherAdj)
+    Math.max(0, profitOrLossSigned + addBacks + otherAdj)
   )
   const taxableIncome = atoLabel(Math.max(0, taxableBeforeLosses - lossApplied))
 
@@ -741,37 +754,17 @@ export function computeCtrLodgment(
     Math.max(0, estimatedTax - paygWithheld)
   )
 
-  const fields: LodgmentField[] = [
+  const reconciliationFields: LodgmentField[] = [
     {
-      id: 'CTR_6_TOTAL_INCOME',
-      label: 'Item 6 — Total income',
+      id: 'CTR_7_TAXABLE',
+      label: 'Item 7T — Taxable / net income or loss',
       description:
-        'Total assessable income excluding GST (est. = cash income − BAS 1A). Do not paste GST-inclusive bank totals.',
-      section: 'ctr',
-      amount: totalIncome,
+        'After Item 7 reconciliation adjustments. Losses print L on the ATO form.',
+      section: 'tax',
+      amount: taxableIncome > 0 ? taxableIncome : atoLabel(Math.abs(metrics.netProfitExGst)),
       source: 'auto',
-      guide: ctrFieldGuide('Item 6 Total income'),
-    },
-    {
-      id: 'CTR_7_TOTAL_EXPENSES',
-      label: 'Item 7 — Total expenses',
-      description:
-        'Deductible expenses excluding claimable GST (est. = cash expenses − BAS 1B; GST-FREE stays at face).',
-      section: 'ctr',
-      amount: totalExpenses,
-      source: 'auto',
-      guide: ctrFieldGuide('Item 7 Total expenses'),
-    },
-    {
-      id: 'CTR_11_PROFIT_LOSS',
-      label: 'Item 11 — Total profit or loss',
-      description: profitOrLoss >= 0
-        ? 'Tax-basis profit before income tax (ex GST est.).'
-        : 'Tax-basis loss before income tax (ex GST est.; enter as negative in ATO if required).',
-      section: 'ctr',
-      amount: profitOrLoss,
-      source: 'auto',
-      guide: ctrFieldGuide('Item 11 Total profit or loss'),
+      guide: ctrFieldGuide('Taxable income'),
+      sortOrder: 90,
     },
     {
       id: 'CTR_ADD_BACKS',
@@ -838,6 +831,8 @@ export function computeCtrLodgment(
     },
   ]
 
+  const fields: LodgmentField[] = [...item6Fields, ...reconciliationFields]
+
   const { count } = countUncategorised(filtered)
   const enrichedFields = enrichLodgmentFields(fields, 'ctr')
   const validation = validateCtr(enrichedFields, count, taxableIncome, estimatedTax)
@@ -858,5 +853,6 @@ export function computeCtrLodgment(
     validation,
     uncategorisedCount: count,
     estimatedTaxRate: taxRate,
+    item6LedgerCents: ctrItem6LedgerCents(item6Input),
   }
 }

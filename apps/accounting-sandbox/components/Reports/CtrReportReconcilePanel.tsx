@@ -42,13 +42,21 @@ export function CtrReportReconcilePanel({
     [transactions, openingDirectorLoanBalance, financialYear, companyTaxRate]
   )
 
-  const ctrIncome = ctr.fields.find((f) => f.id === 'CTR_6_TOTAL_INCOME')?.amount ?? 0
-  const ctrExpenses = ctr.fields.find((f) => f.id === 'CTR_7_TOTAL_EXPENSES')?.amount ?? 0
-  const ctrProfit = ctr.fields.find((f) => f.id === 'CTR_11_PROFIT_LOSS')?.amount ?? 0
+  const ctrIncome = ctr.fields.find((f) => f.id === 'CTR_6S_TOTAL_INCOME')?.amount ?? 0
+  const ctrExpenses = ctr.fields.find((f) => f.id === 'CTR_6Q_TOTAL_EXPENSES')?.amount ?? 0
+  const ctrProfitField = ctr.fields.find((f) => f.id === 'CTR_6T_PROFIT_LOSS')
+  const ctrProfitLoss = ctrProfitField?.label.includes('(L)')
+    ? -(ctrProfitField?.amount ?? 0)
+    : ctrProfitField?.amount ?? 0
 
-  const incomeOk = Math.abs(metrics.totalIncome - ctrIncome) < 0.03
-  const expensesOk = Math.abs(metrics.totalExpenses - ctrExpenses) < 0.03
-  const profitOk = Math.abs(metrics.netProfit - ctrProfit) < 0.03
+  const ledger = ctr.item6LedgerCents
+  const ctrIncomeLedger = ledger?.totalIncome ?? metrics.totalIncomeExGst
+  const ctrExpensesLedger = ledger?.totalExpenses ?? metrics.totalExpensesExGst
+  const ctrProfitLedger = ledger?.profitOrLoss ?? metrics.netProfitExGst
+
+  const incomeOk = Math.abs(ctrIncomeLedger - ctrIncome) <= 1.02
+  const expensesOk = Math.abs(ctrExpensesLedger - ctrExpenses) <= 1.02
+  const profitOk = Math.abs(Math.abs(ctrProfitLedger) - Math.abs(ctrProfitLoss)) <= 1.02
   const allOk = incomeOk && expensesOk && profitOk
 
   return (
@@ -61,7 +69,7 @@ export function CtrReportReconcilePanel({
         <div>
           <h3 className="font-semibold text-gray-900">CTR vs financial summary — FY {financialYear}</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Income statement totals compared with Company CTR lodgment fields (
+            Tax basis (ex GST, cents) vs CTR Item 6 ATO whole dollars (
             {companyTaxRateLabel(companyTaxRate)}).
           </p>
         </div>
@@ -78,27 +86,27 @@ export function CtrReportReconcilePanel({
       </div>
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
         <div>
-          <dt className="text-gray-600">Total income</dt>
+          <dt className="text-gray-600">Total income (ex GST)</dt>
           <dd className="font-mono font-medium">
-            Reports {formatCurrency(metrics.totalIncome)} / CTR {formatCurrency(ctrIncome)}
+            Ledger {formatCurrency(ctrIncomeLedger)} / CTR {formatCurrency(ctrIncome)}
           </dd>
           <p className={`text-xs mt-1 ${incomeOk ? 'text-green-700' : 'text-amber-800'}`}>
             {incomeOk ? 'Match' : 'Review'}
           </p>
         </div>
         <div>
-          <dt className="text-gray-600">Total expenses</dt>
+          <dt className="text-gray-600">Total expenses (ex GST)</dt>
           <dd className="font-mono font-medium">
-            Reports {formatCurrency(metrics.totalExpenses)} / CTR {formatCurrency(ctrExpenses)}
+            Ledger {formatCurrency(ctrExpensesLedger)} / CTR {formatCurrency(ctrExpenses)}
           </dd>
           <p className={`text-xs mt-1 ${expensesOk ? 'text-green-700' : 'text-amber-800'}`}>
             {expensesOk ? 'Match' : 'Review'}
           </p>
         </div>
         <div>
-          <dt className="text-gray-600">Profit or loss</dt>
+          <dt className="text-gray-600">Profit or loss (ex GST)</dt>
           <dd className="font-mono font-medium">
-            Reports {formatCurrency(metrics.netProfit)} / CTR {formatCurrency(ctrProfit)}
+            Ledger {formatCurrency(ctrProfitLedger)} / CTR {formatCurrency(ctrProfitLoss)}
           </dd>
           <p className={`text-xs mt-1 ${profitOk ? 'text-green-700' : 'text-amber-800'}`}>
             {profitOk ? 'Match' : 'Review'}

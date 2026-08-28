@@ -70,6 +70,7 @@ import { LodgmentFieldPanel } from '@/components/Lodgment/LodgmentFieldPanel'
 import { BasPeriodSummaryCard } from '@/components/Lodgment/BasPeriodSummaryCard'
 import { AnnualIncomeSummaryCard } from '@/components/Lodgment/AnnualIncomeSummaryCard'
 import { BasSnapshotComparePanel } from '@/components/Lodgment/BasSnapshotComparePanel'
+import { CtrItem6FormPanel } from '@/components/Lodgment/CtrItem6FormPanel'
 import { CtrSummaryCard } from '@/components/Lodgment/CtrSummaryCard'
 import { LodgmentCollapsibleSection } from '@/components/Lodgment/LodgmentCollapsibleSection'
 import { LodgmentCalendar } from '@/components/Lodgment/LodgmentCalendar'
@@ -1665,7 +1666,10 @@ export function ATOLodgmentGuide({
       )}
 
       {activeTab === 'ctr' && ctrResult && !viewingSnapshot && (
-        <CtrSummaryCard result={ctrResult} taxRate={ctrTaxRate} />
+        <>
+          <CtrItem6FormPanel result={ctrResult} />
+          <CtrSummaryCard result={ctrResult} taxRate={ctrTaxRate} />
+        </>
       )}
 
       <LodgmentFieldPanel

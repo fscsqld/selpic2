@@ -1,69 +1,63 @@
 import { describe, expect, it } from 'vitest'
 import { buildMyTaxAnnualFields } from '@/lib/ato-lodgment/mytax-field-map'
+import { aggregateGstExclusiveByCategory } from '@/lib/gst/lodgment-gst-exclusive'
 
-/** SELPIC FY-style expense mix (GST-inclusive cash totals). */
-const FY_EXPENSES = {
-  EXPENSE_OFFICE_EQUIPMENT: 3827.2,
-  EXPENSE_CLEANING_SUBCONTRACTOR: 3696,
-  EXPENSE_TRAVEL_TRANSPORT: 1516.08,
-  EXPENSE_ACCOUNTING_FEES: 1133,
-  EXPENSE_FUEL_TRAVEL: 945.92,
-  EXPENSE_STARTUP_COSTS: 661.85,
-  EXPENSE_FREIGHT_SHIPPING: 642.8,
-  EXPENSE_OFFICE_SUPPLIES: 242.08,
-  EXPENSE_TRAVEL_ACCOMMODATION: 211.71,
-  EXPENSE_MARKETING: 85.18,
-  EXPENSE_MERCHANT_FEES: 26.56,
-  EXPENSE_SOFTWARE_SUBSCRIPTIONS: 22.5,
-  EXPENSE_BANK_FEES: 1.53,
+/** SELPIC FY-style expense mix — build ex-GST maps via per-line rules. */
+function buildFyExGstMaps() {
+  const txs = [
+    {
+      credit: 14419.48,
+      category: 'INCOME_SALES_SERVICES',
+      department: 'cleaning',
+      source: 'bank',
+    },
+    { debit: 3827.2, category: 'EXPENSE_OFFICE_EQUIPMENT', department: 'cleaning', source: 'bank' },
+    { debit: 3696, category: 'EXPENSE_CLEANING_SUBCONTRACTOR', department: 'cleaning', source: 'bank' },
+    { debit: 1516.08, category: 'EXPENSE_TRAVEL_TRANSPORT', department: 'cleaning', source: 'manual' },
+    { debit: 1133, category: 'EXPENSE_ACCOUNTING_FEES', department: 'cleaning', source: 'bank' },
+    { debit: 945.92, category: 'EXPENSE_FUEL_TRAVEL', department: 'cleaning', source: 'bank' },
+    { debit: 661.85, category: 'EXPENSE_STARTUP_COSTS', department: 'cleaning', source: 'manual' },
+    { debit: 642.8, category: 'EXPENSE_FREIGHT_SHIPPING', department: 'cleaning', source: 'bank' },
+    { debit: 242.08, category: 'EXPENSE_OFFICE_SUPPLIES', department: 'cleaning', source: 'bank' },
+    { debit: 211.71, category: 'EXPENSE_TRAVEL_ACCOMMODATION', department: 'cleaning', source: 'bank' },
+    { debit: 85.18, category: 'EXPENSE_MARKETING', department: 'cleaning', source: 'bank' },
+    { debit: 26.56, category: 'EXPENSE_MERCHANT_FEES', department: 'cleaning', source: 'bank' },
+    { debit: 22.5, category: 'EXPENSE_SOFTWARE_SUBSCRIPTIONS', department: 'cleaning', source: 'bank' },
+    { debit: 1.53, category: 'EXPENSE_BANK_FEES', department: 'cleaning', source: 'bank' },
+  ].map((t) => ({ ...t, date: '2026-05-01', credit: t.credit ?? null, debit: t.debit ?? null }))
+
+  return aggregateGstExclusiveByCategory(txs as any, 'company')
 }
 
-const FY_EXPENSE_TOTAL = Object.values(FY_EXPENSES).reduce((s, n) => s + n, 0)
-
 describe('buildMyTaxAnnualFields expense buckets', () => {
-  it('sums category breakdown to total expenses', () => {
-    expect(FY_EXPENSE_TOTAL).toBeCloseTo(13012.41, 2)
-  })
+  it('maps sections without confusing cross-buckets (ex-GST)', () => {
+    const { incomeByCategory, expensesByCategory } = buildFyExGstMaps()
+    const expenseSum = Object.values(expensesByCategory).reduce((s, n) => s + n, 0)
+    const incomeSum = Object.values(incomeByCategory).reduce((s, n) => s + n, 0)
 
-  it('maps sections without confusing cross-buckets', () => {
     const fields = buildMyTaxAnnualFields(
       {
-        totalIncome: 14419.48,
-        totalExpenses: FY_EXPENSE_TOTAL,
-        netProfit: 1407.07,
+        totalIncome: incomeSum,
+        totalExpenses: expenseSum,
+        netProfit: incomeSum - expenseSum,
         gstPayable: 1310.86,
         gstClaimable: 563.83,
       },
-      {
-        incomeByCategory: { INCOME_SALES_SERVICES: 14419.48 },
-        expensesByCategory: FY_EXPENSES,
-      }
+      { incomeByCategory, expensesByCategory }
     )
 
     const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
 
-    // Purchases = trading stock only — office supplies are NOT purchases
     expect(amount('MYTAX_PURCHASES')).toBeCloseTo(0, 2)
-
-    // Contractor = subcontractor only — accounting fees excluded
-    expect(amount('MYTAX_CONTRACTOR')).toBeCloseTo(3696, 2)
-
-    // Motor = fuel only — business airfare (TRAVEL_TRANSPORT) is NOT motor
-    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92, 2)
-
-    const other =
-      3827.2 +
-      1516.08 +
-      1133 +
-      661.85 +
-      642.8 +
-      242.08 +
-      211.71 +
-      85.18 +
-      26.56 +
-      22.5 +
-      1.53
-    expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(other, 2)
+    expect(amount('MYTAX_CONTRACTOR')).toBeCloseTo(
+      expensesByCategory.EXPENSE_CLEANING_SUBCONTRACTOR ?? 0,
+      2
+    )
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(
+      expensesByCategory.EXPENSE_FUEL_TRAVEL ?? 0,
+      2
+    )
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 - 945.92 / 11, 1)
 
     const sectionSum =
       amount('MYTAX_PURCHASES') +
@@ -71,25 +65,24 @@ describe('buildMyTaxAnnualFields expense buckets', () => {
       amount('MYTAX_MOTOR_VEHICLE') +
       amount('MYTAX_DEPRECIATION') +
       amount('MYTAX_OTHER_EXPENSES')
-    expect(sectionSum).toBeCloseTo(FY_EXPENSE_TOTAL, 2)
-    expect(amount('MYTAX_TOTAL_EXPENSES')).toBeCloseTo(FY_EXPENSE_TOTAL, 2)
-    expect(amount('MYTAX_NET_INCOME')).toBeCloseTo(1407.07, 2)
+    expect(sectionSum).toBeCloseTo(expenseSum, 2)
+    expect(amount('MYTAX_TOTAL_EXPENSES')).toBeCloseTo(expenseSum, 2)
   })
 
   it('keeps real vehicle costs in motor and airfare out', () => {
-    const total = 945.92 + 1516.08 + 200 + 80
+    const fuelEx = 945.92 - 945.92 / 11
     const fields = buildMyTaxAnnualFields(
       {
         totalIncome: 1000,
-        totalExpenses: total,
-        netProfit: 1000 - total,
+        totalExpenses: fuelEx + 1516.08 + 200 + 80,
+        netProfit: 1000 - (fuelEx + 1516.08 + 200 + 80),
         gstPayable: 0,
         gstClaimable: 0,
       },
       {
         incomeByCategory: { INCOME_SALES_SERVICES: 1000 },
         expensesByCategory: {
-          EXPENSE_FUEL_TRAVEL: 945.92,
+          EXPENSE_FUEL_TRAVEL: fuelEx,
           EXPENSE_TRAVEL_TRANSPORT: 1516.08,
           EXPENSE_MOTOR_VEHICLE: 200,
           EXPENSE_TRAVEL_PARKING_TOLLS: 80,
@@ -98,34 +91,7 @@ describe('buildMyTaxAnnualFields expense buckets', () => {
     )
     const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
 
-    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 + 200 + 80, 2)
+    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(fuelEx + 200 + 80, 2)
     expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(1516.08, 2)
-  })
-
-  it('scales motor from fuel only when cash→tax scale is applied', () => {
-    const cashExpenses = 945.92 + 1516.08
-    const taxExpenses = cashExpenses - 100 // pretend $100 GST claimable on mix
-    const fields = buildMyTaxAnnualFields(
-      {
-        totalIncome: 1000,
-        totalExpenses: taxExpenses,
-        netProfit: 1000 - taxExpenses,
-        gstPayable: 0,
-        gstClaimable: 100,
-        cashTotalIncome: 1000,
-        cashTotalExpenses: cashExpenses,
-      },
-      {
-        incomeByCategory: { INCOME_SALES_SERVICES: 1000 },
-        expensesByCategory: {
-          EXPENSE_FUEL_TRAVEL: 945.92,
-          EXPENSE_TRAVEL_TRANSPORT: 1516.08,
-        },
-      }
-    )
-    const amount = (id: string) => fields.find((f) => f.id === id)?.amount ?? -1
-    const scale = taxExpenses / cashExpenses
-    expect(amount('MYTAX_MOTOR_VEHICLE')).toBeCloseTo(945.92 * scale, 2)
-    expect(amount('MYTAX_OTHER_EXPENSES')).toBeCloseTo(1516.08 * scale, 2)
   })
 })

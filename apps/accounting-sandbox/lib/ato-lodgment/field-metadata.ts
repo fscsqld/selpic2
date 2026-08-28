@@ -86,20 +86,50 @@ export const BAS_FIELD_META: Record<string, FieldMeta> = {
 }
 
 export const CTR_FIELD_META: Record<string, FieldMeta> = {
-  CTR_6_TOTAL_INCOME: {
+  CTR_6R_OTHER_GROSS_INCOME: {
     entryKind: 'review',
-    atoScreenPath: 'Company tax return → Income → Item 6 Total income',
+    atoScreenPath: 'Company tax return → Item 6 → R Other gross income',
     sortOrder: 10,
   },
-  CTR_7_TOTAL_EXPENSES: {
+  CTR_6S_TOTAL_INCOME: {
     entryKind: 'review',
-    atoScreenPath: 'Company tax return → Expenses → Item 7 Total expenses',
+    atoScreenPath: 'Company tax return → Item 6 → S Total income',
     sortOrder: 20,
   },
-  CTR_11_PROFIT_LOSS: {
-    entryKind: 'auto',
-    atoScreenPath: 'Company tax return → Reconciliation → Item 11 Total profit or loss',
+  CTR_6C_CONTRACTOR: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 6 → C Contractor expenses',
     sortOrder: 30,
+  },
+  CTR_6Y_MOTOR: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 6 → Y Motor vehicle expenses',
+    sortOrder: 40,
+  },
+  CTR_6Z_REPAIRS: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 6 → Z Repairs and maintenance',
+    sortOrder: 50,
+  },
+  CTR_6S_OTHER_EXPENSES: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 6 → S All other expenses',
+    sortOrder: 60,
+  },
+  CTR_6Q_TOTAL_EXPENSES: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 6 → Q Total expenses',
+    sortOrder: 70,
+  },
+  CTR_6T_PROFIT_LOSS: {
+    entryKind: 'auto',
+    atoScreenPath: 'Company tax return → Item 6 → T Total profit or loss',
+    sortOrder: 80,
+  },
+  CTR_7_TAXABLE: {
+    entryKind: 'review',
+    atoScreenPath: 'Company tax return → Item 7 → T Taxable income or loss',
+    sortOrder: 90,
   },
   CTR_ADD_BACKS: {
     entryKind: 'manual',

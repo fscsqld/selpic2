@@ -113,6 +113,13 @@ export interface CtrLodgmentResult {
   validation: LodgmentValidation
   uncategorisedCount: number
   estimatedTaxRate: number
+  /** L2 cents for Item 6 reconciliation (ledger vs ATO whole $). */
+  item6LedgerCents?: {
+    totalIncome: number
+    totalExpenses: number
+    profitOrLoss: number
+    motor: number
+  }
 }
 
 export type LodgmentResult =

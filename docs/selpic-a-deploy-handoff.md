@@ -165,8 +165,7 @@ Track A deploy + Cash delete are done. Remaining work is **not only** public Tra
 
 | Resume phrase | Work |
 |---------------|------|
-| **「Period Management 확인부터」** | Confirm Jul/Aug cash/DL fixture (handoff 2026-08-25) |
-| **「tsc 정리부터」** | Type debt → then remove `ignoreBuildErrors` |
-| **「Track B 시작」** | Public multi-tenant — only when user explicitly wants B; **must include** employee mobile My Payroll (see `accounting-track-b-employee-mobile-payroll.mdc`) |
+| **「ATO GST-ex 정렬」** / **「1순위부터」** | Priority 1 handoff: `.cursor/rules/accounting-priority1-gst-ex-handoff.mdc` |
+| **「Track B 시작」** | Public multi-tenant + employee mobile My Payroll — only when explicit |
 
-Do **not** assume “only public left.”
+Do **not** assume “only public left.” Export History / Excel GST / BAS quarter UX are already deployed.
