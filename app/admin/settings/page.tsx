@@ -2674,27 +2674,47 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                        </button>
                        <button 
                          onClick={() => {
-                           const { deleteLogsByDate } = useAdminActivityLog.getState()
-                           const confirmed = window.confirm(
-                             'This will delete all activity logs older than 30 days.\n\n' +
-                             `Current logs: ${systemStats.activityLogSize.toLocaleString()} entries\n\n` +
-                             'Are you sure you want to continue?'
-                           )
-                           if (confirmed) {
+                           void (async () => {
+                             const { deleteLogsByDate } = useAdminActivityLog.getState()
+                             const confirmed = window.confirm(
+                               'This will delete all activity logs older than 30 days.\n\n' +
+                                 `Current logs: ${systemStats.activityLogSize.toLocaleString()} entries\n\n` +
+                                 'Are you sure you want to continue?'
+                             )
+                             if (!confirmed) return
+
                              try {
                                setIsLoading(true)
                                const thirtyDaysAgo = new Date()
                                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+                               const { deleteActivityLogsOnServer } = await import(
+                                 '@/lib/logAdminActivity'
+                               )
+                               const result = await deleteActivityLogsOnServer({
+                                 mode: 'before',
+                                 before: thirtyDaysAgo.toISOString(),
+                               })
+                               if (!result.ok) {
+                                 setMessage(
+                                   result.error || 'Failed to clean activity logs on server.'
+                                 )
+                                 setTimeout(() => setMessage(''), 5000)
+                                 return
+                               }
                                deleteLogsByDate(thirtyDaysAgo)
-                               setMessage(`Activity logs older than 30 days have been cleaned up.`)
+                               setMessage(
+                                 result.deleted > 0
+                                   ? `Removed ${result.deleted} activity log(s) older than 30 days.`
+                                   : 'No shared activity logs older than 30 days on server.'
+                               )
                                setTimeout(() => setMessage(''), 5000)
-                               setIsLoading(false)
                              } catch (error) {
                                setMessage('Error cleaning up activity logs. Please try again.')
                                setTimeout(() => setMessage(''), 5000)
+                             } finally {
                                setIsLoading(false)
                              }
-                           }
+                           })()
                          }}
                          disabled={isLoading || systemStats.activityLogSize === 0}
                          className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -4938,6 +4958,8 @@ function ActivityLogView() {
   const [daysToKeep, setDaysToKeep] = useState<number>(30)
   const [logToDelete, setLogToDelete] = useState<string | null>(null)
   const [remoteSyncNote, setRemoteSyncNote] = useState<string | null>(null)
+  const [isClearing, setIsClearing] = useState(false)
+  const [isDeletingLog, setIsDeletingLog] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -4995,6 +5017,75 @@ function ActivityLogView() {
       setFilterAdmin('all')
     }
   }, [filterAdmin])
+
+  const handleClearLogs = async () => {
+    if (isClearing) return
+
+    setIsClearing(true)
+    try {
+      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+
+      if (clearMode === 'all') {
+        const result = await deleteActivityLogsOnServer({ mode: 'all' })
+        if (!result.ok) {
+          window.alert(result.error || 'Failed to clear activity logs on server.')
+          return
+        }
+        clearLogs()
+        setRemoteSyncNote(
+          result.deleted > 0
+            ? `Cleared ${result.deleted} shared log${result.deleted === 1 ? '' : 's'} from server.`
+            : 'Activity logs cleared.'
+        )
+      } else {
+        const cutoffDate = new Date()
+        cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+        const result = await deleteActivityLogsOnServer({
+          mode: 'before',
+          before: cutoffDate.toISOString(),
+        })
+        if (!result.ok) {
+          window.alert(result.error || 'Failed to clear old activity logs on server.')
+          return
+        }
+        deleteLogsByDate(cutoffDate)
+        setRemoteSyncNote(
+          result.deleted > 0
+            ? `Removed ${result.deleted} log${result.deleted === 1 ? '' : 's'} older than ${daysToKeep} day(s).`
+            : `No shared logs older than ${daysToKeep} day(s) on server.`
+        )
+      }
+
+      setIsClearModalOpen(false)
+      window.setTimeout(() => setRemoteSyncNote(null), 5000)
+    } catch (err) {
+      console.error('Failed to clear activity logs:', err)
+      window.alert('Failed to clear activity logs. Please try again.')
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  const handleDeleteLog = async (logId: string) => {
+    if (isDeletingLog) return
+
+    setIsDeletingLog(true)
+    try {
+      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+      const result = await deleteActivityLogsOnServer({ mode: 'id', id: logId })
+      if (!result.ok) {
+        window.alert(result.error || 'Failed to delete activity log on server.')
+        return
+      }
+      deleteLog(logId)
+      setLogToDelete(null)
+    } catch (err) {
+      console.error('Failed to delete activity log:', err)
+      window.alert('Failed to delete activity log. Please try again.')
+    } finally {
+      setIsDeletingLog(false)
+    }
+  }
 
   const filteredLogs = useMemo(() => {
     let result = logs
@@ -5287,20 +5378,16 @@ function ActivityLogView() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    if (clearMode === 'all') {
-                      clearLogs()
-                    } else {
-                      const cutoffDate = new Date()
-                      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-                      deleteLogsByDate(cutoffDate)
-                    }
-                    setIsClearModalOpen(false)
-                  }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => void handleClearLogs()}
+                  disabled={isClearing}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4 inline mr-2" />
-                  {clearMode === 'all' ? 'Clear All' : 'Clear Old Logs'}
+                  {isClearing
+                    ? 'Clearing…'
+                    : clearMode === 'all'
+                      ? 'Clear All'
+                      : 'Clear Old Logs'}
                 </button>
               </div>
             </div>
@@ -5338,14 +5425,12 @@ function ActivityLogView() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    deleteLog(logToDelete)
-                    setLogToDelete(null)
-                  }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => void handleDeleteLog(logToDelete)}
+                  disabled={isDeletingLog}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4 inline mr-2" />
-                  Delete
+                  {isDeletingLog ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>

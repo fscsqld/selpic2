@@ -5,6 +5,7 @@ import {
   type ActivityLog,
   type ActivityLogAction,
 } from '@/lib/adminActivityLog'
+import { userIsSuperAdmin } from '@/lib/supabase/adminClaims'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -116,6 +117,53 @@ export async function POST(req: Request) {
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to save activity log'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: Request) {
+  const user = await requireSupabaseAdminUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!userIsSuperAdmin(user)) {
+    return NextResponse.json({ error: 'Forbidden — super_admin only' }, { status: 403 })
+  }
+
+  const url = new URL(req.url)
+  const all = url.searchParams.get('all') === '1'
+  const before = url.searchParams.get('before')?.trim()
+  const id = url.searchParams.get('id')?.trim()
+
+  if (!all && !before && !id) {
+    return NextResponse.json(
+      { error: 'Specify all=1, before=<ISO timestamp>, or id=<log id>' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    const sb = await createSupabaseServerClient()
+    let query = sb.from('admin_activity_logs').delete({ count: 'exact' })
+
+    if (id) {
+      query = query.eq('id', id)
+    } else if (before) {
+      const parsed = new Date(before)
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: 'Invalid before date' }, { status: 400 })
+      }
+      query = query.lt('occurred_at', parsed.toISOString())
+    } else {
+      query = query.not('id', 'is', null)
+    }
+
+    const { error, count } = await query
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, deleted: count ?? 0 })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to delete activity logs'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

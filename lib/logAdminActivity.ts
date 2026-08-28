@@ -116,6 +116,53 @@ export async function syncActivityLogToServer(log: ActivityLog): Promise<void> {
   }
 }
 
+export type DeleteActivityLogsInput =
+  | { mode: 'all' }
+  | { mode: 'before'; before: string }
+  | { mode: 'id'; id: string }
+
+/** Remove shared audit rows from Supabase (super_admin API). Local store is updated separately. */
+export async function deleteActivityLogsOnServer(
+  input: DeleteActivityLogsInput
+): Promise<{ ok: boolean; deleted: number; error?: string }> {
+  try {
+    const params = new URLSearchParams()
+    if (input.mode === 'all') {
+      params.set('all', '1')
+    } else if (input.mode === 'before') {
+      params.set('before', input.before)
+    } else {
+      params.set('id', input.id)
+    }
+
+    const res = await fetch(`/api/admin/activity-logs?${params.toString()}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    })
+
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      deleted?: number
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        deleted: 0,
+        error: body.error || res.statusText || 'Delete failed',
+      }
+    }
+
+    return { ok: true, deleted: typeof body.deleted === 'number' ? body.deleted : 0 }
+  } catch (e) {
+    return {
+      ok: false,
+      deleted: 0,
+      error: e instanceof Error ? e.message : 'Delete failed',
+    }
+  }
+}
+
 /** Pull shared audit rows into the local Activity Log (merge by id). */
 export async function pullAdminActivityLogsFromServer(): Promise<number> {
   try {

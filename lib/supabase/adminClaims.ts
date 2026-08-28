@@ -17,3 +17,9 @@ export function userHasAdminAccess(user: User): boolean {
     u.is_admin === true
   )
 }
+
+export function userIsSuperAdmin(user: User): boolean {
+  const m = user.app_metadata || {}
+  const u = user.user_metadata || {}
+  return m.role === 'super_admin' || u.role === 'super_admin'
+}
