@@ -5,6 +5,7 @@ import {
   atoCentsLeftOut,
   roundAtoWholeDollars,
 } from '@/lib/utils/ato-lodgment-rounding'
+import type { AnnualBasCrossCheck } from '@/lib/ato-lodgment/lodgment-layer-hints'
 import type { AnnualLodgmentResult } from '@/lib/ato-lodgment/types'
 import type { LodgmentField } from '@/lib/ato-lodgment/types'
 
@@ -69,6 +70,8 @@ interface AnnualMyTaxFormPanelProps {
   result: AnnualLodgmentResult
   /** Company uses CTR — panel still shows ex-GST worksheet for review. */
   accountType?: 'company' | 'sole_trader' | 'individual'
+  /** Sum of quarterly BAS ledger cents for the same FY (GST registered). */
+  basFyCrossCheck?: AnnualBasCrossCheck | null
 }
 
 /**
@@ -78,6 +81,7 @@ interface AnnualMyTaxFormPanelProps {
 export function AnnualMyTaxFormPanel({
   result,
   accountType,
+  basFyCrossCheck,
 }: AnnualMyTaxFormPanelProps) {
   const ledger = result.annualLedgerCents
   const coreFields = CORE_FIELD_IDS.map((id) => fieldById(result.fields, id)).filter(
@@ -178,6 +182,38 @@ export function AnnualMyTaxFormPanel({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {basFyCrossCheck && (
+        <div className="px-4 py-2.5 text-xs text-indigo-900 bg-indigo-50/90 border-t border-indigo-100 space-y-1">
+          <p>
+            <span className="font-medium">FY vs Σ BAS quarters (ledger cents):</span>{' '}
+            Total income ex-GST{' '}
+            <span className="font-mono">{formatCurrency(basFyCrossCheck.annualExGstIncome)}</span>{' '}
+            vs Σ(G1−1A){' '}
+            <span className="font-mono">{formatCurrency(basFyCrossCheck.basExGstSalesSum)}</span>
+            {Math.abs(basFyCrossCheck.incomeDelta) > 0.02 && (
+              <>
+                {' '}
+                · Δ{' '}
+                <span className="font-mono">{formatCurrency(basFyCrossCheck.incomeDelta)}</span>
+              </>
+            )}
+          </p>
+          <p className="text-indigo-800">
+            GST on sales FY{' '}
+            <span className="font-mono">{formatCurrency(basFyCrossCheck.annualGstOnIncome)}</span>{' '}
+            vs Σ BAS 1A{' '}
+            <span className="font-mono">{formatCurrency(basFyCrossCheck.basGstOnSalesSum)}</span>
+            {Math.abs(basFyCrossCheck.gstDelta) > 0.02 && (
+              <>
+                {' '}
+                · Δ <span className="font-mono">{formatCurrency(basFyCrossCheck.gstDelta)}</span>
+              </>
+            )}
+            . Lodge uses whole $ per quarter — sums may differ slightly from FY ledger.
+          </p>
         </div>
       )}
 

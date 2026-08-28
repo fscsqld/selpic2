@@ -28,6 +28,7 @@ import {
   computeCtrLodgment,
   filterByDateRange,
   getCurrentFinancialYearRange,
+  getQuartersInFinancialYear,
   listRecentBasQuarters,
   listRecentBasMonths,
 } from '@/lib/ato-lodgment/compute-lodgment'
@@ -44,6 +45,10 @@ import {
   type BasPeriodLiveData,
 } from '@/lib/ato-lodgment/bas-snapshot-compare'
 import { buildPreLodgeChecklist, fieldsToTsv, serializePreLodgeSummary } from '@/lib/ato-lodgment/pre-lodge-checklist'
+import {
+  compareAnnualToBasRollup,
+  rollupBasLedgerCents,
+} from '@/lib/ato-lodgment/lodgment-layer-hints'
 import { getReportsReviewed } from '@/lib/journey/reports-review-flag'
 import { sortFieldsByAtoOrder } from '@/lib/ato-lodgment/field-metadata'
 import { buildLodgmentCalendar } from '@/lib/ato-lodgment/lodgment-calendar'
@@ -487,6 +492,62 @@ export function ATOLodgmentGuide({
     ctrAddBacks,
     ctrLossCarry,
     ctrOtherAdj,
+  ])
+
+  const annualBasFyCrossCheck = useMemo(() => {
+    if (!gstRegistered || !annualResult) return null
+    const scopeForRange = (start: string, end: string) =>
+      applyLodgmentScope(
+        dateRepairedTransactions,
+        start,
+        end,
+        statementScopeMode,
+        lockedPeriodIds,
+        viewPeriodId
+      )
+    const ledgerSlices = getQuartersInFinancialYear(financialYear).map((q) => {
+      const scoped = scopeForRange(q.startDate, q.endDate)
+      const openBal = getOpeningBalanceForLodgmentScope(
+        scopeMode,
+        q.startDate,
+        viewPeriodId,
+        financialPeriods,
+        openingDirectorLoanBalance,
+        metricsOpeningDirectorLoan
+      )
+      return computeBasLodgment(
+        scoped,
+        q.startDate,
+        q.endDate,
+        'quarterly',
+        q.label,
+        openBal,
+        accountType,
+        undefined,
+        gstRegistered
+      ).basLedgerCents
+    })
+    const rollup = rollupBasLedgerCents(ledgerSlices)
+    const exGstIncome =
+      annualResult.taxTotalIncome ??
+      annualResult.annualLedgerCents?.totalIncome ??
+      0
+    const gstOnIncome =
+      annualResult.gstOnIncome ?? annualResult.annualLedgerCents?.gstOnIncome ?? 0
+    return compareAnnualToBasRollup(exGstIncome, gstOnIncome, rollup)
+  }, [
+    gstRegistered,
+    annualResult,
+    financialYear,
+    dateRepairedTransactions,
+    statementScopeMode,
+    lockedPeriodIds,
+    viewPeriodId,
+    scopeMode,
+    financialPeriods,
+    openingDirectorLoanBalance,
+    metricsOpeningDirectorLoan,
+    accountType,
   ])
 
   const scopeValidation = useMemo((): LodgmentValidation => {
@@ -1655,7 +1716,11 @@ export function ATOLodgmentGuide({
 
       {activeTab === 'annual' && annualResult && !viewingSnapshot && (
         <>
-          <AnnualMyTaxFormPanel result={annualResult} accountType={accountType} />
+          <AnnualMyTaxFormPanel
+            result={annualResult}
+            accountType={accountType}
+            basFyCrossCheck={annualBasFyCrossCheck}
+          />
           <AnnualIncomeSummaryCard result={annualResult} />
         </>
       )}

@@ -37,6 +37,10 @@ export function BasGstFormPanel({ result }: BasGstFormPanelProps) {
   const refund7c = fieldAmount(result.fields, '7C')
   const payment9 = c1 > 0 ? c1 : refund7c
   const isRefund = refund7c > 0 && c1 === 0
+  const exGst =
+    ledger?.g1 != null && ledger?.gstOnSales != null
+      ? ledger.g1 - ledger.gstOnSales
+      : null
 
   const rows: BasRow[] = [
     {
@@ -117,6 +121,17 @@ export function BasGstFormPanel({ result }: BasGstFormPanelProps) {
           </tbody>
         </table>
       </div>
+
+      {exGst != null && (
+        <div className="px-4 py-2.5 text-xs text-emerald-900 bg-emerald-50/90 border-t border-emerald-100">
+          <span className="font-medium">This period (L2):</span> G1 − 1A ={' '}
+          <span className="font-mono">{formatCurrency(exGst)}</span> ex-GST sales.{' '}
+          <span className="text-emerald-800">
+            1A is GST only — not income. Annual <em>Gross payments</em> is FY ex-GST; G1 is
+            GST-inclusive.
+          </span>
+        </div>
+      )}
 
       {result.uncategorisedCount > 0 && (
         <p className="px-4 py-2 text-xs text-amber-700 border-t border-gray-100">
