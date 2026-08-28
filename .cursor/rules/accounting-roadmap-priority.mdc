@@ -36,8 +36,10 @@ Step 3) Export period labels + Lodgment UX polish — Done
 
 ## Remaining (internal / product) — besides B
 
-1. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
-2. **Employee login** — form exists; real employee account + login deferred  
+1. **A2 storefront → Selpic A** — **Done 2026-08-28** (`NEXT_PUBLIC_ACCOUNTING_URL` + `selpic2` prod redeploy)  
+2. **A4 ops agreement** — **Done 2026-08-28** (`docs/selpic-a-deploy-handoff.md`)  
+3. **Payroll-only role smoke (A3)** — deferred until a payroll-only test admin exists  
+4. **Employee login** — form exists; real employee account + login deferred  
 3. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
 4. **HR / compliance TODOs** — leave store, WorkCover, etc. (unless user asks)  
 5. **Journal / AR-AP** — optional  
@@ -56,7 +58,7 @@ Step 3) Export period labels + Lodgment UX polish — Done
 
 ```
 1) Ops / roles when accounts exist?
-   → Payroll-only smoke, then employee login
+   → Payroll-only smoke (A3), then employee login
 
 2) Only when user explicitly starts public product?
    → Track B (tenancy → auth incl. employee role → mobile My Payroll → onboarding → harden API)

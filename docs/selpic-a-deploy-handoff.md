@@ -1,6 +1,6 @@
 # Selpic A — deploy handoff (internal vs public)
 
-Last updated: 2026-08-26  
+Last updated: 2026-08-28  
 Branch with accounting WIP: `cursor/fundraising-b2b-partner-program`  
 Accounting Vercel project: **`selpic-accounting`** (separate from homepage **`selpic2`**)
 
@@ -47,16 +47,11 @@ Do these **in order**. One item at a time.
 
 Done (user confirmed fix reflected, 2026-08-26).
 
-### A2 — Storefront points at deployed Selpic A
+### A2 — Storefront points at deployed Selpic A ✅ (2026-08-28)
 
-1. Vercel → project **`selpic2`** (homepage)  
-2. Settings → Environment Variables  
-3. Set **Production** (and Preview if used):  
-   `NEXT_PUBLIC_ACCOUNTING_URL=https://selpic-accounting.vercel.app`  
-4. **Redeploy** Production for `selpic2`  
-5. https://www.selpic.com.au/admin/dashboard → **Selpic A** → Admin Access (super)  
-6. Opened tab address must be **`selpic-accounting.vercel.app`** (not `localhost:3001`)  
-7. Same ledger as Vercel History  
+1. Vercel → project **`selpic2`** — `NEXT_PUBLIC_ACCOUNTING_URL=https://selpic-accounting.vercel.app` (**Production**, verified via `vercel env pull`)
+2. **Redeploy** Production for `selpic2` — deployment `dpl_5T4ky3gxLSYW4RvFi2QrWQRaVNZe` → https://www.selpic.com.au
+3. **You verify (browser):** https://www.selpic.com.au/admin/dashboard → **Selpic A** → **Admin Access** → tab URL must be **`selpic-accounting.vercel.app`** (not `localhost:3001`) and show the same ledger as prod History
 
 **Pass:** Admin opens protected production accounting with data.
 
@@ -66,12 +61,19 @@ Done (user confirmed fix reflected, 2026-08-26).
 - [x] Staff Access → `/employee/login` (Employee Login form shown; no employee account yet — login itself deferred)  
 - [ ] Payroll-only → My Payroll only — **deferred** until a payroll-only admin (or employee) test account exists  
 
-### A4 — Ops agreement (write down)
+### A4 — Ops agreement (written 2026-08-28)
 
-- Primary browser/profile for the company ledger  
-- Weekly **Settings → Data Management → Download Backup**  
-- Never rely on preview `*-fscsqlds-projects.vercel.app` URLs for the “real” ledger (different IndexedDB origin)  
-- Keep Deployment Protection SSO on  
+**Canonical ledger origin:** https://selpic-accounting.vercel.app only.  
+Do **not** treat `localhost:3001` or long preview URLs (`*-fscsqlds-projects.vercel.app`) as the company books — each origin has its own IndexedDB.
+
+| Rule | Detail |
+|------|--------|
+| **Primary browser** | One agreed Chrome/Edge profile on the company PC for daily accounting |
+| **Weekly backup** | Settings → Data Management → **Download Backup** (JSON v4); store off-machine |
+| **Admin entry** | https://www.selpic.com.au/admin → Selpic A → Admin Access (SSO token) |
+| **Deployment Protection** | Keep Vercel SSO **on** for `selpic-accounting` prod + preview |
+| **Restore** | Import backup only on `selpic-accounting.vercel.app` (or agreed recovery PC on same origin) |
+| **Staff phones** | No company backup import on personal devices — Track B for server-backed My Payroll |
 
 ### A5 — Optional polish (not blockers for “deploy done”)
 
@@ -88,11 +90,11 @@ Done (user confirmed fix reflected, 2026-08-26).
 
 ### Definition: “Deploy-related work complete”
 
-- [ ] A1 pass  
-- [ ] A2 pass  
-- [ ] A3 pass  
-- [ ] A4 written  
-- [ ] Homepage production still healthy (`selpic2` / www.selpic.com.au)  
+- [x] A1 pass  
+- [x] A2 env + redeploy (user browser check: Admin Access → `selpic-accounting.vercel.app`)  
+- [ ] A3 pass (payroll-only — deferred until test account)  
+- [x] A4 written  
+- [x] Homepage production healthy (`selpic2` / www.selpic.com.au redeployed 2026-08-28)  
 
 Then stop Track A and only then start Track B.
 
