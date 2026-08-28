@@ -7,7 +7,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, User, DollarSign, FileText, Calendar } from 'lucide-react'
+import { ArrowLeft, User, DollarSign, FileText, Calendar, Trash2, Loader2 } from 'lucide-react'
 import { Employee } from '@/src/shared/types/employee'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import { EmployeeBasicInfo } from './EmployeeBasicInfo'
@@ -25,6 +25,7 @@ interface EmployeeDetailPageProps {
 export function EmployeeDetailPage({ employee, onBack, onEmployeeUpdate }: EmployeeDetailPageProps) {
   const [activeTab, setActiveTab] = useState<'basic' | 'payroll' | 'payslip' | 'leave' | 'insurance'>('basic')
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(employee)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (employee) {
@@ -41,6 +42,45 @@ export function EmployeeDetailPage({ employee, onBack, onEmployeeUpdate }: Emplo
       }
     } catch (err) {
       console.error('Failed to load employee details:', err)
+    }
+  }
+
+  const handleDeleteEmployee = async () => {
+    if (!currentEmployee?.id || isDeleting) return
+
+    const label = currentEmployee.employeeId
+      ? `${currentEmployee.name} (${currentEmployee.employeeId})`
+      : currentEmployee.name
+
+    const confirmed = window.confirm(
+      [
+        `⚠️ WARNING: Permanently delete ${label}?`,
+        '',
+        'This will also delete:',
+        '• All timesheets for this employee',
+        '• All payslips and related payroll journal entries',
+        '',
+        'This cannot be undone.',
+      ].join('\n')
+    )
+
+    if (!confirmed) return
+
+    setIsDeleting(true)
+    try {
+      await indexedDBStorage.init()
+      await indexedDBStorage.deleteEmployee(currentEmployee.id)
+      window.dispatchEvent(
+        new CustomEvent('transactionsUpdated', {
+          detail: { source: 'employeeDeleted', employeeId: currentEmployee.id },
+        })
+      )
+      onEmployeeUpdate()
+    } catch (err) {
+      console.error('Failed to delete employee:', err)
+      alert('Failed to delete employee. Please try again.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -80,6 +120,20 @@ export function EmployeeDetailPage({ employee, onBack, onEmployeeUpdate }: Emplo
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => void handleDeleteEmployee()}
+          disabled={isDeleting}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 disabled:opacity-60 transition-colors"
+          title="Permanently delete this employee and all related payroll data"
+        >
+          {isDeleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+          {isDeleting ? 'Deleting…' : 'Delete employee'}
+        </button>
       </div>
 
       {/* Tabs */}
