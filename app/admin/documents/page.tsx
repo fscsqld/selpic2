@@ -1116,7 +1116,7 @@ If you have any questions, please contact us.`
   )
 
   return (
-    <AdminRoute requiredPermissions={['users:read']}>
+    <AdminRoute requiredPermissions={['documents:read']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Document Sender"

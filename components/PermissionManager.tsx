@@ -81,7 +81,7 @@ export default function PermissionManager({
     
     filteredPermissions.forEach(permission => {
       if (!permission || typeof permission !== 'string') return
-      const category = getPermissionCategory(permission) || '기타'
+      const category = getPermissionCategory(permission) || 'Other'
       if (!groups[category]) {
         groups[category] = []
       }
@@ -501,7 +501,7 @@ export default function PermissionManager({
             {(() => {
               const categoryCounts: Record<string, number> = {}
               selectedPermissions.forEach(permission => {
-                const category = getPermissionCategory(permission) || '기타'
+                const category = getPermissionCategory(permission) || 'Other'
                 categoryCounts[category] = (categoryCounts[category] || 0) + 1
               })
               return Object.keys(categoryCounts).length > 0 ? (

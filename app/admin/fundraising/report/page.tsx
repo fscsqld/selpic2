@@ -15,7 +15,7 @@ import { HeartHandshake } from 'lucide-react'
 
 export default function FundraisingReportPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['fundraising:read']}>
       <ReportContent />
     </AdminRoute>
   )

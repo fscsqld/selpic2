@@ -8,6 +8,8 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import MediaUpload from '@/components/MediaUpload'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminRoute from '@/components/AdminRoute'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { catalogImagePersistError } from '@/lib/catalogRecordSanitize'
 import {
   MIXED_LABELS_SUBCATEGORY,
@@ -135,8 +137,10 @@ export default function AdminProductsPage() {
 
 function AdminProductsPageContent() {
   const { products, addProduct, updateProduct, deleteProduct, refreshProducts, adjustProductStock, defaultPageSize } = useStore()
+  const { adminUser } = useAdminAuth()
   const { subcategoryItems } = useContentStore()
   const { t } = useTranslation()
+  const canWriteProducts = adminHasPermission(adminUser, 'products:write')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -230,6 +234,10 @@ function AdminProductsPageContent() {
     setTimeout(() => {
       setNotification({ type: 'info', message: '', show: false })
     }, 3000)
+  }
+
+  const denyProductWrite = () => {
+    showNotification('error', 'You do not have permission to modify products.')
   }
 
   const forceCatalogSync = useCallback(async (): Promise<boolean> => {
@@ -379,6 +387,10 @@ function AdminProductsPageContent() {
   }, [refreshProducts])
 
   const openModal = (product?: ProductFormData) => {
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
     if (product) {
       setEditingProduct(product)
       setFormData({
@@ -507,7 +519,11 @@ function AdminProductsPageContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
+
     // 스티커 카테고리일 때 서브카테고리 필수 검증
     if (formData.category === 'Stickers' && !formData.subcategory) {
       showNotification('error', t('admin.products.stickerSubcategoryError'))
@@ -727,6 +743,10 @@ function AdminProductsPageContent() {
   }
 
   const handleDelete = async (productId: string) => {
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
     const product = products.find(p => p.id === productId)
     if (confirm(t('admin.products.confirmDeleteSingle').replace('{name}', product?.name || ''))) {
       deleteProduct(productId)
@@ -912,6 +932,10 @@ function AdminProductsPageContent() {
   }
 
   const handleApplyStockAdjustment = (productId: string, direction: 'in' | 'out') => {
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
     const value = stockAdjustments[productId]
     if (!value || value === 0 || isNaN(value)) {
       showNotification('error', t('admin.products.enterQuantityToAdjust'))
@@ -939,6 +963,10 @@ function AdminProductsPageContent() {
 
   // 일괄 삭제
   const handleBulkDelete = () => {
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
     if (selectedProducts.size === 0) return
     
     if (confirm(t('admin.products.confirmBulkDeleteProducts').replace('{count}', selectedProducts.size.toString()))) {
@@ -958,6 +986,10 @@ function AdminProductsPageContent() {
 
   // 일괄 재고 상태 변경
   const handleBulkStockChange = (inStock: boolean) => {
+    if (!canWriteProducts) {
+      denyProductWrite()
+      return
+    }
     if (selectedProducts.size === 0) return
     
     const action = inStock ? t('admin.products.inStockAction') : t('admin.products.outOfStockAction')
@@ -1020,13 +1052,19 @@ function AdminProductsPageContent() {
         {/* 페이지 설명 */}
         <div className="mb-8">
           <p className="text-gray-600">{t('admin.products.description')}</p>
+          {!canWriteProducts && (
+            <p className="mt-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Read-only access — you can view products but cannot add, edit, or delete them.
+            </p>
+          )}
         </div>
 
         {/* 상품 관리 버튼들 */}
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => openModal()}
-            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200"
+            disabled={!canWriteProducts}
+            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-5 h-5 mr-2" />
             {t('admin.products.addProduct')}
@@ -1039,19 +1077,22 @@ function AdminProductsPageContent() {
               </span>
               <button
                 onClick={() => handleBulkStockChange(true)}
-                className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm"
+                disabled={!canWriteProducts}
+                className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('admin.products.changeToInStock')}
               </button>
               <button
                 onClick={() => handleBulkStockChange(false)}
-                className="inline-flex items-center px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors duration-200 text-sm"
+                disabled={!canWriteProducts}
+                className="inline-flex items-center px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('admin.products.changeToOutOfStock')}
               </button>
               <button
                 onClick={handleBulkDelete}
-                className="inline-flex items-center px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 text-sm"
+                disabled={!canWriteProducts}
+                className="inline-flex items-center px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('admin.products.bulkDeleteItems')}
               </button>
@@ -1357,13 +1398,15 @@ function AdminProductsPageContent() {
                           />
                           <button
                             onClick={() => handleApplyStockAdjustment(product.id, 'in')}
-                            className="px-2 py-1 text-xs rounded bg-green-50 text-green-700 hover:bg-green-100"
+                            disabled={!canWriteProducts}
+                            className="px-2 py-1 text-xs rounded bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             + 
                           </button>
                           <button
                             onClick={() => handleApplyStockAdjustment(product.id, 'out')}
-                            className="px-2 py-1 text-xs rounded bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                            disabled={!canWriteProducts}
+                            className="px-2 py-1 text-xs rounded bg-yellow-50 text-yellow-700 hover:bg-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             –
                           </button>
@@ -1374,14 +1417,16 @@ function AdminProductsPageContent() {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => openModal(product)}
-                          className="text-emerald-600 hover:text-emerald-900"
+                          disabled={!canWriteProducts}
+                          className="text-emerald-600 hover:text-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed"
                           title={t('admin.products.editProductTooltip')}
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(product.id)}
-                          className="text-red-600 hover:text-red-900"
+                          disabled={!canWriteProducts}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
                           title={t('admin.products.deleteProductTooltip')}
                         >
                           <Trash2 className="w-4 h-4" />

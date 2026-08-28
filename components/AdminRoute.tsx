@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasAllPermissions } from '@/lib/adminPermissionCheck'
 import { useAdminSession } from '@/lib/adminSession'
 import AdminInboundSync from '@/components/AdminInboundSync'
 import AdminInboundSoundAlert from '@/components/AdminInboundSoundAlert'
@@ -82,17 +83,9 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
       return
     }
 
-    // 권한 확인 (super_admin / admin:manage = full app access; avoids hidden menus + route redirects)
+    // Permission check (super_admin / admin:manage / explicit permission + legacy aliases)
     if (requiredPermissions.length > 0 && adminUser) {
-      const fullAccess =
-        adminUser.role === 'super_admin' ||
-        adminUser.permissions.includes('admin:manage')
-
-      const hasPermission =
-        fullAccess ||
-        requiredPermissions.every((permission) => adminUser.permissions.includes(permission))
-
-      if (!hasPermission) {
+      if (!adminHasAllPermissions(adminUser, requiredPermissions)) {
         console.log('Permission denied, redirecting to dashboard...')
         router.push('/admin/dashboard')
       }

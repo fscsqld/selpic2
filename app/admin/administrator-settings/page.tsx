@@ -15,32 +15,11 @@ import {
 } from 'lucide-react'
 import AdminRoute from '@/components/AdminRoute'
 import PermissionManager from '@/components/PermissionManager'
+import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
-const AVAILABLE_PERMISSIONS = [
-  'dashboard:read',
-  'products:read',
-  'products:write',
-  'content:read',
-  'content:write',
-  'users:read',
-  'users:write',
-  'analytics:read',
-  'orders:read',
-  'orders:write',
-  'messages:read',
-  'messages:write',
-  'community:read',
-  'community:write',
-  'community:moderate',
-  'images:read',
-  'images:write',
-  'invoices:read',
-  'invoices:write',
-  'system:admin',
-  'admin:manage',
-]
+const AVAILABLE_PERMISSIONS = [...ADMIN_PERMISSION_CATALOG]
 
 export default function AdministratorSettingsPage() {
   const router = useRouter()

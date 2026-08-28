@@ -1,50 +1,10 @@
 import type { User } from '@supabase/supabase-js'
 import { userHasAdminAccess } from '@/lib/supabase/adminClaims'
 import type { AdminUser } from '@/lib/adminAuth'
-
-const DEFAULT_ADMIN_PERMISSIONS = [
-  'dashboard:read',
-  'products:read',
-  'products:write',
-  'content:read',
-  'content:write',
-  'users:read',
-  'analytics:read',
-  'orders:read',
-  'messages:read',
-  'community:read',
-  /** Operational menus (dashboard quick actions + AdminRoute) */
-  'images:read',
-  'images:write',
-  'invoices:read',
-  'invoices:write',
-  'system:admin',
-] as const
-
-/** Matches management UI / dashboard; super_admin gets full access everywhere. */
-const SUPER_PERMISSIONS = [
-  'dashboard:read',
-  'products:read',
-  'products:write',
-  'content:read',
-  'content:write',
-  'users:read',
-  'users:write',
-  'analytics:read',
-  'orders:read',
-  'orders:write',
-  'messages:read',
-  'messages:write',
-  'community:read',
-  'community:write',
-  'community:moderate',
-  'images:read',
-  'images:write',
-  'invoices:read',
-  'invoices:write',
-  'system:admin',
-  'admin:manage',
-] as const
+import {
+  DEFAULT_ADMIN_PERMISSIONS,
+  SUPER_ADMIN_DEFAULT_PERMISSIONS,
+} from '@/lib/adminPermissionCatalog'
 
 /** Maps Supabase Auth user to the shape used by the admin UI (Zustand). Client-safe. */
 export function mapSupabaseUserToAdminUser(user: User): AdminUser {
@@ -63,11 +23,10 @@ export function mapSupabaseUserToAdminUser(user: User): AdminUser {
   const permissions = Array.isArray(permissionsFromMeta)
     ? (permissionsFromMeta as string[])
     : role === 'super_admin'
-      ? [...SUPER_PERMISSIONS]
+      ? [...SUPER_ADMIN_DEFAULT_PERMISSIONS]
       : [...DEFAULT_ADMIN_PERMISSIONS]
 
   const email = user.email || undefined
-  /** Display name only; login remains email + password (user_metadata is updated via updateUser from the client). */
   const username =
     (typeof u.display_name === 'string' && u.display_name.trim()) ||
     (typeof u.username === 'string' && u.username.trim()) ||

@@ -20,6 +20,7 @@ import {
 import { useAdminAuth } from '@/lib/adminAuth'
 import AdminRoute from '@/components/AdminRoute'
 import PermissionManager from '@/components/PermissionManager'
+import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
 import { useTranslation } from '@/lib/useTranslation'
 import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
@@ -69,30 +70,7 @@ export default function AdminManagementPage() {
   const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  // Available permissions
-  const availablePermissions = [
-    'dashboard:read',
-    'products:read',
-    'products:write',
-    'content:read',
-    'content:write',
-    'users:read',
-    'users:write',
-    'analytics:read',
-    'orders:read',
-    'orders:write',
-    'messages:read',
-    'messages:write',
-    'community:read',
-    'community:write',
-    'community:moderate',
-    'images:read',
-    'images:write',
-    'invoices:read',
-    'invoices:write',
-    'system:admin',
-    'admin:manage'
-  ]
+  const availablePermissions = [...ADMIN_PERMISSION_CATALOG]
 
   // Check if current user is super admin
   const isSuperAdmin = adminUser?.role === 'super_admin'

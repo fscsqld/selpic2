@@ -3,6 +3,8 @@
  * Use NEXT_PUBLIC_ACCOUNTING_URL in production; falls back to local :3001 in dev.
  */
 
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
+
 export type SelpicAAdminUser = {
   username?: string
   role?: string
@@ -35,7 +37,7 @@ export function canUseSelpicAAdminAccess(admin: SelpicAAdminUser): boolean {
 export function canSeeSelpicAQuickAction(admin: SelpicAAdminUser): boolean {
   if (!admin) return false
   if (canUseSelpicAAdminAccess(admin)) return true
-  return (admin.permissions || []).includes('system:admin')
+  return adminHasPermission(admin, 'accounting:read')
 }
 
 export function buildSelpicAAdminSsoUrl(admin: NonNullable<SelpicAAdminUser>): string {

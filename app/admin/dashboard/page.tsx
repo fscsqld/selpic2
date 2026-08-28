@@ -55,6 +55,7 @@ import {
   isSelpicAAccountingManager,
   isSelpicAPayrollOnlyAdmin,
 } from '@/lib/admin/selpicAAccess'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
@@ -376,13 +377,10 @@ export default function AdminDashboard() {
     }
   ]
 
-  // Helper function to check if admin has permission
-  const hasPermission = useCallback((permission: string): boolean => {
-    if (!adminUser) return false
-    // Super admin has all permissions
-    if (adminUser.role === 'super_admin') return true
-    return adminUser.permissions.includes(permission)
-  }, [adminUser])
+  const hasPermission = useCallback(
+    (permission: string): boolean => adminHasPermission(adminUser, permission),
+    [adminUser]
+  )
 
   const refreshEtsyStatus = useCallback(async () => {
     try {
@@ -486,7 +484,7 @@ export default function AdminDashboard() {
       icon: Plug,
       href: '/admin/integrations',
       color: 'bg-rose-500',
-      requiredPermission: 'orders:read'
+      requiredPermission: 'integrations:read'
     },
     {
       title: t('admin.dashboard.quickActions.sales.title'),
@@ -503,7 +501,7 @@ export default function AdminDashboard() {
       icon: TrendingUp,
       href: '/admin/traffic',
       color: 'bg-indigo-500',
-      requiredPermission: 'analytics:read'
+      requiredPermission: 'traffic:read'
     },
     {
       title: 'Customer Messages',
@@ -521,7 +519,7 @@ export default function AdminDashboard() {
       href: '/admin/bespoke-requests',
       color: 'bg-indigo-500',
       badge: inboundCount('bespoke') > 0 ? inboundCount('bespoke') : undefined,
-      requiredPermission: 'messages:read'
+      requiredPermission: 'bespoke:read'
     },
     {
       title: 'Newsletter',
@@ -530,7 +528,7 @@ export default function AdminDashboard() {
       href: '/admin/newsletter',
       color: 'bg-cyan-500',
       badge: inboundCount('newsletter') > 0 ? inboundCount('newsletter') : undefined,
-      requiredPermission: 'users:read'
+      requiredPermission: 'newsletter:read'
     },
     {
       title: 'Invoice & document sender',
@@ -538,7 +536,7 @@ export default function AdminDashboard() {
       icon: FileCheck,
       href: '/admin/documents',
       color: 'bg-teal-500',
-      requiredPermission: 'users:read'
+      requiredPermission: 'documents:read'
     },
     {
       title: 'Fundraising',
@@ -550,7 +548,7 @@ export default function AdminDashboard() {
       href: '/admin/fundraising/partners',
       color: 'bg-emerald-600',
       badge: inboundCount('fundraising') > 0 ? inboundCount('fundraising') : undefined,
-      requiredPermission: 'analytics:read',
+      requiredPermission: 'fundraising:read',
     },
     {
       title: 'Invoice preview',
@@ -591,13 +589,11 @@ export default function AdminDashboard() {
       icon: Calculator,
       href: accountingBaseUrl,
       color: 'bg-amber-500',
-      requiredPermission: 'system:admin', // Super Admin 또는 회계 관리자만 접근
-      isExternal: true // 외부 링크 표시
+      requiredPermission: 'accounting:read',
+      isExternal: true
     }
   ].filter(action => {
-    // Filter actions based on permissions
     if (!action.requiredPermission) return true
-    // Selpic A: super / accounting (full) / payroll-only (My Payroll) / system:admin
     if (action.title === 'Selpic A') {
       return canSeeSelpicAQuickAction(adminUser)
     }

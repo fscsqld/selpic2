@@ -15,6 +15,7 @@ import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminActivityLog } from '@/lib/adminActivityLog'
+import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
 import { useAdminSession } from '@/lib/adminSession'
 import { useAdminPasswordPolicy } from '@/lib/adminPasswordPolicy'
 import { useAdminIPControl } from '@/lib/adminIPControl'
@@ -795,14 +796,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
     })
   }, [adminUser, isSuperAdmin, adminUsers, memoizedAdminUsers])
   
-  const availablePermissions = [
-    'dashboard:read', 'products:read', 'products:write', 'content:read', 
-    'content:write', 'users:read', 'users:write', 'analytics:read',
-    'orders:read', 'orders:write', 'messages:read', 'messages:write',
-    'community:read', 'community:write', 'community:moderate',
-    'images:read', 'images:write', 'invoices:read', 'invoices:write',
-    'system:admin', 'admin:manage'
-  ]
+  const availablePermissions = [...ADMIN_PERMISSION_CATALOG]
 
   // 탭 그룹 정의
   const tabGroups = [
@@ -1423,7 +1417,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
   }
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['system:admin']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Settings"

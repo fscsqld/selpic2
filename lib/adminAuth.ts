@@ -4,6 +4,10 @@ import { useAdminActivityLog } from './adminActivityLog'
 import { useAdminSession } from './adminSession'
 import { useAdminIPControl } from './adminIPControl'
 import { useAdminPasswordPolicy } from './adminPasswordPolicy'
+import {
+  DEFAULT_ADMIN_PERMISSIONS,
+  SUPER_ADMIN_DEFAULT_PERMISSIONS,
+} from './adminPermissionCatalog'
 
 export interface AdminUser {
   username: string
@@ -47,52 +51,14 @@ export const useAdminAuth = create<AdminAuthState>()(
         {
           username: 'admin',
           role: 'admin',
-          permissions: [
-            'dashboard:read',
-            'products:read',
-            'products:write',
-            'content:read',
-            'content:write',
-            'users:read',
-            'analytics:read',
-            'orders:read',
-            'messages:read',
-            'community:read',
-            'images:read',
-            'images:write',
-            'invoices:read',
-            'invoices:write',
-            'system:admin',
-          ],
+          permissions: [...DEFAULT_ADMIN_PERMISSIONS],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
         },
         {
           username: 'superadmin',
           role: 'super_admin',
-          permissions: [
-            'dashboard:read',
-            'products:read',
-            'products:write',
-            'content:read',
-            'content:write',
-            'users:read',
-            'users:write',
-            'analytics:read',
-            'orders:read',
-            'orders:write',
-            'messages:read',
-            'messages:write',
-            'community:read',
-            'community:write',
-            'community:moderate',
-            'images:read',
-            'images:write',
-            'invoices:read',
-            'invoices:write',
-            'system:admin',
-            'admin:manage',
-          ],
+          permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
         }
@@ -165,18 +131,7 @@ export const useAdminAuth = create<AdminAuthState>()(
               adminUserData = {
                 username: 'admin',
                 role: 'admin' as const,
-                permissions: [
-                  'dashboard:read',
-                  'products:read',
-                  'products:write',
-                  'content:read',
-                  'content:write',
-                  'users:read',
-                  'analytics:read',
-                  'orders:read',
-                  'messages:read',
-                  'community:read'
-                ],
+                permissions: [...DEFAULT_ADMIN_PERMISSIONS],
                 isActive: true,
                 createdAt: '2024-01-01T00:00:00.000Z',
                 lastLogin: now
@@ -244,18 +199,7 @@ export const useAdminAuth = create<AdminAuthState>()(
               adminUserData = {
                 username: 'superadmin',
                 role: 'super_admin' as const,
-                permissions: [
-                  'dashboard:read',
-                  'products:read',
-                  'products:write',
-                  'content:read',
-                  'content:write',
-                  'users:read',
-                  'users:write',
-                  'analytics:read',
-                  'system:admin',
-                  'admin:manage'
-                ],
+                permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
                 isActive: true,
                 createdAt: '2024-01-01T00:00:00.000Z',
                 lastLogin: now
@@ -1114,33 +1058,14 @@ export const useAdminAuth = create<AdminAuthState>()(
             {
               username: 'admin',
               role: 'admin',
-              permissions: [
-                'dashboard:read',
-                'products:read',
-                'products:write',
-                'content:read',
-                'content:write',
-                'users:read',
-                'analytics:read'
-              ],
+              permissions: [...DEFAULT_ADMIN_PERMISSIONS],
               isActive: true,
               createdAt: '2024-01-01T00:00:00.000Z'
             },
             {
               username: 'superadmin',
               role: 'super_admin',
-              permissions: [
-                'dashboard:read',
-                'products:read',
-                'products:write',
-                'content:read',
-                'content:write',
-                'users:read',
-                'users:write',
-                'analytics:read',
-                'system:admin',
-                'admin:manage'
-              ],
+              permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
               isActive: true,
               createdAt: '2024-01-01T00:00:00.000Z'
             }
