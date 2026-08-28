@@ -44,7 +44,12 @@ Accountant PDF/CTR: **layout reference only** — user does **not** want varianc
 - Transaction History “P&L period” filter matches `dashboardTransactions`
 - Statement-upload banner copy updated (P&L = All History, not single PDF only)
 
-### Step 3 — Doc refresh — after deploy when user asks
+### Step 3 — Export period labels + Lodgment UX polish — **Done 2026-08-28**
+
+- `bas-report-period.ts` — FY/custom no longer snaps to Q1 in BAS export
+- Compliance BAS sheet uses `matchExactBasQuarter` period label + L1/L2/L3 note
+- Annual snapshot compare panel; CTR ↔ Annual L2 cross-hint
+- Pre-lodge checklist L1/L2/L3 copy per tab
 
 ---
 

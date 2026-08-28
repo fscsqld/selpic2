@@ -44,6 +44,7 @@ import {
   buildBasPeriodCompareRows,
   type BasPeriodLiveData,
 } from '@/lib/ato-lodgment/bas-snapshot-compare'
+import { buildAnnualSnapshotCompareRow } from '@/lib/ato-lodgment/annual-snapshot-compare'
 import { buildPreLodgeChecklist, fieldsToTsv, serializePreLodgeSummary } from '@/lib/ato-lodgment/pre-lodge-checklist'
 import {
   compareAnnualToBasRollup,
@@ -77,7 +78,9 @@ import { BasPeriodSummaryCard } from '@/components/Lodgment/BasPeriodSummaryCard
 import { AnnualIncomeSummaryCard } from '@/components/Lodgment/AnnualIncomeSummaryCard'
 import { AnnualMyTaxFormPanel } from '@/components/Lodgment/AnnualMyTaxFormPanel'
 import { BasSnapshotComparePanel } from '@/components/Lodgment/BasSnapshotComparePanel'
+import { AnnualSnapshotComparePanel } from '@/components/Lodgment/AnnualSnapshotComparePanel'
 import { CtrItem6FormPanel } from '@/components/Lodgment/CtrItem6FormPanel'
+import { CtrAnnualCrossHint } from '@/components/Lodgment/CtrAnnualCrossHint'
 import { CtrSummaryCard } from '@/components/Lodgment/CtrSummaryCard'
 import { LodgmentCollapsibleSection } from '@/components/Lodgment/LodgmentCollapsibleSection'
 import { LodgmentCalendar } from '@/components/Lodgment/LodgmentCalendar'
@@ -549,6 +552,33 @@ export function ATOLodgmentGuide({
     metricsOpeningDirectorLoan,
     accountType,
   ])
+
+  const annualSnapshotRow = useMemo(() => {
+    if (!annualResult) return null
+    return buildAnnualSnapshotCompareRow(snapshots, financialYear, annualResult.fields)
+  }, [snapshots, financialYear, annualResult])
+
+  const ctrAnnualCross = useMemo(() => {
+    if (!ctrResult || !annualResult || accountType !== 'company') return null
+    const annualIncome =
+      annualResult.taxTotalIncome ?? annualResult.annualLedgerCents?.totalIncome ?? 0
+    const annualExpenses =
+      annualResult.taxTotalExpenses ?? annualResult.annualLedgerCents?.totalExpenses ?? 0
+    const annualNet =
+      annualResult.taxNetProfit ?? annualResult.annualLedgerCents?.netIncome ?? 0
+    const ledger = ctrResult.item6LedgerCents
+    const ctrIncome = ledger?.totalIncome ?? 0
+    const ctrExpenses = ledger?.totalExpenses ?? 0
+    const ctrProfit = ledger?.profitOrLoss ?? 0
+    return {
+      annualIncomeExGst: annualIncome,
+      annualExpensesExGst: annualExpenses,
+      annualNetExGst: annualNet,
+      ctrIncomeExGst: ctrIncome,
+      ctrExpensesExGst: ctrExpenses,
+      ctrProfitOrLoss: ctrProfit,
+    }
+  }, [ctrResult, annualResult, accountType])
 
   const scopeValidation = useMemo((): LodgmentValidation => {
     const warnings: string[] = []
@@ -1725,6 +1755,15 @@ export function ATOLodgmentGuide({
         </>
       )}
 
+      {activeTab === 'annual' && annualSnapshotRow && !viewingSnapshot && (
+        <AnnualSnapshotComparePanel
+          row={annualSnapshotRow}
+          onLoadSnapshot={(snap) => loadSnapshotById(snap.id)}
+          onUpdateSnapshot={() => saveSnapshot(false)}
+          updateBusy={snapshotBusy}
+        />
+      )}
+
       {activeTab === 'bas' && !viewingSnapshot && basCompareRows.length > 0 && (
         <BasSnapshotComparePanel
           financialYear={basFinancialYear}
@@ -1740,6 +1779,9 @@ export function ATOLodgmentGuide({
 
       {activeTab === 'ctr' && ctrResult && !viewingSnapshot && (
         <>
+          {ctrAnnualCross && (
+            <CtrAnnualCrossHint financialYear={financialYear} {...ctrAnnualCross} />
+          )}
           <CtrItem6FormPanel result={ctrResult} />
           <CtrSummaryCard result={ctrResult} taxRate={ctrTaxRate} />
         </>

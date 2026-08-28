@@ -64,6 +64,25 @@ function pushItem(items: PreLodgeCheckItem[], item: PreLodgeCheckItem): void {
   items.push(item)
 }
 
+function pushReportingLayersGuide(
+  items: PreLodgeCheckItem[],
+  kind: 'bas' | 'annual' | 'ctr'
+): void {
+  const detailByKind: Record<typeof kind, string> = {
+    bas: 'L1 = Biz Intel cash (incl. GST). L2 = 1A/1B cents on GST Summary. L3 = G1/1A/1B whole $ — copy ATO lodge $ only.',
+    annual:
+      'L1 = Biz Intel cash P&L. L2 = myTax lines here (excl. GST per line). L3 = ATO lodge $ where shown. Do not copy L1 cash into myTax.',
+    ctr: 'L1 = Biz Intel cash. L2 = Item 6 ledger (excl. GST). L3 = ATO lodge $ on Item 6. Annual tab L2 should match Item 6 before lodge.',
+  }
+  pushItem(items, {
+    id: 'reporting_layers',
+    label: 'Reporting layers understood (L1 cash / L2 ex-GST / L3 lodge $)',
+    passed: true,
+    detail: detailByKind[kind],
+    severity: 'recommended',
+  })
+}
+
 export function computeReadyToLodge(items: PreLodgeCheckItem[]): boolean {
   const required = items.filter((i) => i.severity === 'required')
   if (!required.every((i) => i.passed)) return false
@@ -279,6 +298,7 @@ export function buildPreLodgeChecklist(options: {
   }
 
   if (kind === 'bas' && gstRegistered) {
+    pushReportingLayersGuide(items, 'bas')
     const g1 = fields.find((f) => f.id === 'G1')?.amount ?? 0
     const a1 = fields.find((f) => f.id === '1A')?.amount ?? 0
     pushItem(items, {
@@ -328,6 +348,7 @@ export function buildPreLodgeChecklist(options: {
   }
 
   if (kind === 'ctr') {
+    pushReportingLayersGuide(items, 'ctr')
     const taxable = fields.find((f) => f.id === 'CTR_TAXABLE')?.amount ?? 0
     const taxEst = fields.find((f) => f.id === 'CTR_TAX_EST')?.amount ?? 0
     const rate = businessExtras?.ctrTaxRate ?? 0.25
@@ -368,6 +389,7 @@ export function buildPreLodgeChecklist(options: {
   }
 
   if (kind === 'annual') {
+    pushReportingLayersGuide(items, 'annual')
     const net = fields.find((f) => f.id === 'MYTAX_NET_INCOME')?.amount ?? 0
     const income = fields.find((f) => f.id === 'MYTAX_TOTAL_INCOME')?.amount ?? 0
     pushItem(items, {

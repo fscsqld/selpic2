@@ -91,4 +91,12 @@ describe('generateBASReport GST aligns with Biz Intel', () => {
     expect(report.gstSummary?.label1A).toBe(0)
     expect(report.gstSummary?.gstRefund).toBe(true)
   })
+
+  it('does not collapse FY dates into Q1 when exporting quarterly BAS', () => {
+    const report = generateBASReport([], '2025-07-01', '2026-06-30', 'quarterly', 'company')
+    expect(report.period.type).toBe('custom')
+    expect(report.period.startDate).toBe('2025-07-01')
+    expect(report.period.endDate).toBe('2026-06-30')
+    expect(report.period.label).toBe('FY 2025-2026')
+  })
 })

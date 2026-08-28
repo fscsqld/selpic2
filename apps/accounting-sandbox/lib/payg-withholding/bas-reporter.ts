@@ -11,22 +11,26 @@ import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
 import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
 import { calculatePAYG } from '@/src/shared/utils/tax-calculator'
 import { 
-  getAustralianQuarter, 
   getAustralianQuarterDates
 } from '@/lib/utils/australian-financial-year'
 import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
+import {
+  resolveBasReportPeriod,
+  type BasReportPeriodType,
+} from '@/lib/export/bas-report-period'
 
-function formatBasPeriodTypeLabel(type: string): string {
-  if (type === 'monthly') return 'Monthly'
-  if (type === 'quarterly') return 'Quarterly'
-  return type
+function formatBasPeriodTypeLabel(type: BasReportPeriodType | string): string {
+  if (type === 'monthly') return 'Monthly (one BAS GST period)'
+  if (type === 'quarterly') return 'Quarterly (one BAS GST period)'
+  if (type === 'custom') return 'Custom / multi-period (not one BAS cycle)'
+  return String(type)
 }
 
 export interface BASReport {
   period: {
     startDate: string
     endDate: string
-    type: 'monthly' | 'quarterly'
+    type: BasReportPeriodType
     label: string // e.g., "Q1 2026", "March 2026"
   }
   
@@ -236,41 +240,11 @@ export function generateBASReport(
     }
   })
   
-  // Generate period label and adjust dates to match Australian BAS reporting periods
-  // Use Australian Financial Year utilities for accurate period calculation
-  const start = new Date(startDate)
-  let periodLabel = ''
-  let reportStartDate = startDate
-  let reportEndDate = endDate
-  
-  if (periodType === 'quarterly') {
-    // Get Australian quarter for the start date
-    const { quarter, financialYear } = getAustralianQuarter(start)
-    const quarterDates = getAustralianQuarterDates(quarter, financialYear)
-    
-    // Use standard quarter dates (1st of quarter start month to last day of quarter end month)
-    reportStartDate = quarterDates.startDateStr
-    reportEndDate = quarterDates.endDateStr
-    periodLabel = `Q${quarter} ${financialYear}`
-  } else {
-    // Monthly reporting: use actual month boundaries
-    const reportMonthStart = new Date(start.getFullYear(), start.getMonth(), 1)
-    const reportMonthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0)
-    const formatLocal = (date: Date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
-    reportStartDate = formatLocal(reportMonthStart)
-    reportEndDate = formatLocal(reportMonthEnd)
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December']
-    const year = start.getFullYear()
-    const month = start.getMonth() // 0-11
-    periodLabel = `${monthNames[month]} ${year}`
-  }
+  // Period label — exact BAS quarter/month only; FY/custom keep caller window
+  const resolved = resolveBasReportPeriod(startDate, endDate, periodType)
+  const reportStartDate = resolved.startDate
+  const reportEndDate = resolved.endDate
+  const periodLabel = resolved.label
   
   // GST — same engine as Biz Intel GST Summary / ATO lodgment (÷11 on taxable income & expenses)
   const startIso = toIsoDateString(reportStartDate) || reportStartDate.slice(0, 10)
@@ -292,7 +266,7 @@ export function generateBASReport(
     period: {
       startDate: reportStartDate, // BAS 신고 기간 시작일 (분기/월 시작일)
       endDate: reportEndDate, // BAS 신고 기간 종료일 (분기/월 종료일)
-      type: periodType,
+      type: resolved.type,
       label: periodLabel,
     },
     paygSummary: {
@@ -336,6 +310,12 @@ export function exportBASToExcel(
   allRows.push(['Start Date:', formatDateAustralian(report.period.startDate)])
   allRows.push(['End Date:', formatDateAustralian(report.period.endDate)])
   allRows.push(['Period Type:', formatBasPeriodTypeLabel(report.period.type)])
+  if (report.period.type === 'custom') {
+    allRows.push([
+      'Note:',
+      'Not one BAS GST cycle — pick a single quarter/month in Export BAS before lodging.',
+    ])
+  }
   allRows.push([''])
   
   // PAYG Registration Info

@@ -25,6 +25,7 @@ import {
 } from '@/lib/classification/directors-loan-balance'
 import { roundAtoWholeDollars } from '@/lib/utils/ato-lodgment-rounding'
 import { REPORTING_LAYERS_COMPLIANCE_NOTE } from '@/lib/reporting/reporting-layer-labels'
+import { matchExactBasQuarter } from '@/lib/dashboard/view-period-range'
 
 export interface Transaction {
   id?: string
@@ -274,6 +275,12 @@ export async function generateBASPackage(data: CompliancePackageData): Promise<X
     advanceSettings.autoMatchReimbursements
   )
 
+  const reportPeriod = resolveComplianceReportPeriod({
+    financialYear: data.financialYear,
+    periodStart,
+    periodEnd,
+  })
+
   const incomeStatement =
     periodStart && periodEnd
       ? await computeIncomeStatementFromStorage({
@@ -360,7 +367,16 @@ export async function generateBASPackage(data: CompliancePackageData): Promise<X
     [companyName],
     [`ABN: ${abn}`],
     ['BAS Summary'],
-    periodStart && periodEnd ? [`Period: ${formatDateAustralian(periodStart)} to ${formatDateAustralian(periodEnd)}`] : [''],
+    [`Period: ${reportPeriod.label}`],
+    [
+      `Dates: ${formatDateAustralian(reportPeriod.start)} to ${formatDateAustralian(reportPeriod.end)}`,
+    ],
+    [
+      reportPeriod.isExactBasQuarter
+        ? 'BAS cycle: one quarterly GST period (L3 whole $ on lodge)'
+        : 'Not one BAS quarter — summary only; lodge each BAS period separately',
+    ],
+    [REPORTING_LAYERS_COMPLIANCE_NOTE],
     incomeStatement?.ledgerIntegrated
       ? [`Source: Ledger-integrated P&L (${accountingSettings.basis} basis)`]
       : [''],
@@ -614,21 +630,13 @@ export function resolveComplianceReportPeriod(
   const fyLabelStart = Number(fy.start.slice(0, 4))
   const fyLabel = `${fyLabelStart}-${fyLabelStart + 1}`
 
-  const quarters: Array<{ q: 1 | 2 | 3 | 4; start: string; end: string }> = [
-    { q: 1, start: `${fyLabelStart}-07-01`, end: `${fyLabelStart}-09-30` },
-    { q: 2, start: `${fyLabelStart}-10-01`, end: `${fyLabelStart}-12-31` },
-    { q: 3, start: `${fyLabelStart + 1}-01-01`, end: `${fyLabelStart + 1}-03-31` },
-    { q: 4, start: `${fyLabelStart + 1}-04-01`, end: `${fyLabelStart + 1}-06-30` },
-  ]
-
-  for (const { q, start: qStart, end: qEnd } of quarters) {
-    if (start === qStart && end === qEnd) {
-      return {
-        start,
-        end,
-        label: `Q${q} ${fyLabel}`,
-        isExactBasQuarter: true,
-      }
+  const exact = matchExactBasQuarter(start, end)
+  if (exact) {
+    return {
+      start,
+      end,
+      label: `Q${exact.quarter} ${exact.financialYear}`,
+      isExactBasQuarter: true,
     }
   }
 
