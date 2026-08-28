@@ -2805,6 +2805,25 @@ class IndexedDBStorage {
       }
     })
   }
+
+  /**
+   * Remove every audit-trail log entry. Does not touch statements, cash, payroll, or journals.
+   */
+  async clearAllAuditTrails(): Promise<number> {
+    if (!this.db) {
+      await this.init()
+    }
+
+    const entries = await this.getAllAuditTrails().catch(() => [])
+    const count = entries.length
+    if (count === 0) {
+      return 0
+    }
+
+    await this.clearStore(AUDIT_TRAIL_STORE)
+    console.log('[IndexedDB] Cleared audit trail entries:', count)
+    return count
+  }
   
   // ============================================
   // Period Management Methods
