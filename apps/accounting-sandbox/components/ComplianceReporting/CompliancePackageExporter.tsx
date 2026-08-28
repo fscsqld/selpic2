@@ -7,6 +7,7 @@ import {
   CompliancePackageData,
   resolveComplianceReportPeriod,
 } from '@/lib/compliance-reporting/compliance-package'
+import { REPORTING_LAYERS_COMPLIANCE_NOTE } from '@/lib/reporting/reporting-layer-labels'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 
@@ -184,6 +185,9 @@ export function CompliancePackageExporter({
           <li>• Trial Balance - Excel</li>
           <li>• Director&apos;s Loan Report - Excel</li>
         </ul>
+        <p className="text-xs text-teal-800 mb-4">
+          {REPORTING_LAYERS_COMPLIANCE_NOTE}
+        </p>
         <p className="text-xs text-teal-800 mb-4">
           P&amp;L, Balance Sheet, Trial Balance, and BAS G1 use ledger-integrated figures (bank
           transactions + journal entries, including AR/AP accrual journals when enabled).

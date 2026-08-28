@@ -81,6 +81,7 @@ import {
 import {
   type DashboardViewPeriod,
   filterTransactionsForDateRange,
+  filterBusinessLedgerForPeriod,
   firstMonthPeriodId,
   getDefaultViewPeriod,
   getTransactionDateBounds,
@@ -1946,11 +1947,12 @@ export function useAccountingDashboard() {
           totalIncome: metrics.totalIncome,
           totalExpenses: metrics.totalExpenses,
           netProfit: metrics.netProfit,
+          totalIncomeExGst: metrics.totalIncomeExGst,
+          totalExpensesExGst: metrics.totalExpensesExGst,
+          netProfitExGst: metrics.netProfitExGst,
           totalGSTPayable: metrics.gstPayable,
           totalGSTClaimable: metrics.gstClaimable,
           directorsLoanBalance: metrics.directorsLoanBalance,
-          cleaningIncome: metrics.totalIncome,
-          stickerIncome: 0,
           periodLabel,
           rowCount: dashboardTransactions.length,
         },
@@ -2458,28 +2460,14 @@ export function useAccountingDashboard() {
   )
 
   const dashboardTransactions = useMemo(() => {
-    // Statement upload: statement ∩ banner period + Cash Expenses in that window
     let scoped: typeof transactions
-    if (isStatementLedgerScope) {
-      if (accountType === 'individual') {
-        scoped = activeLedgerTransactions as typeof transactions
-      } else {
-        const bankInPeriod = filterTransactionsForDateRange(
-          activeLedgerTransactions,
-          viewPeriod.startDate,
-          viewPeriod.endDate
-        )
-        scoped = mergeManualCashExpenses(
-          bankInPeriod,
-          transactions,
-          viewPeriod.startDate,
-          viewPeriod.endDate
-        ) as typeof transactions
-      }
-    } else if (accountType === 'individual') {
-      scoped = transactions
+    if (accountType === 'individual') {
+      scoped = isStatementLedgerScope
+        ? (activeLedgerTransactions as typeof transactions)
+        : transactions
     } else {
-      scoped = filterTransactionsForDateRange(
+      // Full History ledger ∩ banner period; payroll journals stay out (see view-period-range tests).
+      scoped = filterBusinessLedgerForPeriod(
         transactions,
         viewPeriod.startDate,
         viewPeriod.endDate

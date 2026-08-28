@@ -9,6 +9,7 @@ import { formatDateAustralian } from '@/lib/utils/date-format'
 import { strings } from '@/lib/i18n/strings'
 import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
 import { roundMoney } from '@/lib/utils/currency-format'
+import { buildExportSummaryRows, type ExportSummaryMetrics } from '@/lib/reporting/reporting-layer-labels'
 
 export interface ExportTransaction {
   date: string
@@ -344,8 +345,8 @@ export function exportToExcel(
       Date: formatDateAustralian(tx.date), // Australian format: DD/MM/YYYY
       Description: cleanDescriptionForExport(tx.description), // Use cleaned description
       Category: getCategoryDisplayName(tx.category || 'UNCATEGORIZED'), // Use display name (matches UI)
-      'GST (10%)': gst,
-      'Net Amount': netAmount,
+      'GST (L2 est.)': gst,
+      'Net (L2 est.)': netAmount,
       Debit: tx.debit || 0,
       Credit: tx.credit || 0,
       Department: getDepartmentDisplayName(tx.department), // Use display name (matches UI: 'cleaning' → 'Company')
@@ -362,7 +363,18 @@ export function exportToExcel(
   const allRows: any[][] = []
   
   // Step 1: Add main data headers (Row 1)
-  allRows.push(['Date', 'Description', 'Category', 'GST (10%)', 'Net Amount', 'Debit', 'Credit', 'Department', 'Status', 'Balance'])
+  allRows.push([
+    'Date',
+    'Description',
+    'Category',
+    'GST (L2 est.)',
+    'Net (L2 est.)',
+    'Debit (L1)',
+    'Credit (L1)',
+    'Department',
+    'Status',
+    'Balance',
+  ])
   
   // Step 2: Add main transaction data (Rows 2+)
   mainData.forEach((row) => {
@@ -370,8 +382,8 @@ export function exportToExcel(
       row.Date,
       row.Description,
       row.Category,
-      row['GST (10%)'],
-      row['Net Amount'],
+      row['GST (L2 est.)'],
+      row['Net (L2 est.)'],
       row.Debit,
       row.Credit,
       row.Department,
@@ -558,36 +570,10 @@ export function exportToExcel(
  * Export summary to Excel (aligned with Biz Intel P&L / GST cards)
  */
 export function exportSummary(
-  summary: {
-    totalIncome: number
-    totalExpenses: number
-    netProfit: number
-    totalGSTPayable: number
-    totalGSTClaimable: number
-    directorsLoanBalance: number
-    cleaningIncome?: number
-    stickerIncome?: number
-    periodLabel?: string
-    rowCount?: number
-  },
+  summary: ExportSummaryMetrics,
   fileName: string = 'financial-summary'
 ): void {
-  const netGst = summary.totalGSTPayable - summary.totalGSTClaimable
-  const summaryData = [
-    ...(summary.periodLabel
-      ? [{ Metric: 'P&L Period', Amount: summary.periodLabel }]
-      : []),
-    ...(typeof summary.rowCount === 'number'
-      ? [{ Metric: 'Rows included', Amount: String(summary.rowCount) }]
-      : []),
-    { Metric: 'Total Income', Amount: summary.totalIncome.toFixed(2) },
-    { Metric: 'Total Expenses (Tax Deductions)', Amount: summary.totalExpenses.toFixed(2) },
-    { Metric: 'Net Profit', Amount: summary.netProfit.toFixed(2) },
-    { Metric: 'GST Payable (1A)', Amount: summary.totalGSTPayable.toFixed(2) },
-    { Metric: 'GST Claimable (1B)', Amount: summary.totalGSTClaimable.toFixed(2) },
-    { Metric: 'Net GST (1A − 1B)', Amount: netGst.toFixed(2) },
-    { Metric: "Director's Loan Balance", Amount: summary.directorsLoanBalance.toFixed(2) },
-  ]
+  const summaryData = buildExportSummaryRows(summary)
 
   const workbook = XLSX.utils.book_new()
   const worksheet = XLSX.utils.json_to_sheet(summaryData)

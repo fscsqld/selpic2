@@ -1,0 +1,96 @@
+---
+description: Learned — principles for cash vs GST-ex vs BAS whole-$ (user 2026-08-27)
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Reporting principles — cash / GST-ex / BAS whole dollars (learned 2026-08-27)
+
+## User concern (understood)
+
+Comparing many views at once creates apparent “errors”:
+
+- Income total **GST-inclusive** vs **GST-exclusive**  
+- Expense total **GST-inclusive** vs **GST-exclusive**  
+- Same for **each BAS quarter**  
+- Sum of quarterly BAS figures vs **FY** totals  
+- App vs **accountant’s lodged** pack  
+- Bank ATO refund **$18** vs ledger **$18.45**
+
+User asks: what **principles** should Selpic adopt so lodgment is trustworthy and differences are explained, not “bugs”?
+
+## Principle 0 — Three layers (never one number for everything)
+
+| Layer | Name | What it is | Rounding | Where in Selpic |
+|-------|------|------------|----------|-----------------|
+| **L1** | **Books (cash)** | Bank/cash face; usually GST-**inclusive** for taxable lines | Cents | History, Biz Intel P&L cards, Export Business Excel debit/credit |
+| **L2** | **Tax basis (GST-ex)** | Per-line GST removed (or full face if FREE); same txs as L1 | Cents until label | Metrics `*ExGst`, future Annual buckets after GST-ex 정렬, 1A/1B **before** trunc |
+| **L3** | **ATO lodge** | What you type/send on BAS / CTR / many return labels | **Whole $ leave cents out** | BAS Export labels, ATO Lodgment BAS/CTR `atoLabel` |
+
+**Invariant:** L1 ≠ L2 ≠ L3 by design. UI must **name the layer** on every total.
+
+## Principle 1 — One universe of transactions
+
+For a given period window (month / quarter / FY):
+
+- Same filtered txs feed L1 and L2 (business rules, personal out, etc.).  
+- L2 = f(each tx GST tag), **not** L1 × FY average `scaleMap` (that is the GST-ex 정렬 backlog).  
+- L3 = `roundAtoWholeDollars(L2_or_label_input)` **once per BAS label per period**.
+
+## Principle 2 — What must match
+
+| Must match | How |
+|------------|-----|
+| History rows ↔ Export Business/All Depts rows (period) | Same `dashboardTransactions` (+ business filter) |
+| Biz Intel GST 1A/1B (cents) ↔ BAS export **pre-trunc** for **same BAS window** | Same `calculateBusinessMetrics` + claim tags |
+| BAS Export **lodged** 1A/1B ↔ what accountant should type | L3 trunc |
+| Bank ATO GST refund ↔ lodged net refund | L3; leftover cents → BS rounding |
+
+## Principle 3 — What is allowed to differ (show as reconciliation, not error)
+
+| Difference | Why OK | How to show |
+|------------|--------|-------------|
+| L1 income − L2 income | = GST on sales (approx 1A in cents) | Dual line: “Cash incl.” / “Tax excl.” |
+| L1 expenses − L2 expenses | = claimable GST (1B cents) + FREE still in L1 | Same |
+| L2 quarter net GST vs L3 | Cents left out ($18.45 → $18) | “ATO whole $” + cents left out |
+| Σ(Q1…Q4 L3) vs L3(FY) | Truncation identity fails | Do not force equal; optional “BAS year rollup” note |
+| Σ(Q L3) vs accountant PDF | Timing, coding, amendments | Explain layers; **no variance UI** (user 2026-08-28) |
+| App Annual category vs accountant myTax line | Category / rounding / journals | Fix GST tags in ledger; do not force-match accountant PDF |
+
+## Principle 4 — Period discipline
+
+- **BAS:** always **one** GST cycle (Q or month). FY banner → **picker** (shipped).  
+- **P&L / History / Summary:** any From–To including FY (L1).  
+- **Annual / CTR:** FY window; tax basis L2 (+ L3 on labels).  
+- Never invent “FY BAS” as a single L3 form.
+
+## Principle 5 — Accountant pack vs Selpic
+
+**User intent (2026-08-28):** Accountant PDF/CTR was attached for **ATO form layout** (field IDs, BAS/Annual structure), **not** as SSOT for Selpic totals. Small number gaps vs accountant are acceptable; **no accountant variance panel**.
+
+| Compare | Expectation |
+|---------|-------------|
+| Same period, same coding, same GST tags | L2 cents close; L3 identical if both leave-cents-out |
+| Accountant rounded .60→19 (nearest $) | May differ from Selpic L3=18 — flag “ATO leave cents out” |
+| Different category / FREE vs claim | L1 may match bank; L2/1B diverge — fix tags, not “force totals” |
+| Selpic Annual vs accountant myTax line | Selpic = ledger per-line L2; accountant may differ — **no auto Δ UI** |
+
+## Principle 6 — Product rules when implementing UI/copy
+
+1. Every money headline states **Incl. GST** / **Excl. GST** / **ATO whole $**.  
+2. BAS screen: show L2 cents **and** L3 lodge amount side by side.  
+3. After lodge, banked refund clears to L3; **$0.xx** stays on BS rounding (already).  
+4. Year-end: reconcile **L1 FY** to bank; reconcile **Σ BAS L3** to ATO account — separately from L1.  
+5. **ATO GST-ex 정렬 (core)** — done: Annual/BAS/CTR use per-line ex, not scaleMap. **Remaining:** L1/L2 labels on Biz Intel + Export (Step 1 in roadmap).  
+6. Do **not** round L1 History to whole dollars to “match BAS.”
+
+## Mental model one-liner
+
+**Books keep cents (incl GST) → tax view strips GST in cents → BAS/return copy drops cents to whole dollars → bank follows ATO whole dollars; leftover cents are rounding, not missing cash.**
+
+## Resume
+
+- Principles: this file  
+- Cents/$18: `accounting-ato-bas-cents-vs-ledger.mdc`  
+- Annual per-line: `accounting-ato-rounding-gst-ex.mdc` (**「ATO GST-ex 정렬」**)  
+- BAS period UX: done (`accounting-export-pl-siblings.mdc`)

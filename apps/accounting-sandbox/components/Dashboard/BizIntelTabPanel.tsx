@@ -280,13 +280,9 @@ export function BizIntelTabPanel({
     if (accountType === 'individual') {
       return scopedLedgerTransactions
     }
-    // Match P&L banner From/To (e.g. Q3 Jan–Mar → 13 txs, not 64)
+    // Match P&L banner — full History ledger ∩ period (payroll out)
     if (historyMonthFilter === 'pl_period') {
-      return filterTransactionsForDateRange(
-        scopedLedgerTransactions,
-        viewPeriod.startDate,
-        viewPeriod.endDate
-      )
+      return dashboardTransactions
     }
     if (historyMonthFilter === 'all') {
       return scopedLedgerTransactions
@@ -298,6 +294,7 @@ export function BizIntelTabPanel({
     accountType,
     viewPeriod.startDate,
     viewPeriod.endDate,
+    dashboardTransactions,
   ])
 
   const taxProvisionTransactions = useMemo(() => {
@@ -436,12 +433,13 @@ export function BizIntelTabPanel({
             </>
           )}
 
-          {isStatementLedgerScope && activeStatementSnapshot && (
+          {isStatementLedgerScope && activeStatementSnapshot && accountType !== 'individual' && (
             <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900">
-              P&amp;L / GST figures use <strong>{activeStatementSnapshot.fileName}</strong> intersected
-          with the banner period ({dashboardTransactions.length} rows after date repair). History /
-          payroll outside this upload are excluded. Mis-parsed years (e.g. 267→2026) are corrected
-          so totals match BAS Q4.
+              Latest upload: <strong>{activeStatementSnapshot.fileName}</strong>. P&amp;L / GST use{' '}
+              <strong>All History</strong> intersected with the banner period (
+              {dashboardTransactions.length} rows · payroll journals excluded). Transaction History
+              can still filter to &quot;This statement&quot; only. OCR year repairs (e.g. 267→2026)
+              apply on statement-scoped views.
             </div>
           )}
 
@@ -780,7 +778,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={() => onExportExcel(true)}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="Business rows · same as Transaction History for the selected P&L period"
+                    title="Business rows · L1 Debit/Credit + L2 GST/Net · P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export Business Only (P&amp;L Period)
@@ -788,7 +786,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={() => onExportExcel(false)}
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="All departments · same as Transaction History for the selected P&L period"
+                    title="All departments · L1 Debit/Credit + L2 GST/Net · P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export All Depts (P&amp;L Period)
@@ -796,7 +794,7 @@ export function BizIntelTabPanel({
                   <button
                     onClick={onExportSummary}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-                    title="Financial summary · matches Biz Intel cards for the selected P&L period"
+                    title="L1 + L2 summary rows · matches Biz Intel cards for the P&L period"
                   >
                     <Download className="w-5 h-5" />
                     Export Financial Summary (P&amp;L Period)

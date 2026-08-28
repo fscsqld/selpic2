@@ -1,0 +1,69 @@
+---
+description: Handoff — Priority-1 ATO GST-ex + reporting layers (updated 2026-08-28)
+globs: apps/accounting-sandbox/**/ato-lodgment/**,apps/accounting-sandbox/**/gst/**
+alwaysApply: false
+---
+
+# Priority 1 — status & next steps (updated 2026-08-28)
+
+**Resume phrase:** **「순서대로」** / **「1번부터」** → Step 1 below (not GST-ex core — that shipped).
+
+Do **not** restart Track B, Export History, Excel GST, BAS quarter picker, or per-line GST-ex engine.
+
+---
+
+## Shipped (do not re-do)
+
+| Item | Status |
+|------|--------|
+| `lineAmountGstExclusive` + `aggregateGstExclusiveByCategory` | Done |
+| `buildMyTaxAnnualFields` — ex-GST maps; **scaleMap removed** | Done |
+| `BasGstFormPanel` G1/1A/1B/9 + `basLedgerCents` | Done |
+| `AnnualMyTaxFormPanel` 3-column + `annualLedgerCents` | Done |
+| `CtrItem6FormPanel` + `item6LedgerCents` | Done |
+| `lodgment-layer-hints` (G1−1A; FY vs Σ BAS) | Done |
+| `view-period-range` helpers + BAS scoping tests | Done |
+| Export P&L History + Excel GST=1B + BAS quarter UX + Motor≠airfare | Done |
+
+Accountant PDF/CTR: **layout reference only** — user does **not** want variance / Δ compare UI.
+
+---
+
+## Next work — strict order (user 2026-08-28)
+
+### Step 1 — Biz Intel + Export L1/L2 labels — **Done 2026-08-28**
+
+- `lib/reporting/reporting-layer-labels.ts` — shared L1/L2 copy + `buildExportSummaryRows`
+- Real-Time P&L, Business Summary, GST Summary — L1/L2 labels
+- Excel: L1 Debit/Credit, L2 GST/Net columns; Financial Summary export L1+L2 sections
+- Compliance ZIP P&L sheet + exporter copy
+
+### Step 2 — `filterBusinessLedgerForPeriod` in dashboard — **Done 2026-08-28**
+
+- `useAccountingDashboard` → company P&L uses full History ∩ banner (payroll out)
+- Transaction History “P&L period” filter matches `dashboardTransactions`
+- Statement-upload banner copy updated (P&L = All History, not single PDF only)
+
+### Step 3 — Doc refresh — after deploy when user asks
+
+---
+
+## Verify after Steps 1–2
+
+- Local **3001** + hard refresh prod after deploy  
+- Biz Intel cash totals **unchanged** vs before Step 1  
+- Ex-GST secondary lines ≈ Annual lodgment L2 for same period  
+- BAS picker + Lodgment 3-column panels still work  
+
+### Deploy
+
+Only when user asks: commit / push / `vercel --prod` from `apps/accounting-sandbox`.
+
+---
+
+## Do not on resume
+
+- Re-build accountant variance panel  
+- Re-investigate scaleMap / Export 14-row bug  
+- Force Σ BAS quarters = Annual L3  
+- Change L1 P&L to ex-GST by default  

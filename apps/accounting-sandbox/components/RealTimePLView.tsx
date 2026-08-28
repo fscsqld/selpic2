@@ -7,6 +7,12 @@ import {
   calculateBusinessMetrics,
   type Transaction,
 } from '@/lib/utils/business-calculations'
+import {
+  L1_CASH_SUBLABEL,
+  L2_EX_GST_LINE,
+  L2_TAX_NET_LINE,
+  REPORTING_LAYERS_BIZ_INTEL_FOOTER,
+} from '@/lib/reporting/reporting-layer-labels'
 
 interface RealTimePLViewProps {
   /** Already filtered to the selected dashboard period */
@@ -58,10 +64,10 @@ export function RealTimePLView({
           <p className="text-2xl font-bold text-green-600">
             {formatCurrency(metrics.totalIncome)}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Cash (GST incl.)</p>
+          <p className="text-xs text-gray-500 mt-1">{L1_CASH_SUBLABEL}</p>
           {showGstDual && (
             <p className="text-xs text-gray-600 mt-1.5">
-              Ex GST (est.):{' '}
+              {L2_EX_GST_LINE}:{' '}
               <span className="font-semibold text-green-800">
                 {formatCurrency(metrics.totalIncomeExGst)}
               </span>
@@ -78,11 +84,12 @@ export function RealTimePLView({
             {formatCurrency(metrics.totalExpenses)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Cash (GST incl.){showGstDual ? ' · FREE at face' : ''}
+            {L1_CASH_SUBLABEL}
+            {showGstDual ? ' · FREE at face' : ''}
           </p>
           {showGstDual && (
             <p className="text-xs text-gray-600 mt-1.5">
-              Ex GST (est.):{' '}
+              {L2_EX_GST_LINE}:{' '}
               <span className="font-semibold text-red-800">
                 {formatCurrency(metrics.totalExpensesExGst)}
               </span>
@@ -113,11 +120,11 @@ export function RealTimePLView({
             {formatCurrency(metrics.netProfit)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Cash · {metrics.netProfit >= 0 ? 'Profit' : 'Loss'} this period
+            {L1_CASH_SUBLABEL} · {metrics.netProfit >= 0 ? 'Profit' : 'Loss'} this period
           </p>
           {showGstDual && (
             <p className="text-xs text-gray-600 mt-1.5">
-              Tax (ex GST est.):{' '}
+              {L2_TAX_NET_LINE}:{' '}
               <span
                 className={`font-semibold ${
                   metrics.netProfitExGst >= 0 ? 'text-green-800' : 'text-red-800'
@@ -134,10 +141,7 @@ export function RealTimePLView({
         <p className="text-xs text-gray-500 text-center">
           Based on {transactions.length} transactions in {periodLabel}
         </p>
-        <p className="text-xs text-gray-400 text-center mt-1">
-          Matches Business Summary — cash (GST incl.) stays primary; tax estimate strips 1A/1B
-          only
-        </p>
+        <p className="text-xs text-gray-400 text-center mt-1">{REPORTING_LAYERS_BIZ_INTEL_FOOTER}</p>
       </div>
     </div>
   )

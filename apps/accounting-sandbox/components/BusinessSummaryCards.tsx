@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, Receipt, DollarSign, AlertTriangle, Eye, Edit2, Check, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/currency-format'
+import {
+  L1_CASH_SUBLABEL,
+  L2_EX_GST_LINE,
+  L2_TAX_NET_LINE,
+  REPORTING_LAYERS_BIZ_INTEL_FOOTER,
+} from '@/lib/reporting/reporting-layer-labels'
 
 interface BusinessSummaryCardsProps {
   totalIncome: number
@@ -107,17 +113,21 @@ export function BusinessSummaryCards({
   const incomeSubLabel = isIndividual
     ? 'All Income'
     : showGstDual
-      ? 'Cash (GST incl.)'
+      ? L1_CASH_SUBLABEL
       : 'Total Business'
   const expensesSubLabel = isIndividual
     ? 'All Expenses'
     : showGstDual
-      ? 'Cash (GST incl.) · FREE at face'
+      ? `${L1_CASH_SUBLABEL} · FREE at face`
       : 'Total Business'
 
   return (
     <div className="mb-8">
-      <h2 className="text-xl font-semibold mb-4">{summaryTitle}</h2>
+      <h2 className="text-xl font-semibold mb-1">{summaryTitle}</h2>
+      {!isIndividual && showGstDual && (
+        <p className="text-xs text-gray-500 mb-4">{REPORTING_LAYERS_BIZ_INTEL_FOOTER}</p>
+      )}
+      {(!showGstDual || isIndividual) && <div className="mb-4" />}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Income */}
         <div className="card bg-green-50 border-green-200">
@@ -132,7 +142,7 @@ export function BusinessSummaryCards({
               </p>
               {showGstDual && (
                 <p className="text-xs text-gray-600 mt-1.5">
-                  Ex GST (est.):{' '}
+                  {L2_EX_GST_LINE}:{' '}
                   <span className="font-semibold text-green-800">
                     {formatCurrency(incomeExGst)}
                   </span>
@@ -156,7 +166,7 @@ export function BusinessSummaryCards({
               </p>
               {showGstDual && (
                 <p className="text-xs text-gray-600 mt-1.5">
-                  Ex GST (est.):{' '}
+                  {L2_EX_GST_LINE}:{' '}
                   <span className="font-semibold text-blue-800">
                     {formatCurrency(expensesExGst)}
                   </span>
@@ -176,11 +186,11 @@ export function BusinessSummaryCards({
                 {formatCurrency(safeNetProfit)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {showGstDual ? 'Cash · Income − Expenses' : 'Income - Expenses'}
+                {showGstDual ? `${L1_CASH_SUBLABEL} · Income − Expenses` : 'Income - Expenses'}
               </p>
               {showGstDual && (
                 <p className="text-xs text-gray-600 mt-1.5">
-                  Tax (ex GST est.):{' '}
+                  {L2_TAX_NET_LINE}:{' '}
                   <span
                     className={`font-semibold ${
                       netExGst >= 0 ? 'text-green-800' : 'text-red-800'

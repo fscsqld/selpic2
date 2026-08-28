@@ -4,7 +4,7 @@ globs: apps/accounting-sandbox/**/*
 alwaysApply: false
 ---
 
-# Accounting — remaining work & priority (learned 2026-08-27)
+# Accounting — remaining work & priority (updated 2026-08-28)
 
 ## Status snapshot
 
@@ -12,36 +12,55 @@ alwaysApply: false
 |--------------|--------|
 | **A — Internal deploy** (SSO, prod URL, Admin link, History, backup ops) | **Done** (A1–A4 done; Cash single-delete shipped) |
 | **Cash Expense single-delete** | **Done** |
+| **Priority 1 core — per-line GST-ex + ATO Lodgment panels** | **Done** (scaleMap removed; BAS / Annual / CTR Item 6; L1/L2 hints on Lodgment) |
 | **B — Public / multi-tenant accounting** | **Backlog only** — do **not** start until internal product is stable and user explicitly opens B |
-| **B — Employee mobile My Payroll** | **Required inside B** (learned 2026-08-27) — see `accounting-track-b-employee-mobile-payroll.mdc` |
-| **`tsc` debt** (~180) + remove `ignoreBuildErrors` | **Done 2026-08-27** (`tsc --noEmit` = 0) |
+| **B — Employee mobile My Payroll** | **Required inside B** — see `accounting-track-b-employee-mobile-payroll.mdc` |
+| **`tsc` debt** + remove `ignoreBuildErrors` | **Done** (`tsc --noEmit` = 0) |
 
-Public (B) is **not** the only remaining accounting work. When B starts, **employee phone self-service** is mandatory — not optional polish.
+Public (B) is **not** the only remaining accounting work.
+
+## Next work — **strict order** (user 2026-08-28)
+
+Do these **in sequence**; do not skip ahead unless user explicitly reprioritizes.
+
+```
+Step 1) Biz Intel + Export L1/L2 layer labels — **Done 2026-08-28**
+Step 2) Wire filterBusinessLedgerForPeriod into useAccountingDashboard — **Done 2026-08-28**
+Step 3) Roadmap / handoff doc refresh — ongoing (rules updated in-session)
+```
+
+### Explicitly **not** in backlog
+
+- **Accountant CTR variance panel** — user confirmed accountant PDF was for **form/layout reference only**, not number reconciliation. Small Selpic vs accountant deltas are OK; no Δ-per-line UI.
 
 ## Remaining (internal / product) — besides B
 
-1. **ATO lodgment GST-ex alignment** — **learned 2026-08-27** (all income + expense Annual/BAS/CTR; replace FY `scaleMap`). See `accounting-ato-rounding-gst-ex.mdc`. Resume: **「ATO GST-ex 정렬」**  
-2. **Export Business Only (P&L Period)** — **Fixed 2026-08-27**: uses `dashboardTransactions` (full History for period). See `accounting-export-pl-period-history.mdc`.  
-3. **Excel GST column vs History Claim GST** — **Fixed 2026-08-27**: `gstAndNetForExport` (= History 1B). Live books were never wrong — Excel-only. See `accounting-excel-gst-vs-history.mdc`.  
-4. **Export BAS period UX** — **Done 2026-08-27**: FY → quarter picker; uses `gstReportingCycle`. See `accounting-export-pl-siblings.mdc`.  
-5. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
-6. **Employee login** — form exists; real employee account + login deferred  
-7. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
-8. **HR / compliance TODOs** (leave store, WorkCover persist, payslip load, audit log IDB) — incomplete modules; lower priority than core ledger/BAS unless user asks  
-9. **Journal / AR-AP fuller accrual UI** — optional richer DE; empty $0 screens OK (`accounting-reports-journal-arap-optional.mdc`)
+1. **Steps 1–3 above** — current focus  
+2. **Payroll-only role smoke** — deferred until a payroll-only test admin exists  
+3. **Employee login** — form exists; real employee account + login deferred  
+4. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+5. **HR / compliance TODOs** — leave store, WorkCover, etc. (unless user asks)  
+6. **Journal / AR-AP** — optional  
+
+### Done recently (do not restart)
+
+- Export P&L History + Excel GST=1B + BAS quarter UX + Motor≠airfare  
+- Per-line GST-ex (`lodgment-gst-exclusive.ts`), scaleMap removed  
+- `BasGstFormPanel`, `AnnualMyTaxFormPanel`, `CtrItem6FormPanel` + `lodgment-layer-hints`  
+- `view-period-range` helpers restored + BAS scoping tests  
+- `npm run dev:fresh` for local `.next` cache corruption  
 
 ## Recommended work order (when choosing “what next”)
 
 ```
-1) ATO copy figures wrong vs Xero-class / user asks tax basis?
-   → 「ATO GST-ex 정렬」 (per-line GST-ex for all Annual income+expense; BAS/CTR parity)
+1) Resume internal polish?
+   → Step 1 (L1/L2 labels) → Step 2 (dashboard ledger filter) → Step 3 (docs)
 
 2) Ops / roles when accounts exist?
    → Payroll-only smoke, then employee login
 
 3) Only when user explicitly starts public product?
-   → Track B (tenancy → auth **incl. employee role** → **mobile My Payroll** → onboarding → harden API)
-     Detail: `.cursor/rules/accounting-track-b-employee-mobile-payroll.mdc`
+   → Track B (tenancy → auth incl. employee role → mobile My Payroll → onboarding → harden API)
 
 4) Nice-to-have modules?
    → HR leave / WorkCover / audit IDB / AR-AP journals
@@ -50,16 +69,13 @@ Public (B) is **not** the only remaining accounting work. When B starts, **emplo
 ## Do not
 
 - Start Track B because “only public is left” — that is false  
+- Build accountant PDF variance / Δ compare UI — user rejected (layout reference only)  
 - Mix homepage (`selpic2`) webpack with accounting  
-- Treat ignoreBuildErrors as permanent forever without a cleanup plan  
-- Apply FY-wide cash→tax `scaleMap` as the long-term ATO model (user rejected; replace with per-line GST-ex)
+- Apply FY-wide cash→tax `scaleMap` as the long-term ATO model (removed)  
+- Change L1 P&L cash totals to “match accountant” or BAS  
 
 ## Resume phrases
 
-- ATO tax basis: **「ATO GST-ex 정렬」** / **「Annual per-line GST-ex」**  
-- P&L Excel rows: **「Export Business Only P&L History」** (row universe — done)  
-- Excel GST column: **「Excel GST = History 1B」** (done 2026-08-27)  
-- BAS Excel: **「BAS export = BAS period UX」** (done 2026-08-27)  
-- Period QA: **「Period Management 확인부터」** (done)  
-- Types: **「tsc 정리부터」** (done)  
-- Public: **「Track B 시작」** (only when intentional; includes employee mobile My Payroll)
+- **Next polish:** **「순서대로」** / **「1번부터」** → Step 1 L1/L2 labels  
+- ATO tax basis detail: **「Annual per-line GST-ex」** (core done; labels remain)  
+- Public: **「Track B 시작」** (only when intentional)

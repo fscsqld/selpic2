@@ -18,6 +18,7 @@ import {
   daysBetweenInclusive,
   gstSummaryCadenceLabel,
 } from '@/lib/gst/gst-summary-cadence'
+import { REPORTING_LAYERS_BIZ_INTEL_FOOTER } from '@/lib/reporting/reporting-layer-labels'
 
 
 interface GSTSummaryProps {
@@ -239,8 +240,9 @@ export function GSTSummary({
             {formatDateAustralian(dateRange.endDate)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Matches Business Summary and ATO Lodgment (income ÷ 11 / taxable expenses ÷ 11).
+            L2 cents (1A / 1B) — matches Business Summary. Export BAS uses L3 whole $.
           </p>
+          <p className="text-xs text-gray-400 mt-1">{REPORTING_LAYERS_BIZ_INTEL_FOOTER}</p>
           {(cadence === 'FY / Period' || cadence === 'Multi-quarter') && (
             <p className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
               FY / multi-quarter Net is a <strong>period book estimate</strong> (Σ 1A − Σ 1B), not
@@ -260,7 +262,7 @@ export function GSTSummary({
           <p className="text-3xl font-bold text-green-600">
             {formatCurrency(gstCollected)}
           </p>
-          <p className="text-sm text-gray-500 mt-1">Taxable sales ÷ 11</p>
+          <p className="text-sm text-gray-500 mt-1">L2 · Taxable sales ÷ 11 (cents)</p>
         </div>
 
         <div className="card">
@@ -269,7 +271,7 @@ export function GSTSummary({
             <h3 className="text-lg font-semibold">GST Paid (1B)</h3>
           </div>
           <p className="text-3xl font-bold text-red-600">{formatCurrency(gstPaid)}</p>
-          <p className="text-sm text-gray-500 mt-1">Claimable purchases ÷ 11</p>
+          <p className="text-sm text-gray-500 mt-1">L2 · Claimable purchases ÷ 11 (cents)</p>
         </div>
 
         <div className="card">

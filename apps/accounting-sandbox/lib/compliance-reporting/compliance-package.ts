@@ -24,6 +24,7 @@ import {
   resolvePriorPeriodDirectorAdvances,
 } from '@/lib/classification/directors-loan-balance'
 import { roundAtoWholeDollars } from '@/lib/utils/ato-lodgment-rounding'
+import { REPORTING_LAYERS_COMPLIANCE_NOTE } from '@/lib/reporting/reporting-layer-labels'
 
 export interface Transaction {
   id?: string
@@ -463,23 +464,24 @@ export async function generateFinancialStatements(data: CompliancePackageData): 
     ['Profit & Loss Statement'],
     [`Financial Year: ${financialYear.start.split('-')[0]}-${financialYear.end.split('-')[0]}`],
     [`Period: ${formatDateAustralian(financialYear.start)} to ${formatDateAustralian(financialYear.end)}`],
+    [REPORTING_LAYERS_COMPLIANCE_NOTE],
     incomeStatement.ledgerIntegrated
       ? [`Source: Ledger-integrated (${accountingSettings.basis} basis)`]
       : [''],
     [''],
-    ['Revenue', ''],
+    ['Revenue (L1 cash incl. GST unless noted)', ''],
     ...(revenueLines.length > 0
       ? revenueLines
       : [['Trading Revenue', incomeStatement.totalIncome] as [string, number]]),
-    ['Total Revenue', incomeStatement.totalIncome],
+    ['Total Revenue (L1)', incomeStatement.totalIncome],
     [''],
-    ['Expenses', ''],
+    ['Expenses (L1 cash incl. GST unless noted)', ''],
     ...(expenseLines.length > 0
       ? expenseLines
       : [['Total Expenses', incomeStatement.totalExpenses] as [string, number]]),
-    ['Total Expenses', incomeStatement.totalExpenses],
+    ['Total Expenses (L1)', incomeStatement.totalExpenses],
     [''],
-    ['Net Profit/(Loss)', incomeStatement.netProfit],
+    ['Net Profit/(Loss) (L1)', incomeStatement.netProfit],
   ]
 
   const balanceSheetData = [
