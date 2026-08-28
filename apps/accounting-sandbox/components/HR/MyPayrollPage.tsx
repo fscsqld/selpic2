@@ -288,6 +288,7 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
         <EmployeePasswordManagement
           employeeId={employee.employeeId}
           employeeName={employee.name}
+          hasPassword={!!employee.password}
           isSelfChange={true}
           onPasswordChanged={() => {
             // 비밀번호 변경 후 아무 작업 없음 (성공 메시지 표시됨)

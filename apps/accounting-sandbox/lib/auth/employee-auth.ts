@@ -119,18 +119,29 @@ export function getCurrentEmployeeSession(): EmployeeSession | null {
  */
 export async function setEmployeePassword(employeeId: string, newPassword: string): Promise<boolean> {
   try {
+    const trimmedId = employeeId.trim()
+    if (!trimmedId) return false
+
     await indexedDBStorage.init()
-    const employee = await indexedDBStorage.getEmployeeByEmployeeId(employeeId)
+    const employee = await indexedDBStorage.getEmployeeByEmployeeId(trimmedId)
 
     if (!employee) {
+      console.error('[employee-auth] setEmployeePassword: employee not found:', trimmedId)
+      return false
+    }
+
+    if (!employee.id) {
+      console.error('[employee-auth] setEmployeePassword: employee record missing id:', trimmedId)
       return false
     }
 
     const hashedPassword = hashPassword(newPassword)
-    employee.password = hashedPassword
-    employee.updatedAt = new Date().toISOString()
-
-    await indexedDBStorage.saveEmployee(employee)
+    await indexedDBStorage.saveEmployee({
+      ...employee,
+      employeeId: trimmedId,
+      password: hashedPassword,
+      updatedAt: new Date().toISOString(),
+    })
     return true
   } catch (error) {
     console.error('Failed to set employee password:', error)

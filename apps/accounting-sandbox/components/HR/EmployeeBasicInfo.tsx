@@ -21,6 +21,12 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
   const [isSaving, setIsSaving] = useState(false)
   const [success, setSuccess] = useState(false)
 
+  // Reload from IndexedDB after password save (or parent refresh) without keeping stale fields.
+  useEffect(() => {
+    const { password: _password, ...rest } = employee
+    setFormData(rest)
+  }, [employee.id, employee.updatedAt, employee.password])
+
   // Employee Type 변경 시 자동 처리
   useEffect(() => {
     if (formData.type === 'contractor') {
@@ -82,6 +88,8 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
       const updatedEmployee: Employee = {
         ...employee,
         ...formData,
+        // Password is only set via EmployeePasswordManagement — never wipe hash on basic-info save.
+        password: employee.password,
         // Contractor인 경우 TFN 제거, Superannuation Rate 0
         taxFileNumber: formData.type === 'contractor' ? undefined : formData.taxFileNumber,
         superannuationRate: formData.type === 'contractor' ? 0 : (formData.superannuationRate || 0.11),
@@ -117,9 +125,15 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
 
       {success && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-green-800">
-          Employee information saved successfully!
+          Employee information saved successfully! (Login password is saved separately — use Set Password
+          below.)
         </div>
       )}
+
+      <p className="mb-4 text-xs text-gray-500">
+        <strong>Save Changes</strong> stores name, ID, and employment fields only. To enable employee
+        login, expand <strong>Set Password</strong> at the bottom and click that button.
+      </p>
 
       <div className="space-y-6">
         {/* Personal Information */}
@@ -562,8 +576,9 @@ export function EmployeeBasicInfo({ employee, onUpdate }: EmployeeBasicInfoProps
         {/* Password Management */}
         <div className="pt-6 border-t border-gray-200">
           <EmployeePasswordManagement
-            employeeId={employee.employeeId}
-            employeeName={employee.name}
+            employeeId={formData.employeeId || employee.employeeId}
+            employeeName={formData.name || employee.name}
+            hasPassword={!!employee.password}
             isSelfChange={false}
             onPasswordChanged={onUpdate}
           />

@@ -15,6 +15,8 @@ import { getCurrentEmployeeSession } from '@/lib/auth/employee-auth'
 interface EmployeePasswordManagementProps {
   employeeId: string
   employeeName: string
+  /** When false, panel opens by default and button reads "Set Password". */
+  hasPassword?: boolean
   isSelfChange?: boolean // 직원이 본인 비밀번호를 변경하는 경우
   onPasswordChanged?: () => void
 }
@@ -22,6 +24,7 @@ interface EmployeePasswordManagementProps {
 export function EmployeePasswordManagement({
   employeeId,
   employeeName,
+  hasPassword = false,
   isSelfChange = false,
   onPasswordChanged
 }: EmployeePasswordManagementProps) {
@@ -35,7 +38,7 @@ export function EmployeePasswordManagement({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isExpanded, setIsExpanded] = useState(() => {
-    // localStorage에서 이전 상태 불러오기 (기본값: false - 접힌 상태)
+    if (!hasPassword) return true
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('changePassword_expanded')
       return saved === 'true'
@@ -43,14 +46,17 @@ export function EmployeePasswordManagement({
     return false
   })
 
-  // 컴포넌트 마운트 시 필드 초기화 (브라우저 자동완성 방지)
+  // 컴포넌트 마운트 / 직원 변경 시 필드 초기화 (브라우저 자동완성 방지)
   useEffect(() => {
     setCurrentPassword('')
     setNewPassword('')
     setConfirmPassword('')
     setError(null)
     setSuccess(false)
-  }, [])
+    if (!hasPassword) {
+      setIsExpanded(true)
+    }
+  }, [employeeId, hasPassword])
 
   // 접기/펼치기 상태를 localStorage에 저장
   const toggleExpanded = () => {
@@ -163,7 +169,11 @@ export function EmployeePasswordManagement({
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-semibold flex items-center gap-2">
           <Lock className="w-6 h-6" />
-          {isSelfChange ? 'Change My Password' : 'Change Password'}
+          {isSelfChange
+            ? 'Change My Password'
+            : hasPassword
+              ? 'Change Password'
+              : 'Set Password (employee login)'}
         </h3>
         <button
           onClick={toggleExpanded}
@@ -192,7 +202,7 @@ export function EmployeePasswordManagement({
           {success && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md flex items-center gap-2 text-green-800">
               <CheckCircle className="w-5 h-5" />
-              <span>Password changed successfully!</span>
+              <span>{hasPassword ? 'Password changed successfully!' : 'Password set — you can log in now.'}</span>
             </div>
           )}
 
@@ -200,6 +210,12 @@ export function EmployeePasswordManagement({
         {!isSelfChange && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
             <strong>Employee:</strong> {employeeName} ({employeeId})
+            {!hasPassword && (
+              <p className="mt-2 text-blue-900">
+                No login password yet — set one here, then use this exact Employee ID at{' '}
+                <span className="font-mono">/employee/login</span>.
+              </p>
+            )}
           </div>
         )}
 
@@ -287,12 +303,17 @@ export function EmployeePasswordManagement({
         </div>
 
             <button
-              onClick={handleChangePassword}
-              disabled={isChanging}
+              type="button"
+              onClick={() => void handleChangePassword()}
+              disabled={isChanging || !employeeId?.trim()}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" />
-              {isChanging ? 'Changing Password...' : 'Change Password'}
+              {isChanging
+                ? 'Saving password...'
+                : hasPassword
+                  ? 'Change Password'
+                  : 'Set Password'}
             </button>
           </div>
         </>
