@@ -73,6 +73,13 @@ export interface BasLodgmentResult {
   validation: LodgmentValidation
   uncategorisedCount: number
   uncategorisedAmount: number
+  /** L2 cents for BAS GST labels (ledger vs ATO whole $). */
+  basLedgerCents?: {
+    g1: number
+    gstOnSales: number
+    gstOnPurchases: number
+    gstNet: number
+  }
 }
 
 export interface AnnualLodgmentResult {

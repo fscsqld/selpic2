@@ -322,21 +322,24 @@ export function computeBasLodgment(
   // Prefer Biz Intel ledger metrics (single source of truth) for G1 / 1A / 1B.
   // gst-breakdown still supplies G2/G3 and cross-checks when metrics are empty.
   // ATO labels: whole dollars (leave cents out) — ledger stays in cents elsewhere.
-  const g1 = atoLabel(
-    metrics.totalIncome > 0
-      ? metrics.totalIncome
-      : gstBreakdown.g1TotalSalesGstInclusive
+  const gstCollectedLedger = roundMoney(
+    metrics.gstPayable > 0 ? metrics.gstPayable : gstBreakdown.gstOnSales
   )
+  const gstPaidLedger = roundMoney(
+    metrics.gstClaimable > 0 ? metrics.gstClaimable : gstBreakdown.gstOnPurchases
+  )
+  const g1Ledger = roundMoney(
+    metrics.totalIncome > 0 ? metrics.totalIncome : gstBreakdown.g1TotalSalesGstInclusive
+  )
+  const gstNetLedger = roundMoney(gstCollectedLedger - gstPaidLedger)
+
+  const g1 = atoLabel(g1Ledger)
   const g2 = atoLabel(gstBreakdown.g2ExportSales)
   // Do not treat ATO refunds / non-sales as G3 — only real GST-free sales
   const g3 = atoLabel(gstBreakdown.g3OtherGstFreeSales)
 
-  const gstCollected = atoLabel(
-    metrics.gstPayable > 0 ? metrics.gstPayable : gstBreakdown.gstOnSales
-  )
-  const gstPaid = atoLabel(
-    metrics.gstClaimable > 0 ? metrics.gstClaimable : gstBreakdown.gstOnPurchases
-  )
+  const gstCollected = atoLabel(gstCollectedLedger)
+  const gstPaid = atoLabel(gstPaidLedger)
   // Net from already-truncated labels (matches ATO 1A − 1B), not truncate(cents net)
   const gstNet = gstCollected - gstPaid
 
@@ -536,6 +539,12 @@ export function computeBasLodgment(
     validation,
     uncategorisedCount: count,
     uncategorisedAmount: amount,
+    basLedgerCents: {
+      g1: g1Ledger,
+      gstOnSales: gstCollectedLedger,
+      gstOnPurchases: gstPaidLedger,
+      gstNet: gstNetLedger,
+    },
   }
 }
 

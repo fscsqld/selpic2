@@ -67,6 +67,7 @@ import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import type { LodgmentSnapshot } from '@/lib/storage/lodgment-snapshot-types'
 import { ReportFooter } from '@/components/Reports/ReportFooter'
 import { LodgmentFieldPanel } from '@/components/Lodgment/LodgmentFieldPanel'
+import { BasGstFormPanel } from '@/components/Lodgment/BasGstFormPanel'
 import { BasPeriodSummaryCard } from '@/components/Lodgment/BasPeriodSummaryCard'
 import { AnnualIncomeSummaryCard } from '@/components/Lodgment/AnnualIncomeSummaryCard'
 import { BasSnapshotComparePanel } from '@/components/Lodgment/BasSnapshotComparePanel'
@@ -1645,7 +1646,10 @@ export function ATOLodgmentGuide({
       </LodgmentCollapsibleSection>
 
       {activeTab === 'bas' && basResult && !viewingSnapshot && (
-        <BasPeriodSummaryCard result={basResult} />
+        <>
+          <BasGstFormPanel result={basResult} />
+          <BasPeriodSummaryCard result={basResult} />
+        </>
       )}
 
       {activeTab === 'annual' && annualResult && !viewingSnapshot && (
