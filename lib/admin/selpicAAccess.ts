@@ -41,7 +41,11 @@ export function canSeeSelpicAQuickAction(admin: SelpicAAdminUser): boolean {
   if (!admin) return false
   if (canUseSelpicAAdminAccess(admin)) return true
   if (isSelpicAPayrollOnlyAdmin(admin)) return true
-  return adminHasPermission(admin, 'accounting:read')
+  const role = admin.role === 'super_admin' || admin.role === 'admin' ? admin.role : 'admin'
+  return adminHasPermission(
+    { role, permissions: admin.permissions || [] },
+    'accounting:read'
+  )
 }
 
 export function buildSelpicAAdminSsoUrl(admin: NonNullable<SelpicAAdminUser>): string {

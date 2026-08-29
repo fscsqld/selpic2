@@ -5,14 +5,23 @@ export interface PermissionPreset {
   name: string
   description: string
   permissions: string[]
-  category: 'read-only' | 'content' | 'order' | 'customer-service' | 'marketing' | 'fundraising' | 'accounting' | 'custom'
+  category:
+    | 'read-only'
+    | 'content'
+    | 'order'
+    | 'customer-service'
+    | 'marketing'
+    | 'fundraising'
+    | 'accounting'
+    | 'system'
+    | 'custom'
 }
 
 export const permissionPresets: PermissionPreset[] = [
   {
     id: 'read-only',
     name: 'Read-only admin',
-    description: 'View dashboard, catalog, orders, and reports without edit access.',
+    description: 'View dashboard, catalog, orders, reports, and most modules without edit access.',
     category: 'read-only',
     permissions: [
       'dashboard:read',
@@ -25,6 +34,10 @@ export const permissionPresets: PermissionPreset[] = [
       'community:read',
       'images:read',
       'invoices:read',
+      'integrations:read',
+      'documents:read',
+      'newsletter:read',
+      'bespoke:read',
       'fundraising:read',
     ],
   },
@@ -60,6 +73,7 @@ export const permissionPresets: PermissionPreset[] = [
       'invoices:read',
       'invoices:write',
       'documents:read',
+      'documents:write',
     ],
   },
   {
@@ -80,6 +94,13 @@ export const permissionPresets: PermissionPreset[] = [
     ],
   },
   {
+    id: 'user-manager',
+    name: 'Customer accounts',
+    description: 'View and edit registered customers and VIP grades.',
+    category: 'customer-service',
+    permissions: ['dashboard:read', 'users:read', 'users:write'],
+  },
+  {
     id: 'marketing-manager',
     name: 'Marketing & analytics',
     description: 'Sales overview, traffic, newsletter, and community publishing.',
@@ -96,15 +117,24 @@ export const permissionPresets: PermissionPreset[] = [
     ],
   },
   {
+    id: 'documents-sender',
+    name: 'Document sender',
+    description: 'Invoice & document sender workspace — view and email PDFs.',
+    category: 'order',
+    permissions: [
+      'dashboard:read',
+      'documents:read',
+      'documents:write',
+      'invoices:read',
+      'invoices:write',
+    ],
+  },
+  {
     id: 'fundraising-manager',
     name: 'Fundraising operations',
     description: 'Partner registry, change requests, documents, and settings (not payout).',
     category: 'fundraising',
-    permissions: [
-      'dashboard:read',
-      'fundraising:read',
-      'fundraising:write',
-    ],
+    permissions: ['dashboard:read', 'fundraising:read', 'fundraising:write'],
   },
   {
     id: 'fundraising-finance',
@@ -116,16 +146,31 @@ export const permissionPresets: PermissionPreset[] = [
   {
     id: 'accounting-manager',
     name: 'Selpic A (full ledger)',
-    description: 'Open Selpic A with full accounting, BAS, and HR & Payroll admin access.',
+    description: 'Open Selpic A with Admin Access — full accounting, BAS, and HR & Payroll.',
     category: 'accounting',
     permissions: ['dashboard:read', 'accounting:read', 'accounting:admin'],
   },
   {
     id: 'payroll-only',
     name: 'Selpic A (payroll only)',
-    description: 'My Payroll / timesheet entry only — no full ledger.',
+    description: 'See Selpic A and use Staff Access (employee login) for payslips/timesheets.',
     category: 'accounting',
     permissions: ['dashboard:read', 'payroll:access'],
+  },
+  {
+    id: 'system-settings',
+    name: 'System Management',
+    description: 'Admin Settings — general, security, notifications, media, activity log, sessions.',
+    category: 'system',
+    permissions: ['dashboard:read', 'system:admin'],
+  },
+  {
+    id: 'admin-registry',
+    name: 'Administrator registry',
+    description:
+      'Administrator settings — add/remove staff emails and permissions. Prefer with role super_admin.',
+    category: 'system',
+    permissions: ['dashboard:read', 'admin:manage'],
   },
 ]
 
@@ -400,8 +445,8 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
   },
   'system:admin': {
     permission: 'system:admin',
-    name: 'Store settings',
-    description: 'General, security, notifications, and media settings.',
+    name: 'System Management',
+    description: 'Admin Settings — general, security, notifications, media, activity log, and sessions.',
     category: 'System Management',
     accessiblePages: ['/admin/settings'],
   },

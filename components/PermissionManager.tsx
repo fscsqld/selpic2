@@ -34,9 +34,17 @@ export default function PermissionManager({
 }: PermissionManagerProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
+  /** Multiple presets may be active; permissions are the union of their sets (plus manual tweaks). */
+  const [selectedPresets, setSelectedPresets] = useState<Set<string>>(new Set())
   const [expandedPermissions, setExpandedPermissions] = useState<Set<string>>(new Set())
   const [showDependencyWarning, setShowDependencyWarning] = useState(false)
+
+  const availablePermsOf = (preset: PermissionPreset): string[] => {
+    if (!preset.permissions || !Array.isArray(availablePermissions)) return []
+    return preset.permissions.filter(
+      (p) => p && typeof p === 'string' && availablePermissions.includes(p)
+    )
+  }
 
   // Filter permissions based on search and category
   const filteredPermissions = useMemo(() => {
@@ -91,21 +99,37 @@ export default function PermissionManager({
     return groups
   }, [filteredPermissions])
 
-  // Handle preset selection
+  /** Toggle preset: add = union permissions; remove = drop that preset's perms unless still covered by another active preset. */
   const handlePresetSelect = (presetId: string) => {
     if (!permissionPresets || !Array.isArray(permissionPresets)) return
-    const preset = permissionPresets.find(p => p && p.id === presetId)
-    if (preset && preset.permissions && Array.isArray(preset.permissions) && 
-        availablePermissions && Array.isArray(availablePermissions) && availablePermissions.length > 0) {
-      // Only include permissions that are available
-      const presetPermissions = preset.permissions.filter(p => 
-        p && typeof p === 'string' && availablePermissions.includes(p)
-      )
-      // Auto-include dependencies
-      const permissionsWithDeps = autoIncludeDependencies(presetPermissions)
-      setSelectedPreset(presetId)
-      onPermissionsChange(permissionsWithDeps)
+    const preset = permissionPresets.find((p) => p && p.id === presetId)
+    if (!preset || !Array.isArray(availablePermissions) || availablePermissions.length === 0) return
+
+    const presetPermissions = autoIncludeDependencies(availablePermsOf(preset))
+    const nextSelected = new Set(selectedPresets)
+    const current = Array.isArray(selectedPermissions) ? [...selectedPermissions] : []
+
+    if (nextSelected.has(presetId)) {
+      nextSelected.delete(presetId)
+      const stillCovered = new Set<string>()
+      for (const id of nextSelected) {
+        const other = permissionPresets.find((p) => p && p.id === id)
+        if (!other) continue
+        for (const p of autoIncludeDependencies(availablePermsOf(other))) {
+          stillCovered.add(p)
+        }
+      }
+      const removed = new Set(presetPermissions)
+      const nextPerms = current.filter((p) => !removed.has(p) || stillCovered.has(p))
+      setSelectedPresets(nextSelected)
+      onPermissionsChange(autoIncludeDependencies(nextPerms))
+      return
     }
+
+    nextSelected.add(presetId)
+    const merged = autoIncludeDependencies([...new Set([...current, ...presetPermissions])])
+    setSelectedPresets(nextSelected)
+    onPermissionsChange(merged)
   }
 
   // Handle permission toggle
@@ -133,7 +157,8 @@ export default function PermissionManager({
       }
     }
     
-    setSelectedPreset(null) // Clear preset selection when manually changing
+    // Manual edits clear preset highlights (permissions may no longer match a full preset)
+    setSelectedPresets(new Set())
     onPermissionsChange(newPermissions)
   }
 
@@ -196,27 +221,35 @@ export default function PermissionManager({
 
   return (
     <div className="space-y-4">
-      {/* Preset Selection */}
+      {/* Preset Selection — multi-select: click to add, click again to remove */}
       <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Permission Preset Selection
         </label>
+        <p className="text-xs text-gray-500 mb-2">
+          Click a preset to add its permissions. Click again to remove that preset. Select several presets to combine roles.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {permissionPresets && Array.isArray(permissionPresets) && permissionPresets.length > 0 ? (
             permissionPresets.map(preset => {
               if (!preset || !preset.id) return null
+              const isOn = selectedPresets.has(preset.id)
               return (
                 <button
                   key={preset.id}
                   type="button"
                   onClick={() => handlePresetSelect(preset.id)}
+                  aria-pressed={isOn}
                   className={`text-left p-3 rounded-md border transition-colors ${
-                    selectedPreset === preset.id
-                      ? 'border-indigo-500 bg-indigo-50'
+                    isOn
+                      ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
                       : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                 >
-                  <div className="font-medium text-sm text-gray-900">{preset.name || 'Unknown'}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium text-sm text-gray-900">{preset.name || 'Unknown'}</div>
+                    {isOn && <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />}
+                  </div>
                   <div className="text-xs text-gray-500 mt-1">{preset.description || ''}</div>
                   <div className="text-xs text-gray-400 mt-1">
                     {preset.permissions && Array.isArray(preset.permissions) && availablePermissions && Array.isArray(availablePermissions)
@@ -230,16 +263,16 @@ export default function PermissionManager({
             <div className="text-sm text-gray-500 col-span-2">No presets available.</div>
           )}
         </div>
-        {selectedPreset && (
+        {selectedPresets.size > 0 && (
           <button
             type="button"
             onClick={() => {
-              setSelectedPreset(null)
+              setSelectedPresets(new Set())
               onPermissionsChange([])
             }}
             className="mt-2 text-xs text-indigo-600 hover:text-indigo-800"
           >
-            Clear Preset Selection
+            Clear all presets and permissions
           </button>
         )}
       </div>

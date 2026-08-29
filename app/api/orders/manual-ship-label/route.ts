@@ -103,7 +103,12 @@ export async function POST(req: Request) {
 
     const id = `ORD-${Date.now().toString(36)}`
     const now = new Date().toISOString()
-    const performedBy = (admin.email || admin.user_metadata?.full_name || admin.id || 'admin').slice(0, 120)
+    const performedBy = (
+      gate.user.email ||
+      (typeof gate.user.user_metadata?.full_name === 'string' ? gate.user.user_metadata.full_name : '') ||
+      gate.user.id ||
+      'admin'
+    ).slice(0, 120)
 
     const order: OrderRecord = {
       id,

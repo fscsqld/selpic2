@@ -8,6 +8,7 @@ import {
   DEFAULT_ADMIN_PERMISSIONS,
   SUPER_ADMIN_DEFAULT_PERMISSIONS,
 } from './adminPermissionCatalog'
+import { setSiteConfigCloudWritesAllowed } from './siteConfigClient'
 
 export interface AdminUser {
   username: string
@@ -315,6 +316,9 @@ export const useAdminAuth = create<AdminAuthState>()(
 
       logout: () => {
         const { adminUser } = get()
+
+        // Stop CMS cloud upserts before clearing the Supabase session (avoids 401 toast on login).
+        setSiteConfigCloudWritesAllowed(false)
 
         if (typeof window !== 'undefined') {
           try {

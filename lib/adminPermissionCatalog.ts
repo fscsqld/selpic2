@@ -68,7 +68,7 @@ export const ADMIN_PERMISSION_IMPLIES: Partial<Record<AdminPermission, AdminPerm
  * Legacy assignments still in production registries — treated as satisfying the new permission.
  * Remove entries only after migrating all admin_email_registry rows.
  */
-export const ADMIN_PERMISSION_LEGACY_ALIASES: Partial<Record<AdminPermission, AdminPermission[]>> = {
+export const ADMIN_PERMISSION_LEGACY_ALIASES: Partial<Record<AdminPermission, string[]>> = {
   'traffic:read': ['analytics:read'],
   'fundraising:read': ['analytics:read'],
   'fundraising:write': ['analytics:read'],
@@ -82,6 +82,7 @@ export const ADMIN_PERMISSION_LEGACY_ALIASES: Partial<Record<AdminPermission, Ad
   'bespoke:read': ['messages:read'],
   'bespoke:write': ['messages:write'],
   'accounting:read': ['accounting:admin', 'system:admin'],
+  /** Older JWT/registry values still seen in the wild */
   'accounting:admin': ['system:admin', 'accounting:full'],
   'payroll:access': ['payroll:read'],
 }

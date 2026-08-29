@@ -15,7 +15,8 @@ Admin CMS edits persist to `public.site_configs` (`config_key = storefront_cms`)
 - Browser **must not** `supabase.from('site_configs').upsert` (RLS blocks `anon`; legacy local admin has no JWT).
 - Writes go through `PUT /api/admin/site-config` (`requireSupabaseAdminUser` + service role).
 - Client: `lib/siteConfigClient.ts` → `upsertSiteConfigValue` → same-origin fetch with `credentials: 'same-origin'`.
-- Autosave stays admin-only (`SiteConfigStoreAutosave` on `/admin`).
+- Autosave stays admin-only (`SiteConfigStoreAutosave` on `/admin` while logged in).
+- On logout, `setSiteConfigCloudWritesAllowed(false)` cancels pending upserts so template remount / pagehide cannot POST with a dead session (no false “Save failed” on the login page).
 
 ## Payload shape
 

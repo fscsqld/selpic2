@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import { useAdminAuth } from '@/lib/adminAuth'
 import { getLastSiteConfigWriteStatus } from '@/lib/siteConfigClient'
 
 type Status =
@@ -10,10 +11,13 @@ type Status =
   | { kind: 'saved'; source: 'state' | 'string'; at: number }
   | { kind: 'error'; source: 'state' | 'string'; at: number; message: string }
 
-/** Floating CMS cloud-save indicator — admin only; not for storefront shoppers. */
+/** Floating CMS cloud-save indicator — authenticated admin only; not login or storefront. */
 export default function SiteConfigWriteStatusBadge() {
   const pathname = usePathname() || ''
+  const isLoggedIn = useAdminAuth((s) => s.isLoggedIn)
+  const isLoginPage = pathname === '/admin/login' || pathname.startsWith('/admin/login/')
   const isAdminArea = pathname === '/admin' || pathname.startsWith('/admin/')
+  const showBadge = isAdminArea && isLoggedIn && !isLoginPage
 
   const [status, setStatus] = useState<Status>(() => getLastSiteConfigWriteStatus() as Status)
 
@@ -27,7 +31,7 @@ export default function SiteConfigWriteStatusBadge() {
     return () => window.removeEventListener('site-config-write-status', handler)
   }, [])
 
-  if (!isAdminArea) return null
+  if (!showBadge) return null
   if (status.kind === 'idle') return null
 
   const base =
@@ -55,4 +59,3 @@ export default function SiteConfigWriteStatusBadge() {
     </div>
   )
 }
-
