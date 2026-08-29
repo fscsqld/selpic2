@@ -1,4 +1,4 @@
-import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
+import { ADMIN_PERMISSION_CATALOG, STANDARD_STAFF_PERMISSIONS } from '@/lib/adminPermissionCatalog'
 
 export interface PermissionPreset {
   id: string
@@ -15,9 +15,20 @@ export interface PermissionPreset {
     | 'accounting'
     | 'system'
     | 'custom'
+  /** Highlight in PermissionManager for one-click staff onboarding. */
+  recommended?: boolean
 }
 
 export const permissionPresets: PermissionPreset[] = [
+  {
+    id: 'standard-staff',
+    name: 'Standard staff',
+    description:
+      'Recommended for role admin — catalog, orders, messages, documents, and reports. No System Management or Administrator registry.',
+    category: 'custom',
+    recommended: true,
+    permissions: [...STANDARD_STAFF_PERMISSIONS],
+  },
   {
     id: 'read-only',
     name: 'Read-only admin',

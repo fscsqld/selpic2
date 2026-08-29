@@ -18,12 +18,19 @@ function check(name: string, ok: boolean, detail?: string) {
   cases.push({ name, ok, detail })
 }
 
-check('omitted flag is not a request', normalizeSampleKitRequest({}).ok === true && normalizeSampleKitRequest({}).sampleKitRequested === false)
-check('JSON false is not a request', normalizeSampleKitRequest({ requested: false }).sampleKitRequested === false)
+check('omitted flag is not a request', (() => {
+  const r = normalizeSampleKitRequest({})
+  return r.ok === true && r.sampleKitRequested === false
+})())
+check('JSON false is not a request', (() => {
+  const r = normalizeSampleKitRequest({ requested: false })
+  return r.ok === true && r.sampleKitRequested === false
+})())
 check('string "false" is not a request (Boolean trap)', !isSampleKitRequestedFlag('false'))
-check('unchecked leftover print name is ignored', {
-  ...normalizeSampleKitRequest({ requested: false, printName: 'Chloe' }),
-}.sampleKitRequested === false)
+check('unchecked leftover print name is ignored', (() => {
+  const r = normalizeSampleKitRequest({ requested: false, printName: 'Chloe' })
+  return r.ok === true && r.sampleKitRequested === false
+})())
 
 const missingName = normalizeSampleKitRequest({ requested: true, printName: '   ' })
 check('requested without print name fails', missingName.ok === false)

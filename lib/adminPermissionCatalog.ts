@@ -89,6 +89,12 @@ export const ADMIN_PERMISSION_LEGACY_ALIASES: Partial<Record<AdminPermission, st
 
 export const SUPER_ADMIN_DEFAULT_PERMISSIONS: AdminPermission[] = [...ADMIN_PERMISSION_CATALOG]
 
+/**
+ * Day-to-day storefront staff (role `admin`).
+ * Includes catalog, orders, CS, documents, and read-only fundraising/analytics.
+ * Does NOT include System Management, Administrator registry, Selpic A ledger/payroll,
+ * fundraising payout/write, or newsletter campaign send — assign those via specialty presets.
+ */
 export const DEFAULT_ADMIN_PERMISSIONS: AdminPermission[] = [
   'dashboard:read',
   'products:read',
@@ -98,7 +104,9 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermission[] = [
   'users:read',
   'analytics:read',
   'orders:read',
+  'orders:write',
   'messages:read',
+  'messages:write',
   'community:read',
   'images:read',
   'images:write',
@@ -106,9 +114,14 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermission[] = [
   'invoices:write',
   'traffic:read',
   'integrations:read',
+  'integrations:write',
   'documents:read',
+  'documents:write',
   'newsletter:read',
   'bespoke:read',
+  'bespoke:write',
   'fundraising:read',
-  'system:admin',
 ]
+
+/** Alias used by the recommended PermissionManager preset (keep in sync with DEFAULT_ADMIN_PERMISSIONS). */
+export const STANDARD_STAFF_PERMISSIONS: AdminPermission[] = [...DEFAULT_ADMIN_PERMISSIONS]

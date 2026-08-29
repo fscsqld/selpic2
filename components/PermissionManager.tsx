@@ -224,16 +224,22 @@ export default function PermissionManager({
       {/* Preset Selection — multi-select: click to add, click again to remove */}
       <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Permission Preset Selection
+          Permission presets ({permissionPresets?.length ?? 0} total)
         </label>
         <p className="text-xs text-gray-500 mb-2">
-          Click a preset to add its permissions. Click again to remove that preset. Select several presets to combine roles.
+          Each card shows how many catalog permissions that preset grants (not the number of presets).
+          Click to add; click again to remove. Combine several for specialty roles. Prefer{' '}
+          <span className="font-medium text-gray-700">Standard staff</span> for day-to-day admins.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {permissionPresets && Array.isArray(permissionPresets) && permissionPresets.length > 0 ? (
             permissionPresets.map(preset => {
               if (!preset || !preset.id) return null
               const isOn = selectedPresets.has(preset.id)
+              const permCount =
+                preset.permissions && Array.isArray(preset.permissions) && availablePermissions && Array.isArray(availablePermissions)
+                  ? preset.permissions.filter((p) => availablePermissions.includes(p)).length
+                  : 0
               return (
                 <button
                   key={preset.id}
@@ -243,18 +249,25 @@ export default function PermissionManager({
                   className={`text-left p-3 rounded-md border transition-colors ${
                     isOn
                       ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
+                      : preset.recommended
+                        ? 'border-emerald-300 bg-emerald-50/60 hover:border-emerald-400'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium text-sm text-gray-900">{preset.name || 'Unknown'}</div>
+                    <div className="font-medium text-sm text-gray-900 flex flex-wrap items-center gap-1.5">
+                      {preset.name || 'Unknown'}
+                      {preset.recommended && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                          Recommended
+                        </span>
+                      )}
+                    </div>
                     {isOn && <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">{preset.description || ''}</div>
                   <div className="text-xs text-gray-400 mt-1">
-                    {preset.permissions && Array.isArray(preset.permissions) && availablePermissions && Array.isArray(availablePermissions)
-                      ? preset.permissions.filter(p => availablePermissions.includes(p)).length
-                      : 0} permissions
+                    Grants {permCount} permission{permCount === 1 ? '' : 's'}
                   </div>
                 </button>
               )

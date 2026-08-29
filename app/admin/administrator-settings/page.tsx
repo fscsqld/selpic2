@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import AdminRoute from '@/components/AdminRoute'
 import PermissionManager from '@/components/PermissionManager'
-import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
+import { ADMIN_PERMISSION_CATALOG, DEFAULT_ADMIN_PERMISSIONS, SUPER_ADMIN_DEFAULT_PERMISSIONS } from '@/lib/adminPermissionCatalog'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
@@ -38,7 +38,7 @@ export default function AdministratorSettingsPage() {
   const [newRow, setNewRow] = useState({
     email: '',
     role: 'admin' as 'admin' | 'super_admin',
-    permissions: [] as string[],
+    permissions: [...DEFAULT_ADMIN_PERMISSIONS] as string[],
   })
 
   const selfEmail = (adminUser?.email ?? '').trim().toLowerCase()
@@ -73,7 +73,7 @@ export default function AdministratorSettingsPage() {
     if (result.ok) {
       showMsg('Administrator saved. They receive these permissions on next sign-in (JWT sync).', true)
       setIsCreateOpen(false)
-      setNewRow({ email: '', role: 'admin', permissions: [] })
+      setNewRow({ email: '', role: 'admin', permissions: [...DEFAULT_ADMIN_PERMISSIONS] })
     } else {
       showMsg(result.error || 'Could not create entry.', false)
     }
@@ -170,7 +170,10 @@ export default function AdministratorSettingsPage() {
             </div>
             <button
               type="button"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setNewRow({ email: '', role: 'admin', permissions: [...DEFAULT_ADMIN_PERMISSIONS] })
+                setIsCreateOpen(true)
+              }}
               disabled={!useSupabaseRegistry}
               className="inline-flex items-center justify-center px-4 py-2 rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             >
@@ -344,12 +347,26 @@ export default function AdministratorSettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                   <select
                     value={newRow.role}
-                    onChange={(e) => setNewRow({ ...newRow, role: e.target.value as 'admin' | 'super_admin' })}
+                    onChange={(e) => {
+                      const role = e.target.value as 'admin' | 'super_admin'
+                      setNewRow({
+                        ...newRow,
+                        role,
+                        permissions:
+                          role === 'super_admin'
+                            ? [...SUPER_ADMIN_DEFAULT_PERMISSIONS]
+                            : [...DEFAULT_ADMIN_PERMISSIONS],
+                      })
+                    }}
                     className="w-full rounded-md border-gray-300 shadow-sm text-sm"
                   >
-                    <option value="admin">admin</option>
-                    <option value="super_admin">super_admin</option>
+                    <option value="admin">admin (standard staff permissions)</option>
+                    <option value="super_admin">super_admin (all permissions)</option>
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Changing role resets the permission list to the matching default. Adjust with presets below if
+                    needed.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
