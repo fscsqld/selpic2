@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
 import type { OrderRecord, OrderStatus } from '@/lib/store'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
@@ -78,9 +78,9 @@ async function sendDispatchAndPersist(
 
 /** Single order from Supabase ledger (admin only). */
 export async function GET(_request: Request, context: RouteContext) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:read')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   const { orderId } = await context.params
@@ -121,9 +121,9 @@ export async function GET(_request: Request, context: RouteContext) {
  * The first transition to shipped or ready_for_collection sends and records one dispatch notification.
  */
 export async function PATCH(request: Request, context: RouteContext) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:write')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   const { orderId } = await context.params
@@ -307,9 +307,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 /** Replace order payload in Supabase ledger (admin only). */
 export async function PUT(request: Request, context: RouteContext) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:write')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   const { orderId } = await context.params
@@ -354,9 +354,9 @@ export async function PUT(request: Request, context: RouteContext) {
 
 /** Remove a row from the Supabase ledger (admin only). Client store must also drop the order locally. */
 export async function DELETE(_request: Request, context: RouteContext) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:write')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   const { orderId } = await context.params

@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import { userHasAdminAccess } from '@/lib/supabase/adminClaims'
+import { userHasAdminAccess, userIsSuperAdmin } from '@/lib/supabase/adminClaims'
 import type { AdminUser } from '@/lib/adminAuth'
 import {
   DEFAULT_ADMIN_PERMISSIONS,
@@ -10,14 +10,12 @@ import {
 export function mapSupabaseUserToAdminUser(user: User): AdminUser {
   const meta = user.app_metadata || {}
   const u = user.user_metadata || {}
-  const isSuper =
-    meta.role === 'super_admin' ||
-    meta.role === 'superadmin' ||
-    meta.admin === true ||
-    u.admin === true ||
-    u.role === 'super_admin'
-
-  const role = isSuper ? ('super_admin' as const) : ('admin' as const)
+  /**
+   * Role must come from registry `role` only.
+   * Do NOT treat `app_metadata.admin === true` as super_admin — every roster admin gets
+   * that flag, and mis-mapping it grants full Quick Actions / permission bypass.
+   */
+  const role = userIsSuperAdmin(user) || meta.role === 'superadmin' ? ('super_admin' as const) : ('admin' as const)
 
   const permissionsFromMeta = meta.permissions
   const permissions = Array.isArray(permissionsFromMeta)

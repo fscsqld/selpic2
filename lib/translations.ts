@@ -614,7 +614,7 @@ export const translations = {
           },
            settings: {
              title: '관리자 설정',
-             subtitle: '시스템 설정 및 관리자 계정을 관리하세요',
+             subtitle: '시스템 설정, 활동 로그, 세션 (스태프 계정: Administrator settings)',
              general: {
                title: '일반 설정',
                language: '언어',
@@ -626,7 +626,7 @@ export const translations = {
                back: '뒤로가기'
              },
              adminManagement: {
-               title: '관리자 관리',
+               title: '스태프 접근',
                createNewAdmin: '새 관리자 생성',
                username: '사용자명',
                role: '역할',
@@ -2310,7 +2310,7 @@ export const translations = {
           },
            settings: {
              title: 'Admin Settings',
-             subtitle: 'Manage system settings and admin accounts',
+             subtitle: 'System settings, activity log, and sessions (staff accounts: Administrator settings)',
              general: {
                title: 'General Settings',
                language: 'Language',
@@ -2322,7 +2322,7 @@ export const translations = {
                back: 'Back'
              },
              adminManagement: {
-               title: 'Admin Management',
+               title: 'Staff access',
                createNewAdmin: 'Create New Admin',
                username: 'Username',
                role: 'Role',

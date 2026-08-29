@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import {
   getFundraisingChangeRequestById,
   listFundraisingChangeRequestsFromDb,
@@ -24,8 +24,8 @@ const ALLOWED: FundraisingChangeRequestStatus[] = [
 ]
 
 export async function GET(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('fundraising:read')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   try {
     const url = new URL(req.url)
@@ -44,8 +44,9 @@ export async function GET(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('fundraising:write')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
+  const user = gate.user
 
   try {
     const body = (await req.json().catch(() => null)) as {

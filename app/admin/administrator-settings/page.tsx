@@ -133,13 +133,17 @@ export default function AdministratorSettingsPage() {
 
   if (!isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md px-4">
-          <AlertCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900">Access denied</h1>
-          <p className="text-gray-600 mt-2">Redirecting to the dashboard…</p>
+      <AdminRoute>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <AlertCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold text-gray-900">Access denied</h1>
+            <p className="text-gray-600 mt-2">
+              Only a super administrator can manage the staff email registry. Redirecting to the dashboard…
+            </p>
+          </div>
         </div>
-      </div>
+      </AdminRoute>
     )
   }
 
@@ -158,8 +162,10 @@ export default function AdministratorSettingsPage() {
               </Link>
               <h1 className="text-2xl font-bold text-gray-900">Administrator settings</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Manage who can access the admin app via <code className="text-xs">admin_email_registry</code> (active{' '}
+                Super admin only — manage who can access the admin app via{' '}
+                <code className="text-xs">admin_email_registry</code> (active{' '}
                 <code className="text-xs">admin</code> or <code className="text-xs">super_admin</code> rows).
+                Day-to-day store settings stay under Admin Settings.
               </p>
             </div>
             <button

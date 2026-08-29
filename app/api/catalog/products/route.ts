@@ -1,60 +1,18 @@
 import { NextResponse } from 'next/server'
 import { sanitizeIncomingCatalogRecord } from '@/lib/catalogRecordSanitize'
+import { authorizeCatalogApi } from '@/lib/admin/catalogApiAuth'
 import type { CatalogProductRecord } from '@/lib/server/catalogStore'
 import { readCatalogSnapshot, writeCatalogFile } from '@/lib/server/catalogStore'
 
 const MAX_PRODUCTS = 5000
 
-function getBearerToken(req: Request): string | null {
-  const h = req.headers.get('authorization') || req.headers.get('Authorization')
-  if (h?.startsWith('Bearer ')) return h.slice(7).trim()
-  const alt = req.headers.get('x-catalog-sync-secret')
-  return alt?.trim() || null
-}
-
-function isSameOriginRequest(req: Request): boolean {
-  const origin = req.headers.get('origin') || req.headers.get('Origin')
-  const host = req.headers.get('host') || req.headers.get('Host')
-  if (!origin || !host) return false
-  try {
-    return new URL(origin).host === host
-  } catch {
-    return false
-  }
-}
-
-function isSameOriginByReferer(req: Request): boolean {
-  const referer = req.headers.get('referer') || req.headers.get('Referer')
-  const host = req.headers.get('host') || req.headers.get('Host')
-  if (!referer || !host) return false
-  try {
-    return new URL(referer).host === host
-  } catch {
-    return false
-  }
-}
-
-function isSameOriginByFetchMetadata(req: Request): boolean {
-  const site = (req.headers.get('sec-fetch-site') || '').toLowerCase()
-  return site === 'same-origin'
-}
-
-function hasAdminWriteHint(req: Request): boolean {
-  return (req.headers.get('x-selpic-admin-write') || '').trim() === '1'
-}
-
-function validateSecret(req: Request): boolean {
-  const token = getBearerToken(req)
-  const expected = (process.env.CATALOG_SYNC_SECRET || '').trim()
-  if (expected && token === expected) return true
-  // Same fallback used by media sync route: production proxies can strip origin headers.
-  if (hasAdminWriteHint(req)) return true
-  return isSameOriginRequest(req) || isSameOriginByReferer(req) || isSameOriginByFetchMetadata(req)
-}
-
 export async function GET(req: Request) {
-  if (!validateSecret(req)) {
-    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  const gate = await authorizeCatalogApi(req, 'read')
+  if (!gate.ok) {
+    return NextResponse.json(
+      { success: false, message: gate.error },
+      { status: gate.status }
+    )
   }
   const snapshot = await readCatalogSnapshot()
   return NextResponse.json(
@@ -67,11 +25,13 @@ export async function GET(req: Request) {
     { headers: { 'Cache-Control': 'no-store' } }
   )
 }
+
 export async function POST(req: Request) {
-  if (!validateSecret(req)) {
+  const gate = await authorizeCatalogApi(req, 'write')
+  if (!gate.ok) {
     return NextResponse.json(
-      { success: false, message: 'Unauthorized or CATALOG_SYNC_SECRET not configured' },
-      { status: 401 }
+      { success: false, message: gate.error },
+      { status: gate.status }
     )
   }
 
@@ -105,4 +65,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ success: true, count: products.length, updatedAt })
 }
-

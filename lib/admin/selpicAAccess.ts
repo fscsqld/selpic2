@@ -29,14 +29,18 @@ export function isSelpicAPayrollOnlyAdmin(admin: SelpicAAdminUser): boolean {
   return perms.includes('payroll:read') || perms.includes('payroll:access')
 }
 
-/** Admin Access (SSO): full ledger or My Payroll-only — not Staff employee login. */
+/**
+ * Admin Access (SSO) → full accounting workspace only.
+ * Payroll-only staff must use Staff Access (employee login), not admin SSO.
+ */
 export function canUseSelpicAAdminAccess(admin: SelpicAAdminUser): boolean {
-  return isSelpicAAccountingManager(admin) || isSelpicAPayrollOnlyAdmin(admin)
+  return isSelpicAAccountingManager(admin)
 }
 
 export function canSeeSelpicAQuickAction(admin: SelpicAAdminUser): boolean {
   if (!admin) return false
   if (canUseSelpicAAdminAccess(admin)) return true
+  if (isSelpicAPayrollOnlyAdmin(admin)) return true
   return adminHasPermission(admin, 'accounting:read')
 }
 

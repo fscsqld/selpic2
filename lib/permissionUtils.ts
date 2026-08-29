@@ -394,9 +394,9 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
   'payroll:access': {
     permission: 'payroll:access',
     name: 'Selpic A (payroll only)',
-    description: 'My Payroll / timesheets only — no full accounting tabs.',
+    description: 'See Selpic A and open Staff Access (employee login) for payslips/timesheets — no Admin Access SSO.',
     category: 'Accounting (Selpic A)',
-    accessiblePages: ['Selpic A — My Payroll'],
+    accessiblePages: ['Selpic A — Staff Access (employee login)'],
   },
   'system:admin': {
     permission: 'system:admin',
@@ -408,9 +408,9 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
   'admin:manage': {
     permission: 'admin:manage',
     name: 'Administrator registry',
-    description: 'Manage admin emails, roles, and permissions.',
+    description: 'Manage admin emails, roles, and permissions (Administrator settings).',
     category: 'System Management',
-    accessiblePages: ['/admin/administrator-settings', '/admin/settings (Admin Management)'],
+    accessiblePages: ['/admin/administrator-settings'],
   },
 }
 

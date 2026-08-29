@@ -569,11 +569,13 @@ export default function AdminDashboard() {
     },
     {
       title: 'Administrator settings',
-      description: 'Admin email registry: add staff, roles, and permissions',
+      description: 'Super admin only — register staff emails, roles, and permissions',
       icon: Shield,
       href: '/admin/administrator-settings',
       color: 'bg-slate-600',
+      /** Registry UI is role-gated (super_admin), not only admin:manage. */
       requiredPermission: 'admin:manage',
+      superAdminOnly: true,
     },
     {
       title: t('admin.settings.title'),
@@ -581,7 +583,7 @@ export default function AdminDashboard() {
       icon: Settings,
       href: '/admin/settings',
       color: 'bg-gray-500',
-      requiredPermission: 'system:admin' // Only super admin or admin with system:admin permission
+      requiredPermission: 'system:admin' // Regular + super: store settings, logs, sessions (not staff registry)
     },
     {
       title: 'Selpic A',
@@ -593,6 +595,9 @@ export default function AdminDashboard() {
       isExternal: true
     }
   ].filter(action => {
+    if ((action as { superAdminOnly?: boolean }).superAdminOnly && adminUser?.role !== 'super_admin') {
+      return false
+    }
     if (!action.requiredPermission) return true
     if (action.title === 'Selpic A') {
       return canSeeSelpicAQuickAction(adminUser)
@@ -1088,10 +1093,10 @@ export default function AdminDashboard() {
                               </div>
 
                               <p className="text-sm text-gray-600 mb-6">
-                                {payrollOnly
-                                  ? 'Admin Access opens My Payroll for your payslips and timesheets.'
-                                  : showAdminAccess
-                                    ? 'Admin Access opens the full accounting workspace.'
+                                {showAdminAccess
+                                  ? 'Admin Access opens the full accounting workspace. Staff Access is for employee ID and password (personal payroll).'
+                                  : payrollOnly
+                                    ? 'Use Staff Access with your employee login for payslips and timesheets. Admin Access is for accounting managers only.'
                                     : 'Use Staff Access with your employee login for personal payroll.'}
                               </p>
 
@@ -1107,7 +1112,7 @@ export default function AdminDashboard() {
                                     className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                                   >
                                     <Calculator className="h-5 w-5" />
-                                    {payrollOnly ? 'Admin Access (My Payroll)' : 'Admin Access'}
+                                    Admin Access
                                   </button>
                                 )}
 
