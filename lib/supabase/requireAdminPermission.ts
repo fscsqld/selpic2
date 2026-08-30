@@ -29,6 +29,42 @@ export async function requireAdminPermission(
   return { ok: true, user }
 }
 
+/** System settings / activity log — super_admin or explicit `system:admin` only (not `admin:manage`). */
+export async function requireSystemAdminPermission(): Promise<AdminPermissionGate> {
+  const user = await requireSupabaseAdminUser()
+  if (!user) {
+    return { ok: false, status: 401, error: 'Unauthorized' }
+  }
+
+  const admin = mapSupabaseUserToAdminUser(user)
+  if (admin.role === 'super_admin') {
+    return { ok: true, user }
+  }
+  if ((admin.permissions || []).includes('system:admin')) {
+    return { ok: true, user }
+  }
+
+  return { ok: false, status: 403, error: 'Forbidden — system admin permission required.' }
+}
+
+/** Administrator registry / Supabase user ops — super_admin or explicit `admin:manage` only. */
+export async function requireAdminManagePermission(): Promise<AdminPermissionGate> {
+  const user = await requireSupabaseAdminUser()
+  if (!user) {
+    return { ok: false, status: 401, error: 'Unauthorized' }
+  }
+
+  const admin = mapSupabaseUserToAdminUser(user)
+  if (admin.role === 'super_admin') {
+    return { ok: true, user }
+  }
+  if ((admin.permissions || []).includes('admin:manage')) {
+    return { ok: true, user }
+  }
+
+  return { ok: false, status: 403, error: 'Forbidden — admin manage permission required.' }
+}
+
 /** JSON 401/403 for routes using `{ ok: false, error: 'UNAUTHORIZED' }` envelopes. */
 export function adminPermissionDeniedOkEnvelope(gate: AdminPermissionGate): NextResponse | null {
   if (gate.ok) return null

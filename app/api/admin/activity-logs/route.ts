@@ -8,7 +8,7 @@ import {
 import { userIsSuperAdmin } from '@/lib/supabase/adminClaims'
 import {
   adminPermissionDeniedPlain,
-  requireAdminPermission,
+  requireSystemAdminPermission,
 } from '@/lib/supabase/requireAdminPermission'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
@@ -45,7 +45,7 @@ function rowToClient(row: AdminActivityLogRow): ActivityLog {
 }
 
 export async function GET() {
-  const gate = await requireAdminPermission('system:admin')
+  const gate = await requireSystemAdminPermission()
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
 

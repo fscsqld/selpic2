@@ -44,6 +44,13 @@ export function adminHasAllPermissions(admin: AdminLike, required: string[]): bo
   return required.every((p) => adminHasPermission(admin, p))
 }
 
+/** System Management — super_admin or explicit `system:admin` (not admin:manage bypass). */
+export function adminHasSystemAdminAccess(admin: AdminLike): boolean {
+  if (!admin) return false
+  if (admin.role === 'super_admin') return true
+  return (admin.permissions || []).includes('system:admin')
+}
+
 /**
  * Dashboard / nav display: explicit grants + write→read only.
  * Does not apply legacy aliases (e.g. users:read must not unlock documents:read tile).

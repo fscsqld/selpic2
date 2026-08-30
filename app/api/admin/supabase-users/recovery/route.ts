@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   adminPermissionDeniedPlain,
-  requireAdminPermission,
+  requireAdminManagePermission,
 } from '@/lib/supabase/requireAdminPermission'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
@@ -28,7 +28,7 @@ function siteBase(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  const gate = await requireAdminPermission('admin:manage')
+  const gate = await requireAdminManagePermission()
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
   if (!isSupabaseConfigured()) {

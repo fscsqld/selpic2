@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { parseSiteConfigWriteBody } from '@/lib/siteConfigWritePayload'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
+import { requireSystemAdminPermission } from '@/lib/supabase/requireAdminPermission'
 
 export const runtime = 'nodejs'
 
@@ -14,7 +14,7 @@ const jsonHeaders = { 'Cache-Control': 'no-store' as const }
  * Browser clients must not upsert `site_configs` directly (RLS blocks anon).
  */
 export async function PUT(req: Request) {
-  const gate = await requireAdminPermission('system:admin')
+  const gate = await requireSystemAdminPermission()
   if (!gate.ok) {
     return NextResponse.json(
       {

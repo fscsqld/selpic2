@@ -55,7 +55,7 @@ import {
   isSelpicAAccountingManager,
   isSelpicAPayrollOnlyAdmin,
 } from '@/lib/admin/selpicAAccess'
-import { adminHasPermissionStrict } from '@/lib/adminPermissionCheck'
+import { adminHasPermissionStrict, adminHasSystemAdminAccess } from '@/lib/adminPermissionCheck'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
@@ -590,6 +590,9 @@ export default function AdminDashboard() {
     if (!action.requiredPermission) return true
     if (action.title === 'Selpic A') {
       return canSeeSelpicAQuickAction(adminUser)
+    }
+    if (action.requiredPermission === 'system:admin') {
+      return adminHasSystemAdminAccess(adminUser)
     }
     return hasPermission(action.requiredPermission)
   }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, inboundSummary])
