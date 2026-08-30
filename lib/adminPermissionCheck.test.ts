@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { AdminUser } from '@/lib/adminAuth'
 import {
+  adminHasAdminSettingsPageAccess,
   adminHasAllPermissions,
   adminHasFullAccess,
   adminHasPermission,
+  adminHasSystemAdminAccess,
 } from '@/lib/adminPermissionCheck'
 
 function admin(over: Partial<AdminUser> = {}): AdminUser {
@@ -49,5 +51,13 @@ describe('adminPermissionCheck', () => {
     const user = admin({ permissions: ['orders:read', 'products:read'] })
     expect(adminHasAllPermissions(user, ['orders:read', 'products:read'])).toBe(true)
     expect(adminHasAllPermissions(user, ['orders:read', 'orders:write'])).toBe(false)
+  })
+
+  it('splits Admin Settings personal vs system management', () => {
+    expect(adminHasAdminSettingsPageAccess(admin({ permissions: ['settings:personal'] }))).toBe(true)
+    expect(adminHasAdminSettingsPageAccess(admin({ permissions: ['dashboard:read'] }))).toBe(false)
+    expect(adminHasSystemAdminAccess(admin({ permissions: ['settings:personal'] }))).toBe(false)
+    expect(adminHasSystemAdminAccess(admin({ permissions: ['system:admin'] }))).toBe(true)
+    expect(adminHasPermission(admin({ permissions: ['system:admin'] }), 'settings:personal')).toBe(true)
   })
 })

@@ -18,6 +18,7 @@ import { useAdminActivityLog } from '@/lib/adminActivityLog'
 import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
 import { useAdminSession } from '@/lib/adminSession'
 import { useAdminPasswordPolicy } from '@/lib/adminPasswordPolicy'
+import { adminHasSystemAdminAccess } from '@/lib/adminPermissionCheck'
 import { useAdminIPControl } from '@/lib/adminIPControl'
 import { useAdminNotifications } from '@/lib/adminNotifications'
 import { useUserAuth } from '@/lib/userAuth'
@@ -624,6 +625,7 @@ export default function AdminSettingsPage() {
   }
 
   const isSuperAdmin = adminUser?.role === 'super_admin'
+  const canAccessSystemSettings = isSuperAdmin || adminHasSystemAdminAccess(adminUser)
   const useSupabaseRegistry = hasPublicSupabaseEnv()
   const registry = useAdminEmailRegistry(Boolean(isSuperAdmin))
 
@@ -799,40 +801,45 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
   const availablePermissions = [...ADMIN_PERMISSION_CATALOG]
 
   // 탭 그룹 정의
-  const tabGroups = [
-    {
-      id: 'general',
-      label: 'General Settings',
-      icon: Settings,
-      tabs: [
-        { id: 'general', label: 'General', icon: Settings },
-        { id: 'security', label: t('admin.settings.security.title'), icon: Shield },
-        { id: 'notifications', label: t('admin.settings.notifications.title'), icon: Bell },
-        { id: 'media', label: 'Media', icon: ImageIcon }
-      ]
-    },
-    {
-      id: 'admin',
-      label: 'Audit & access',
-      icon: Users,
-      superAdminOnly: true,
-      tabs: [
-        { id: 'admin-management', label: t('admin.settings.adminManagement.title') || 'Staff access', icon: Users },
-        { id: 'activity-log', label: 'Activity Log', icon: FileText },
-        { id: 'sessions', label: 'Session Management', icon: Shield }
-      ]
-    },
-    {
-      id: 'system',
-      label: 'System',
-      icon: Database,
-      superAdminOnly: true,
-      tabs: [
-        { id: 'system', label: t('admin.settings.system.title'), icon: Database },
-        { id: 'sales', label: t('admin.settings.sales.title'), icon: Database }
-      ]
-    }
-  ]
+  const tabGroups = useMemo(() => {
+    const groups = [
+      {
+        id: 'general',
+        label: 'General Settings',
+        icon: Settings,
+        tabs: [
+          { id: 'general', label: 'General', icon: Settings },
+          { id: 'security', label: t('admin.settings.security.title'), icon: Shield },
+          { id: 'notifications', label: t('admin.settings.notifications.title'), icon: Bell },
+          ...(canAccessSystemSettings
+            ? [{ id: 'media', label: 'Media', icon: ImageIcon }]
+            : []),
+        ],
+      },
+      {
+        id: 'admin',
+        label: 'Audit & access',
+        icon: Users,
+        superAdminOnly: true,
+        tabs: [
+          { id: 'admin-management', label: t('admin.settings.adminManagement.title') || 'Staff access', icon: Users },
+          { id: 'activity-log', label: 'Activity Log', icon: FileText },
+          { id: 'sessions', label: 'Session Management', icon: Shield },
+        ],
+      },
+      {
+        id: 'system',
+        label: 'System',
+        icon: Database,
+        superAdminOnly: true,
+        tabs: [
+          { id: 'system', label: t('admin.settings.system.title'), icon: Database },
+          { id: 'sales', label: t('admin.settings.sales.title'), icon: Database },
+        ],
+      },
+    ]
+    return groups
+  }, [canAccessSystemSettings, t])
 
   // 모든 탭을 평탄화 (기존 코드 호환성)
   const tabs = tabGroups.flatMap(group => group.tabs)
@@ -1417,7 +1424,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
   }
 
   return (
-    <AdminRoute requiredPermissions={['system:admin']}>
+    <AdminRoute requiredAnyPermissions={['settings:personal', 'system:admin']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Settings"
@@ -1652,6 +1659,8 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                     <p className="text-sm text-gray-600 py-2">English (site default). The storefront and admin UI use English only.</p>
                   </div>
 
+                  {canAccessSystemSettings && (
+                    <>
                   {/* Currency Settings */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
@@ -1716,6 +1725,14 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                       Current time: {formatDateTime(new Date(), dateFormat, timezone)}
                     </p>
                   </div>
+                    </>
+                  )}
+
+                  {!canAccessSystemSettings && (
+                    <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                      Store currency, date format, and timezone are managed under System Management (super admin).
+                    </p>
+                  )}
 
                   {/* Default Page Size Settings */}
                   <div>
@@ -2010,7 +2027,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                   </div>
 
                   {/* Password Policy Section */}
-                  <PasswordPolicySection />
+                  {canAccessSystemSettings && <PasswordPolicySection />}
 
                   {/* IP Control Section */}
                   {isSuperAdmin && <IPControlSection />}
@@ -2114,7 +2131,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
             )}
 
             {/* Media Tab - Watermark Settings */}
-            {activeTab === 'media' && (
+            {activeTab === 'media' && canAccessSystemSettings && (
               <div className="bg-white shadow rounded-lg p-6 w-full">
                 <h3 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
                   <ImageIcon className="h-5 w-5 mr-2" />

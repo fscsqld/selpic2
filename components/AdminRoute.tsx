@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
-import { adminHasAllPermissions } from '@/lib/adminPermissionCheck'
+import { adminHasAllPermissions, adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useAdminSession } from '@/lib/adminSession'
 import { resolveAdminBrowserSession } from '@/lib/supabase/resolveAdminBrowserSession'
 import AdminInboundSync from '@/components/AdminInboundSync'
@@ -12,7 +12,10 @@ import AdminOrderSoundListener from '@/components/AdminOrderSoundListener'
 
 interface AdminRouteProps {
   children: React.ReactNode
+  /** User must hold every listed permission (AND). */
   requiredPermissions?: string[]
+  /** User must hold at least one listed permission (OR). */
+  requiredAnyPermissions?: string[]
 }
 
 const ADMIN_SESSION_CHECK_INTERVAL_MS = 30000
@@ -25,7 +28,11 @@ export function clearAdminRegistryAccessCache(): void {
   registryAccessCache = null
 }
 
-export default function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
+export default function AdminRoute({
+  children,
+  requiredPermissions = [],
+  requiredAnyPermissions = [],
+}: AdminRouteProps) {
   const { isLoggedIn, adminUser, logout } = useAdminAuth()
   const { currentSessionId, isSessionValid, updateActivity } = useAdminSession()
   const router = useRouter()
@@ -92,13 +99,22 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     }
 
     // Permission check (super_admin / admin:manage / explicit permission + legacy aliases)
+    if (requiredAnyPermissions.length > 0 && adminUser) {
+      const hasAny = requiredAnyPermissions.some((p) => adminHasPermission(adminUser, p))
+      if (!hasAny) {
+        console.log('Permission denied (any), redirecting to dashboard...')
+        router.push('/admin/dashboard')
+        return
+      }
+    }
+
     if (requiredPermissions.length > 0 && adminUser) {
       if (!adminHasAllPermissions(adminUser, requiredPermissions)) {
         console.log('Permission denied, redirecting to dashboard...')
         router.push('/admin/dashboard')
       }
     }
-  }, [hasHydrated, isLoggedIn, adminUser, requiredPermissions, router, currentSessionId, isSessionValid, logout])
+  }, [hasHydrated, isLoggedIn, adminUser, requiredPermissions, requiredAnyPermissions, router, currentSessionId, isSessionValid, logout])
 
   // Only real user interaction should extend idle time.
   useEffect(() => {
