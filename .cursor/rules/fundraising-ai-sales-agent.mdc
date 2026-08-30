@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Fundraising AI Sales Agent — FINAL PLAN (standby)
 
-**Status:** **A1 in progress** on branch `feature/ai-fundraising-agent`. Broader vision (multi-sector unified agent) is in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md). Implement steps in order; after A1 recommend commit and wait unless user says continue.
+**Status:** **A1 shipped** (`main`). **A2+A3 in progress** on `feature/ai-fundraising-agent`. Broader vision in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md).
 
 ## Goal
 

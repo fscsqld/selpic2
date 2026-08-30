@@ -320,4 +320,51 @@ export async function markFundraisingOutreachTargetConverted(opts: {
   }
 }
 
+export async function listFundraisingOutreachTargetsFromDb(opts?: {
+  status?: FundraisingOutreachTargetStatus
+  limit?: number
+}): Promise<FundraisingOutreachTarget[]> {
+  if (!isSupabaseConfigured()) return []
+  const admin = getSupabaseAdmin()
+  let q = admin
+    .from('fundraising_outreach_targets')
+    .select('*')
+    .order('updated_at', { ascending: false })
+  if (opts?.status) q = q.eq('status', opts.status)
+  const { data, error } = await q.limit(opts?.limit ?? 200)
+  if (error || !data) return []
+  return data.map((r) => mapOutreachTargetRow(r as Parameters<typeof mapOutreachTargetRow>[0]))
+}
+
+export async function upsertFundraisingOutreachTarget(
+  target: FundraisingOutreachTarget
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'Supabase not configured' }
+  const id = String(target.id || '').trim()
+  if (!id) return { ok: false, error: 'Target id required' }
+  try {
+    const admin = getSupabaseAdmin()
+    const updatedAt = nowIso()
+    const { error } = await admin.from('fundraising_outreach_targets').upsert({
+      id,
+      organization_name: String(target.organizationName || '').trim(),
+      contact_email: target.contactEmail?.trim().toLowerCase() || null,
+      contact_name: target.contactName?.trim() || null,
+      org_type: target.orgType?.trim() || null,
+      state: target.state?.trim() || null,
+      status: target.status || 'PENDING',
+      last_sent_at: target.lastSentAt || null,
+      last_error: target.lastError || null,
+      converted_partner_id: target.convertedPartnerId || null,
+      payload: target.payload || {},
+      created_at: target.createdAt || updatedAt,
+      updated_at: updatedAt,
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'upsert outreach target failed' }
+  }
+}
+
 export { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
