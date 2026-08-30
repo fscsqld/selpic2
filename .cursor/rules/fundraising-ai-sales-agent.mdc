@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Fundraising AI Sales Agent — FINAL PLAN (standby)
 
-**Status:** **A1 shipped** (`main`). **A2+A3 in progress** on `feature/ai-fundraising-agent`. Broader vision in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md).
+**Status:** **A1–A3 shipped** on `main` (capture + Agent UI + capped Resend send). Broader multi-sector vision remains in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md). Auto-scrape / daily mass mail is **not** in v1.
 
 ## Goal
 
