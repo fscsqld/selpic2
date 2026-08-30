@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { deletePublicDataForAuthUser } from '@/lib/supabase/cascadeDeleteUserData'
 
 export async function GET() {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('admin:manage')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   }
@@ -41,10 +43,9 @@ type Body = {
 }
 
 export async function PATCH(req: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('admin:manage')
+  if (!gate.ok) return adminPermissionDeniedPlain(gate)!
+  const admin = gate.user
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   }
@@ -133,10 +134,9 @@ type DeleteBody = { userId?: string }
  * Deletes auth user after removing dependent public rows (orders by email, profiles, optional cart tables, registry).
  */
 export async function DELETE(req: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('admin:manage')
+  if (!gate.ok) return adminPermissionDeniedPlain(gate)!
+  const admin = gate.user
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   }

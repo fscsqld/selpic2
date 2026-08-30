@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { parseSiteConfigWriteBody } from '@/lib/siteConfigWritePayload'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 
 export const runtime = 'nodejs'
 
@@ -14,15 +14,17 @@ const jsonHeaders = { 'Cache-Control': 'no-store' as const }
  * Browser clients must not upsert `site_configs` directly (RLS blocks anon).
  */
 export async function PUT(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) {
+  const gate = await requireAdminPermission('system:admin')
+  if (!gate.ok) {
     return NextResponse.json(
       {
         success: false,
         message:
-          'Sign in with a Supabase admin email. Legacy local admin cannot save CMS to the cloud.',
+          gate.status === 401
+            ? 'Sign in with a Supabase admin email. Legacy local admin cannot save CMS to the cloud.'
+            : 'Forbidden — system admin permission required to save CMS settings.',
       },
-      { status: 401, headers: jsonHeaders }
+      { status: gate.status, headers: jsonHeaders }
     )
   }
 

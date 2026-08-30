@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
 
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export async function DELETE(
   _req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('documents:write')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   const { id } = await context.params
   const safeId = String(id || '').trim()

@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
-
+  const gate = await requireAdminPermission('newsletter:write')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
   const { id } = await ctx.params
   if (!id) {
     return NextResponse.json({ ok: false, error: 'INVALID_ID' }, { status: 400 })
@@ -45,11 +47,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
-
+  const gate = await requireAdminPermission('newsletter:write')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
   const { id } = await ctx.params
   if (!id) {
     return NextResponse.json({ ok: false, error: 'INVALID_ID' }, { status: 400 })

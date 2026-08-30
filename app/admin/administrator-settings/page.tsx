@@ -86,7 +86,10 @@ export default function AdministratorSettingsPage() {
     const result = await registry.patchEntry(permEmail, { permissions: permList })
     setIsLoading(false)
     if (result.ok) {
-      showMsg('Permissions updated.', true)
+      showMsg(
+        'Permissions updated. Ask this staff member to refresh the page (or sign in again) to see Quick Action changes.',
+        true
+      )
       setIsPermOpen(false)
       setPermEmail('')
     } else {

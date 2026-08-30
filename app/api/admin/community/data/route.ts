@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server'
 
 import { buildPostsWithComments, categoryRowToClient } from '@/lib/community/serialize'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 export async function GET() {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('community:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SERVICE_UNAVAILABLE' }, { status: 503 })

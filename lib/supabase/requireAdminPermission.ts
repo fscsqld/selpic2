@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { NextResponse } from 'next/server'
 import type { User } from '@supabase/supabase-js'
 
 import { adminHasAllPermissions } from '@/lib/adminPermissionCheck'
@@ -26,4 +27,19 @@ export async function requireAdminPermission(
   }
 
   return { ok: true, user }
+}
+
+/** JSON 401/403 for routes using `{ ok: false, error: 'UNAUTHORIZED' }` envelopes. */
+export function adminPermissionDeniedOkEnvelope(gate: AdminPermissionGate): NextResponse | null {
+  if (gate.ok) return null
+  return NextResponse.json(
+    { ok: false, error: gate.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN' },
+    { status: gate.status }
+  )
+}
+
+/** JSON 401/403 for routes using `{ error: string }` envelopes. */
+export function adminPermissionDeniedPlain(gate: AdminPermissionGate): NextResponse | null {
+  if (gate.ok) return null
+  return NextResponse.json({ error: gate.error }, { status: gate.status })
 }

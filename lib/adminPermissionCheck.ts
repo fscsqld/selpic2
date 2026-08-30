@@ -43,3 +43,22 @@ export function adminHasAllPermissions(admin: AdminLike, required: string[]): bo
   if (!required.length) return true
   return required.every((p) => adminHasPermission(admin, p))
 }
+
+/**
+ * Dashboard / nav display: explicit grants + write→read only.
+ * Does not apply legacy aliases (e.g. users:read must not unlock documents:read tile).
+ */
+export function adminHasPermissionStrict(admin: AdminLike, required: string): boolean {
+  if (!admin) return false
+  if (adminHasFullAccess(admin)) return true
+
+  const perms = admin.permissions || []
+  if (perms.includes(required)) return true
+
+  for (const [strong, weakList] of Object.entries(ADMIN_PERMISSION_IMPLIES)) {
+    if (weakList?.includes(required as AdminPermission) && perms.includes(strong)) {
+      return true
+    }
+  }
+  return false
+}

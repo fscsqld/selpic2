@@ -55,7 +55,7 @@ import {
   isSelpicAAccountingManager,
   isSelpicAPayrollOnlyAdmin,
 } from '@/lib/admin/selpicAAccess'
-import { adminHasPermission } from '@/lib/adminPermissionCheck'
+import { adminHasPermissionStrict } from '@/lib/adminPermissionCheck'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
@@ -84,7 +84,6 @@ const DASHBOARD_COLLAPSED_ORDER_COUNT = 8
 const DASHBOARD_EXPANDED_ORDER_COUNT = 25
 
 export default function AdminDashboard() {
-  const [isComponentReady, setIsComponentReady] = useState(false)
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
   const [dashboardOrderDetailId, setDashboardOrderDetailId] = useState<string | null>(null)
   const [ordersExpanded, setOrdersExpanded] = useState(false)
@@ -94,6 +93,7 @@ export default function AdminDashboard() {
     null
   )
   const [etsySyncBusy, setEtsySyncBusy] = useState(false)
+  const [permissionUpdateKey, setPermissionUpdateKey] = useState(0)
 
   const { adminUser, logout } = useAdminAuth()
   const activityLogs = useAdminActivityLog((s) => s.logs)
@@ -125,14 +125,6 @@ export default function AdminDashboard() {
   
   const salesUnreadCount = getUnreadCount()
   const totalUnreadCount = inboundSummary.totalCount + salesUnreadCount
-
-  // 컴포넌트 준비 상태 관리
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsComponentReady(true)
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [])
 
   // 스토어 복원 후·대시보드 진입 시 상품·주문 동기화 (고객 주문이 통계에 반영되도록)
   useEffect(() => {
@@ -211,8 +203,7 @@ export default function AdminDashboard() {
     const interval = setInterval(() => {
       // 데이터 새로고침 (Zustand store는 자동으로 업데이트되지만, 강제 리렌더링을 위해)
       console.log('🔄 Auto refreshing dashboard data...')
-      // 페이지 새로고침 대신 상태 업데이트 트리거
-      setIsComponentReady(prev => !prev)
+      setPermissionUpdateKey((prev) => prev + 1)
     }, autoRefreshInterval)
 
     return () => clearInterval(interval)
@@ -378,7 +369,7 @@ export default function AdminDashboard() {
   ]
 
   const hasPermission = useCallback(
-    (permission: string): boolean => adminHasPermission(adminUser, permission),
+    (permission: string): boolean => adminHasPermissionStrict(adminUser, permission),
     [adminUser]
   )
 
@@ -395,12 +386,12 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (!isComponentReady || !adminUser || !hasPermission('orders:read')) return
+    if (!adminUser || !hasPermission('orders:read')) return
     void refreshEtsyStatus()
-  }, [isComponentReady, adminUser, hasPermission, refreshEtsyStatus])
+  }, [adminUser, hasPermission, refreshEtsyStatus])
 
   useEtsyOAuthReturn({
-    enabled: isComponentReady && !!adminUser && hasPermission('orders:read'),
+    enabled: !!adminUser && hasPermission('orders:read'),
     onBanner: setEtsyBanner,
     afterConnected: async () => {
       await refreshEtsyStatus()
@@ -419,8 +410,6 @@ export default function AdminDashboard() {
   }, [adminUser])
 
   // Listen for permission changes and force re-render
-  const [permissionUpdateKey, setPermissionUpdateKey] = useState(0)
-  
   useEffect(() => {
     const handleAuthUpdate = () => {
       console.log('🔄 Dashboard: Admin auth updated, refreshing Quick Actions...')
@@ -609,20 +598,6 @@ export default function AdminDashboard() {
     () => getDashboardImportantActivities(activityLogs, DASHBOARD_RECENT_ACTIVITY_LIMIT),
     [activityLogs]
   )
-
-  // 컴포넌트가 준비되지 않았을 때 로딩 표시
-  if (!isComponentReady) {
-    return (
-      <AdminRoute>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">관리자 대시보드 로딩 중...</p>
-          </div>
-        </div>
-      </AdminRoute>
-    )
-  }
 
   return (
     <AdminRoute>

@@ -18,11 +18,14 @@ export function mapSupabaseUserToAdminUser(user: User): AdminUser {
   const role = userIsSuperAdmin(user) || meta.role === 'superadmin' ? ('super_admin' as const) : ('admin' as const)
 
   const permissionsFromMeta = meta.permissions
+  const registryManaged = meta.selpic_registry === true
   const permissions = Array.isArray(permissionsFromMeta)
     ? (permissionsFromMeta as string[])
-    : role === 'super_admin'
-      ? [...SUPER_ADMIN_DEFAULT_PERMISSIONS]
-      : [...DEFAULT_ADMIN_PERMISSIONS]
+    : registryManaged
+      ? []
+      : role === 'super_admin'
+        ? [...SUPER_ADMIN_DEFAULT_PERMISSIONS]
+        : [...DEFAULT_ADMIN_PERMISSIONS]
 
   const email = user.email || undefined
   const username =

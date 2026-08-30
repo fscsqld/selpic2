@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
+import type { User } from '@supabase/supabase-js'
+
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
 import type { OrderRecord } from '@/lib/store'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import {
@@ -52,16 +57,15 @@ async function saveOrder(order: OrderRecord): Promise<void> {
   }
 }
 
-function performedByFromUser(user: NonNullable<Awaited<ReturnType<typeof requireSupabaseAdminUser>>>) {
+function performedByFromUser(user: User) {
   return (user.email || user.user_metadata?.full_name || user.id || 'admin').slice(0, 120)
 }
 
 /** Download PDF for orders that already have an internal label record. */
 export async function GET(request: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('orders:read')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
   }
@@ -124,10 +128,9 @@ export async function GET(request: Request) {
  * Live AusPost Digital API labels remain a separate future path (`mode: 'live'`).
  */
 export async function POST(request: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('orders:write')
+  if (!gate.ok) return adminPermissionDeniedPlain(gate)!
+  const adminUser = gate.user
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
   }

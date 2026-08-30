@@ -16,6 +16,13 @@ interface AdminRouteProps {
 
 const ADMIN_SESSION_CHECK_INTERVAL_MS = 30000
 const ADMIN_ACTIVITY_THROTTLE_MS = 15000
+/** Avoid re-blocking the UI on every admin page navigation. */
+const REGISTRY_ACCESS_CACHE_MS = 5 * 60 * 1000
+let registryAccessCache: { ok: true; checkedAt: number } | null = null
+
+export function clearAdminRegistryAccessCache(): void {
+  registryAccessCache = null
+}
 
 export default function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
   const { isLoggedIn, adminUser, logout } = useAdminAuth()
@@ -148,6 +155,13 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
       return
     }
 
+    const cached =
+      registryAccessCache && Date.now() - registryAccessCache.checkedAt < REGISTRY_ACCESS_CACHE_MS
+    if (cached) {
+      setRegistryAccessOk(true)
+      return
+    }
+
     let cancelled = false
     setRegistryAccessOk(null)
     ;(async () => {
@@ -159,19 +173,23 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
         } = await supabase.auth.getSession()
         if (cancelled) return
         if (!session?.access_token) {
+          registryAccessCache = { ok: true, checkedAt: Date.now() }
           setRegistryAccessOk(true)
           return
         }
         const r = await fetch('/api/admin/registry-access', { credentials: 'same-origin' })
         if (cancelled) return
         if (!r.ok) {
+          clearAdminRegistryAccessCache()
           logout()
           router.replace('/admin/login')
           return
         }
+        registryAccessCache = { ok: true, checkedAt: Date.now() }
         setRegistryAccessOk(true)
       } catch {
         if (!cancelled) {
+          clearAdminRegistryAccessCache()
           logout()
           router.replace('/admin/login')
         }
@@ -212,6 +230,7 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
 
         const mapped = mapSupabaseUserToAdminUser(s2.user)
         useAdminAuth.setState({ adminUser: mapped })
+        registryAccessCache = { ok: true, checkedAt: Date.now() }
         window.dispatchEvent(new Event('admin-auth-updated'))
       } catch (e) {
         console.warn('[AdminRoute] admin registry sync', e)

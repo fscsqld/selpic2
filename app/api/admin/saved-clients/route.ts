@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 type SavedClientCategory = 'sticker' | 'cleaning'
@@ -15,8 +18,9 @@ type SavedClientRow = {
 }
 
 export async function GET() {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('documents:read')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   const sb = await createSupabaseServerClient()
   const { data, error } = await sb
@@ -32,8 +36,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('documents:write')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   let body: any = null
   try {

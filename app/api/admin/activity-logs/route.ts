@@ -6,6 +6,10 @@ import {
   type ActivityLogAction,
 } from '@/lib/adminActivityLog'
 import { userIsSuperAdmin } from '@/lib/supabase/adminClaims'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
@@ -41,8 +45,9 @@ function rowToClient(row: AdminActivityLogRow): ActivityLog {
 }
 
 export async function GET() {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('system:admin')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   try {
     const sb = await createSupabaseServerClient()

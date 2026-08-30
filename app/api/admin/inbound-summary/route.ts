@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 
 import { fetchAdminInboundSummary } from '@/lib/server/adminInboundSummary'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 /** Unified pending counts for all customer → admin inbound channels. */
 export async function GET() {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('dashboard:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   try {
     const summary = await fetchAdminInboundSummary()

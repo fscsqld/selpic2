@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 export async function GET(req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('analytics:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SUPABASE_NOT_CONFIGURED' }, { status: 503 })

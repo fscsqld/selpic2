@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 
 import { listSydneyDaysInclusive, toSydneyDay } from '@/lib/analytics/sydney-day'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -15,10 +18,9 @@ function defaultRange(daysBack: number): { from: string; to: string } {
 }
 
 export async function GET(req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('traffic:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SUPABASE_NOT_CONFIGURED' }, { status: 503 })

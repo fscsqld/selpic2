@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
 import {
   exchangeEtsyAuthorizationCode,
@@ -29,10 +32,9 @@ function redirectAfterOAuth(request: Request, jar: Awaited<ReturnType<typeof coo
 }
 
 export async function GET(request: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('integrations:write')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   const jar = await cookies()
 
