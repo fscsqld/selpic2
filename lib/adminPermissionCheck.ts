@@ -51,6 +51,19 @@ export function adminHasSystemAdminAccess(admin: AdminLike): boolean {
   return (admin.permissions || []).includes('system:admin')
 }
 
+/** Admin Settings (personal) — password, profile, notifications, UI prefs. */
+export function adminHasSettingsPersonalAccess(admin: AdminLike): boolean {
+  if (!admin) return false
+  if (admin.role === 'super_admin') return true
+  const perms = admin.permissions || []
+  return perms.includes('settings:personal') || perms.includes('system:admin')
+}
+
+/** Admin Settings page entry (dashboard tile + /admin/settings route). */
+export function adminHasAdminSettingsPageAccess(admin: AdminLike): boolean {
+  return adminHasSettingsPersonalAccess(admin)
+}
+
 /**
  * Dashboard / nav display: explicit grants + write→read only.
  * Does not apply legacy aliases (e.g. users:read must not unlock documents:read tile).

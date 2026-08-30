@@ -24,7 +24,7 @@ export const permissionPresets: PermissionPreset[] = [
     id: 'standard-staff',
     name: 'Standard staff',
     description:
-      'Recommended for role admin — catalog, orders, messages, documents, and reports. No System Management or Administrator registry.',
+      'Recommended for role admin — catalog, orders, messages, documents, personal Admin Settings, and reports. No System Management or Administrator registry.',
     category: 'custom',
     recommended: true,
     permissions: [...STANDARD_STAFF_PERMISSIONS],
@@ -454,10 +454,18 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
     category: 'Accounting (Selpic A)',
     accessiblePages: ['Selpic A — Staff Access (employee login)'],
   },
+  'settings:personal': {
+    permission: 'settings:personal',
+    name: 'Admin Settings (personal)',
+    description:
+      'Open Admin Settings for your password, profile, notifications, and UI preferences — not store-wide system or activity log.',
+    category: 'Admin Settings',
+    accessiblePages: ['/admin/settings'],
+  },
   'system:admin': {
     permission: 'system:admin',
     name: 'System Management',
-    description: 'Admin Settings — general, security, notifications, media, activity log, and sessions.',
+    description: 'Full Admin Settings — store currency/timezone, media watermark, activity log, and sessions.',
     category: 'System Management',
     accessiblePages: ['/admin/settings'],
   },
@@ -559,5 +567,6 @@ export const permissionCategories = [
   'Bespoke',
   'Fundraising',
   'Accounting (Selpic A)',
+  'Admin Settings',
   'System Management',
 ]

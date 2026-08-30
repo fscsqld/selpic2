@@ -38,6 +38,7 @@ export const ADMIN_PERMISSION_CATALOG = [
   'accounting:read',
   'accounting:admin',
   'payroll:access',
+  'settings:personal',
   'system:admin',
   'admin:manage',
 ] as const
@@ -62,6 +63,7 @@ export const ADMIN_PERMISSION_IMPLIES: Partial<Record<AdminPermission, AdminPerm
   'fundraising:write': ['fundraising:read'],
   'fundraising:finance': ['fundraising:read'],
   'accounting:admin': ['accounting:read'],
+  'system:admin': ['settings:personal'],
 }
 
 /**
@@ -121,6 +123,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: AdminPermission[] = [
   'bespoke:read',
   'bespoke:write',
   'fundraising:read',
+  'settings:personal',
 ]
 
 /** Alias used by the recommended PermissionManager preset (keep in sync with DEFAULT_ADMIN_PERMISSIONS). */
