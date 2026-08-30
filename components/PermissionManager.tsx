@@ -276,7 +276,8 @@ export default function PermissionManager({
             <div className="text-sm text-gray-500 col-span-2">No presets available.</div>
           )}
         </div>
-        {selectedPresets.size > 0 && (
+        {(selectedPresets.size > 0 ||
+          (Array.isArray(selectedPermissions) && selectedPermissions.length > 0)) && (
           <button
             type="button"
             onClick={() => {
