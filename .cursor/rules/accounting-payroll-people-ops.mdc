@@ -1,0 +1,43 @@
+# Staff / Payroll people-ops boundary
+
+## Product role
+
+The **HR & Staff** tab is a **people-ops** sector: register staff, hours, confirm pay
+(PAYG / Super / Net), Mark Paid, employee self-service. It is **not** a second cash
+engine alongside bank PDF parsing.
+
+## Invariant
+
+On timesheet / payslip **approve**:
+
+- Create **accrual** journals only: wages/super expense + PAYG / Super /
+  `LIABILITY_WAGES_PAYABLE` (net).
+- **Never** credit `ASSET_CASH` on approve (legacy rows may still exist — detect via
+  `isLegacyPayrollCashCredit`).
+
+Cash leaves the business when the **bank statement** shows the transfer. Later
+phases match bank outflows to clear wages/PAYG/super payables so Staff totals and
+bank spend stay consistent without double P&L expense.
+
+## Do
+
+- Employee enters hours **or clocks in/out**; admin approves and Mark Paid after transfer.
+- Keep Staff preview totals (`pay-run-summary`) aligned with payslip status.
+- Use **Pay Run (batch)** for period preview → multi-approve; single Timesheet Approval remains.
+- **Remittance & ABA**: export Direct Entry `.aba` for approved nets; track PAYG/Super
+  due vs bank clears. STP/SuperStream remain external.
+- **Payslip email**: mailto summary only (no server SMTP in OSS MVP).
+- Attendance open shifts must not count toward pay until clock-out (or cancel).
+- Admin can view/edit attendance on the employee **Attendance** tab.
+- Salaried staff: set `payBasis: salary` + `salaryAmount`; use Fixed salary Pay Run
+  to create submitted timesheets, then batch-approve.
+- Persist ABA funding settings via `lib/payroll/aba-settings` (localStorage).
+- Heal legacy `ASSET_CASH` payroll credits with the Legacy payroll heal panel.
+- When classifying bank wages, prefer liability clearing / match over a second
+  `EXPENSE_WAGES` when a Pay Run already accrued the cost (Phase 4+).
+
+## Do not
+
+- Treat approve as “money already left the bank”.
+- Import Staff payroll modules into the storefront homepage app.
+- Count open (no clock-out) attendance toward Gross / timesheet drafts.

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { DollarSign, Users, FileText, Calendar, TrendingUp, AlertTriangle } from 'lucide-react'
 import { generateBASReport } from '@/lib/payg-withholding/bas-reporter'
 import { formatCurrency } from '@/lib/utils/currency-format'
+import { formatDateAustralian } from '@/lib/utils/date-format'
 import { PAYGConfigManager } from '@/lib/payg-withholding/config'
 
 interface PAYGSummaryProps {
@@ -17,7 +18,7 @@ interface PAYGSummaryProps {
     isPayrollTransaction?: boolean
     payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
     noABNWarning?: {
-      shouldWarn: boolean
+      shouldWarn?: boolean
       withholdingAmount?: number
     }
   }>
@@ -65,7 +66,7 @@ export function PAYGSummary({ transactions }: PAYGSummaryProps) {
       dateRange.endDate,
       periodType
     )
-  }, [transactions, dateRange, periodType])
+  }, [transactions, dateRange, periodType, payrollTransactions.length])
 
   // If no payroll transactions, show empty state
   if (payrollTransactions.length === 0) {

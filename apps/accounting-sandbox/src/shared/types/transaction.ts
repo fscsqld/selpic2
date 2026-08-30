@@ -26,12 +26,22 @@ export interface ClassifiedTransaction extends BaseTransaction {
   isPayrollTransaction?: boolean
   payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
   noABNWarning?: {
-    shouldWarn: boolean
-    warningMessage: string
+    shouldWarn?: boolean
+    warningMessage?: string
     withholdingAmount?: number
   }
   capitalImprovementWarning?: boolean
   isUnusualCredit?: boolean
+  fundedByDirector?: boolean
+  paidBy?: 'company' | 'director'
+  matchedEmployee?: {
+    id: string
+    name: string
+    employeeId: string
+    type: string
+  }
+  matchConfidence?: 'high' | 'medium' | 'low'
+  matchReason?: string
   fbtInfo?: {
     isFBTRelevant: boolean
     fbtCategory?: 'meal' | 'entertainment' | 'travel' | 'vehicle' | 'other'
@@ -42,10 +52,13 @@ export interface ClassifiedTransaction extends BaseTransaction {
     confidence: number
   }
   gstInfo?: {
-    hasGST: boolean
+    hasGST?: boolean
+    isGSTIncluded?: boolean
     gstAmount?: number
     gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
     netAmount?: number
+    confidence?: number
+    reasoning?: string
   }
 }
 

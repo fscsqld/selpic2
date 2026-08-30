@@ -1,0 +1,27 @@
+---
+description: Transaction History must show bank + Cash Expense in chronological date order
+globs: apps/accounting-sandbox/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Transaction History date order (accounting sandbox)
+
+## Invariant
+
+**Transaction History (P&L period)** lists every bank-statement row **and** Add Cash Expense whose date sits in the banner From/To — not only the last uploaded PDF. Q4 upload must not hide Dec–Mar cash or earlier statements when the period is 7 Dec–29 Jun.
+
+Same list is chronological (earliest date first). Cash expenses must not be dumped at the end of the bank block.
+
+## Do
+
+- Sort with `sortTransactionsChronologically` from `lib/dashboard/sort-transactions.ts` (ISO dates via `toIsoDateString`).
+- Merge cash into statement-scoped History via `mergeManualCashExpenses` (already sorts).
+- For **P&L period**, use `filterBusinessLedgerForPeriod` / `dashboardTransactions` (full ledger ∩ banner).
+- Same calendar day: keep bank lines in statement order, then cash/manual.
+
+## Do not
+
+- Append `source: 'manual'` / `cash_*` rows after all bank rows without sorting.
+- Sort on raw display strings (`DD/MM/YYYY`) — always normalise to ISO first.
+- Assume History “statement” scope is bank-only forever — Cash Expense belongs in the same date-ordered view as P&L.
+---

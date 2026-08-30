@@ -42,34 +42,32 @@ export default function LoginPage() {
     let cancelled = false
 
     const redirectIfAuthenticated = async () => {
-      if (useAdminAuth.getState().isLoggedIn) {
-        router.replace('/admin/dashboard')
-        return
-      }
-      if (useUserAuth.getState().isLoggedIn) {
-        router.replace('/')
-        return
-      }
-
       const hasSupabase =
         Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
         Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
 
-      if (!hasSupabase) return
-
-      try {
-        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
-        const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
-        const supabase = createSupabaseBrowserClient()
-        const { data } = await supabase.auth.getSession()
-        if (cancelled || !data.session?.user) return
-        if (userHasAdminAccess(data.session.user)) {
-          router.replace('/admin/dashboard')
-        } else {
-          router.replace('/')
+      if (hasSupabase) {
+        try {
+          const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+          const { resolveAdminBrowserSession } = await import('@/lib/supabase/resolveAdminBrowserSession')
+          const supabase = createSupabaseBrowserClient()
+          const resolved = await resolveAdminBrowserSession(supabase)
+          if (cancelled) return
+          if (resolved.ok) {
+            router.replace('/admin/dashboard')
+            return
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
+      } else if (useAdminAuth.getState().isLoggedIn) {
+        router.replace('/admin/dashboard')
+        return
+      }
+
+      if (cancelled) return
+      if (useUserAuth.getState().isLoggedIn) {
+        router.replace('/')
       }
     }
 

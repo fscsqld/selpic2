@@ -1,0 +1,69 @@
+---
+description: Learned — Export Business Only (P&L Period) must match full History for period
+globs: apps/accounting-sandbox/**/excel-export/**,apps/accounting-sandbox/**/BizIntelTabPanel*,apps/accounting-sandbox/**/useAccountingDashboard*
+alwaysApply: false
+---
+
+# Export Business Only (P&L Period) — user expectation vs bug (learned 2026-08-27)
+
+## User setup
+
+- P&L period: **FY 2025–26 (Jul–Jun)** · From **01/07/2025** · To **30/06/2026**  
+- Banner: **64 transactions**  
+- Action: **Export Business Only (P&L Period)**  
+- File checked: `Downloads/statement-business-selpic-bank_statment_2026-08-27.xlsx`
+
+## What the user expects (product truth)
+
+Export = **Transaction History for that P&L window, business only** — same universe as the on-screen **64** rows (all History bank statements in range + cash in range, personal excluded).  
+Not “one PDF statement ∩ period.”
+
+## What the file actually contains (wrong)
+
+- Sheet **General Ledger**: **14** data rows (+ GRAND TOTAL) — not 64.  
+- Looks like **one active statement’s bank lines** in range + some **cash** (e.g. Korea flight, Stamp Zone ×2, Case, Ibis, Samsung, ASIC, freight, Nab fee, share capital, director loan).  
+- **Missing** typical FY History mass: Stripe/cleaning income runs, fuel, cleaning subcontractor, accounting fees, marketing, software, merchant fees, other bank months, etc.  
+- Filename still `statement-business-{activeStatementFile}` — statement-scoped naming.  
+- Tax Category Summary totals (~$10k debit side) ≪ full FY P&L expenses (~$15k) / full income.
+
+## Why code does this today
+
+`resolveStatementForExcelExport` / `handleExportExcel`:
+
+1. Load **current (or latest) statement** only (or `exportStatementSnapshot`).  
+2. Filter bank rows to P&L `dateRangeFilter`.  
+3. **Merge cash** in range only.  
+4. Explicit comment: *“never the full merged History of every statement.”*  
+5. UI `title`: *“Business rows · statement ∩ P&L period”* — matches code, **conflicts** with button label + user intent.
+
+Success toast: *“statement ∩ banner + cash”* — same mismatch.
+
+## Correct invariant (when fixing)
+
+```
+Export Business Only (P&L Period)
+  ≡ business rows of dashboardTransactions / History for viewPeriod
+  ≡ same count as P&L banner (e.g. 64 for FY 2025–26)
+```
+
+Sister checks:
+
+- Personal dept excluded (business only).  
+- All History statements’ bank rows in From–To, not only active PDF.  
+- Cash in period included.  
+- Payroll: follow same include/exclude as on-screen History for that filter (do not silently drop if History shows them).  
+- Summary / BAS period exports already use `dashboardTransactions` — Business Excel should **align** with that source, not statement-scoped resolve.  
+- Filename: prefer `pl-business-{start}_to_{end}` (or similar), not only active statement name.  
+- Sheet header should state P&L period + row count (existing `buildGeneralLedgerSheet` period rows if wired).
+
+## Do not
+
+- Tell the user 14 rows is “correct P&L Period export” for a 64-tx FY.  
+- “Fix” by changing the banner count to 14.  
+- Reintroduce FY GST `scaleMap` here — unrelated.
+
+## Fix status (2026-08-27)
+
+**Shipped:** `handleExportExcel` uses `filterPlPeriodHistoryForExport(dashboardTransactions)` — same universe as on-screen History for the P&L banner. Filename `pl-business-{start}_to_{end}`. UI titles updated.
+
+`resolveStatementForExcelExport` remains for legacy/tooling; not used by Biz Intel Export Business Only.

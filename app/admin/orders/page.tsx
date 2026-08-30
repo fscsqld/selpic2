@@ -5,6 +5,7 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import { useStore, ORDER_PLATFORM_LABEL, type OrderPlatformSource, type OrderStatus } from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, Package, CreditCard, User, History, FileText, Save, Plus, Loader2, Volume2, Store, RefreshCw, ExternalLink } from 'lucide-react'
@@ -71,6 +72,11 @@ export default function AdminOrdersPage() {
     autoRefreshInterval,
   } = useStore()
   const { adminUser } = useAdminAuth()
+  const canWriteOrders = adminHasPermission(adminUser, 'orders:write')
+
+  const denyOrderWrite = () => {
+    alert('You do not have permission to modify orders.')
+  }
 
   const [manualModalOpen, setManualModalOpen] = useState(false)
   const [quickShipModalOpen, setQuickShipModalOpen] = useState(false)
@@ -301,6 +307,10 @@ export default function AdminOrdersPage() {
 
   const applyStatusChange = useCallback(
     async (orderId: string, status: OrderStatus) => {
+      if (!canWriteOrders) {
+        denyOrderWrite()
+        return
+      }
       const current = orders.find((o) => o.id === orderId)
       if (
         status === 'shipped' &&
@@ -344,7 +354,7 @@ export default function AdminOrdersPage() {
         alert(e instanceof Error ? e.message : 'Failed to save status')
       }
     },
-    [orders, performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus]
+    [orders, performedBy, persistStatusToLedger, syncOrdersFromSupabase, updateOrderStatus, canWriteOrders]
   )
 
   /** Admin orders UI is English-only; storefront `language` does not apply here. */
@@ -768,6 +778,10 @@ export default function AdminOrdersPage() {
   }
 
   const bulkStatusChange = (status: 'processing' | 'shipped' | 'cancelled') => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (selectedIds.length === 0) {
       alert(isKo ? '선택한 주문이 없습니다.' : 'No orders selected.')
       return
@@ -798,6 +812,10 @@ export default function AdminOrdersPage() {
   }
 
   const bulkDelete = () => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (selectedIds.length === 0) {
       alert(isKo ? '선택한 주문이 없습니다.' : 'No orders selected.')
       return
@@ -812,6 +830,10 @@ export default function AdminOrdersPage() {
   }
 
   const handleSaveOrder = (orderId: string, formData: any) => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (formData.customer) {
       updateOrderCustomer(orderId, formData.customer, performedBy)
     }
@@ -853,7 +875,7 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['orders:read']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title={T.title}
@@ -864,6 +886,14 @@ export default function AdminOrdersPage() {
           showHomepageLink={false}
           showLanguageSelector={false}
         />
+
+        {!canWriteOrders && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Read-only access — you can view orders but cannot change status, edit, or delete them.
+            </p>
+          </div>
+        )}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-white px-4 py-3 shadow-sm">
@@ -953,8 +983,15 @@ export default function AdminOrdersPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setManualModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                onClick={() => {
+                  if (!canWriteOrders) {
+                    denyOrderWrite()
+                    return
+                  }
+                  setManualModalOpen(true)
+                }}
+                disabled={!canWriteOrders}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="h-4 w-4" aria-hidden />
                 {isKo ? '주문 수동 추가' : 'Add order manually'}
@@ -1219,25 +1256,29 @@ export default function AdminOrdersPage() {
                 </button>
                 <button
                   onClick={() => bulkStatusChange('processing')}
-                  className="px-3 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 text-sm"
+                  disabled={!canWriteOrders}
+                  className="px-3 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {T.setProcessing}
                 </button>
                 <button
                   onClick={() => bulkStatusChange('shipped')}
-                  className="px-3 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100 text-sm"
+                  disabled={!canWriteOrders}
+                  className="px-3 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {T.setShipped}
                 </button>
                 <button
                   onClick={() => bulkStatusChange('cancelled')}
-                  className="px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 text-sm"
+                  disabled={!canWriteOrders}
+                  className="px-3 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {T.cancel}
                 </button>
                 <button
                   onClick={bulkDelete}
-                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                  disabled={!canWriteOrders}
+                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {T.bulkDelete}
                 </button>
@@ -1296,10 +1337,15 @@ export default function AdminOrdersPage() {
                           </div>
                           <button
                             onClick={() => {
+                              if (!canWriteOrders) {
+                                denyOrderWrite()
+                                return
+                              }
                               if (confirm(T.confirmDelete)) deleteOrder(order.id, performedBy)
                             }}
+                            disabled={!canWriteOrders}
                             title={T.delete}
-                            className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 border border-red-200"
+                            className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Trash size={14} />
                           </button>
@@ -1334,8 +1380,15 @@ export default function AdminOrdersPage() {
                             <Home size={12} /> View
                           </Link>
                           <button
-                            onClick={() => setEditingOrder(order.id)}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs flex-1"
+                            onClick={() => {
+                              if (!canWriteOrders) {
+                                denyOrderWrite()
+                                return
+                              }
+                              setEditingOrder(order.id)
+                            }}
+                            disabled={!canWriteOrders}
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Edit size={12} /> {T.editOrder}
                           </button>

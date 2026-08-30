@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, Trash2, RefreshCw, CheckCircle, X } from 'lucide-react'
+import { AlertTriangle, Trash2, RefreshCw, X } from 'lucide-react'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
+import { clearBrowserLedgerCaches } from '@/lib/storage/backup-preferences'
+import { clearSSOToken } from '@/lib/sso-handler'
 
 interface SystemResetProps {
   onResetComplete: () => void
@@ -10,6 +12,28 @@ interface SystemResetProps {
 }
 
 const CONFIRMATION_TEXT = 'RESET'
+
+/** Extra keys beyond clearBrowserLedgerCaches / selpic_* prefix. */
+const FACTORY_LOCAL_KEYS = [
+  'director_name',
+  'openai_api_key',
+  'user_openai_api_key',
+  'homepage_api_url',
+  'homepage_api_key',
+  'employee_session',
+  'selpic_a_pin',
+  'selpic_a_attempts',
+  'selpic_a_lockout_until',
+  'selpic_setup_complete',
+  'selpic_company_name',
+  'selpic_abn',
+  'selpic_acn',
+  'selpic_payg_config',
+  'payg_config',
+  'selpic_user_mappings',
+  'user_mappings',
+  'selpic_sso_token',
+] as const
 
 export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
   const [confirmationText, setConfirmationText] = useState<string>('')
@@ -20,35 +44,27 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
   const isConfirmButtonEnabled = confirmationText === CONFIRMATION_TEXT
 
   const handleReset = async () => {
-    if (!isConfirmButtonEnabled) {
-      return
-    }
+    if (!isConfirmButtonEnabled) return
 
     setIsResetting(true)
     setError(null)
     setResetProgress('')
 
     try {
-      // Step 1: Clear all IndexedDB stores
       setResetProgress('Clearing IndexedDB data...')
-      await clearAllIndexedDBData()
+      await indexedDBStorage.init()
+      await indexedDBStorage.factoryResetAllData()
 
-      // Step 2: Clear all localStorage (except browser settings)
       setResetProgress('Clearing localStorage...')
-      await clearAllLocalStorage()
+      clearFactoryLocalStorage()
 
-      // Step 3: Clear sessionStorage
       setResetProgress('Clearing session data...')
       if (typeof window !== 'undefined') {
         sessionStorage.clear()
       }
 
       setResetProgress('Reset complete! Redirecting to setup...')
-      
-      // Wait a moment to show completion message
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Call completion callback (will trigger Setup Wizard)
+      await new Promise((resolve) => setTimeout(resolve, 800))
       onResetComplete()
     } catch (err) {
       console.error('[SystemReset] Error during reset:', err)
@@ -57,131 +73,31 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
     }
   }
 
-  const clearAllIndexedDBData = async (): Promise<void> => {
-    try {
-      // Initialize IndexedDB first
-      await indexedDBStorage.init()
+  function clearFactoryLocalStorage() {
+    if (typeof window === 'undefined') return
 
-      // Clear all stores one by one
-      const storesToClear = [
-        'statements',
-        'cashExpenses',
-        'receipts',
-        'transactionReceipts',
-        'businessProfile',
-        'usageLogging',
-        'apiUsage',
-        'apiBalance',
-        'assets',
-        'auditTrail',
-        'periods',
-        'periodCarryForward',
-        'incomingOrders'
-      ]
+    clearBrowserLedgerCaches()
+    clearSSOToken()
 
-      for (const storeName of storesToClear) {
-        try {
-          await clearStore(storeName)
-        } catch (err) {
-          console.warn(`[SystemReset] Warning: Could not clear store ${storeName}:`, err)
-          // Continue with other stores even if one fails
-        }
-      }
-
-      console.log('[SystemReset] ✅ All IndexedDB stores cleared')
-    } catch (err) {
-      console.error('[SystemReset] Error clearing IndexedDB:', err)
-      throw new Error('Failed to clear IndexedDB data')
-    }
-  }
-
-  const clearStore = async (storeName: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      // Access IndexedDB directly
-      const request = indexedDB.open('selpic-accounting')
-      
-      request.onsuccess = () => {
-        const db = request.result
-        if (!db.objectStoreNames.contains(storeName)) {
-          // Store doesn't exist, skip
-          console.log(`[SystemReset] Store ${storeName} does not exist, skipping`)
-          db.close()
-          resolve()
-          return
-        }
-
-        try {
-          const transaction = db.transaction([storeName], 'readwrite')
-          const store = transaction.objectStore(storeName)
-          const clearRequest = store.clear()
-
-          clearRequest.onsuccess = () => {
-            console.log(`[SystemReset] ✅ Cleared store: ${storeName}`)
-            db.close()
-            resolve()
-          }
-
-          clearRequest.onerror = () => {
-            console.error(`[SystemReset] ❌ Error clearing store ${storeName}:`, clearRequest.error)
-            db.close()
-            // Don't reject, just log and continue
-            resolve()
-          }
-
-          transaction.onerror = () => {
-            console.error(`[SystemReset] ❌ Transaction error for store ${storeName}:`, transaction.error)
-            db.close()
-            resolve()
-          }
-        } catch (err) {
-          console.error(`[SystemReset] ❌ Exception clearing store ${storeName}:`, err)
-          db.close()
-          resolve() // Continue with other stores
-        }
-      }
-
-      request.onerror = () => {
-        console.error('[SystemReset] ❌ Error opening IndexedDB:', request.error)
-        reject(request.error)
-      }
-
-      request.onblocked = () => {
-        console.warn('[SystemReset] ⚠️ IndexedDB is blocked. Please close other tabs.')
-        // Wait a bit and retry
-        setTimeout(() => {
-          resolve() // Continue anyway
-        }, 1000)
-      }
-    })
-  }
-
-  const clearAllLocalStorage = async (): Promise<void> => {
-    if (typeof window === 'undefined') {
-      return
+    for (const key of FACTORY_LOCAL_KEYS) {
+      localStorage.removeItem(key)
     }
 
-    // Get all localStorage keys
-    const keysToRemove: string[] = []
+    const extra: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key) {
-        // Keep browser-specific keys, remove all SELPIC-related keys
-        if (key.startsWith('selpic_') || 
-            key.startsWith('accounting_') || 
-            key === 'opening_director_loan_balance' ||
-            key === 'selpic_setup_complete') {
-          keysToRemove.push(key)
-        }
+      if (!key) continue
+      if (
+        key.startsWith('selpic_') ||
+        key.startsWith('accounting_') ||
+        key.startsWith('journey_') ||
+        key.startsWith('ato_') ||
+        key.startsWith('individual_tax_')
+      ) {
+        extra.push(key)
       }
     }
-
-    // Remove all SELPIC-related keys
-    keysToRemove.forEach(key => {
-      localStorage.removeItem(key)
-      console.log(`[SystemReset] Removed localStorage key: ${key}`)
-    })
-
-    console.log('[SystemReset] ✅ All localStorage cleared')
+    extra.forEach((key) => localStorage.removeItem(key))
   }
 
   return (
@@ -193,33 +109,28 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">System Reset</h2>
           <p className="text-gray-600">
-            This will permanently delete all data and restore the system to its initial state.
+            Permanently deletes all ledger and setup data and returns to the first-time Setup Wizard.
           </p>
         </div>
 
-        {/* Warning Box */}
         <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-red-900 mb-2">⚠️ Warning: Data Will Be Permanently Deleted</h3>
+              <h3 className="font-semibold text-red-900 mb-2">Warning: data will be permanently deleted</h3>
               <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
-                <li>All transactions and financial data</li>
-                <li>All uploaded statements and receipts</li>
-                <li>Business profile and settings</li>
-                <li>API usage logs and balances</li>
-                <li>Asset records and audit trails</li>
-                <li>All periods and carry-forward data</li>
-                <li>Incoming orders from homepage</li>
+                <li>Statements, cash, periods, bank recon, journals</li>
+                <li>HR / payroll (employees, payslips, timesheets)</li>
+                <li>Business profile, PIN, and API usage logs</li>
+                <li>Lodgment worksheets and local settings caches</li>
               </ul>
               <p className="text-sm font-medium text-red-900 mt-3">
-                This action cannot be undone. Please ensure you have exported all important data before proceeding.
+                Export a JSON backup from Settings → Data Management first. This cannot be undone.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Confirmation Input */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Type <span className="font-mono font-bold text-red-600">{CONFIRMATION_TEXT}</span> to confirm:
@@ -233,12 +144,8 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
             disabled={isResetting}
             autoFocus
           />
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            You must type exactly "{CONFIRMATION_TEXT}" to enable the reset button.
-          </p>
         </div>
 
-        {/* Progress Message */}
         {resetProgress && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-2">
@@ -248,7 +155,6 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
           </div>
         )}
 
-        {/* Error Message */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2">
@@ -258,10 +164,10 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="space-y-3">
           <button
-            onClick={handleReset}
+            type="button"
+            onClick={() => void handleReset()}
             disabled={!isConfirmButtonEnabled || isResetting}
             className="w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
@@ -279,19 +185,13 @@ export function SystemReset({ onResetComplete, onCancel }: SystemResetProps) {
           </button>
 
           <button
+            type="button"
             onClick={onCancel}
             disabled={isResetting}
             className="w-full py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
           >
             Cancel
           </button>
-        </div>
-
-        {/* Additional Info */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-500 text-center">
-            After reset, you will be guided through the initial setup process, including PIN setup and homepage API integration.
-          </p>
         </div>
       </div>
     </div>

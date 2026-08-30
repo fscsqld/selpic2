@@ -1,0 +1,41 @@
+---
+description: Learned — Annual myTax Motor vehicle; airfare NOT motor (user 2026-08-27)
+globs: apps/accounting-sandbox/**/ato-lodgment/**,apps/accounting-sandbox/**/ATOLodgment*
+alwaysApply: false
+---
+
+# Annual / myTax — Motor vehicle expenses (learned 2026-08-27)
+
+## UI
+
+**ATO Lodgment → Annual income (myTax N/A)** → ATO entry order → **Motor vehicle expenses**  
+Field: `MYTAX_MOTOR_VEHICLE`  
+Path: `myTax → Business/sole trader → Expenses → Motor vehicle expenses`
+
+## Product truth (user-confirmed) — airfare ≠ motor
+
+| Category / spend | `MYTAX_MOTOR_VEHICLE`? |
+|------------------|------------------------|
+| Fuel (`EXPENSE_FUEL_TRAVEL`) | **Yes** |
+| Motor / vehicle / parking / toll | **Yes** |
+| Business airfare / Travel–Transport (`EXPENSE_TRAVEL_TRANSPORT`, e.g. **$1,516.08**) | **No** → `MYTAX_OTHER_EXPENSES` |
+| Travel accommodation | **No** |
+
+## Fix (shipped 2026-08-27)
+
+`isMotorExpenseCategory` in `mytax-field-map.ts` excludes `travel_transport`, travel+transport, airfare/flight/airline. Keeps fuel/motor/vehicle/parking/toll.
+
+| | Amount |
+|--|--------|
+| **Wrong (old UI)** | Motor ~**$2,371.55** (Fuel + airfare, scaled) |
+| **Correct (after fix)** | Motor ≈ **$910.82** (Fuel only scaled); airfare → Other |
+
+P&L category Travel–Transport **$1,516.08** unchanged — only Annual bucket map changed.
+
+**Broader ATO work (user 2026-08-27):** all income + expense lodgment lines → **per-line GST-ex** (no FY `scaleMap`) — `accounting-ato-rounding-gst-ex.mdc`. Motor $ will change again when that ships.
+
+## Do not
+
+- Put airfare back into motor for string convenience  
+- Change P&L `EXPENSE_TRAVEL_TRANSPORT` unless user asks  
+- Equate CTR total expenses with this motor field

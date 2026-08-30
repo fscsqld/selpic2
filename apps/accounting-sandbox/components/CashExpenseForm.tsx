@@ -18,6 +18,9 @@ interface CashExpenseFormProps {
     department?: string
     description?: string
     source: 'manual'
+    claimAuGst?: boolean
+    paidBy?: 'company' | 'director'
+    fundedByDirector?: boolean
   }) => Promise<void>
   apiKey: string
   categories: string[]
@@ -36,6 +39,8 @@ export function CashExpenseForm({
   const [amount, setAmount] = useState('')
   const [merchant, setMerchant] = useState('')
   const [category, setCategory] = useState('CASH_EXPENSE_PETTY')
+  const [claimAuGst, setClaimAuGst] = useState(false)
+  const [paidBy, setPaidBy] = useState<'company' | 'director'>('director')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -238,6 +243,9 @@ export function CashExpenseForm({
         department: 'cleaning', // Default to Company
         description: merchant,
         source: 'manual',
+        claimAuGst,
+        paidBy,
+        fundedByDirector: paidBy === 'director',
       })
 
       // Reset form
@@ -245,6 +253,7 @@ export function CashExpenseForm({
       setAmount('')
       setMerchant('')
       setCategory('CASH_EXPENSE_PETTY')
+      setClaimAuGst(false)
       setReceiptFile(null)
       setReceiptPreview(null)
       setExtractionSuccess(false)
@@ -362,6 +371,57 @@ export function CashExpenseForm({
             </select>
           </div>
 
+          {/* AU GST claim (BAS 1B) — company expense can still hit P&L without this */}
+          
+          {/* Paid by — director advances increase Director Loan */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Paid by
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-800">
+                <input
+                  type="radio"
+                  name="paidBy"
+                  checked={paidBy === 'director'}
+                  onChange={() => setPaidBy('director')}
+                  className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Director (personal — company owes director)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-800">
+                <input
+                  type="radio"
+                  name="paidBy"
+                  checked={paidBy === 'company'}
+                  onChange={() => setPaidBy('company')}
+                  className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Company float / petty cash
+              </label>
+            </div>
+          </div>
+
+<div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={claimAuGst}
+                onChange={(e) => setClaimAuGst(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-gray-900">
+                  Claim AU GST on this purchase (BAS 1B)
+                </span>
+                <span className="block text-xs text-gray-600 mt-1">
+                  Leave unchecked for overseas, pre-incorporation, ASIC GST-free, or other non-claimable
+                  spends. Expense still counts for P&amp;L / company tax; only GST claim is skipped.
+                </span>
+              </span>
+            </label>
+          </div>
+
           {/* Receipt Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -394,6 +454,7 @@ export function CashExpenseForm({
               )}
               {receiptPreview && (
                 <div className="mt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable */}
                   <img
                     src={receiptPreview}
                     alt="Receipt preview"

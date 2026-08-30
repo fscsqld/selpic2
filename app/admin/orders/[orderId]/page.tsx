@@ -7,6 +7,7 @@ import OrderTracking from '@/components/OrderTracking'
 import OrderEmailConfirmation from '@/components/OrderEmailConfirmation'
 import { useStore, ORDER_PLATFORM_LABEL } from '@/lib/store'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useTranslation } from '@/lib/useTranslation'
 import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
@@ -33,6 +34,12 @@ export default function AdminOrderDetailPage() {
   const router = useRouter()
   const { t } = useTranslation()
   const { adminUser } = useAdminAuth()
+  const canWriteOrders = adminHasPermission(adminUser, 'orders:write')
+
+  const denyOrderWrite = () => {
+    alert('You do not have permission to modify orders.')
+  }
+
   const {
     orders,
     addTrackingNumber,
@@ -119,6 +126,10 @@ export default function AdminOrderDetailPage() {
   }, [order, router, ledgerReady])
 
   const handleAddTrackingNumber = async (trackingNumber: string, provider: string) => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (order) {
       setIsLoading(true)
       try {
@@ -136,6 +147,10 @@ export default function AdminOrderDetailPage() {
   }
 
   const handleUpdateDeliveryStatus = async (status: string, location: string, description: string) => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (order) {
       setIsLoading(true)
       try {
@@ -154,6 +169,10 @@ export default function AdminOrderDetailPage() {
 
   // ✅ 주문 승인 핸들러 (Supabase 반영 + 회계 장부 자동 기록 포함)
   const handleApproveOrder = async () => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (!order) return
 
     try {
@@ -236,7 +255,7 @@ export default function AdminOrderDetailPage() {
 
   if (!order && !ledgerReady) {
     return (
-      <AdminRoute>
+      <AdminRoute requiredPermissions={['orders:read']}>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center text-gray-600">
             <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -249,7 +268,7 @@ export default function AdminOrderDetailPage() {
 
   if (!order && ledgerReady) {
     return (
-      <AdminRoute>
+      <AdminRoute requiredPermissions={['orders:read']}>
         <div className="min-h-screen bg-gray-50">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center">
@@ -360,6 +379,10 @@ Selpic Team`
   const patchLedgerStatus = async (
     next: 'approved' | 'processing' | 'shipped' | 'ready_for_collection' | 'collected'
   ) => {
+    if (!canWriteOrders) {
+      denyOrderWrite()
+      return
+    }
     if (!order) return
     if (
       next === 'shipped' &&
@@ -471,7 +494,7 @@ Selpic Team`
   }
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['orders:read']}>
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
@@ -509,6 +532,7 @@ Selpic Team`
                     <button
                       type="button"
                       disabled={
+                        !canWriteOrders ||
                         statusSaving ||
                         order.status === 'ready_for_collection' ||
                         order.status === 'collected' ||
@@ -523,6 +547,7 @@ Selpic Team`
                     <button
                       type="button"
                       disabled={
+                        !canWriteOrders ||
                         statusSaving ||
                         order.status === 'collected' ||
                         order.status === 'cancelled'
@@ -539,6 +564,7 @@ Selpic Team`
                     <button
                       type="button"
                       disabled={
+                        !canWriteOrders ||
                         statusSaving ||
                         order.status === 'processing' ||
                         order.status === 'shipped' ||
@@ -552,7 +578,7 @@ Selpic Team`
                     </button>
                     <button
                       type="button"
-                      disabled={statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
+                      disabled={!canWriteOrders || statusSaving || order.status === 'shipped' || order.status === 'cancelled'}
                       onClick={() => patchLedgerStatus('shipped')}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100 disabled:opacity-50"
                     >
@@ -1147,7 +1173,7 @@ Selpic Team`
                     onClick={() => {
                       void handleApproveOrder()
                     }}
-                    disabled={statusSaving || order.status === 'approved'}
+                    disabled={!canWriteOrders || statusSaving || order.status === 'approved'}
                     className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {order.status === 'approved' ? 'Already Approved' : 'Approve Order'}
@@ -1157,6 +1183,7 @@ Selpic Team`
                       void patchLedgerStatus('processing')
                     }}
                     disabled={
+                      !canWriteOrders ||
                       statusSaving ||
                       order.status === 'processing' ||
                       order.status === 'ready_for_collection' ||
@@ -1174,6 +1201,7 @@ Selpic Team`
                           void patchLedgerStatus('ready_for_collection')
                         }}
                         disabled={
+                          !canWriteOrders ||
                           statusSaving ||
                           order.status === 'ready_for_collection' ||
                           order.status === 'collected' ||
@@ -1188,6 +1216,7 @@ Selpic Team`
                           void patchLedgerStatus('collected')
                         }}
                         disabled={
+                          !canWriteOrders ||
                           statusSaving ||
                           order.status === 'collected' ||
                           order.status === 'cancelled'
@@ -1202,7 +1231,7 @@ Selpic Team`
                       onClick={() => {
                         void patchLedgerStatus('shipped')
                       }}
-                      disabled={statusSaving || order.status === 'shipped'}
+                      disabled={!canWriteOrders || statusSaving || order.status === 'shipped'}
                       className="w-full px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Mark as Shipped

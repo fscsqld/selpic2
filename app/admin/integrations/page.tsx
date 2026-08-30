@@ -49,7 +49,7 @@ export default function AdminIntegrationsPage() {
   }
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['integrations:read']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Integrations"

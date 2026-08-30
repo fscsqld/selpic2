@@ -88,7 +88,7 @@ function buildRequestSummary(record: BespokeStickerRequestRecord): string {
 
 export default function AdminBespokeRequestsPage() {
   return (
-    <AdminRoute requiredPermissions={['messages:read']}>
+    <AdminRoute requiredPermissions={['bespoke:read']}>
       <AdminBespokeRequestsContent />
     </AdminRoute>
   )

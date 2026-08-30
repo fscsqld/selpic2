@@ -105,8 +105,7 @@ export function isTaxDeductible(category: string): boolean {
  * @returns 그룹에 속하는지 여부
  */
 export function isCategoryInGroup(category: string, group: keyof typeof CATEGORY_GROUPS): boolean {
-  const cats = CATEGORY_GROUPS[group] as readonly TaxCategory[]
-  return cats.includes(category as TaxCategory)
+  return (CATEGORY_GROUPS[group] as readonly string[]).includes(category)
 }
 
 /**
@@ -115,10 +114,9 @@ export function isCategoryInGroup(category: string, group: keyof typeof CATEGORY
  * @returns 그룹 이름 또는 null
  */
 export function getCategoryGroup(category: string): keyof typeof CATEGORY_GROUPS | null {
-  for (const group of Object.keys(CATEGORY_GROUPS) as (keyof typeof CATEGORY_GROUPS)[]) {
-    const categories = CATEGORY_GROUPS[group] as readonly TaxCategory[]
-    if (categories.includes(category as TaxCategory)) {
-      return group
+  for (const [group, categories] of Object.entries(CATEGORY_GROUPS)) {
+    if ((categories as readonly string[]).includes(category)) {
+      return group as keyof typeof CATEGORY_GROUPS
     }
   }
   return null

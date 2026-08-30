@@ -31,6 +31,7 @@ export function WorkCoverCertificate({ policy }: WorkCoverCertificateProps) {
     if (policy) {
       loadCertificates()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when policy identity changes only
   }, [policy])
 
   const loadCertificates = async () => {

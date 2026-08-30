@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { OrderRecord } from '@/lib/store'
 import { DEFAULT_STANDARD_LETTER_WEIGHT_KG } from '@/lib/shipping/orderDeclaredWeightKg'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 
@@ -45,9 +45,9 @@ function isAustralia(country: string): boolean {
 }
 
 export async function POST(req: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized — registry admin session required.' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:write')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   if (!isSupabaseConfigured()) {
@@ -103,7 +103,12 @@ export async function POST(req: Request) {
 
     const id = `ORD-${Date.now().toString(36)}`
     const now = new Date().toISOString()
-    const performedBy = (admin.email || admin.user_metadata?.full_name || admin.id || 'admin').slice(0, 120)
+    const performedBy = (
+      gate.user.email ||
+      (typeof gate.user.user_metadata?.full_name === 'string' ? gate.user.user_metadata.full_name : '') ||
+      gate.user.id ||
+      'admin'
+    ).slice(0, 120)
 
     const order: OrderRecord = {
       id,

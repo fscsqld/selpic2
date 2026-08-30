@@ -1,0 +1,87 @@
+---
+description: FY P&L dual basis — cash GST-inclusive vs tax ex-GST; GST-FREE not ÷11
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# FY / year-end P&L: two valid Nets (learn before “fixing” −$927)
+
+## Invariant
+
+**Net = Income − Expenses** is always true.  
+What changes is whether Income/Expenses are **GST-inclusive (bank cash)** or **GST-exclusive (tax / CTR style)**.
+
+| Basis | Income (SELPIC FY fixture) | Expenses | Net |
+|-------|----------------------------|----------|-----|
+| **Real-Time / Business Summary (cash)** | ~$14,419.48 incl. | $15,346.61 incl. | **−$927.13** |
+| **Tax / accountant (ex GST)** | ≈ $14,419 − 1A ≈ **$13,108.62** | ≈ $15,347 − 1B ≈ **$14,783** | **≈ −$1,674** |
+
+Bridge: `Net_exGST ≈ Net_inclusive − (1A − 1B)`  
+(e.g. −927 − ~747 ≈ −1,674).
+
+Quarters use the **same** engine. FY does not switch formula — the GST gap is just larger and more visible vs the accountant pack.
+
+## GST-FREE purchases (already correct in engine)
+
+`lib/gst/purchase-gst-claimable.ts`:
+
+- Explicit **FREE** / **EXCLUDED** / manual default → **not** in `taxableExpenses` → **not** in 1B (no ÷11).
+- Face value **still** in `totalExpenses` (P&L cash cost).
+- Only **INCLUDED** / default bank claimable lines → ÷11 for 1B.
+
+So ex-GST expenses are **not** “total expenses × 10/11”. They are:
+
+`Expenses_exGST ≈ totalExpenses − 1B`  
+(= claimable lines stripped of GST + GST-free/non-claimable at full face value).
+
+## What each screen is for
+
+| UI | Basis today | Use for |
+|----|-------------|---------|
+| Real-Time P&L, Business Summary Income/Expenses/Net | Inclusive cash | Bank reconciliation |
+| GST Summary 1A / 1B / Net | ÷11 estimates | **BAS** (quarterly) |
+| Taxable Income card (−$927 on FY) | Same as inclusive Net today | **Not** automatic CTR “excluding GST” profit |
+| ATO Lodgment BAS | Same metrics / 1A·1B | OK for BAS estimates |
+| ATO Lodgment **Annual / CTR** | **Tax (ex GST)** via `totalIncomeExGst` / `totalExpensesExGst` / `netProfitExGst` | Copy into myTax / company return — **not** cash Net |
+| Annual P&L check card | Tax primary + cash footnote | Prevents pasting Biz Intel −$927 as CTR profit |
+| **Balance Sheet** Equity | CTR primary (−$1,674); cash secondary (−$927); bridge 1A−1B (~+$747); **Total RE (CTR / ex GST when GST Payable on BS)** | CTR ≠ Biz Intel; RE keeps BS balanced |
+| **Balance Sheet** GST Payable | **Latest BAS quarter due** (e.g. Q4 ~$765); ATO refund is **Cash**, not a payable reduction | See `accounting-balance-sheet-gst-profit.mdc` |
+
+## Balance Sheet equity (learned)
+
+```
+CTR Net (−1,674.16) + Net GST 1A−1B (+747.03) = Cash Net (−927.13)
+Total RE (CTR / ex GST when GST Payable on BS) = Opening RE + Cash Net
+Total Equity = Opening Capital + Share Capital + Total RE (CTR / ex GST when GST Payable on BS)
+```
+
+**Wrong:** Equity primary profit = cash −$927 as if CTR.  
+**Right:** Primary = `netProfitExGst`; Total RE stays cash; show GST bridge between them.
+
+Helpers: `lib/gst/outstanding-bas-gst.ts`, `computeBalanceSheet` in `lib/utils/balance-sheet.ts`.
+
+## Product direction (implemented)
+
+For selected P&L period (FY and quarters):
+
+1. Business Summary / Real-Time P&L show Income **incl. + ex GST (est.)**  
+2. Expenses show **incl. + ex GST (est.)** with FREE lines at face (`totalExpenses − 1B`)  
+3. Net shows **cash** and **tax (est.)** side by side  
+4. Tax Provision primary Taxable Income = **tax (ex GST)**; cash P&L shown as secondary  
+5. **ATO Annual + Company CTR** primary totals = **tax (ex GST)**; cash shown only as reconciliation  
+6. Do **not** replace bank P&L with tax P&L silently on Biz Intel — cash stays the large figure  
+
+Engine fields: `totalIncomeExGst` / `totalExpensesExGst` / `netProfitExGst` on `calculateBusinessMetrics`.  
+
+## Do not
+
+- Call −$927 a “bug” vs −$1,674 without stating basis  
+- Blindly remove 10% from all expenses (breaks GST-FREE)  
+- Lodge company income tax using inclusive Net as if it were ex-GST CTR profit  
+- Assume quarterly BAS being right means FY Taxable Income card is already tax-basis  
+
+## Confirmed fixture (SELPIC FY 2025–26)
+
+- Q2 exp incl. $1,516.08 · Q3 $7,570.19 · Q4 $6,260.34 → FY $15,346.61  
+- 1B FY ≈ $563.83 → exp ex ≈ $14,782.78  
+- Income ex ≈ $13,108.62 → tax Net ≈ **−$1,674**

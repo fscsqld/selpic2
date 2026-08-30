@@ -20,24 +20,21 @@ export default function EmployeePayrollPage() {
   const router = useRouter()
 
   useEffect(() => {
-    checkAuthorization()
-  }, [])
+    const checkAuthorization = async () => {
+      try {
+        // 직원 세션 확인 (직원 로그인을 통해 생성된 세션)
+        const currentSession = getCurrentEmployeeSession()
+        
+        if (!currentSession) {
+          console.error('[Employee Payroll] No employee session found. Please login first.')
+          // 로그인 페이지로 리다이렉트
+          router.push('/employee/login')
+          return
+        }
 
-  const checkAuthorization = async () => {
-    try {
-      // 직원 세션 확인 (직원 로그인을 통해 생성된 세션)
-      const currentSession = getCurrentEmployeeSession()
-      
-      if (!currentSession) {
-        console.error('[Employee Payroll] No employee session found. Please login first.')
-        // 로그인 페이지로 리다이렉트
-        router.push('/employee/login')
-        return
-      }
-
-      // 직원 정보 확인
-      await indexedDBStorage.init()
-      const employee = await indexedDBStorage.getEmployeeByEmployeeId(currentSession.employeeId)
+        // 직원 정보 확인
+        await indexedDBStorage.init()
+        const employee = await indexedDBStorage.getEmployeeByEmployeeId(currentSession.employeeId)
       
       if (!employee) {
         console.error('[Employee Payroll] Employee not found:', currentSession.employeeId)
@@ -73,6 +70,9 @@ export default function EmployeePayrollPage() {
       setIsLoading(false)
     }
   }
+
+    void checkAuthorization()
+  }, [router])
 
   if (isLoading) {
     return (

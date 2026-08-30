@@ -1,0 +1,54 @@
+---
+description: Balance Sheet GST payable + Total RE = CTR when GST is a liability
+alwaysApply: false
+globs: apps/accounting-sandbox/**/balance-sheet*,apps/accounting-sandbox/**/BalanceSheet*,apps/accounting-sandbox/**/trial-balance*,apps/accounting-sandbox/lib/gst/outstanding-bas-gst*,apps/accounting-sandbox/**/ato-gst-refund*
+---
+
+# Balance Sheet: GST payable + CTR retained earnings
+
+## Invariants
+
+1. **GST still due** = **latest Australian BAS quarter** net (1A−1B) on/before as-at (e.g. Q4 ~$765.48). Show under **Current Liabilities**.
+2. An **ATO GST/BAS refund bank deposit** is **Cash & Bank**. General ATO practice: BAS labels are **whole dollars (leave cents out)**; ATO pays that whole-dollar amount. Ledger ÷11 may show e.g. ~$18.45 while the bank shows **$18.00**. Category `NON_TAXABLE_ATO_GST_REFUND`. Not a GST payable reduction. SELPIC Q3 is one instance — use actual banked credits per user (`atoGstRefundRoundingGap`).
+3. **When GST Payable is on the Balance Sheet as a liability, Total Retained Earnings = opening RE + CTR / ex-GST profit − ATO refund rounding** (`netProfitExGst` − gap). Do **not** use cash Net in Total RE — that double-counts GST already in liabilities.
+4. **ATO refund rounding** = max(0, BAS prior-credit ledger estimate − banked refund). Debit from Total RE (and TB) so Assets = L+E when Cash holds only the banked amount.
+5. Cash Net and the GST bridge (cash − CTR ≈ period 1A−1B) are **reference footnotes only** — not in Equity totals.
+6. **Trial Balance** uses the same basis: assets/liabilities from BS; P&L as **Total income (ex GST)** / **Total expenses (ex GST)** plus **ATO GST refund rounding** debit so Debit − Credit tracks BS `balanceDifference`.
+7. **Lodgment copy sheets (BAS / CTR / myTax)** use `roundAtoWholeDollars` — see `.cursor/rules/accounting-ato-lodgment-rounding.mdc`.
+
+## Equity fixture (SELPIC FYE, after fix)
+
+| Line | Amount | In totals? |
+|------|--------|------------|
+| Share Capital | $100 | Yes |
+| Current Period Profit (ex GST / CTR) | **−$1,674.16** | Yes |
+| Less: ATO GST refund rounding | **−$0.45** | Yes (when gap > 0) |
+| Total Retained Earnings | CTR − rounding | Yes |
+| Total Equity | Share capital + Total RE | Yes |
+| Cash / GST-incl. profit (−$927.13) | note | **No** |
+| Bridge ≈ +$747 | note | **No** |
+
+Identity: `Total Liabilities (incl. GST Payable Q4) + Total Equity (CTR RE − rounding) = Total Assets (Cash)`.
+
+## Wrong vs right
+
+| Topic | Wrong | Right |
+|-------|-------|--------|
+| Total RE | Cash −$927 while GST Payable on BS | **CTR − rounding** |
+| GST $747 | “ATO GST Refundable” asset | **Payable** (or Q4 due); $18 ATO money is **Cash** |
+| Put $18.45 in Cash | Overstates cash | Banked **$18**; **$0.45** clearing on RE |
+| Add GST bridge in Equity totals | Adds into RE math | Footnote only |
+| TB inclusive category P&L + GST Payable | Double-counts GST | Ex-GST income/expense + rounding debit |
+
+## External prompts
+
+- Director's Loan as Current Liability — **yes** (label under Current Liabilities).
+- Move $747 to ATO GST Refundable asset — **no** for this fixture.
+- Total RE = CTR with GST Payable on BS — **yes**; then less ATO rounding if estimate > banked.
+
+## Code
+
+- `computeBalanceSheet` — `lib/utils/balance-sheet.ts` (`retainedEarnings = opening + netProfitExGst − atoGstRefundRounding`)
+- `computeTrialBalance` — `lib/utils/trial-balance.ts` (ex-GST P&L + rounding debit)
+- `atoGstRefundRoundingGap` / `ATO_GST_REFUND_BANKED_AUD` — `lib/utils/ato-gst-refund.ts`
+- UI footnotes — `components/Reports/BalanceSheetView.tsx`

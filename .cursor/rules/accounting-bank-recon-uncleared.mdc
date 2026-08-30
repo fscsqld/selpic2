@@ -1,0 +1,43 @@
+---
+description: Month-End “bank transactions not marked cleared” — bank recon vs classify
+alwaysApply: false
+globs: apps/accounting-sandbox/**/month-end*,apps/accounting-sandbox/**/BankReconciliation*
+---
+
+# Complete bank reconciliation — “not marked cleared”
+
+## UI text
+
+`Complete bank reconciliation`  
+`21 bank transaction(s) not marked cleared.`
+
+## Meaning
+
+For the **selected Month-End period** (e.g. `2026-06`):
+
+1. Count **bank statement lines only** (exclude Add Cash Expense).
+2. Compare to Bank Reconciliation session `clearedTransactionIds`.
+3. If no completed recon session (or lines not ticked cleared) → show uncleared count.
+
+**Cleared** = user confirmed that line matches the bank statement / closing balance process in **Settings → Bank Reconciliation** (tick each line, then complete recon).
+
+This is **not** the same as:
+
+- Categorising for P&L / BAS (Biz Intel categories)
+- Having uploaded/parsed the PDF (lines exist but may still be uncleared)
+
+## Cash expense
+
+Manual cash expenses are **never** required to be “cleared” — they are not on the bank PDF. Month with only cash → recon task can show done / “Cash Expense only”.
+
+## SELPIC workflow
+
+- Upload + classify → P&L/BAS numbers work even if uncleared > 0.
+- Before **Lock accounting period**, clear bank lines for that month (or accept open period).
+- 21 uncleared ≈ 21 bank rows in that month not yet ticked in recon UI.
+
+## Code
+
+- Checklist: `lib/subledger/month-end-checklist.ts` (`bank-recon` task)
+- UI: `components/Reconciliation/BankReconciliationPanel.tsx`
+- Storage: `clearedTransactionIds` on bank reconciliation session

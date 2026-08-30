@@ -35,7 +35,7 @@ const DOC_HISTORY_PAGE_SIZE = 10
 
 export default function FundraisingDocumentsPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['fundraising:read']}>
       <DocumentsContent />
     </AdminRoute>
   )

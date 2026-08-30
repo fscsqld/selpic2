@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 
 import { categoryRowToClient } from '@/lib/community/serialize'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 type IncomingCategory = {
   id?: unknown
@@ -25,10 +28,9 @@ function normalizeSlug(raw: string): string {
 }
 
 export async function PUT(req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('community:moderate')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SERVICE_UNAVAILABLE' }, { status: 503 })

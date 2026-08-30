@@ -9,11 +9,11 @@ interface BusinessProfile {
   individualName?: string
   
   // Company/Sole Trader fields
-  companyName: string
-  abn: string
+  companyName?: string
+  abn?: string
   acn?: string
-  gstReportingCycle: 'Monthly' | 'Quarterly'
-  paygReportingCycle: 'Monthly' | 'Quarterly'
+  gstReportingCycle?: 'Monthly' | 'Quarterly'
+  paygReportingCycle?: 'Monthly' | 'Quarterly'
   gstRegistered?: boolean
   fbtRegistered?: boolean
   
@@ -265,6 +265,14 @@ export function BusinessProfileForm() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleGstRegisteredChange = (checked: boolean) => {
+    setProfile({ ...profile, gstRegistered: checked })
+  }
+
+  const handleFbtRegisteredChange = (checked: boolean) => {
+    setProfile({ ...profile, fbtRegistered: checked })
   }
 
   const handleABNChange = (value: string) => {
@@ -560,9 +568,9 @@ export function BusinessProfileForm() {
             <p><strong>Debug Info:</strong></p>
             <p>Account Type: {profile.accountType || 'NOT SET'}</p>
             {profile.accountType === 'individual' ? (
-              <p>Individual Name: "{profile.individualName || ''}" (length: {(profile.individualName || '').length})</p>
+              <p>Individual Name: &quot;{profile.individualName || ''}&quot; (length: {(profile.individualName || '').length})</p>
             ) : (
-              <p>Company Name: "{profile.companyName || ''}" (length: {(profile.companyName || '').length})</p>
+              <p>Company Name: &quot;{profile.companyName || ''}&quot; (length: {(profile.companyName || '').length})</p>
             )}
             {profile.accountType !== 'individual' && (
               <>

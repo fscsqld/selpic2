@@ -1,0 +1,40 @@
+---
+description: Statement History + Recover work per browser; safe for any merchant
+globs: apps/accounting-sandbox/components/Dashboard/HistoryPage.tsx,apps/accounting-sandbox/hooks/useAccountingDashboard.ts,apps/accounting-sandbox/lib/storage/recovered-statement.ts,apps/accounting-sandbox/lib/storage/load-all-transactions.ts
+alwaysApply: false
+---
+
+# Statement History / Recover — multi-user (browser-local)
+
+## Invariant
+
+History lists **only** statements saved in **this browser’s IndexedDB** on the accounting origin (`http://localhost:3001` / deployed accounting host). Recover may run only when that History has **no real bank file** and a **non-cash** browser cache still holds rows.
+
+## What every other user gets (by design)
+
+| Situation | Expected |
+|-----------|----------|
+| New merchant, empty browser | “No saved statements” + upload via Biz Intel — **no** Recover |
+| Same user, other PC / Chrome profile / phone | Empty History — data does **not** sync across devices |
+| Storefront port (e.g. 3005) | Never shows sandbox History (different app / origin) |
+| Private window / cleared site data | Empty History — correct |
+| History empty + transaction cache | Recover banner; saves `recovered_*.cache` **without** `cash_*` rows |
+| Real PDF/CSV already in History | Recover **hidden and refused** (would double P&L) |
+| Recover dump already present | Refuse second Recover until that row is deleted |
+| IndexedDB read throws | Error banner + Retry — never silent empty list |
+
+Cash expenses stay in the **cash** IndexedDB store. `loadAllTransactions` merges them; Recover must **strip `cash_*`** or cash doubles for every merchant.
+
+## Do
+
+- Gate Recover with `evaluateRecoverEligibility` (wait for `historyHydrated`)
+- Filter recover payload with `filterRowsForStatementRecover`
+- Surface IndexedDB read failures as an error — silent `[]` reads as “data deleted”
+- Prefer re-upload of the real bank file over Recover when possible
+
+## Do not
+
+- Assume one merchant’s IndexedDB exists on another user’s machine
+- Persist Recover beside an existing PDF/CSV
+- Put cash expenses into a recovered statement file
+- Treat empty History as a code bug when the browser simply has no statements

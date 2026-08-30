@@ -49,7 +49,7 @@ function sydneyDayFromOrderIso(iso: string): string {
 
 export default function AdminTrafficPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['traffic:read']}>
       <AdminTrafficPageContent />
     </AdminRoute>
   )

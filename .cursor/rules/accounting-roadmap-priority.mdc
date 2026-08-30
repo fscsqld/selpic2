@@ -1,0 +1,81 @@
+---
+description: Accounting roadmap — what remains after Track A; work order (not only public B)
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Accounting — remaining work & priority (updated 2026-08-28)
+
+## Status snapshot
+
+| Track / item | Status |
+|--------------|--------|
+| **A — Internal deploy** (SSO, prod URL, Admin link, History, backup ops) | **Done** (A1–A4 done; Cash single-delete shipped) |
+| **Cash Expense single-delete** | **Done** |
+| **Priority 1 core — per-line GST-ex + ATO Lodgment panels** | **Done** (scaleMap removed; BAS / Annual / CTR Item 6; L1/L2 hints on Lodgment) |
+| **Phase 1 polish — Steps 1–3** (L1/L2 labels, dashboard filter, export + lodgment UX) | **Done 2026-08-28** |
+| **2nd-priority polish** (roadmap docs, ESLint, CTR snapshot compare, BAS filing quarter) | **Done 2026-08-28** |
+| **B — Public / multi-tenant accounting** | **Backlog only** — do **not** start until internal product is stable and user explicitly opens B |
+| **B — Employee mobile My Payroll** | **Required inside B** — see `accounting-track-b-employee-mobile-payroll.mdc` |
+| **`tsc` debt** + remove `ignoreBuildErrors` | **Done** (`tsc --noEmit` = 0) |
+
+Public (B) is **not** the only remaining accounting work.
+
+## Completed sequence (user 2026-08-28)
+
+```
+Step 1) Biz Intel + Export L1/L2 layer labels — Done
+Step 2) Wire filterBusinessLedgerForPeriod into useAccountingDashboard — Done
+Step 3) Export period labels + Lodgment UX polish — Done
+2nd) Roadmap/handoff refresh, ESLint in sandbox, CTR snapshot compare, resolveBasLodgmentQuarterForFiling in BAS tab — Done
+```
+
+### Explicitly **not** in backlog
+
+- **Accountant CTR variance panel** — user confirmed accountant PDF was for **form/layout reference only**, not number reconciliation. Small Selpic vs accountant deltas are OK; no Δ-per-line UI.
+
+## Remaining (internal / product) — besides B
+
+1. **A2 storefront → Selpic A** — **Done 2026-08-28** (`NEXT_PUBLIC_ACCOUNTING_URL` + `selpic2` prod redeploy)  
+2. **A4 ops agreement** — **Done 2026-08-28** (`docs/selpic-a-deploy-handoff.md`)  
+3. **Payroll-only role smoke (A3)** — deferred until a payroll-only test admin exists  
+4. **Employee login** — form exists; real employee account + login deferred  
+3. **Optional A5 polish** — Preview `OPENAI_API_KEY`; soft deeper Period QA  
+4. **HR / compliance TODOs** — leave store, WorkCover, etc. (unless user asks)  
+5. **Journal / AR-AP** — optional  
+
+### Done recently (do not restart)
+
+- Export P&L History + Excel GST=1B + BAS quarter UX + Motor≠airfare  
+- Per-line GST-ex (`lodgment-gst-exclusive.ts`), scaleMap removed  
+- `BasGstFormPanel`, `AnnualMyTaxFormPanel`, `CtrItem6FormPanel` + `lodgment-layer-hints`  
+- `view-period-range` helpers restored + BAS scoping tests  
+- `npm run dev:fresh` for local `.next` cache corruption  
+- Annual + CTR lodgment snapshot compare panels  
+- `resolveBasLodgmentQuarterForFiling` wired into BAS tab defaults  
+
+## Recommended work order (when choosing “what next”)
+
+```
+1) Ops / roles when accounts exist?
+   → Payroll-only smoke (A3), then employee login
+
+2) Only when user explicitly starts public product?
+   → Track B (tenancy → auth incl. employee role → mobile My Payroll → onboarding → harden API)
+
+3) Nice-to-have modules?
+   → HR leave / WorkCover / audit IDB / AR-AP journals
+```
+
+## Do not
+
+- Start Track B because “only public is left” — that is false  
+- Build accountant PDF variance / Δ compare UI — user rejected (layout reference only)  
+- Mix homepage (`selpic2`) webpack with accounting  
+- Apply FY-wide cash→tax `scaleMap` as the long-term ATO model (removed)  
+- Change L1 P&L cash totals to “match accountant” or BAS  
+
+## Resume phrases
+
+- **Ops polish:** payroll-only smoke, employee login  
+- Public: **「Track B 시작」** (only when intentional)

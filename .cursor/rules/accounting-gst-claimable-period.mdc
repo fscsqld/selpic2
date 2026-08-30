@@ -1,0 +1,33 @@
+---
+description: FY GST Claimable vs quarters — ATO refund is not 1B; FY can exceed Q4
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# GST Claimable across P&L periods
+
+## Invariant
+
+`gstClaimable` for a P&L window = **claimable purchase debits in that window ÷ 11** (when GST-registered). It is **recomputed** for the selected dates — not “last quarter” and not “ATO refund + Q4”.
+
+## Confirmed SELPIC confusion (FY $563.83 vs Q4 $545.38)
+
+| Belief | Fact |
+|--------|------|
+| Q3 Claimable = $0 because ATO refunded $18 | **Wrong.** $18 is BAS **net refund** (7C), not 1B. |
+| FY must equal Q4 only | **Wrong** if Q2/Q3 have any claimable purchases. |
+| FY $563.83 is a bug | **Usually correct:** \(563.83 - 545.38 = 18.45\) ≈ Q3 (or Q2) claimable. Example: Travel case $152.10 + bank $50.85 → $202.95 ÷ 11 = **$18.45**. |
+
+Check: P&L → **BAS Q3** — Claimable should show ~$18.45 if those purchases sit in Jan–Mar, not $0.
+
+## Product behaviour
+
+- Business Summary GST cards show **1A/1B** labels and **÷11** copy (not “10% of total income/expenses”).
+- When the P&L window spans multiple quarters, Claimable/Payable cards list **Q2 · Q3 · Q4** slices (`breakdownGstByBasQuarter`).
+- ATO categories (`NON_TAXABLE_ATO_GST_REFUND`, `EXPENSE_ATO_GST_BAS`, PAYG) are **never** 1B claimable.
+
+## Do not
+
+- Add ATO bank refunds into `gstClaimable`
+- Force FY Claimable to equal a single BAS quarter
+- Equate “we received a GST refund” with “1B was zero that quarter”

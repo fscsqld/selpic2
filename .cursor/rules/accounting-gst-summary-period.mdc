@@ -1,0 +1,68 @@
+---
+description: GST Summary FY vs BAS — Quarterly label, ÷11, not remittance cash
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# GST Summary — FY window vs quarterly BAS (learn before “fixing” $747)
+
+## Confirmed SELPIC UI confusion (FY 2025–26)
+
+Screen showed:
+
+| UI | Problem |
+|----|---------|
+| Badge **Quarterly** while Period = **FY 2025–26** (01/07/2025–30/06/2026) | Cadence badge must follow the **banner window**, not the default `useState('quarterly')` toggle |
+| Subcopy **“10% of taxable expenses”** under 1B | Inclusive GST estimate is **÷ 11**, same as Business Summary / lodgment helper text |
+| FY **1A $1,310.86 / 1B $563.83 / Net $747.03 Payable (1C)** | Correct as a **period book estimate** (\(1A-1B\)) for the FY window — **not** “one annual ATO cheque” |
+
+## Arithmetic (always)
+
+\[
+\text{GST Net} = 1A - 1B
+\]
+
+Positive → **Payable (1C)**; negative → **Refund (7C)**.
+
+Engine: taxable sales ÷ 11 → 1A; claimable purchases ÷ 11 → 1B (`calculateBusinessMetrics`).
+
+## FY Net ≠ sum of “cash to/from ATO”
+
+| Context | Meaning of GST Net |
+|---------|-------------------|
+| **One BAS quarter** | Ledger **estimate** for that BAS (closest to lodgment 1C/7C before adjustments). |
+| **FY / multi-quarter** | \( \sum 1A - \sum 1B \) over the date window — a **period total**, not a single remittance. GST is lodged **per BAS cycle**. |
+
+SELPIC year-end trap:
+
+- **Q3** bank may show ~**$18 ATO GST/BAS refund** (cash in) — that is **7C settlement cash**, category `NON_TAXABLE_ATO_GST_REFUND`, **not** 1B and **not** subtracted from FY Net in this card.
+- **Q4** may show ATO GST **payment** debits (`EXPENSE_ATO_GST_BAS` etc.) — also **settlement**, not 1B.
+- FY 1B (~$563.83) is **claimable purchases ÷ 11 across the year** (often ≈ Q4 claimable + earlier quarters). Example: FY $563.83 − Q4 $545.38 ≈ **$18.45** Q3 claimable purchases — **not** “ATO refund + Q4”.
+
+Helpers:
+- `lib/gst/gst-period-breakdown.ts` (`breakdownGstByBasQuarter`) — list **Q2 · Q3 · Q4** slices under FY totals so users see quarters that add to FY 1A/1B.
+- `lib/gst/gst-summary-cadence.ts` (`gstSummaryCadenceLabel`) — badge = **FY / Period** when the banner is a full FY, even if internal toggle defaults to `quarterly`.
+
+## Product direction (GST Summary card)
+
+When P&L banner is FY / multi-quarter:
+
+1. Cadence chip = **FY / Period** (or Monthly), **not** “Quarterly”
+2. Labels = **÷ 11** (not “10% of …”)
+3. Show **per-BAS-quarter breakdown** of 1A / 1B / Net
+4. Footnote: FY Net is a period estimate; **ATO refund/payment cash is outside** this Net (see `accounting-ato-gst-refund.mdc`, `accounting-gst-claimable-period.mdc`)
+
+When banner is a single BAS quarter: chip may say **Quarterly**; Net ≈ that BAS estimate.
+
+## Do
+
+- Align GST Summary dates with the dashboard P&L banner
+- Treat BAS export / lodgment as **quarter** workflows
+- Reconcile bank ATO refunds/payments separately from 1A/1B
+
+## Do not
+
+- Treat FY GST Net Payable as the sole annual remittance due
+- Equate Q3 “we received ~$18 from ATO” with “1B was $0” or “add $18 into FY 1B”
+- Force FY 1B to equal only Q4
+- Leave the cadence badge as Quarterly whenever `periodType` state defaults to quarterly while dates span a full FY

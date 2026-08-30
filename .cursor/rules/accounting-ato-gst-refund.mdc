@@ -1,0 +1,43 @@
+---
+description: ATO GST/BAS bank refund is not revenue — cash asset + BS clearing
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# ATO GST refund ($18 fixture) — not company income
+
+## Business meaning (confirmed)
+
+When the ATO deposits a GST/BAS refund into the company bank account (e.g. **$18** in SELPIC Q3 / statement history):
+
+- It is **not** sales revenue or taxable company income.
+- It increases **Cash & Bank** (an **asset**).
+- Economically it settles GST the company already claimed on purchases (BAS 1B > 1A) — a balance-sheet movement, not a P&L earn.
+- Year-end reports must keep Cash correct and must **not** inflate Revenue / Net Profit.
+
+Same amount + description on different dates is unrelated (see monthly ASSOCIATEDCLEANING). Do not “fix” a correctly classified ATO refund into `INCOME_*`.
+
+## How this app implements it
+
+| Layer | Behaviour |
+|-------|-----------|
+| Category | `NON_TAXABLE_ATO_GST_REFUND` (label: ATO GST/BAS Refund) |
+| Classify | Credit rules: ATO + Activity Statement / BAS; debit mis-parse can swap to credit (`selpic-company-rules`) |
+| P&L Revenue | Company income requires `INCOME_*` — this category is excluded |
+| P&L Expenses | Not an expense debit; not treated as a vendor refund that reduces expenses |
+| Cash asset | Included in statement **closing** Cash & Bank |
+| Balance Sheet | **Do not** show as “Less: Prior BAS credits” under GST Payable. Liability = latest BAS still due; refund amount may appear as a Cash note (`atoGstRefundInCash`) |
+| BS / TB (statement closing) | When closing balance is present → **ATO GST Refund Clearing** may still apply so Assets do not float without an offset (`statement-cash-clearing`) |
+| Journals | Maps to `ASSET_GST_RECEIVABLE` (conceptual Dr Cash / Cr GST receivable — not income) |
+| Order match | Excluded from sales reconciliation |
+
+Helpers: `lib/utils/statement-cash-clearing.ts` (`sumAtoGstRefundAmount`, `atoGstRefundClearing`), `lib/utils/ato-gst-refund.ts`, `lib/utils/business-calculations.ts`, `lib/journal/ledger-account-map.ts`.
+
+**Banked amount (SELPIC):** accountant rounded prior BAS refund estimate (~$18.45) to **$18.00**; ATO deposited **$18.00**. Use ATO_GST_REFUND_BANKED_AUD / statement credit face value — do not invent $18.45 as cash.
+
+## Do not
+
+- Classify ATO refund credits as `INCOME_*` or add them to Real-Time P&L Revenue
+- Drop the cash from the bank closing balance (that understates assets)
+- Treat “same $18 twice” across months as duplicate without checking two real ATO deposits
+- Label the bank deposit as a GST **payable** reduction / “Prior BAS credit” on the Balance Sheet

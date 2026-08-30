@@ -1,0 +1,63 @@
+---
+description: Sales/income GST (1A) — Manual override + company GST registration
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Income (sales) GST vs purchase GST
+
+## Two layers (do not confuse)
+
+| Layer | Where | What it does |
+|-------|--------|----------------|
+| **Company** | Settings → GST Registered | Master switch. **Off → 1A and 1B are $0** everywhere (Biz Intel, BAS, lodgment). |
+| **Per transaction** | Transaction History GST dropdown | Only meaningful when the company **is** GST-registered: mark a sale GST-free or a purchase not claimable. |
+
+**You do not need to re-tag every income/expense row** after turning GST Registered off. Totals already ignore per-row “GST included”. History shows **Not GST registered** instead of the per-row dropdown while the company switch is off.
+
+When you turn GST Registered **back on**, previous per-row tags (or default inclusive ÷11) apply again — that is intentional.
+
+## Australian context
+
+- **Registered for GST** (typically turnover ≥ $75,000, or voluntarily registered): most taxable sales are charged **GST-inclusive**; BAS **1A** = GST on sales.
+- **Not registered**: do **not** charge GST; **1A should be $0**; also usually no **1B** claims.
+- Some sales are **GST-free** even when the seller is registered → use per-row GST-free while registered.
+
+## App behaviour
+
+| Side | UI when registered | UI when not registered | Metric |
+|------|--------------------|------------------------|--------|
+| Purchases | Claim (1B) / GST-free | “Not GST registered” | `gstClaimable` |
+| Sales | GST included (1A) / GST-free | “Not GST registered” | `gstPayable` via `sumGstPayableOnSales` |
+| Settings | GST registered on/off | — | Off → both 1A and 1B are 0 |
+
+- Untagged sales (registered): default **inclusive ÷11**.
+- Manual FREE sales (registered): **0** toward 1A.
+- Persist Manual GST with `gstInfo.reasoning` starting `Manual:`.
+
+## Shared helpers
+
+- `lib/gst/sales-gst.ts` — 1A sum + `buildGstInfoForSale`
+- `calculateBusinessMetrics(..., gstRegistered)` — 5th arg
+- `TransactionTable` receives `gstRegistered` for History display
+- Wire profile flag into Biz Intel, GST Summary, BAS, ATO lodgment
+
+## Persistence (correct model)
+
+**Save is the commit.** Business Profile has an explicit Save button — same as company name, ABN, cycles.
+
+1. Toggle **GST Registered** → draft only (form state).
+2. Click **Save** → IndexedDB via `mergeBusinessProfileForSave` + `businessProfileUpdated`.
+3. Success feedback must be **visible next to Save** (see `accounting-save-feedback.mdc`) — not only a banner at the top of a long form.
+4. Biz Intel / History / BAS reload from the saved profile (and stay correct after refresh).
+
+Do **not** auto-persist on toggle alone — that conflicts with the Save button and other profile fields.
+
+## Do not
+
+- Require users to set every sale to GST-free when the company is not registered
+- Fall back to `income/11` when `gstPayable === 0`
+- Overwrite `Manual:` GST on reload
+- Charge 1A/1B when GST registered is unchecked (after Save)
+- Auto-save GST Registered on toggle without Save
+- Merge account-type drafts with sole_trader last without re-applying the current form

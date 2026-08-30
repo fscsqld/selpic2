@@ -1,0 +1,42 @@
+---
+description: Period Management rejects OCR junk ids and UTC-shifted month bounds
+globs: apps/accounting-sandbox/components/Settings/PeriodManagement.tsx,apps/accounting-sandbox/lib/period-management/**/*.ts,apps/accounting-sandbox/lib/storage/indexed-db.ts,apps/accounting-sandbox/lib/utils/parse-transaction-date.ts
+alwaysApply: false
+---
+
+# Period Management — calendar integrity (multi-merchant)
+
+## Invariant
+
+A financial period id is always `YYYY-MM` with year **2000–2100**. Its `startDate`/`endDate` are the **local calendar** first/last day of that month (`2026-08-01` … `2026-08-31`), never `Date#toISOString()` (AU midnight shifts to the previous UTC day).
+
+## Bugs observed (learn for every merchant)
+
+| Symptom | Cause |
+|---------|--------|
+| All Periods shows `257-10`, `267-04`, dates `0257-…` | OCR year `267` / `257` became a period id via `new Date(junk)` fallback when syncing transactions |
+| `2026-08` shows `31/07/2026 ~ 30/08/2026` | `startDate.toISOString().split('T')[0]` in Australia (UTC+10) |
+| Opening/closing Director Loan stuck at Settings `$1,000` with no activity | Locked/carry rows with wrong calendar; opening chain must use prior **closing**, not silent lump match |
+
+## User-facing copy (All Periods)
+
+Do **not** surface OCR junk / UTC heal internals in the UI. Explain what users act on:
+
+- Active = ledger sync; Locked = frozen until Unlock & Recalculate
+- Cash = bank cash book roll-forward (empty months keep prior close)
+- Close Period can be undone with Unlock
+
+## Do
+
+- Build bounds with `periodIdToCalendarBounds` / `formatCalendarDate` (local Y-M-D)
+- Gate ids with `isValidPeriodId` before save, carry-forward, or sync
+- On Period Management load: **delete** invalid ids; **heal** UTC-shifted dates and re-save
+- `generatePeriodIdFromDateString` must never fall back to `new Date(ocrString)` for period minting
+- `toIsoDateString` rejects Date years outside 1990–2100
+
+## Do not
+
+- Use `toISOString()` for month start/end storage or display source of truth
+- Keep `257-*` / `267-*` rows “for history” — they corrupt Select Period and opening chains
+- Auto-dump Biz Intel prior advances into a single month’s period opening
+---

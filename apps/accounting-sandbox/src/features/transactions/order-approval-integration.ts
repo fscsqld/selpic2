@@ -7,22 +7,28 @@
 
 import { Order } from '../../shared/types/order'
 import { Transaction } from '../../shared/types/transaction'
-import { approveOrder, createTransactionFromOrder } from './order-approval'
-import { checkDuplicateOrder } from './duplicate-detector'
+import { checkDuplicateOrder, approveOrder, createTransactionFromOrder } from './order-approval'
 import { auditLogger } from '../../shared/logging/audit-logger'
 import { indexedDBStorage } from '../../../lib/storage/indexed-db'
+import { INCOMING_ORDERS_RETIRED } from '../../../lib/orders/incoming-orders-retired'
 
 /**
  * 주문 승인 후 회계 장부에 자동 기록
  * 
  * ⚠️ 중요: 이 함수는 비동기로 호출되어야 하며, await 하지 않음
  * 기존 홈페이지 API 응답에 영향을 주지 않음
+ *
+ * Soft-retired: bank statement deposits are revenue SSOT — do not post selpic_orders income.
  */
 export async function recordOrderToAccounting(
   order: Order,
   userId?: string,
   userRole?: string
 ): Promise<{ success: boolean; transactionId?: string; skipped?: boolean; error?: string }> {
+  if (INCOMING_ORDERS_RETIRED) {
+    return { success: true, skipped: true }
+  }
+
   try {
     auditLogger.log('order_accounting_start', {
       userId,
@@ -100,11 +106,13 @@ export async function recordOrderToAccounting(
       occurredAt: order.transactionDate,
       customerName: order.metadata?.customerName || 'Unknown',
       customerEmail: order.metadata?.customerEmail || '',
-      items: (order.metadata?.items || []).map((i) => ({
-        name: i.name,
-        quantity: i.quantity,
-        unitPrice: i.price,
-        totalPrice: i.quantity * i.price,
+      items: (order.metadata?.items || []).map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice ?? item.price ?? 0,
+        totalPrice:
+          item.totalPrice ??
+          (item.unitPrice ?? item.price ?? 0) * item.quantity,
       })),
       subtotal: order.amount,
       shipping: 0,

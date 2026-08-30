@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { generateOauthState, generatePkcePair } from '@/lib/integrations/etsy/etsyOAuth'
 import { getEtsyClientId, getEtsyClientSecret, getEtsyOAuthRedirectUri } from '@/lib/integrations/etsy/etsyEnv'
 import { getEtsyOAuthScopes } from '@/lib/integrations/etsy/etsyOAuthConfig'
@@ -13,10 +16,9 @@ const STATE = 'etsy_oauth_state'
 const VERIFIER = 'etsy_pkce_verifier'
 
 export async function GET(request: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('integrations:write')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   const clientId = getEtsyClientId()
   const redirectUri = getEtsyOAuthRedirectUri()

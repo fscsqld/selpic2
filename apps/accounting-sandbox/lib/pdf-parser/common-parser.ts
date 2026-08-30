@@ -132,7 +132,7 @@ export class CommonParser {
    */
   static extractAccountNumber(
     text: string,
-    patterns: string[] = [
+    patterns: Array<string | RegExp> = [
       /Account\s+Number[:\s]+(\d+)/i,
       /Account[:\s]+(\d+)/i,
       /A\/C[:\s]+(\d+)/i,

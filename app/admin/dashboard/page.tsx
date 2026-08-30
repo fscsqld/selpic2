@@ -46,6 +46,16 @@ import {
   DASHBOARD_RECENT_ACTIVITY_LIMIT,
   getDashboardImportantActivities,
 } from '@/lib/adminDashboardRecentActivities'
+import {
+  buildSelpicAAdminSsoUrl,
+  buildSelpicAStaffLoginUrl,
+  canSeeSelpicAQuickAction,
+  canUseSelpicAAdminAccess,
+  getAccountingAppBaseUrl,
+  isSelpicAAccountingManager,
+  isSelpicAPayrollOnlyAdmin,
+} from '@/lib/admin/selpicAAccess'
+import { adminHasPermissionStrict, adminHasSystemAdminAccess } from '@/lib/adminPermissionCheck'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
@@ -74,7 +84,6 @@ const DASHBOARD_COLLAPSED_ORDER_COUNT = 8
 const DASHBOARD_EXPANDED_ORDER_COUNT = 25
 
 export default function AdminDashboard() {
-  const [isComponentReady, setIsComponentReady] = useState(false)
   const [showSELPICAModal, setShowSELPICAModal] = useState(false)
   const [dashboardOrderDetailId, setDashboardOrderDetailId] = useState<string | null>(null)
   const [ordersExpanded, setOrdersExpanded] = useState(false)
@@ -84,6 +93,7 @@ export default function AdminDashboard() {
     null
   )
   const [etsySyncBusy, setEtsySyncBusy] = useState(false)
+  const [permissionUpdateKey, setPermissionUpdateKey] = useState(0)
 
   const { adminUser, logout } = useAdminAuth()
   const activityLogs = useAdminActivityLog((s) => s.logs)
@@ -111,18 +121,10 @@ export default function AdminDashboard() {
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
   const router = useRouter()
   const { t } = useTranslation()
-  const accountingBaseUrl = process.env.NEXT_PUBLIC_ACCOUNTING_URL || 'http://localhost:3001'
+  const accountingBaseUrl = getAccountingAppBaseUrl()
   
   const salesUnreadCount = getUnreadCount()
   const totalUnreadCount = inboundSummary.totalCount + salesUnreadCount
-
-  // 컴포넌트 준비 상태 관리
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsComponentReady(true)
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [])
 
   // 스토어 복원 후·대시보드 진입 시 상품·주문 동기화 (고객 주문이 통계에 반영되도록)
   useEffect(() => {
@@ -201,8 +203,7 @@ export default function AdminDashboard() {
     const interval = setInterval(() => {
       // 데이터 새로고침 (Zustand store는 자동으로 업데이트되지만, 강제 리렌더링을 위해)
       console.log('🔄 Auto refreshing dashboard data...')
-      // 페이지 새로고침 대신 상태 업데이트 트리거
-      setIsComponentReady(prev => !prev)
+      setPermissionUpdateKey((prev) => prev + 1)
     }, autoRefreshInterval)
 
     return () => clearInterval(interval)
@@ -367,13 +368,10 @@ export default function AdminDashboard() {
     }
   ]
 
-  // Helper function to check if admin has permission
-  const hasPermission = useCallback((permission: string): boolean => {
-    if (!adminUser) return false
-    // Super admin has all permissions
-    if (adminUser.role === 'super_admin') return true
-    return adminUser.permissions.includes(permission)
-  }, [adminUser])
+  const hasPermission = useCallback(
+    (permission: string): boolean => adminHasPermissionStrict(adminUser, permission),
+    [adminUser]
+  )
 
   const refreshEtsyStatus = useCallback(async () => {
     try {
@@ -388,12 +386,12 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (!isComponentReady || !adminUser || !hasPermission('orders:read')) return
+    if (!adminUser || !hasPermission('orders:read')) return
     void refreshEtsyStatus()
-  }, [isComponentReady, adminUser, hasPermission, refreshEtsyStatus])
+  }, [adminUser, hasPermission, refreshEtsyStatus])
 
   useEtsyOAuthReturn({
-    enabled: isComponentReady && !!adminUser && hasPermission('orders:read'),
+    enabled: !!adminUser && hasPermission('orders:read'),
     onBanner: setEtsyBanner,
     afterConnected: async () => {
       await refreshEtsyStatus()
@@ -403,27 +401,15 @@ export default function AdminDashboard() {
 
   // Helper function to check if admin is accounting manager
   const isAccountingManager = useCallback((): boolean => {
-    if (!adminUser) return false
-    // Super admin is always accounting manager
-    if (adminUser.role === 'super_admin') return true
-    // Check if admin has accounting:admin or accounting:full permission
-    return adminUser.permissions.includes('accounting:admin') || 
-           adminUser.permissions.includes('accounting:full')
+    return isSelpicAAccountingManager(adminUser)
   }, [adminUser])
 
   // Helper function to check if admin has payroll access only
   const hasPayrollAccessOnly = useCallback((): boolean => {
-    if (!adminUser) return false
-    // Super admin and accounting managers have full access
-    if (isAccountingManager()) return false
-    // Check if admin has payroll:read or payroll:access permission
-    return adminUser.permissions.includes('payroll:read') || 
-           adminUser.permissions.includes('payroll:access')
-  }, [adminUser, isAccountingManager])
+    return isSelpicAPayrollOnlyAdmin(adminUser)
+  }, [adminUser])
 
   // Listen for permission changes and force re-render
-  const [permissionUpdateKey, setPermissionUpdateKey] = useState(0)
-  
   useEffect(() => {
     const handleAuthUpdate = () => {
       console.log('🔄 Dashboard: Admin auth updated, refreshing Quick Actions...')
@@ -487,7 +473,7 @@ export default function AdminDashboard() {
       icon: Plug,
       href: '/admin/integrations',
       color: 'bg-rose-500',
-      requiredPermission: 'orders:read'
+      requiredPermission: 'integrations:read'
     },
     {
       title: t('admin.dashboard.quickActions.sales.title'),
@@ -504,7 +490,7 @@ export default function AdminDashboard() {
       icon: TrendingUp,
       href: '/admin/traffic',
       color: 'bg-indigo-500',
-      requiredPermission: 'analytics:read'
+      requiredPermission: 'traffic:read'
     },
     {
       title: 'Customer Messages',
@@ -522,7 +508,7 @@ export default function AdminDashboard() {
       href: '/admin/bespoke-requests',
       color: 'bg-indigo-500',
       badge: inboundCount('bespoke') > 0 ? inboundCount('bespoke') : undefined,
-      requiredPermission: 'messages:read'
+      requiredPermission: 'bespoke:read'
     },
     {
       title: 'Newsletter',
@@ -531,7 +517,7 @@ export default function AdminDashboard() {
       href: '/admin/newsletter',
       color: 'bg-cyan-500',
       badge: inboundCount('newsletter') > 0 ? inboundCount('newsletter') : undefined,
-      requiredPermission: 'users:read'
+      requiredPermission: 'newsletter:read'
     },
     {
       title: 'Invoice & document sender',
@@ -539,7 +525,7 @@ export default function AdminDashboard() {
       icon: FileCheck,
       href: '/admin/documents',
       color: 'bg-teal-500',
-      requiredPermission: 'users:read'
+      requiredPermission: 'documents:read'
     },
     {
       title: 'Fundraising',
@@ -551,7 +537,7 @@ export default function AdminDashboard() {
       href: '/admin/fundraising/partners',
       color: 'bg-emerald-600',
       badge: inboundCount('fundraising') > 0 ? inboundCount('fundraising') : undefined,
-      requiredPermission: 'analytics:read',
+      requiredPermission: 'fundraising:read',
     },
     {
       title: 'Invoice preview',
@@ -572,11 +558,13 @@ export default function AdminDashboard() {
     },
     {
       title: 'Administrator settings',
-      description: 'Admin email registry: add staff, roles, and permissions',
+      description: 'Super admin only — register staff emails, roles, and permissions',
       icon: Shield,
       href: '/admin/administrator-settings',
       color: 'bg-slate-600',
+      /** Registry UI is role-gated (super_admin), not only admin:manage. */
       requiredPermission: 'admin:manage',
+      superAdminOnly: true,
     },
     {
       title: t('admin.settings.title'),
@@ -584,7 +572,7 @@ export default function AdminDashboard() {
       icon: Settings,
       href: '/admin/settings',
       color: 'bg-gray-500',
-      requiredPermission: 'system:admin' // Only super admin or admin with system:admin permission
+      requiredPermission: 'system:admin' // Regular + super: store settings, logs, sessions (not staff registry)
     },
     {
       title: 'Selpic A',
@@ -592,19 +580,19 @@ export default function AdminDashboard() {
       icon: Calculator,
       href: accountingBaseUrl,
       color: 'bg-amber-500',
-      requiredPermission: 'system:admin', // Super Admin 또는 회계 관리자만 접근
-      isExternal: true // 외부 링크 표시
+      requiredPermission: 'accounting:read',
+      isExternal: true
     }
   ].filter(action => {
-    // Filter actions based on permissions
+    if ((action as { superAdminOnly?: boolean }).superAdminOnly && adminUser?.role !== 'super_admin') {
+      return false
+    }
     if (!action.requiredPermission) return true
-    // Selpic A: super / accounting / payroll / site-level system admin
     if (action.title === 'Selpic A') {
-      return (
-        isAccountingManager() ||
-        hasPayrollAccessOnly() ||
-        adminUser?.permissions.includes('system:admin')
-      )
+      return canSeeSelpicAQuickAction(adminUser)
+    }
+    if (action.requiredPermission === 'system:admin') {
+      return adminHasSystemAdminAccess(adminUser)
     }
     return hasPermission(action.requiredPermission)
   }), [adminUser, permissionUpdateKey, hasPermission, isAccountingManager, hasPayrollAccessOnly, t, salesUnreadCount, inboundSummary])
@@ -613,20 +601,6 @@ export default function AdminDashboard() {
     () => getDashboardImportantActivities(activityLogs, DASHBOARD_RECENT_ACTIVITY_LIMIT),
     [activityLogs]
   )
-
-  // 컴포넌트가 준비되지 않았을 때 로딩 표시
-  if (!isComponentReady) {
-    return (
-      <AdminRoute>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">관리자 대시보드 로딩 중...</p>
-          </div>
-        </div>
-      </AdminRoute>
-    )
-  }
 
   return (
     <AdminRoute>
@@ -1062,15 +1036,15 @@ export default function AdminDashboard() {
                 {quickActions.map((action, index) => {
                   // Selpic A 카드 - 클릭 시 모달 표시
                   if (action.title === 'Selpic A') {
-                    const isStaff = adminUser?.role === 'admin' && !adminUser?.permissions.includes('accounting:admin') && !adminUser?.permissions.includes('accounting:full')
-                    
+                    const showAdminAccess = canUseSelpicAAdminAccess(adminUser)
+                    const payrollOnly = isSelpicAPayrollOnlyAdmin(adminUser)
+
                     return (
                       <React.Fragment key={index}>
                         <div
                           onClick={() => setShowSELPICAModal(true)}
                           className="block p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all duration-200 relative bg-gradient-to-br from-amber-50 to-orange-50 cursor-pointer"
                         >
-                          {/* 카드 제목 및 설명 */}
                           <div className="flex items-center space-x-3">
                             <div className={`p-2 rounded-lg ${action.color} relative`}>
                               <action.icon className="h-5 w-5 text-white" />
@@ -1081,38 +1055,35 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Selpic A Access Modal */}
+
                         {showSELPICAModal && (
                           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
                               <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-xl font-semibold text-gray-900">Selpic A Access</h3>
                                 <button
+                                  type="button"
                                   onClick={() => setShowSELPICAModal(false)}
                                   className="text-gray-400 hover:text-gray-600"
                                 >
                                   <X className="h-5 w-5" />
                                 </button>
                               </div>
-                              
+
                               <p className="text-sm text-gray-600 mb-6">
-                                Please select your access method.
+                                {showAdminAccess
+                                  ? 'Admin Access opens the full accounting workspace. Staff Access is for employee ID and password (personal payroll).'
+                                  : payrollOnly
+                                    ? 'Use Staff Access with your employee login for payslips and timesheets. Admin Access is for accounting managers only.'
+                                    : 'Use Staff Access with your employee login for personal payroll.'}
                               </p>
-                              
+
                               <div className="space-y-3">
-                                {/* Admin Access Button - hidden for staff */}
-                                {!isStaff && (
+                                {showAdminAccess && adminUser && (
                                   <button
+                                    type="button"
                                     onClick={() => {
-                                      const token = btoa(JSON.stringify({
-                                        username: adminUser?.username,
-                                        role: adminUser?.role, // Actual DB Role
-                                        permissions: adminUser?.permissions,
-                                        timestamp: Date.now(),
-                                        accessType: 'admin'
-                                      }))
-                                      const url = `${accountingBaseUrl}?token=${token}`
+                                      const url = buildSelpicAAdminSsoUrl(adminUser)
                                       window.open(url, '_blank')
                                       setShowSELPICAModal(false)
                                     }}
@@ -1122,19 +1093,17 @@ export default function AdminDashboard() {
                                     Admin Access
                                   </button>
                                 )}
-                                
-                                {/* Staff Access Button - 직원 로그인 페이지로 이동 */}
+
                                 <button
+                                  type="button"
                                   onClick={() => {
-                                    // 직원 로그인 페이지로 이동 (SSO 토큰 없이)
-                                    const url = `${accountingBaseUrl}/employee/login`
-                                    window.open(url, '_blank')
+                                    window.open(buildSelpicAStaffLoginUrl(), '_blank')
                                     setShowSELPICAModal(false)
                                   }}
                                   className="w-full py-3 px-4 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
                                 >
                                   <Users className="h-5 w-5" />
-                                  Staff Access
+                                  Staff Access (employee login)
                                 </button>
                               </div>
                             </div>

@@ -9,8 +9,8 @@ import { loadAllEmployees } from './payroll-transaction-matcher'
 import { Employee } from '@/src/shared/types/employee'
 
 export interface NoABNWarning {
-  shouldWarn: boolean
-  warningMessage: string
+  shouldWarn?: boolean
+  warningMessage?: string
   withholdingAmount?: number
 }
 

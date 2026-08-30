@@ -15,32 +15,11 @@ import {
 } from 'lucide-react'
 import AdminRoute from '@/components/AdminRoute'
 import PermissionManager from '@/components/PermissionManager'
+import { ADMIN_PERMISSION_CATALOG, DEFAULT_ADMIN_PERMISSIONS, SUPER_ADMIN_DEFAULT_PERMISSIONS } from '@/lib/adminPermissionCatalog'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
 
-const AVAILABLE_PERMISSIONS = [
-  'dashboard:read',
-  'products:read',
-  'products:write',
-  'content:read',
-  'content:write',
-  'users:read',
-  'users:write',
-  'analytics:read',
-  'orders:read',
-  'orders:write',
-  'messages:read',
-  'messages:write',
-  'community:read',
-  'community:write',
-  'community:moderate',
-  'images:read',
-  'images:write',
-  'invoices:read',
-  'invoices:write',
-  'system:admin',
-  'admin:manage',
-]
+const AVAILABLE_PERMISSIONS = [...ADMIN_PERMISSION_CATALOG]
 
 export default function AdministratorSettingsPage() {
   const router = useRouter()
@@ -59,7 +38,7 @@ export default function AdministratorSettingsPage() {
   const [newRow, setNewRow] = useState({
     email: '',
     role: 'admin' as 'admin' | 'super_admin',
-    permissions: [] as string[],
+    permissions: [...DEFAULT_ADMIN_PERMISSIONS] as string[],
   })
 
   const selfEmail = (adminUser?.email ?? '').trim().toLowerCase()
@@ -94,7 +73,7 @@ export default function AdministratorSettingsPage() {
     if (result.ok) {
       showMsg('Administrator saved. They receive these permissions on next sign-in (JWT sync).', true)
       setIsCreateOpen(false)
-      setNewRow({ email: '', role: 'admin', permissions: [] })
+      setNewRow({ email: '', role: 'admin', permissions: [...DEFAULT_ADMIN_PERMISSIONS] })
     } else {
       showMsg(result.error || 'Could not create entry.', false)
     }
@@ -107,7 +86,10 @@ export default function AdministratorSettingsPage() {
     const result = await registry.patchEntry(permEmail, { permissions: permList })
     setIsLoading(false)
     if (result.ok) {
-      showMsg('Permissions updated.', true)
+      showMsg(
+        'Permissions updated. Ask this staff member to refresh the page (or sign in again) to see Quick Action changes.',
+        true
+      )
       setIsPermOpen(false)
       setPermEmail('')
     } else {
@@ -154,13 +136,17 @@ export default function AdministratorSettingsPage() {
 
   if (!isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md px-4">
-          <AlertCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900">Access denied</h1>
-          <p className="text-gray-600 mt-2">Redirecting to the dashboard…</p>
+      <AdminRoute>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <AlertCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold text-gray-900">Access denied</h1>
+            <p className="text-gray-600 mt-2">
+              Only a super administrator can manage the staff email registry. Redirecting to the dashboard…
+            </p>
+          </div>
         </div>
-      </div>
+      </AdminRoute>
     )
   }
 
@@ -179,13 +165,18 @@ export default function AdministratorSettingsPage() {
               </Link>
               <h1 className="text-2xl font-bold text-gray-900">Administrator settings</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Manage who can access the admin app via <code className="text-xs">admin_email_registry</code> (active{' '}
+                Super admin only — manage who can access the admin app via{' '}
+                <code className="text-xs">admin_email_registry</code> (active{' '}
                 <code className="text-xs">admin</code> or <code className="text-xs">super_admin</code> rows).
+                Day-to-day store settings stay under Admin Settings.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setNewRow({ email: '', role: 'admin', permissions: [...DEFAULT_ADMIN_PERMISSIONS] })
+                setIsCreateOpen(true)
+              }}
               disabled={!useSupabaseRegistry}
               className="inline-flex items-center justify-center px-4 py-2 rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             >
@@ -359,12 +350,26 @@ export default function AdministratorSettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                   <select
                     value={newRow.role}
-                    onChange={(e) => setNewRow({ ...newRow, role: e.target.value as 'admin' | 'super_admin' })}
+                    onChange={(e) => {
+                      const role = e.target.value as 'admin' | 'super_admin'
+                      setNewRow({
+                        ...newRow,
+                        role,
+                        permissions:
+                          role === 'super_admin'
+                            ? [...SUPER_ADMIN_DEFAULT_PERMISSIONS]
+                            : [...DEFAULT_ADMIN_PERMISSIONS],
+                      })
+                    }}
                     className="w-full rounded-md border-gray-300 shadow-sm text-sm"
                   >
-                    <option value="admin">admin</option>
-                    <option value="super_admin">super_admin</option>
+                    <option value="admin">admin (standard staff permissions)</option>
+                    <option value="super_admin">super_admin (all permissions)</option>
                   </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Changing role resets the permission list to the matching default. Adjust with presets below if
+                    needed.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>

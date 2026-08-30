@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { runFundraisingRenewalNotices } from '@/lib/fundraising/runFundraisingRenewalCron'
 
 /**
  * Admin-triggered run of the same D19 renewal batch as the cron job.
  */
 export async function POST() {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('fundraising:write')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   try {
     const result = await runFundraisingRenewalNotices()

@@ -100,7 +100,7 @@ export function PAYGConfigForm() {
             </div>
           ) : (
             <div className="text-sm text-yellow-700 space-y-1">
-              <p>PAYG is currently disabled. Focus on Director's Loan management.</p>
+              <p>PAYG is currently disabled. Focus on Director&apos;s Loan management.</p>
               <p className="mt-2 font-medium">⚠️ No ABN Withholding warnings will still be shown (legal requirement)</p>
             </div>
           )}
@@ -186,7 +186,7 @@ export function PAYGConfigForm() {
           <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
             <li>PAYG registration is required for businesses that pay salaries or director fees</li>
             <li>No ABN Withholding (47%) warnings will always be shown regardless of PAYG status</li>
-            <li>When PAYG is disabled, focus on Director's Loan management</li>
+            <li>When PAYG is disabled, focus on Director&apos;s Loan management</li>
             <li>You can enable PAYG at any time - no restart required</li>
           </ul>
         </div>

@@ -15,7 +15,7 @@ import { useState } from 'react'
 
 export default function FundraisingSettingsPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['fundraising:read']}>
       <SettingsContent />
     </AdminRoute>
   )

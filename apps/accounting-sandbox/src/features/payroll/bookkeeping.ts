@@ -9,6 +9,23 @@ import { Employee } from '../../shared/types/employee'
 import { Transaction } from '../../shared/types/transaction'
 import { PayrollJournalEntry } from './types'
 
+/** Accrual liability for net wages (cleared when bank pays staff). */
+export const LIABILITY_WAGES_PAYABLE = 'LIABILITY_WAGES_PAYABLE'
+
+/** Legacy Phase-0 bug: net wages were credited to cash instead of wages payable. */
+export function isLegacyPayrollCashCredit(tx: {
+  source?: string | null
+  category?: string | null
+  credit?: number | null
+}): boolean {
+  return (
+    tx.source === 'payroll' &&
+    tx.category === 'ASSET_CASH' &&
+    typeof tx.credit === 'number' &&
+    tx.credit > 0
+  )
+}
+
 /**
  * 급여 승인 시 자동 분개 처리
  * @param payslip - Payslip 정보
@@ -59,9 +76,9 @@ export function createPayrollJournalEntries(
     })
   }
   
-  // 5. Cash/Bank (Credit) - Net Pay (Gross Pay - PAYG Withholding만)
+  // 5. Wages payable (Credit) — net pay accrued until bank remittance
   entries.push({
-    account: 'ASSET_CASH',
+    account: LIABILITY_WAGES_PAYABLE,
     debit: 0,
     credit: payslip.netPay,
     description: `Net Pay - ${employee.name}`,

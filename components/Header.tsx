@@ -351,6 +351,34 @@ export default function Header() {
   const currentUser = userAuth?.user || null
   const logoutUser = userAuth?.logout || (() => {})
   const staffSessionActive = useAdminAuth((s) => s.isLoggedIn)
+  const [staffDashboardReady, setStaffDashboardReady] = useState(false)
+
+  useEffect(() => {
+    if (!isMounted || !staffSessionActive) {
+      setStaffDashboardReady(false)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+      if (!url || !anon) {
+        if (!cancelled) setStaffDashboardReady(staffSessionActive)
+        return
+      }
+      try {
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+        const { resolveAdminBrowserSession } = await import('@/lib/supabase/resolveAdminBrowserSession')
+        const resolved = await resolveAdminBrowserSession(createSupabaseBrowserClient())
+        if (!cancelled) setStaffDashboardReady(resolved.ok)
+      } catch {
+        if (!cancelled) setStaffDashboardReady(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isMounted, staffSessionActive])
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0)
 
@@ -574,7 +602,7 @@ export default function Header() {
                 </button>
               )}
 
-              {staffSessionActive && (
+              {staffDashboardReady && (
                 <Link
                   href="/admin/dashboard"
                   className="hidden sm:inline-flex items-center rounded-full border border-violet-200 bg-violet-50/90 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition-colors"
@@ -610,7 +638,7 @@ export default function Header() {
                       <p className="text-sm text-gray-500">Signed in as</p>
                       <p className="text-sm font-semibold text-gray-900 truncate">{currentUser?.name || currentUser?.email}</p>
                     </div>
-                    {staffSessionActive && (
+                    {staffDashboardReady && (
                       <Link
                         href="/admin/dashboard"
                         onClick={() => setIsAccountMenuOpen(false)}

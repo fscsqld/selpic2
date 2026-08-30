@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 export async function GET(req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
-
+  const gate = await requireAdminPermission('newsletter:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
   const url = new URL(req.url)
   const limit = Math.min(5000, Math.max(1, Number(url.searchParams.get('limit') || 2000)))
 

@@ -4,7 +4,17 @@ import { PDFParserEngine } from '@/lib/pdf-parser'
 import { AIClassifierEngine } from '@/lib/ai-classifier'
 import { BankTransaction } from '@/lib/pdf-parser/types'
 import { UniversalCSVParser } from '@/lib/csv-parser/nab-csv-parser'
-import { findUserMapping, getUserMappings } from '@/lib/storage/user-mappings'
+import { classifyTransactionsRulesOnly, buildRulesOnlyAnalyzeResponse } from '@/lib/analyze/rules-only-pipeline'
+import {
+  applyErroneousPaymentSwap,
+  detectErroneousPayment,
+} from '@/lib/classification/erroneous-payment'
+import { shouldExcludeBankAdvisoryTransaction } from '@/lib/classification/bank-advisory'
+import { isCorporateBankAccount } from '@/lib/classification/company-account'
+import { detectFuelRetailer } from '@/lib/classification/australian-fuel-retailers'
+import { detectShippingProvider } from '@/lib/classification/australian-shipping-providers'
+import { detectPlatformTransaction } from '@/lib/classification/platform-marketplace'
+import type { UserMapping } from '@/lib/storage/user-mappings'
 import { PAYGWithholdingEngine } from '@/lib/payg-withholding'
 import { gstDetector } from '@/lib/gst-settlement'
 import { FBTDetector } from '@/lib/fbt-monitoring/fbt-detector'
@@ -43,6 +53,19 @@ export async function POST(request: NextRequest) {
     const isUserApiKey = formData.get('isUserApiKey') === 'true'
     const directorName = (formData.get('directorName') as string) || ''
     const accountType = (formData.get('accountType') as string) || 'company' // Default to company for backward compatibility
+    const classificationMode = (formData.get('classificationMode') as string) || 'ai'
+    const rulesOnly = classificationMode === 'rules_only'
+
+    let userMappings: UserMapping[] = []
+    try {
+      const mappingsRaw = formData.get('userMappings') as string
+      if (mappingsRaw) {
+        const parsed = JSON.parse(mappingsRaw)
+        if (Array.isArray(parsed)) userMappings = parsed
+      }
+    } catch {
+      userMappings = []
+    }
 
     // Get Master API Key from environment variable (fallback)
     const masterApiKey = process.env.OPENAI_API_KEY
@@ -69,15 +92,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (!apiKey || !apiKey.trim()) {
-      console.error('[ANALYZE] Error: No API key available (neither user key nor master key)')
-      return NextResponse.json(
-        { error: 'OpenAI API key is required. Please provide your API key in Settings or configure OPENAI_API_KEY environment variable.' },
-        { status: 400 }
-      )
+      if (!rulesOnly) {
+        console.error('[ANALYZE] Error: No API key available (neither user key nor master key)')
+        return NextResponse.json(
+          { error: 'OpenAI API key is required. Please provide your API key in Settings or configure OPENAI_API_KEY environment variable.' },
+          { status: 400 }
+        )
+      }
+      console.log('[ANALYZE] Rules-only mode: proceeding without API key')
     }
 
-    // Validate API key format
-    if (!apiKey.startsWith('sk-')) {
+    if (apiKey?.trim() && !apiKey.startsWith('sk-')) {
       console.error('[ANALYZE] Error: Invalid API key format')
       return NextResponse.json(
         { error: 'Invalid API key format. Must start with "sk-"' },
@@ -266,7 +291,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (rulesOnly) {
+      console.log('[ANALYZE] Rules-only classification — skipping OpenAI')
+      const rulesAccountType =
+        accountType === 'individual' || accountType === 'sole_trader' || accountType === 'company'
+          ? accountType
+          : 'company'
+      const classifiedTransactions = classifyTransactionsRulesOnly(
+        parsedStatement.transactions,
+        rulesAccountType,
+        userMappings,
+        directorName
+      )
+      const responseData = buildRulesOnlyAnalyzeResponse(parsedStatement, classifiedTransactions)
+      console.log('[ANALYZE] ✅ Rules-only complete:', {
+        total: classifiedTransactions.length,
+        uncategorised: classifiedTransactions.filter((t) => t.category === 'UNCATEGORIZED').length,
+        elapsedMs: Date.now() - startTime,
+      })
+      return NextResponse.json(responseData)
+    }
+
     // Step 2: AI Classification
+    if (!apiKey?.trim()) {
+      return NextResponse.json(
+        { error: 'OpenAI API key is required for AI classification mode.' },
+        { status: 400 }
+      )
+    }
+
     console.log('[ANALYZE] Step 4: Initializing AI classifier...')
     let classifierEngine: AIClassifierEngine
     try {
@@ -359,9 +412,17 @@ export async function POST(request: NextRequest) {
         break // Exit the loop immediately
       }
       
-      const transaction = parsedStatement.transactions[index]
+      let transaction = applyErroneousPaymentSwap(parsedStatement.transactions[index])
+
+      if (shouldExcludeBankAdvisoryTransaction(transaction)) {
+        console.log(
+          `[ANALYZE] [${index + 1}] ⏭️ Skipping bank advisory notice (not a transaction):`,
+          transaction.description.substring(0, 80)
+        )
+        continue
+      }
       
-      // 🔧 CRITICAL: Prevent duplicate processing - Check if transaction was already processed
+      // 🔧 CRITICAL: Prevent duplicate processing
       const transactionId = transaction.reference || `${transaction.date}_${transaction.description}_${transaction.debit || transaction.credit}`
       if (processedTransactionIds.has(transactionId)) {
         console.warn(`[ANALYZE] [${index + 1}] ⚠️ Skipping duplicate transaction: ${transactionId}`)
@@ -442,6 +503,43 @@ export async function POST(request: NextRequest) {
           classifiedTransactions.push(classifiedTransaction);
           console.log(`[ANALYZE] [${index + 1}] ✅ Cash Deposit transaction added (current count: ${classifiedTransactions.length})`);
           continue; // Skip to next transaction
+        }
+
+        const erroneousMatch = detectErroneousPayment(transaction)
+        if (erroneousMatch) {
+          console.log(
+            `[ANALYZE] [${index + 1}] 🔧 MANDATORY: Erroneous payment → ${erroneousMatch.category} (Skipping AI)`
+          )
+          const gstInfo = {
+            isGSTIncluded: false,
+            gstType: 'FREE' as const,
+            gstAmount: 0,
+            netAmount: Math.abs(transaction.debit || transaction.credit || 0),
+            confidence: 1.0,
+            reasoning: 'Erroneous payment / return — not business income or expense',
+          }
+          const fbtInfo = {
+            isFBTRelevant: false,
+            fbtRisk: 'low' as const,
+            fbtCategory: undefined,
+            isFBTReportable: false,
+            reasoning: 'Not FBT relevant',
+            confidence: 1.0,
+          }
+          classifiedTransactions.push({
+            ...transaction,
+            id: transaction.reference || `tx_${Date.now()}_${index}`,
+            category: erroneousMatch.category,
+            confidence: erroneousMatch.confidence,
+            department: erroneousMatch.department,
+            isDirectorsLoan: false,
+            isPreTradingExpense: false,
+            requiresPAYG: false,
+            isPayrollTransaction: false,
+            gstInfo,
+            fbtInfo,
+          } as any)
+          continue
         }
         
         console.log(`[ANALYZE] [${index + 1}] Calling classifier.classify()...`)
@@ -552,17 +650,14 @@ export async function POST(request: NextRequest) {
         if (directorName && directorName.trim()) {
           const directorNameUpper = directorName.trim().toUpperCase()
           
-          // ⚠️ CRITICAL: Exclude known personal name patterns FIRST
-          // These are NOT Director transactions, even if they contain parts of Director name
-          const personalNamePatterns = [
-            'MRS HEE KIM', 'HEE KIM', 'KIM HEE',
-            'MRS ', 'MR ', 'MS ', // Titles indicate other people
-          ]
-          const isPersonalNamePattern = personalNamePatterns.some(pattern => 
+          // Exclude other people (e.g. Mrs Hee Kim). Do NOT treat "Mr/Ms/Mrs"
+          // alone as exclusion — "Mr Jinsoo Kim Loan" is the configured director.
+          const otherPersonPatterns = ['MRS HEE KIM', 'HEE KIM', 'KIM HEE']
+          const isOtherPerson = otherPersonPatterns.some((pattern) =>
             descriptionUpper.includes(pattern)
           )
-          
-          if (!isPersonalNamePattern) {
+
+          if (!isOtherPerson) {
             // Check if description contains the FULL Director name (all parts)
             // Match patterns: "Jinsoo Kim", "JINSOO KIM", "KIM JINSOO", etc.
             const directorNameParts = directorNameUpper.split(/\s+/).filter(part => part.length > 2)
@@ -588,26 +683,62 @@ export async function POST(request: NextRequest) {
               if (!isBusinessCustomer) {
                 isDirectorTransaction = true;
                 
-        if (hasCredit) {
-                  // Director Loan - Capital Injection (입금)
+        if (hasCredit || (hasDebit && descriptionUpper.includes('LOAN'))) {
+                  // Capital injection — also when PDF put the amount in Debit column
+                  if (hasDebit && !hasCredit && descriptionUpper.includes('LOAN')) {
+                    transaction.credit = transaction.debit
+                    transaction.debit = null
+                  }
                   console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Director Loan (Capital Injection) → LIABILITY_DIRECTORS_LOAN`);
                   classification = {
                     ...classification,
                     category: 'LIABILITY_DIRECTORS_LOAN',
                     department: 'cleaning', // Company
                     confidence: 1.0,
-                    reason: `Fixed mapping: Director name "${directorName}" found in credit transaction - Director Loan (Capital Injection)`
+                    reason: `Fixed mapping: Director name "${directorName}" found - Director Loan (Capital Injection)`,
+                    isDirectorsLoan: true,
                   };
                 } else if (hasDebit) {
-                  // Director Loan Repayment or Withdrawal (출금)
-                  console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Director Loan Repayment/Withdrawal → EXPENSE_DIRECTOR_LOAN_REPAYMENT`);
-                  classification = {
-                    ...classification,
-                    category: 'EXPENSE_DIRECTOR_LOAN_REPAYMENT',
-                    department: 'cleaning', // Company
-                    confidence: 1.0,
-                    reason: `Fixed mapping: Director name "${directorName}" found in debit transaction - Director Loan Repayment/Withdrawal`
-                  };
+                  const companyRule = (
+                    await import('@/lib/classification/selpic-company-rules')
+                  ).detectSelpicCompanyRule(
+                    transaction.description || '',
+                    transaction.debit,
+                    transaction.credit,
+                    directorName
+                  )
+                  if (
+                    companyRule?.category === 'NON_TAXABLE_DIRECTOR_REIMBURSEMENT' ||
+                    companyRule?.category === 'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT' ||
+                    companyRule?.category === 'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN'
+                  ) {
+                    if (companyRule.swapDebitToCredit && transaction.debit) {
+                      transaction.credit = transaction.debit
+                      transaction.debit = null
+                    }
+                    console.log(
+                      `[ANALYZE] [${index + 1}] 🔧 FORCING: Director debit → ${companyRule.category}`
+                    )
+                    classification = {
+                      ...classification,
+                      category: companyRule.category,
+                      department: companyRule.department,
+                      confidence: companyRule.confidence,
+                      reason: companyRule.reason,
+                    }
+                  } else {
+                    // Generic director debit — loan repayment / withdrawal (balance sheet only)
+                    console.log(
+                      `[ANALYZE] [${index + 1}] 🔧 FORCING: Director Loan Repayment/Withdrawal → EXPENSE_DIRECTOR_LOAN_REPAYMENT`
+                    )
+                    classification = {
+                      ...classification,
+                      category: 'EXPENSE_DIRECTOR_LOAN_REPAYMENT',
+                      department: 'cleaning',
+                      confidence: 1.0,
+                      reason: `Fixed mapping: Director name "${directorName}" found in debit transaction - Director Loan Repayment/Withdrawal`,
+                    }
+                  }
                 }
               }
             }
@@ -667,8 +798,8 @@ export async function POST(request: NextRequest) {
                                  descriptionUpper.includes('LINKED ACC') ||
                                  (descriptionUpper.includes('ONLINE') && (descriptionUpper.includes('TRNS') || descriptionUpper.includes('TRANSFER'))))
         
-        // Personal name transfers - Check if incorrectly parsed as DEBIT when it should be CREDIT
-        if (isPersonalNameTransfer) {
+        // Personal name transfers — mixed-use accounts only (company statements stay as parsed)
+        if (accountType !== 'company' && isPersonalNameTransfer) {
           // ⚠️ CRITICAL: Personal names like "MRS HEE KIM" are typically deposits (입금) from others
           // If the parser incorrectly classified it as DEBIT, convert to CREDIT
           if (hasDebit && !hasCredit) {
@@ -707,16 +838,18 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        // Account transfers - Usually DEBIT, but respect original if CREDIT
+        // Account transfers — mixed-use personal department; company uses business department
         if (isAccountTransfer) {
-          // Account transfers are usually DEBIT (money going out), but if the statement shows CREDIT, respect it
+          const transferDept = isCorporateBankAccount(accountType as 'individual' | 'company' | 'sole_trader')
+            ? 'cleaning'
+            : 'personal'
           console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Account Transfer → NON_TAXABLE_TRANSFER (preserving original DEBIT/CREDIT)`)
           classification = {
             ...classification,
             category: 'NON_TAXABLE_TRANSFER',
-            department: 'personal',
-            confidence: 1.0, // 100% confidence
-            reason: 'Fixed mapping: Account transfer (preserving original DEBIT/CREDIT from bank statement)'
+            department: transferDept,
+            confidence: 1.0,
+            reason: 'Fixed mapping: Account transfer (preserving original DEBIT/CREDIT from bank statement)',
           }
         }
         
@@ -776,6 +909,44 @@ export async function POST(request: NextRequest) {
         // ⚠️ IMPORTANT: Only apply if NOT already classified as personal transfer or refund
         // ⚠️ IMPORTANT: Only apply for Company/Sole Trader accounts (not Individual)
         if (accountType !== 'individual' && hasCredit && !isPersonalNameTransfer && !isAccountTransfer && classification.category !== 'INCOME_REFUND_REIMBURSEMENT') {
+          if (
+            descriptionUpper.includes('ATO') &&
+            (
+              descriptionUpper.includes('BAS') ||
+              descriptionUpper.includes('GST') ||
+              descriptionUpper.includes('ACTIVITY STATEMENT') ||
+              descriptionUpper.includes('I002') ||
+              descriptionUpper.includes('REFUND') ||
+              descriptionUpper.includes('REBATE') ||
+              descriptionUpper.includes('SELPIC')
+            )
+          ) {
+            console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: ATO credit → ATO GST/BAS Refund`)
+            classification = {
+              ...classification,
+              category: 'NON_TAXABLE_ATO_GST_REFUND',
+              department: 'general',
+              confidence: 1.0,
+              reason: 'Fixed mapping: ATO GST/BAS refund or rebate is non-P&L'
+            }
+          }
+
+          if (
+            descriptionUpper.includes('STRIPE') ||
+            descriptionUpper.includes('ETSY') ||
+            descriptionUpper.includes('EBAY') ||
+            descriptionUpper.includes('E-BAY')
+          ) {
+            console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Stripe/Etsy/eBay credit → Trading Revenue`)
+            classification = {
+              ...classification,
+              category: 'INCOME_SALES_CLEANING',
+              department: 'cleaning',
+              confidence: 1.0,
+              reason: 'Fixed mapping: Stripe/Etsy/eBay credit is platform sales revenue'
+            }
+          }
+
           // Jason Family Shine - All instances must be Cleaning Income
           if (descriptionUpper.includes('JASON FAMILY') || descriptionUpper.includes('JASON FAMILY SHINE')) {
             console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Jason Family Shine → Cleaning Income`)
@@ -887,6 +1058,31 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+
+        if (
+          accountType !== 'individual' &&
+          hasDebit &&
+          !hasCredit &&
+          descriptionUpper.includes('ATO') &&
+          (
+            descriptionUpper.includes('I002') ||
+            descriptionUpper.includes('REFUND') ||
+            descriptionUpper.includes('REBATE') ||
+            descriptionUpper.includes('ACTIVITY STATEMENT') ||
+            descriptionUpper.includes('BAS')
+          )
+        ) {
+          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: ATO refund parsed as debit → credit refund`)
+          transaction.credit = transaction.debit
+          transaction.debit = null
+          classification = {
+            ...classification,
+            category: 'NON_TAXABLE_ATO_GST_REFUND',
+            department: 'general',
+            confidence: 1.0,
+            reason: 'Fixed mapping: ATO GST/BAS refund converted from incorrect debit parse'
+          }
+        }
         
         // POST-PROCESSING: Additional business expense rules (apply to both Credit and Debit)
         // hasDebit is already declared above
@@ -943,6 +1139,44 @@ export async function POST(request: NextRequest) {
           }
         }
         
+        // Australian fuel / petrol retailers — mandatory Fuel category on debits
+        const fuelMatch = detectFuelRetailer(transaction.description || '')
+        if (fuelMatch && hasDebit && !hasCredit) {
+          console.log(
+            `[ANALYZE] [${index + 1}] 🔧 MANDATORY: ${fuelMatch.brand} → Fuel (${fuelMatch.reason})`
+          )
+          classification = {
+            ...classification,
+            category: 'EXPENSE_FUEL_TRAVEL',
+            department: isCorporateBankAccount(accountType as 'individual' | 'company' | 'sole_trader')
+              ? 'cleaning'
+              : classification.department || 'cleaning',
+            confidence: fuelMatch.confidence,
+            reason: fuelMatch.reason,
+          }
+        }
+
+        // Online platforms — Stripe/Etsy/eBay/Google/Cursor etc.
+        const platformMatch = detectPlatformTransaction(
+          transaction.description || '',
+          transaction.debit,
+          transaction.credit
+        )
+        if (platformMatch) {
+          console.log(
+            `[ANALYZE] [${index + 1}] 🔧 MANDATORY: ${platformMatch.brand} → ${platformMatch.category}`
+          )
+          classification = {
+            ...classification,
+            category: platformMatch.category,
+            department: isCorporateBankAccount(accountType as 'individual' | 'company' | 'sole_trader')
+              ? 'cleaning'
+              : classification.department || 'cleaning',
+            confidence: platformMatch.confidence,
+            reason: platformMatch.reason,
+          }
+        }
+
         // MJR Enterprise - Always Cleaning Subcontractor Expense
         if (descriptionUpper.includes('MJR ENTERPRISE') || descriptionUpper.includes('MJRENTERPRISE')) {
           if (hasDebit) {
@@ -957,19 +1191,121 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        // Cursor Software - Business Software Expense (Cleaning Department)
-        if (descriptionUpper.includes('CURSOR') && 
-            (descriptionUpper.includes('POWERED IDE') || 
-             descriptionUpper.includes('AI') ||
-             descriptionUpper.includes('SOFTWARE'))) {
-          if (hasDebit) {
-            console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Cursor Software → Cleaning Business Expense`)
+        // Business software subscriptions - Cursor / Google Workspace / Cloud
+        if (
+          hasDebit &&
+          (
+            (descriptionUpper.includes('CURSOR') &&
+              (descriptionUpper.includes('POWERED IDE') ||
+               descriptionUpper.includes('AI') ||
+               descriptionUpper.includes('SOFTWARE'))) ||
+            descriptionUpper.includes('GOOGLE WORKSPACE') ||
+            descriptionUpper.includes('GOOGLE CLOUD') ||
+            descriptionUpper.includes('GSUITE') ||
+            descriptionUpper.includes('G SUITE') ||
+            (descriptionUpper.includes('GOOGLE') &&
+              (descriptionUpper.includes('WORKSPACE') ||
+               descriptionUpper.includes('CLOUD') ||
+               descriptionUpper.includes('STORAGE') ||
+               descriptionUpper.includes('DRIVE')))
+          )
+        ) {
+          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Business software subscription expense`)
+          classification = {
+            ...classification,
+            category: 'EXPENSE_SOFTWARE_SUBSCRIPTIONS',
+            department: 'cleaning',
+            confidence: 1.0,
+            reason: 'Fixed mapping: business software / subscription expense'
+          }
+        }
+
+        // Bank interest income / bank fees
+        if (
+          accountType !== 'individual' &&
+          hasCredit &&
+          (
+            descriptionUpper.includes('INT CREDIT') ||
+            descriptionUpper.includes('INTEREST CREDIT') ||
+            descriptionUpper.includes('CREDIT INTEREST') ||
+            descriptionUpper.includes('BANK INTEREST')
+          ) &&
+          !descriptionUpper.includes('INTEREST RATE') &&
+          !descriptionUpper.includes('PLEASE NOTE') &&
+          !descriptionUpper.includes('FROM TODAY YOUR')
+        ) {
+          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Bank interest credit → Other Business Income`)
+          classification = {
+            ...classification,
+            category: 'INCOME_OTHER_BUSINESS',
+            department: 'cleaning',
+            confidence: 1.0,
+            reason: 'Fixed mapping: bank interest credit is other business income'
+          }
+        }
+
+        if (
+          hasDebit &&
+          (
+            descriptionUpper.includes('BANK FEE') ||
+            descriptionUpper.includes('ACCOUNT FEE') ||
+            descriptionUpper.includes('MONTHLY FEE') ||
+            descriptionUpper.includes('OVERDRAFT INTEREST') ||
+            descriptionUpper.includes('DEBIT INTEREST') ||
+            descriptionUpper.includes('INTEREST CHARGE')
+          ) &&
+          !descriptionUpper.includes('INTEREST RATE') &&
+          !descriptionUpper.includes('PLEASE NOTE') &&
+          !descriptionUpper.includes('FROM TODAY YOUR')
+        ) {
+          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Bank fee / debit interest expense`)
+          classification = {
+            ...classification,
+            category: 'EXPENSE_BANK_FEES_INTEREST',
+            department: 'cleaning',
+            confidence: 1.0,
+            reason: 'Fixed mapping: bank fee or debit interest expense'
+          }
+        }
+
+        // Google Ads / marketing platforms
+        if (
+          hasDebit &&
+          (
+            descriptionUpper.includes('GOOGLE ADS') ||
+            descriptionUpper.includes('GOOGLEAD') ||
+            descriptionUpper.includes('ADWORDS')
+          )
+        ) {
+          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Google Ads → Marketing`)
+          classification = {
+            ...classification,
+            category: 'EXPENSE_MARKETING',
+            department: 'cleaning',
+            confidence: 1.0,
+            reason: 'Fixed mapping: Google Ads marketing expense'
+          }
+        }
+
+        // Merchant / platform fees - Stripe, Etsy, eBay charges
+        if (
+          hasDebit &&
+          (
+            descriptionUpper.includes('STRIPE') ||
+            descriptionUpper.includes('ETSY') ||
+            descriptionUpper.includes('EBAY') ||
+            descriptionUpper.includes('E-BAY')
+          )
+        ) {
+          const isPlatformRevenueCredit = hasCredit && !hasDebit
+          if (!isPlatformRevenueCredit) {
+            console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Stripe/Etsy/eBay debit → Merchant & Platform Fees`)
             classification = {
               ...classification,
-              category: classification.category || 'EXPENSE_OFFICE_SUPPLIES', // Keep existing category or default to Office Supplies
-              department: 'cleaning', // Force Cleaning department (not Personal)
-              confidence: 1.0, // 100% confidence
-              reason: 'Fixed mapping: Cursor is business software expense for Cleaning department'
+              category: 'EXPENSE_MERCHANT_FEES',
+              department: 'cleaning',
+              confidence: 1.0,
+              reason: 'Fixed mapping: payment gateway / marketplace fee expense'
             }
           }
         }
@@ -1107,23 +1443,23 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        // Freight & Shipping - Australia Post, Sendle
-        if (hasDebit && (
-            descriptionUpper.includes('AUSTRALIA POST') ||
-            descriptionUpper.includes('AUS POST') ||
-            descriptionUpper.includes('AUSPOST') ||
-            descriptionUpper.includes('SENDLE')
-          )) {
-          console.log(`[ANALYZE] [${index + 1}] 🔧 FORCING: Freight & Shipping → EXPENSE_FREIGHT_SHIPPING (with GST enabled)`)
+        // Australian freight / postal providers — mandatory Freight & Shipping on debits
+        const shippingMatch = detectShippingProvider(transaction.description || '')
+        if (shippingMatch && hasDebit && !hasCredit) {
+          console.log(
+            `[ANALYZE] [${index + 1}] 🔧 MANDATORY: ${shippingMatch.brand} → Freight & Shipping`
+          )
           classification = {
             ...classification,
             category: 'EXPENSE_FREIGHT_SHIPPING',
-            department: 'cleaning', // Company
-            confidence: 1.0, // 100% confidence
-            reason: 'Fixed mapping: Freight & Shipping expense (Australia Post, Sendle) with GST enabled'
+            department: isCorporateBankAccount(accountType as 'individual' | 'company' | 'sole_trader')
+              ? 'cleaning'
+              : classification.department || 'cleaning',
+            confidence: shippingMatch.confidence,
+            reason: shippingMatch.reason,
           }
         }
-        
+
         // Office Equipment & Assets - Computers, furniture, equipment purchases
         if (hasDebit && (
             descriptionUpper.includes('COMPUTER') ||
@@ -1401,11 +1737,24 @@ export async function POST(request: NextRequest) {
           const integratedGstInfo = (classificationResult as any).gstInfo;
           const integratedFbtInfo = (classificationResult as any).fbtInfo;
           
-          // 🔧 Force GST for Freight & Shipping (Australia Post, Sendle)
-          const isFreightShipping = classification.category === 'EXPENSE_FREIGHT_SHIPPING';
+          // Freight: AU providers claim GST; Hanaone / international — GST-free for 1B
+          const isFreightShipping = classification.category === 'EXPENSE_FREIGHT_SHIPPING'
+          const descUpper = String(transaction.description || '').toUpperCase()
+          const isHanaoneFreight =
+            descUpper.includes('HANAONE') || descUpper.includes('HANA ONE')
           
-          if (isFreightShipping) {
-            // Force GST included for Freight & Shipping
+          if (isFreightShipping && isHanaoneFreight) {
+            const amount = Math.abs(transaction.debit || transaction.credit || 0)
+            gstInfo = {
+              isGSTIncluded: false,
+              gstType: 'FREE' as const,
+              gstAmount: 0,
+              netAmount: amount,
+              confidence: 0.95,
+              reasoning: 'Hanaone Express — no AU GST claim (international freight)',
+            }
+          } else if (isFreightShipping) {
+            // Force GST included for AU Freight & Shipping (Australia Post, Sendle, etc.)
             const amount = Math.abs(transaction.debit || transaction.credit || 0);
             const gstAmount = Math.round((amount / 11) * 100) / 100;
             const netAmount = Math.round((amount - gstAmount) * 100) / 100;
@@ -1415,7 +1764,7 @@ export async function POST(request: NextRequest) {
               gstAmount: gstAmount,
               netAmount: netAmount,
               confidence: 1.0,
-              reasoning: 'Fixed mapping: Freight & Shipping expenses (Australia Post, Sendle) always include GST'
+              reasoning: 'Fixed mapping: AU Freight & Shipping expenses typically include GST'
             };
             console.log(`[ANALYZE] [${index + 1}] ✅ GST forced for Freight & Shipping:`, {
               isGSTIncluded: gstInfo.isGSTIncluded,
@@ -1662,20 +2011,23 @@ export async function POST(request: NextRequest) {
           const match = await matchPayrollTransaction(transaction, employees);
           
           if (match) {
-            // 매칭된 거래에 태그 추가
-            (classifiedTransactions[i] as any).isPayrollTransaction = true;
-            (classifiedTransactions[i] as any).payrollType = match.employee.type;
-            (classifiedTransactions[i] as any).matchedEmployee = {
+            // Tag employee match for UI — do NOT set isPayrollTransaction on bank
+            // rows (that flag is for HR accrual journals and used to hide bank lines).
+            ;(classifiedTransactions[i] as any).payrollType = match.employee.type
+            ;(classifiedTransactions[i] as any).matchedEmployee = {
               id: match.employee.id,
               name: match.employee.name,
               employeeId: match.employee.employeeId,
-              type: match.employee.type
-            };
-            (classifiedTransactions[i] as any).matchConfidence = match.matchConfidence;
-            (classifiedTransactions[i] as any).matchReason = match.matchReason;
-            
-            matchedCount++;
-            console.log(`[ANALYZE] ✅ Matched transaction ${i + 1} to ${match.employee.name} (${match.employee.employeeId}) - Confidence: ${match.matchConfidence}`);
+              type: match.employee.type,
+            }
+            ;(classifiedTransactions[i] as any).matchConfidence = match.matchConfidence
+            ;(classifiedTransactions[i] as any).matchReason = match.matchReason
+            ;(classifiedTransactions[i] as any).suggestedPayrollClear = true
+
+            matchedCount++
+            console.log(
+              `[ANALYZE] ✅ Matched transaction ${i + 1} to ${match.employee.name} (${match.employee.employeeId}) - Confidence: ${match.matchConfidence}`
+            )
           }
         }
       }
@@ -1799,6 +2151,16 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(usageLogs)) {
       console.warn('[ANALYZE] ⚠️ usageLogs is invalid, using empty array');
     }
+
+    // Corporate bank statements: all ledger rows are business for tax (not personal)
+    const finalTransactions =
+      accountType === 'company'
+        ? classifiedTransactions.map((tx) => ({
+            ...tx,
+            department:
+              tx.department === 'personal' || !tx.department ? 'cleaning' : tx.department,
+          }))
+        : classifiedTransactions
     
     const responseData = {
       success: true,
@@ -1809,12 +2171,12 @@ export async function POST(request: NextRequest) {
         openingBalance: parsedStatement.openingBalance || 0,
         closingBalance: parsedStatement.closingBalance || 0,
       },
-      transactions: classifiedTransactions,
+      transactions: finalTransactions,
       summary: {
-        totalTransactions: classifiedTransactions.length,
-        classifiedCount: classifiedTransactions.filter(tx => tx.category !== 'UNCATEGORIZED').length,
-        directorsLoanCount: classifiedTransactions.filter(tx => tx.isDirectorsLoan).length,
-        preTradingExpenseCount: classifiedTransactions.filter(tx => tx.isPreTradingExpense).length,
+        totalTransactions: finalTransactions.length,
+        classifiedCount: finalTransactions.filter(tx => tx.category !== 'UNCATEGORIZED').length,
+        directorsLoanCount: finalTransactions.filter(tx => tx.isDirectorsLoan).length,
+        preTradingExpenseCount: finalTransactions.filter(tx => tx.isPreTradingExpense).length,
       },
       apiUsage: {
         totalCalls: totalApiUsage.totalCalls || 0,

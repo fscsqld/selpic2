@@ -38,6 +38,7 @@ export function TimesheetApproval() {
       setIsAdmin(true)
     }
     loadTimesheets()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when filterStatus changes
   }, [filterStatus])
 
   const loadTimesheets = async () => {

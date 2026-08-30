@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasAllPermissions } from '@/lib/adminPermissionCheck'
 import { useAdminSession } from '@/lib/adminSession'
+import { resolveAdminBrowserSession } from '@/lib/supabase/resolveAdminBrowserSession'
 import AdminInboundSync from '@/components/AdminInboundSync'
 import AdminInboundSoundAlert from '@/components/AdminInboundSoundAlert'
 import AdminOrderSoundListener from '@/components/AdminOrderSoundListener'
@@ -15,6 +17,13 @@ interface AdminRouteProps {
 
 const ADMIN_SESSION_CHECK_INTERVAL_MS = 30000
 const ADMIN_ACTIVITY_THROTTLE_MS = 15000
+/** Avoid re-blocking the UI on every admin page navigation. */
+const REGISTRY_ACCESS_CACHE_MS = 5 * 60 * 1000
+let registryAccessCache: { ok: true; checkedAt: number } | null = null
+
+export function clearAdminRegistryAccessCache(): void {
+  registryAccessCache = null
+}
 
 export default function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
   const { isLoggedIn, adminUser, logout } = useAdminAuth()
@@ -82,17 +91,9 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
       return
     }
 
-    // 권한 확인 (super_admin / admin:manage = full app access; avoids hidden menus + route redirects)
+    // Permission check (super_admin / admin:manage / explicit permission + legacy aliases)
     if (requiredPermissions.length > 0 && adminUser) {
-      const fullAccess =
-        adminUser.role === 'super_admin' ||
-        adminUser.permissions.includes('admin:manage')
-
-      const hasPermission =
-        fullAccess ||
-        requiredPermissions.every((permission) => adminUser.permissions.includes(permission))
-
-      if (!hasPermission) {
+      if (!adminHasAllPermissions(adminUser, requiredPermissions)) {
         console.log('Permission denied, redirecting to dashboard...')
         router.push('/admin/dashboard')
       }
@@ -145,12 +146,19 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     checkPermissions()
   }, [checkPermissions])
 
-  // When Supabase is configured and the user has a browser session, require registry + JWT (server-side gate).
+  // Align Supabase session + registry with Zustand before rendering admin chrome.
   useEffect(() => {
     if (!hasHydrated || !isLoggedIn) return
     const skip =
       !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
     if (skip) {
+      setRegistryAccessOk(true)
+      return
+    }
+
+    const cached =
+      registryAccessCache && Date.now() - registryAccessCache.checkedAt < REGISTRY_ACCESS_CACHE_MS
+    if (cached) {
       setRegistryAccessOk(true)
       return
     }
@@ -161,25 +169,19 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
       try {
         const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
         const supabase = createSupabaseBrowserClient()
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        const resolved = await resolveAdminBrowserSession(supabase)
         if (cancelled) return
-        if (!session?.access_token) {
-          setRegistryAccessOk(true)
-          return
-        }
-        const r = await fetch('/api/admin/registry-access', { credentials: 'same-origin' })
-        if (cancelled) return
-        if (!r.ok) {
-          logout()
+        if (!resolved.ok) {
+          clearAdminRegistryAccessCache()
           router.replace('/admin/login')
           return
         }
+        registryAccessCache = { ok: true, checkedAt: Date.now() }
         setRegistryAccessOk(true)
       } catch {
         if (!cancelled) {
-          logout()
+          clearAdminRegistryAccessCache()
+          useAdminAuth.getState().logout()
           router.replace('/admin/login')
         }
       }
@@ -188,47 +190,7 @@ export default function AdminRoute({ children, requiredPermissions = [] }: Admin
     return () => {
       cancelled = true
     }
-  }, [hasHydrated, isLoggedIn, logout, router])
-
-  // Keep JWT app_metadata in sync with admin_email_registry (permissions / role updates).
-  useEffect(() => {
-    if (!hasHydrated || !isLoggedIn) return
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
-      return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
-        const { mapSupabaseUserToAdminUser } = await import('@/lib/supabase/mapSupabaseAdminUser')
-        const { syncAdminRegistryWithSession } = await import('@/lib/supabase/syncAdminRegistryClient')
-        const supabase = createSupabaseBrowserClient()
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!session?.access_token || cancelled) return
-
-        await syncAdminRegistryWithSession(supabase, session.access_token)
-        if (cancelled) return
-
-        const {
-          data: { session: s2 },
-        } = await supabase.auth.getSession()
-        if (!s2?.user || cancelled) return
-
-        const mapped = mapSupabaseUserToAdminUser(s2.user)
-        useAdminAuth.setState({ adminUser: mapped })
-        window.dispatchEvent(new Event('admin-auth-updated'))
-      } catch (e) {
-        console.warn('[AdminRoute] admin registry sync', e)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [hasHydrated, isLoggedIn])
+  }, [hasHydrated, isLoggedIn, router])
 
   // Listen for permission changes
   useEffect(() => {

@@ -67,7 +67,7 @@ export function FinancialSummary({ summary }: FinancialSummaryProps) {
       <div className="card">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Director's Loan</p>
+            <p className="text-sm text-gray-600 mb-1">Director&apos;s Loan</p>
             <p className={`text-2xl font-bold ${
               summary.directorsLoanBalance >= 0 ? 'text-yellow-600' : 'text-green-600'
             }`}>

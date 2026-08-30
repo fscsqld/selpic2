@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server'
 import { buildPostsWithComments } from '@/lib/community/serialize'
 import { hasBannedCommunityContent, sanitizeCommunityText } from '@/lib/community/moderation'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 function parseId(param: string): number | null {
   const n = Number(param)
@@ -11,10 +15,9 @@ function parseId(param: string): number | null {
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const adminSession = await requireSupabaseAdminUser()
-  if (!adminSession) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('community:moderate')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SERVICE_UNAVAILABLE' }, { status: 503 })
@@ -104,10 +107,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const adminSession = await requireSupabaseAdminUser()
-  if (!adminSession) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('community:moderate')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SERVICE_UNAVAILABLE' }, { status: 503 })

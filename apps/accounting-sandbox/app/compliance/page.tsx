@@ -8,49 +8,60 @@ import { FBTMonitor } from '@/components/FBTMonitor'
 import { TaxDeadlineTracker } from '@/components/TaxDeadlineTracker'
 import { CompliancePackageExporter } from '@/components/ComplianceReporting/CompliancePackageExporter'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
+import { loadAllTransactions, syncLegacyTransactionCache } from '@/lib/storage/load-all-transactions'
 import { COMPANY_LEGAL } from '@/lib/companyLegal'
-import { ClassifiedTransaction } from '@/lib/pdf-parser/types'
-import { GSTCalculator } from '@/lib/gst-settlement/gst-calculator'
+
+interface ClassifiedTransaction {
+  id?: string
+  date: string
+  description: string
+  debit: number | null
+  credit: number | null
+  balance?: number | null
+  category?: string
+  department?: string
+  confidence?: number | string
+  isDirectorsLoan?: boolean
+  requiresPAYG?: boolean
+  isPayrollTransaction?: boolean
+  payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
+  noABNWarning?: {
+    shouldWarn?: boolean
+    warningMessage?: string
+    withholdingAmount?: number
+  }
+  gstInfo?: {
+    isGSTIncluded: boolean
+    gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    netAmount?: number
+  }
+  fbtInfo?: {
+    isFBTRelevant: boolean
+    fbtCategory?: 'meal' | 'entertainment' | 'travel' | 'vehicle' | 'other'
+    fbtRisk?: 'low' | 'medium' | 'high'
+    isFBTReportable: boolean
+    fbtAmount?: number
+    reasoning?: string
+    confidence: number
+  }
+}
 
 export default function CompliancePage() {
   const [transactions, setTransactions] = useState<ClassifiedTransaction[]>([])
   const [openingDirectorLoanBalance, setOpeningDirectorLoanBalance] = useState<number>(0)
-  const [gstPayable, setGstPayable] = useState<number>(0)
-  const [gstClaimable, setGstClaimable] = useState<number>(0)
 
   useEffect(() => {
     loadTransactions()
     loadOpeningBalance()
   }, [])
 
-  useEffect(() => {
-    if (transactions.length > 0) {
-      calculateGSTValues()
-    }
-  }, [transactions])
-
   const loadTransactions = async () => {
     try {
-      // Initialize IndexedDB if needed
       await indexedDBStorage.init()
-      
-      // Get all statements
-      const statements = await indexedDBStorage.getAllStatements()
-      
-      // Extract all transactions from all statements
-      const allTransactions: ClassifiedTransaction[] = []
-      statements.forEach(statement => {
-        if (statement.transactions && Array.isArray(statement.transactions)) {
-          allTransactions.push(...statement.transactions)
-        }
-      })
-      
-      // 🔧 NEW: No ABN 경고 재계산 (등록된 Contractor 확인)
-      console.log('[Compliance] Recalculating No ABN warnings for loaded transactions...')
-      const { recalculateNoABNWarningsForTransactions } = await import('@/lib/utils/no-abn-warning-recalculator')
-      const recalculatedTransactions = await recalculateNoABNWarningsForTransactions(allTransactions)
-      
-      setTransactions(recalculatedTransactions)
+      const recalculatedTransactions = await loadAllTransactions()
+      syncLegacyTransactionCache(recalculatedTransactions)
+      setTransactions(recalculatedTransactions as ClassifiedTransaction[])
     } catch (error) {
       console.error('Failed to load transactions:', error)
     }
@@ -67,31 +78,18 @@ export default function CompliancePage() {
     }
   }
 
-  const calculateGSTValues = () => {
-    // Get current period dates
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth()
-    
-    // Calculate quarter dates
-    const quarter = Math.floor(currentMonth / 3) + 1
-    const quarterStartMonth = (quarter - 1) * 3
-    const startDate = new Date(currentYear, quarterStartMonth, 1).toISOString().split('T')[0]
-    const endDate = new Date(currentYear, quarterStartMonth + 3, 0).toISOString().split('T')[0]
-    
-    const gstCalculator = new GSTCalculator()
-    const gstResult = gstCalculator.calculateGSTNet(transactions, startDate, endDate, 'quarterly')
-    setGstPayable(gstResult.gstNet > 0 ? gstResult.gstNet : 0)
-    setGstClaimable(gstResult.gstNet < 0 ? Math.abs(gstResult.gstNet) : 0)
-  }
-
-  const handleTransactionUpdate = async (updatedTransaction: ClassifiedTransaction) => {
-    try {
-      await indexedDBStorage.updateTransaction(updatedTransaction.id || '', updatedTransaction)
-      await loadTransactions()
-    } catch (error) {
-      console.error('Failed to update transaction:', error)
-    }
+  const handleTransactionUpdate = (
+    id: string,
+    updates: Partial<ClassifiedTransaction>
+  ) => {
+    void (async () => {
+      try {
+        await indexedDBStorage.updateTransaction(id, updates)
+        await loadTransactions()
+      } catch (error) {
+        console.error('Failed to update transaction:', error)
+      }
+    })()
   }
 
   const companyInfo = {
@@ -136,9 +134,7 @@ export default function CompliancePage() {
             <div className="card">
               <h2 className="text-2xl font-semibold mb-4">GST Summary</h2>
               <GSTSummary 
-                transactions={transactions}
-                gstPayable={gstPayable}
-                gstClaimable={gstClaimable}
+                transactions={transactions as any}
               />
             </div>
 
@@ -146,8 +142,8 @@ export default function CompliancePage() {
             <div className="card">
               <h2 className="text-2xl font-semibold mb-4">FBT Monitor</h2>
               <FBTMonitor 
-                transactions={transactions} 
-                onTransactionUpdate={handleTransactionUpdate}
+                transactions={transactions as any} 
+                onTransactionUpdate={handleTransactionUpdate as any}
               />
             </div>
 

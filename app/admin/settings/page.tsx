@@ -15,6 +15,7 @@ import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminActivityLog } from '@/lib/adminActivityLog'
+import { ADMIN_PERMISSION_CATALOG } from '@/lib/adminPermissionCatalog'
 import { useAdminSession } from '@/lib/adminSession'
 import { useAdminPasswordPolicy } from '@/lib/adminPasswordPolicy'
 import { useAdminIPControl } from '@/lib/adminIPControl'
@@ -795,14 +796,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
     })
   }, [adminUser, isSuperAdmin, adminUsers, memoizedAdminUsers])
   
-  const availablePermissions = [
-    'dashboard:read', 'products:read', 'products:write', 'content:read', 
-    'content:write', 'users:read', 'users:write', 'analytics:read',
-    'orders:read', 'orders:write', 'messages:read', 'messages:write',
-    'community:read', 'community:write', 'community:moderate',
-    'images:read', 'images:write', 'invoices:read', 'invoices:write',
-    'system:admin', 'admin:manage'
-  ]
+  const availablePermissions = [...ADMIN_PERMISSION_CATALOG]
 
   // 탭 그룹 정의
   const tabGroups = [
@@ -819,11 +813,11 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
     },
     {
       id: 'admin',
-      label: 'Admin Management',
+      label: 'Audit & access',
       icon: Users,
       superAdminOnly: true,
       tabs: [
-        { id: 'admin-management', label: t('admin.settings.adminManagement.title') || 'Admin Management', icon: Users },
+        { id: 'admin-management', label: t('admin.settings.adminManagement.title') || 'Staff access', icon: Users },
         { id: 'activity-log', label: 'Activity Log', icon: FileText },
         { id: 'sessions', label: 'Session Management', icon: Shield }
       ]
@@ -1423,7 +1417,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
   }
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['system:admin']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Settings"
@@ -1820,278 +1814,47 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
               </div>
             )}
 
-            {/* Admin Management Tab */}
+            {/* Staff access — super admin only; registry lives under Administrator settings */}
             {activeTab === 'admin-management' && isSuperAdmin && (
-              <div className="bg-white shadow rounded-lg p-6 w-full">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                      <UserPlus className="h-5 w-5 mr-2" />
-                      {t('admin.settings.adminManagement.title') || 'Admin Management'}
-                    </h3>
-                    <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-medium">
-                      {memoizedAdminUsers.length} {memoizedAdminUsers.length === 1 ? 'admin' : 'admins'}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    {selectedAdmins.size > 0 && (
-                      <button
-                        onClick={() => {
-                          setBulkPermissions([])
-                          setIsBulkPermissionsModalOpen(true)
-                        }}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Bulk Permission Management ({selectedAdmins.size})
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setIsCompareModalOpen(true)}
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      <GitCompare className="h-4 w-4 mr-2" />
-                      Compare Permissions
-                    </button>
-                    <button
-                      onClick={() => setIsCreateModalOpen(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      {t('admin.settings.adminManagement.createNewAdmin') || 'Create New Admin'}
-                    </button>
-                  </div>
+              <div className="bg-white shadow rounded-lg p-6 w-full space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                    <Shield className="h-5 w-5 mr-2" />
+                    {t('admin.settings.adminManagement.title') || 'Staff access'}
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-600 max-w-2xl">
+                    Staff emails, roles, and permissions are managed only in{' '}
+                    <strong>Administrator settings</strong> (super admin). This Admin Settings area is for
+                    system configuration, activity log, and sessions — including when a super admin does
+                    day-to-day admin work.
+                  </p>
                 </div>
-
-                {useSupabaseRegistry && (
-                  <div className="mb-4 p-3 rounded-md bg-blue-50 text-blue-900 text-sm border border-blue-100">
-                    Supabase admins are registered <strong>by email</strong> and synced to each user&apos;s JWT when they
-                    sign in. Open{' '}
-                    <a href="/admin/management" className="underline font-medium">
-                      Admin Management
-                    </a>{' '}
-                    to view or edit the full email registry.
-                    {registry.error && (
-                      <span className="block mt-2 text-amber-800">
-                        {registry.error} Apply <code className="text-xs">002_admin_email_registry.sql</code> if the table
-                        is missing.
-                      </span>
-                    )}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="text-sm text-slate-800">
+                    <p className="font-medium">Open staff email registry</p>
+                    <p className="text-slate-600 mt-1">
+                      Add or remove admins, change roles, and edit the permission catalog.
+                    </p>
                   </div>
+                  <a
+                    href="/admin/administrator-settings"
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium text-white bg-slate-700 hover:bg-slate-800 shrink-0"
+                  >
+                    Administrator settings
+                  </a>
+                </div>
+                {!useSupabaseRegistry && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    Supabase browser env is not configured; the registry UI needs NEXT_PUBLIC_SUPABASE_URL and
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY.
+                  </p>
                 )}
-
-                {/* Admin Users Table */}
-                <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-200 bg-white">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          <input
-                            type="checkbox"
-                            checked={selectedAdmins.size === memoizedAdminUsers.length && memoizedAdminUsers.length > 0}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedAdmins(new Set(memoizedAdminUsers.map(a => a.username)))
-                              } else {
-                                setSelectedAdmins(new Set())
-                              }
-                            }}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Username</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Role</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Login Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Permissions</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {memoizedAdminUsers.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center">
-                            <div className="flex flex-col items-center justify-center">
-                              <Users className="h-12 w-12 text-gray-400 mb-4" />
-                              <p className="text-sm font-medium text-gray-900 mb-1">No administrators found</p>
-                              <p className="text-xs text-gray-500 mb-4">Click "Create New Admin" to add an administrator</p>
-                              {process.env.NODE_ENV === 'development' && (
-                                <div className="text-xs text-gray-400 bg-gray-50 p-3 rounded border border-gray-200 text-left max-w-md">
-                                  <p className="font-medium mb-2">Debug Info:</p>
-                                  <p>adminUsers.length: {adminUsers.length}</p>
-                                  <p>memoizedAdminUsers.length: {memoizedAdminUsers.length}</p>
-                                  <p>isSuperAdmin: {isSuperAdmin ? 'true' : 'false'}</p>
-                                  <p>adminUser: {adminUser?.username || 'null'}</p>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        memoizedAdminUsers.map((admin) => (
-                        <tr key={admin.username} className={`hover:bg-gray-50 transition-colors ${selectedAdmins.has(admin.username) ? 'bg-indigo-50' : ''}`}>
-                          <td className="px-6 py-4">
-                            <input
-                              type="checkbox"
-                              checked={selectedAdmins.has(admin.username)}
-                              onChange={(e) => {
-                                const newSelected = new Set(selectedAdmins)
-                                if (e.target.checked) {
-                                  newSelected.add(admin.username)
-                                } else {
-                                  newSelected.delete(admin.username)
-                                }
-                                setSelectedAdmins(newSelected)
-                              }}
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                            />
-                          </td>
-                          <td className="px-6 py-4">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  {admin.avatar ? (
-                                    <img 
-                                      src={admin.avatar} 
-                                      alt={admin.username}
-                                      className="h-10 w-10 rounded-full object-cover border-2 border-indigo-200"
-                                      onError={(e) => {
-                                        // Fallback to icon if image fails to load
-                                        const target = e.target as HTMLImageElement
-                                        target.style.display = 'none'
-                                        const parent = target.parentElement
-                                        if (parent) {
-                                          parent.innerHTML = '<div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center"><svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg></div>'
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                      <Users className="h-6 w-6 text-indigo-600" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">{admin.username}</div>
-                                  {admin.email && (
-                                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                                      <Mail className="h-3 w-3" />
-                                      {admin.email}
-                                    </div>
-                                  )}
-                                  {admin.department && (
-                                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                                      <Building2 className="h-3 w-3" />
-                                      {admin.department}
-                                    </div>
-                                  )}
-                                  {admin.lastModified && (
-                                    <div className="text-sm text-gray-500">
-                                      {t('admin.settings.adminManagement.modified')}: {new Date(admin.lastModified).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center space-x-2">
-                              {admin.role === 'super_admin' ? (
-                                <Crown className="h-4 w-4 text-purple-600" />
-                              ) : (
-                                <Shield className="h-4 w-4 text-blue-600" />
-                              )}
-                              <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
-                                admin.role === 'super_admin' 
-                                  ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
-                              }`}>
-                                {admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              admin.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {admin.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col space-y-1">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                admin.username === adminUser?.username && adminUser ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {admin.username === adminUser?.username && adminUser ? 'Online' : 'Offline'}
-                              </span>
-                              {admin.lastLogin && (
-                                <div className="text-xs text-gray-500">
-                                  {new Date(admin.lastLogin).toLocaleString('en-US')}
-                                </div>
-                              )}
-                              {!admin.lastLogin && (
-                                <div className="text-xs text-gray-400">
-                                  No login record
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">{admin.permissions.length} permissions</div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {admin.permissions.slice(0, 3).join(', ')}
-                              {admin.permissions.length > 3 && '...'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <button
-                                onClick={() => openPasswordModal(admin.username)}
-                                className="p-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-md transition-colors"
-                                title="Change Password"
-                              >
-                                <Lock className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() => openPermissionsModal(admin.username)}
-                                className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-md transition-colors"
-                                title="Update Permissions"
-                              >
-                                <Shield className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() => openProfileModal(admin.username)}
-                                className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-md transition-colors"
-                                title="Edit Profile"
-                              >
-                                <UserCircle className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() => handleToggleStatus(admin.username)}
-                                className={`p-2 rounded-md transition-colors ${
-                                  admin.isActive 
-                                    ? 'text-yellow-600 hover:text-yellow-900 hover:bg-yellow-50' 
-                                    : 'text-green-600 hover:text-green-900 hover:bg-green-50'
-                                }`}
-                                title="Toggle Status"
-                              >
-                                {admin.isActive ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                              </button>
-                              {admin.username !== adminUser?.username && (
-                                <button
-                                  onClick={() => openDeleteModal(admin.username)}
-                                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-md transition-colors"
-                                  title="Delete Admin"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                {useSupabaseRegistry && registry.error && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    {registry.error} Apply <code className="text-xs">002_admin_email_registry.sql</code> if the
+                    table is missing.
+                  </p>
+                )}
               </div>
             )}
 
@@ -2674,27 +2437,47 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                        </button>
                        <button 
                          onClick={() => {
-                           const { deleteLogsByDate } = useAdminActivityLog.getState()
-                           const confirmed = window.confirm(
-                             'This will delete all activity logs older than 30 days.\n\n' +
-                             `Current logs: ${systemStats.activityLogSize.toLocaleString()} entries\n\n` +
-                             'Are you sure you want to continue?'
-                           )
-                           if (confirmed) {
+                           void (async () => {
+                             const { deleteLogsByDate } = useAdminActivityLog.getState()
+                             const confirmed = window.confirm(
+                               'This will delete all activity logs older than 30 days.\n\n' +
+                                 `Current logs: ${systemStats.activityLogSize.toLocaleString()} entries\n\n` +
+                                 'Are you sure you want to continue?'
+                             )
+                             if (!confirmed) return
+
                              try {
                                setIsLoading(true)
                                const thirtyDaysAgo = new Date()
                                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+                               const { deleteActivityLogsOnServer } = await import(
+                                 '@/lib/logAdminActivity'
+                               )
+                               const result = await deleteActivityLogsOnServer({
+                                 mode: 'before',
+                                 before: thirtyDaysAgo.toISOString(),
+                               })
+                               if (!result.ok) {
+                                 setMessage(
+                                   result.error || 'Failed to clean activity logs on server.'
+                                 )
+                                 setTimeout(() => setMessage(''), 5000)
+                                 return
+                               }
                                deleteLogsByDate(thirtyDaysAgo)
-                               setMessage(`Activity logs older than 30 days have been cleaned up.`)
+                               setMessage(
+                                 result.deleted > 0
+                                   ? `Removed ${result.deleted} activity log(s) older than 30 days.`
+                                   : 'No shared activity logs older than 30 days on server.'
+                               )
                                setTimeout(() => setMessage(''), 5000)
-                               setIsLoading(false)
                              } catch (error) {
                                setMessage('Error cleaning up activity logs. Please try again.')
                                setTimeout(() => setMessage(''), 5000)
+                             } finally {
                                setIsLoading(false)
                              }
-                           }
+                           })()
                          }}
                          disabled={isLoading || systemStats.activityLogSize === 0}
                          className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -4938,6 +4721,8 @@ function ActivityLogView() {
   const [daysToKeep, setDaysToKeep] = useState<number>(30)
   const [logToDelete, setLogToDelete] = useState<string | null>(null)
   const [remoteSyncNote, setRemoteSyncNote] = useState<string | null>(null)
+  const [isClearing, setIsClearing] = useState(false)
+  const [isDeletingLog, setIsDeletingLog] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -4995,6 +4780,75 @@ function ActivityLogView() {
       setFilterAdmin('all')
     }
   }, [filterAdmin])
+
+  const handleClearLogs = async () => {
+    if (isClearing) return
+
+    setIsClearing(true)
+    try {
+      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+
+      if (clearMode === 'all') {
+        const result = await deleteActivityLogsOnServer({ mode: 'all' })
+        if (!result.ok) {
+          window.alert(result.error || 'Failed to clear activity logs on server.')
+          return
+        }
+        clearLogs()
+        setRemoteSyncNote(
+          result.deleted > 0
+            ? `Cleared ${result.deleted} shared log${result.deleted === 1 ? '' : 's'} from server.`
+            : 'Activity logs cleared.'
+        )
+      } else {
+        const cutoffDate = new Date()
+        cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
+        const result = await deleteActivityLogsOnServer({
+          mode: 'before',
+          before: cutoffDate.toISOString(),
+        })
+        if (!result.ok) {
+          window.alert(result.error || 'Failed to clear old activity logs on server.')
+          return
+        }
+        deleteLogsByDate(cutoffDate)
+        setRemoteSyncNote(
+          result.deleted > 0
+            ? `Removed ${result.deleted} log${result.deleted === 1 ? '' : 's'} older than ${daysToKeep} day(s).`
+            : `No shared logs older than ${daysToKeep} day(s) on server.`
+        )
+      }
+
+      setIsClearModalOpen(false)
+      window.setTimeout(() => setRemoteSyncNote(null), 5000)
+    } catch (err) {
+      console.error('Failed to clear activity logs:', err)
+      window.alert('Failed to clear activity logs. Please try again.')
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  const handleDeleteLog = async (logId: string) => {
+    if (isDeletingLog) return
+
+    setIsDeletingLog(true)
+    try {
+      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+      const result = await deleteActivityLogsOnServer({ mode: 'id', id: logId })
+      if (!result.ok) {
+        window.alert(result.error || 'Failed to delete activity log on server.')
+        return
+      }
+      deleteLog(logId)
+      setLogToDelete(null)
+    } catch (err) {
+      console.error('Failed to delete activity log:', err)
+      window.alert('Failed to delete activity log. Please try again.')
+    } finally {
+      setIsDeletingLog(false)
+    }
+  }
 
   const filteredLogs = useMemo(() => {
     let result = logs
@@ -5287,20 +5141,16 @@ function ActivityLogView() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    if (clearMode === 'all') {
-                      clearLogs()
-                    } else {
-                      const cutoffDate = new Date()
-                      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-                      deleteLogsByDate(cutoffDate)
-                    }
-                    setIsClearModalOpen(false)
-                  }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => void handleClearLogs()}
+                  disabled={isClearing}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4 inline mr-2" />
-                  {clearMode === 'all' ? 'Clear All' : 'Clear Old Logs'}
+                  {isClearing
+                    ? 'Clearing…'
+                    : clearMode === 'all'
+                      ? 'Clear All'
+                      : 'Clear Old Logs'}
                 </button>
               </div>
             </div>
@@ -5338,14 +5188,12 @@ function ActivityLogView() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    deleteLog(logToDelete)
-                    setLogToDelete(null)
-                  }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => void handleDeleteLog(logToDelete)}
+                  disabled={isDeletingLog}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4 inline mr-2" />
-                  Delete
+                  {isDeletingLog ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>

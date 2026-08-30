@@ -238,7 +238,7 @@ export class UniversalCSVParser {
 
       // Track opening/closing balance from first/last transaction
       if (i === 1 && balance !== null) {
-        openingBalance = balance - (credit || -debit || 0)
+        openingBalance = balance - (credit || -(debit ?? 0) || 0)
       }
       if (i === lines.length - 1 && balance !== null) {
         closingBalance = balance
@@ -252,7 +252,7 @@ export class UniversalCSVParser {
         if (tx.credit) runningBalance += tx.credit
         if (tx.debit) runningBalance -= tx.debit
         if (tx.balance !== null) {
-          if (openingBalance === null) openingBalance = tx.balance - (tx.credit || -tx.debit || 0)
+          if (openingBalance === null) openingBalance = tx.balance - (tx.credit || -(tx.debit ?? 0) || 0)
           closingBalance = tx.balance
         }
       }

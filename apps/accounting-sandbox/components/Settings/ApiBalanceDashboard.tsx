@@ -261,6 +261,7 @@ export function ApiBalanceDashboard({ apiKey, userApiKey }: ApiBalanceDashboardP
       const interval = setInterval(() => fetchUsage(false), 30000) // 30 seconds
       return () => clearInterval(interval)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when API key changes; fetchUsage closes over effectiveApiKey
   }, [effectiveApiKey])
 
   // Save Recent API Usage Logs collapse state to localStorage
@@ -483,9 +484,9 @@ export function ApiBalanceDashboard({ apiKey, userApiKey }: ApiBalanceDashboardP
                       Remaining
                     </span>
                   </p>
-                  <Info 
+                    <Info 
                     className="w-4 h-4 text-amber-600 cursor-help" 
-                    title="This is an estimated value based on local logs. For accurate billing, check OpenAI Dashboard."
+                    aria-label="This is an estimated value based on local logs. For accurate billing, check OpenAI Dashboard."
                   />
                 </div>
                 {usageData.estimatedRemaining !== null ? (

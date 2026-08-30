@@ -33,7 +33,7 @@ export function DirectorsLoanManagerComponent() {
   return (
     <div className="bg-white p-6 rounded-lg shadow">
       <div className="mb-4">
-        <h2 className="text-2xl font-semibold">Director's Loan Management</h2>
+        <h2 className="text-2xl font-semibold">Director&apos;s Loan Management</h2>
         <p className="text-sm text-gray-600 mt-1">
           Track personal withdrawals and advances from company account (PAYG not registered)
         </p>
@@ -70,7 +70,7 @@ export function DirectorsLoanManagerComponent() {
         <h3 className="font-semibold">Recent Transactions</h3>
         {loans.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            No Director's Loan transactions found. 
+            No Director&apos;s Loan transactions found. 
             <br />
             <span className="text-sm">Transactions will be automatically detected from bank statements.</span>
           </div>

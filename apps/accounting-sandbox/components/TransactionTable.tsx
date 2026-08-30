@@ -1,15 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Edit2, Check, X, CheckCircle, AlertCircle, Search, Download, FileText, ArrowLeftRight, Sparkles, AlertTriangle, Receipt, Image as ImageIcon, Upload, X as XIcon, Loader2 } from 'lucide-react' //
-import { formatDateAustralian } from '@/lib/utils/date-format'
+import { Edit2, Check, X, CheckCircle, AlertCircle, Search, Download, FileText, ArrowLeftRight, Sparkles, AlertTriangle, Receipt, Image as ImageIcon, Upload, X as XIcon, Loader2, Lock, Trash2 } from 'lucide-react' //
+import { formatDateAustralian, toDateInputValue } from '@/lib/utils/date-format'
+import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
 import { strings } from '@/lib/i18n/strings'
-import { formatCurrency } from '@/lib/utils/currency-format'
+import { formatCurrency, parseCurrencyInput, toAmountInputValue } from '@/lib/utils/currency-format'
 import { saveUserMapping, findUserMapping } from '@/lib/storage/user-mappings'
 import { saveReceipt, getReceipt, deleteReceipt, getReceiptSourceUrl, getReceiptThumbnailUrl } from '@/lib/storage/receipt-storage'
+import { isDateInLockedPeriod } from '@/lib/period-management/period-lock'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
 import { COMPANY_LEGAL } from '@/lib/companyLegal'
 import { getCategoryDisplayName } from '@/src/shared/utils/category-mapper'
+import {
+  buildGstInfoForClaim,
+  isPurchaseGstClaimable,
+} from '@/lib/gst/purchase-gst-claimable'
+import { cleanTransactionDescription } from '@/lib/dashboard/clean-transaction-description'
+import {
+  isManualCashExpenseRow,
+  resolveCashExpenseId,
+} from '@/lib/cash-expense/is-manual-cash-expense'
 
 // Get current user name (default: 사장님)
 const getCurrentUserName = (): string => {
@@ -46,14 +57,22 @@ interface Transaction {
   matchConfidence?: 'high' | 'medium' | 'low'
   matchReason?: string
   noABNWarning?: {
-    shouldWarn: boolean
-    warningMessage: string
+    shouldWarn?: boolean
+    warningMessage?: string
     withholdingAmount?: number
   }
   capitalImprovementWarning?: boolean
-  source?: 'bank' | 'manual'
+  source?: string
   receiptImageId?: string
   isUnusualCredit?: boolean // Indicates unusual but valid Credit transaction (e.g., refund from expense vendor)
+  gstInfo?: {
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    netAmount?: number
+    confidence?: number
+    reasoning?: string
+  }
   fbtInfo?: {
     isFBTRelevant: boolean
     fbtCategory?: 'meal' | 'entertainment' | 'travel' | 'vehicle' | 'other'
@@ -67,8 +86,13 @@ interface Transaction {
 
 interface TransactionTableProps {
   transactions: Transaction[]
-  onTransactionUpdate?: (id: string, updates: Partial<Transaction>) => void
+  onTransactionUpdate?: (
+    id: string,
+    updates: Partial<Transaction>
+  ) => void | Promise<void>
+  onCashExpenseDelete?: (cashExpenseId: string) => Promise<void>
   accountType?: 'individual' | 'company' | 'sole_trader'
+  lockedPeriodIds?: Set<string>
 }
 
 // 정리된 Tax Category 목록 (중복 제거, 불필요한 항목 제거)
@@ -101,8 +125,11 @@ const CATEGORIES = [
   'EXPENSE_OFFICE_EQUIPMENT', // Office Equipment & Assets
   'EXPENSE_OFFICE_SUPPLIES', // Office Supplies
   'EXPENSE_FREIGHT_SHIPPING', // Freight & Shipping
+  'EXPENSE_SOFTWARE_SUBSCRIPTIONS', // Software & Subscriptions
+  'EXPENSE_BANK_FEES_INTEREST', // Bank Fees & Interest
   'EXPENSE_RENT', // Rent
   'EXPENSE_MARKETING', // Marketing & Advertising
+  'EXPENSE_MERCHANT_FEES', // Merchant & Platform Fees
   'EXPENSE_WAGES_SALARIES', // Wages & Salaries
   'EXPENSE_SUPERANNUATION', // Superannuation
   'EXPENSE_ATO_GST_BAS', // ATO - GST & BAS
@@ -117,6 +144,10 @@ const CATEGORIES = [
   
   // 이체 및 기타
   'NON_TAXABLE_TRANSFER', // Non-Taxable Transfer (통합: TRANSFER_INTERNAL 포함)
+  'NON_TAXABLE_ATO_GST_REFUND', // ATO GST/BAS refund (credit)
+  'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT', // Mistaken payment sent (debit)
+  'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN', // Return of mistaken payment (credit)
+  'NON_TAXABLE_DIRECTOR_REIMBURSEMENT', // Prior-period personal spend reimbursed from company bank
   'UNCATEGORIZED', // Uncategorized
 ]
 
@@ -141,6 +172,15 @@ function cleanDescription(description: string): string {
     { pattern: /ak\s+innovation/i, name: 'AK Innovation' },
     { pattern: /aseeos(?:\s+homes)?/i, name: 'Aseeos Homes' },
     { pattern: /7[- ]?eleven|7eleven/i, name: '7-Eleven' },
+    { pattern: /stripe/i, name: 'Stripe' },
+    { pattern: /etsy/i, name: 'Etsy' },
+    { pattern: /ebay|e-bay/i, name: 'eBay' },
+    { pattern: /cursor/i, name: 'Cursor' },
+    { pattern: /google\s+(workspace|cloud|ads)|gsuite/i, name: 'Google' },
+    { pattern: /paypal/i, name: 'PayPal' },
+    { pattern: /hanaone(?:\s+express)?/i, name: 'Hanaone Express' },
+    { pattern: /australia\s+post|auspost|startrack|parcel\s+post/i, name: 'Australia Post' },
+    { pattern: /sendle/i, name: 'Sendle' },
     { pattern: /kleenhub/i, name: 'KleenHub' },
     { pattern: /ampol/i, name: 'Ampol' },
     { pattern: /bunnings/i, name: 'Bunnings' },
@@ -225,13 +265,34 @@ function cleanDescription(description: string): string {
   ).join(' ')
 }
 
-export function TransactionTable({ transactions, onTransactionUpdate, accountType = 'company' }: TransactionTableProps) {
+export function TransactionTable({
+  transactions,
+  onTransactionUpdate,
+  onCashExpenseDelete,
+  accountType = 'company',
+  lockedPeriodIds,
+}: TransactionTableProps) {
+  const lockedIds = lockedPeriodIds ?? new Set<string>()
+
+  const isTransactionLocked = (date: string): boolean => {
+    if (lockedIds.size === 0) return false
+    return isDateInLockedPeriod(date, lockedIds)
+  }
+
+  const showLockedPeriodAlert = () => {
+    alert('This transaction is in a locked period and cannot be edited.')
+  }
   // Local state to track transaction updates for immediate UI feedback
   const [localTransactions, setLocalTransactions] = useState<Transaction[]>(transactions)
+  const [deletingCashId, setDeletingCashId] = useState<string | null>(null)
   
   // Track which cells are being edited
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingDepartmentId, setEditingDepartmentId] = useState<string | null>(null)
+  const [editingDateId, setEditingDateId] = useState<string | null>(null)
+  const [dateDraft, setDateDraft] = useState('')
+  const [editingAmountKey, setEditingAmountKey] = useState<string | null>(null) // `${txId}:debit` | `${txId}:credit`
+  const [amountDraft, setAmountDraft] = useState('')
   
   // Filter: Show Business Only toggle
   const [showBusinessOnly, setShowBusinessOnly] = useState<boolean>(false)
@@ -338,6 +399,7 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload receipts when localTransactions change; receipts in cleanup only
   }, [localTransactions]) // Use localTransactions instead of filteredTransactions
 
   const getCategoryLabel = (category?: string): string => {
@@ -375,8 +437,11 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
       'EXPENSE_OFFICE_EQUIPMENT': strings.categories.expenseOfficeEquipment,
       'EXPENSE_OFFICE_SUPPLIES': strings.categories.expenseOffice,
       'EXPENSE_FREIGHT_SHIPPING': strings.categories.expenseFreightShipping,
+      'EXPENSE_SOFTWARE_SUBSCRIPTIONS': strings.categories.expenseSoftwareSubscriptions,
+      'EXPENSE_BANK_FEES_INTEREST': strings.categories.expenseBankFeesInterest,
       'EXPENSE_RENT': strings.categories.expenseRent,
       'EXPENSE_MARKETING': strings.categories.expenseMarketing,
+      'EXPENSE_MERCHANT_FEES': strings.categories.expenseMerchantFees,
       'EXPENSE_WAGES_SALARIES': strings.categories.expenseWagesSalaries,
       'EXPENSE_SUPERANNUATION': strings.categories.expenseSuperannuation,
       'EXPENSE_ATO_GST_BAS': strings.categories.expenseATOGSTBAS,
@@ -390,6 +455,10 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
       
       // 이체 및 기타
       'NON_TAXABLE_TRANSFER': strings.categories.internalTransfer, // Non-Taxable Transfer (통합)
+      'NON_TAXABLE_ATO_GST_REFUND': strings.categories.atoGstRefund,
+      'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT': strings.categories.erroneousPaymentOut,
+      'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN': strings.categories.erroneousPaymentReturn,
+      'NON_TAXABLE_DIRECTOR_REIMBURSEMENT': strings.categories.directorReimbursementPriorPeriod,
       'TRANSFER_INTERNAL': strings.categories.internalTransfer, // Non-Taxable Transfer (통합)
       'TRANSFER_PARTNERSHIP_TO_COMPANY': strings.categories.internalTransfer, // Non-Taxable Transfer (통합)
       'UNCATEGORIZED': strings.categories.uncategorized,
@@ -419,6 +488,141 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
     return deptMap[dept] || strings.departments.unknown
   }
 
+  const handleDateChange = async (txId: string, rawValue: string, index: number) => {
+    const tx = localTransactions.find((t, idx) => {
+      const currentTxId = t.id ? `${t.id}_${idx}` : `${t.date}_${t.description}_${idx}`
+      return currentTxId === txId
+    })
+    if (!tx) return
+    if (isTransactionLocked(tx.date)) {
+      showLockedPeriodAlert()
+      setEditingDateId(null)
+      return
+    }
+
+    const normalised = toIsoDateString(rawValue)
+    if (!normalised) {
+      alert('Invalid date. Use a valid calendar date (e.g. 08/04/2026).')
+      return
+    }
+    if (isTransactionLocked(normalised)) {
+      alert('That date falls in a locked period. Choose another date or unlock the period first.')
+      return
+    }
+
+    const oldDate = tx.date
+    const oldIso = toIsoDateString(oldDate) || oldDate
+    if (oldIso === normalised) {
+      setEditingDateId(null)
+      return
+    }
+
+    try {
+      await indexedDBStorage.logAuditTrail({
+        transactionId: txId,
+        action: 'updated',
+        userId: 'owner',
+        userName: getCurrentUserName(),
+        oldValue: oldDate,
+        newValue: normalised,
+        description: `Date corrected from "${formatDateAustralian(oldDate)}" to "${formatDateAustralian(normalised)}"`,
+      })
+    } catch (error) {
+      console.error('[TransactionTable] Failed to log date audit:', error)
+    }
+
+    const updated = localTransactions.map((t, idx) => {
+      const currentTxId = t.id ? `${t.id}_${idx}` : `${t.date}_${t.description}_${idx}`
+      if (currentTxId === txId) {
+        return { ...t, date: normalised, confidence: 'Manual' as const }
+      }
+      return t
+    })
+    setLocalTransactions(updated)
+    setEditingDateId(null)
+
+    if (onTransactionUpdate) {
+      onTransactionUpdate(txId, { date: normalised, confidence: 'Manual' })
+    }
+  }
+
+  // Handle Debit / Credit amount correction (OCR misreads)
+  const handleAmountChange = async (
+    txId: string,
+    side: 'debit' | 'credit',
+    rawValue: string,
+    index: number
+  ) => {
+    const tx = localTransactions.find((t, idx) => {
+      const currentTxId = t.id ? `${t.id}_${idx}` : `${t.date}_${t.description}_${idx}`
+      return currentTxId === txId
+    })
+    if (!tx) return
+    if (isTransactionLocked(tx.date)) {
+      showLockedPeriodAlert()
+      setEditingAmountKey(null)
+      return
+    }
+
+    const parsed = parseCurrencyInput(rawValue)
+    if (parsed === null) {
+      alert('Invalid amount. Enter a non-negative number (e.g. 1234.56).')
+      return
+    }
+
+    const oldDebit = tx.debit ?? 0
+    const oldCredit = tx.credit ?? 0
+    // Bank rows are typically exclusive: a non-zero amount on one side clears the other.
+    const nextDebit = side === 'debit' ? (parsed > 0 ? parsed : null) : parsed > 0 ? null : tx.debit
+    const nextCredit = side === 'credit' ? (parsed > 0 ? parsed : null) : parsed > 0 ? null : tx.credit
+
+    const sameDebit = (nextDebit ?? 0) === oldDebit
+    const sameCredit = (nextCredit ?? 0) === oldCredit
+    if (sameDebit && sameCredit) {
+      setEditingAmountKey(null)
+      return
+    }
+
+    try {
+      await indexedDBStorage.logAuditTrail({
+        transactionId: txId,
+        action: 'updated',
+        userId: 'owner',
+        userName: getCurrentUserName(),
+        oldValue: { debit: tx.debit, credit: tx.credit },
+        newValue: { debit: nextDebit, credit: nextCredit },
+        description: `${side === 'debit' ? 'Debit' : 'Credit'} corrected from ${formatCurrency(
+          side === 'debit' ? tx.debit : tx.credit
+        )} to ${formatCurrency(parsed)}`,
+      })
+    } catch (error) {
+      console.error('[TransactionTable] Failed to log amount audit:', error)
+    }
+
+    const updated = localTransactions.map((t, idx) => {
+      const currentTxId = t.id ? `${t.id}_${idx}` : `${t.date}_${t.description}_${idx}`
+      if (currentTxId === txId) {
+        return {
+          ...t,
+          debit: nextDebit,
+          credit: nextCredit,
+          confidence: 'Manual' as const,
+        }
+      }
+      return t
+    })
+    setLocalTransactions(updated)
+    setEditingAmountKey(null)
+
+    if (onTransactionUpdate) {
+      onTransactionUpdate(txId, {
+        debit: nextDebit,
+        credit: nextCredit,
+        confidence: 'Manual',
+      })
+    }
+  }
+
   // Handle immediate updates for category
   const handleCategoryChange = async (txId: string, newCategory: string, index: number) => {
     const tx = localTransactions.find((t, idx) => {
@@ -427,6 +631,10 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
     })
 
     if (!tx) return
+    if (isTransactionLocked(tx.date)) {
+      showLockedPeriodAlert()
+      return
+    }
 
     // Unified: Auto-convert legacy categories to consolidated ones
     const normalizedCategory = newCategory === 'INCOME_SALES_STICKER' 
@@ -487,6 +695,26 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
     }
   }
 
+  const handleGstClaimChange = (txId: string, claimAuGst: boolean, index: number) => {
+    const tx = localTransactions[index]
+    if (!tx) return
+    if (isTransactionLocked(tx.date)) {
+      showLockedPeriodAlert()
+      return
+    }
+    const amount = Math.abs(tx.debit || 0)
+    if (!amount || !tx.category?.startsWith('EXPENSE_')) return
+
+    const gstInfo = buildGstInfoForClaim(amount, claimAuGst)
+    const updated = localTransactions.map((t, idx) =>
+      idx === index ? { ...t, gstInfo, confidence: 'Manual' as const } : t
+    )
+    setLocalTransactions(updated)
+    if (onTransactionUpdate) {
+      onTransactionUpdate(txId, { gstInfo, confidence: 'Manual' })
+    }
+  }
+
   // Handle immediate updates for department
   const handleDepartmentChange = async (txId: string, newDepartment: string, index: number) => {
     const tx = localTransactions.find((t, idx) => {
@@ -495,6 +723,10 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
     })
 
     if (!tx) return
+    if (isTransactionLocked(tx.date)) {
+      showLockedPeriodAlert()
+      return
+    }
 
     const oldDepartment = tx.department
     
@@ -557,6 +789,12 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
 
   // Handle DEBIT/CREDIT swap
   const handleDebitCreditSwap = (txId: string, index: number) => {
+    const sourceTx = localTransactions[index]
+    if (sourceTx && isTransactionLocked(sourceTx.date)) {
+      showLockedPeriodAlert()
+      return
+    }
+
     const updated = localTransactions.map((tx, idx) => {
       const currentTxId = tx.id ? `${tx.id}_${idx}` : `${tx.date}_${tx.description}_${idx}`
       if (currentTxId === txId) {
@@ -659,19 +897,81 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
             // But for receipt matching, use the base ID without index
             const baseTxId = tx.id || tx.reference || `${tx.date}_${tx.description}`
             const txId = tx.id ? `${tx.id}_${index}` : `${tx.date}_${tx.description}_${index}`
-            // Personal items have lighter background
             const isPersonal = tx.department === 'personal'
+            const isLocked = isTransactionLocked(tx.date)
             return (
-              <tr 
-                key={txId} 
-                className={`hover:bg-gray-50 ${isPersonal ? 'bg-gray-50' : ''}`}
+              <tr
+                key={txId}
+                className={`hover:bg-gray-50 ${isPersonal ? 'bg-gray-50' : ''} ${
+                  isLocked ? 'bg-red-50/40' : ''
+                }`}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatDateAustralian(tx.date)}
+                  <div className="flex items-center gap-2">
+                    {editingDateId === txId && !isLocked ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={dateDraft}
+                          onChange={(e) => setDateDraft(e.target.value)}
+                          className="border border-emerald-400 rounded px-1.5 py-0.5 text-sm"
+                          aria-label="Edit transaction date"
+                        />
+                        <button
+                          type="button"
+                          className="p-1 text-emerald-700 hover:bg-emerald-50 rounded"
+                          title="Save date"
+                          onClick={() => void handleDateChange(txId, dateDraft, index)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                          title="Cancel"
+                          onClick={() => setEditingDateId(null)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isLocked}
+                        title={
+                          isLocked
+                            ? 'Locked period — cannot edit'
+                            : 'Click to correct date (e.g. OCR 267 → 2026)'
+                        }
+                        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 ${
+                          isLocked
+                            ? 'cursor-not-allowed text-gray-500'
+                            : 'hover:bg-emerald-50 hover:text-emerald-800'
+                        }`}
+                        onClick={() => {
+                          if (isLocked) return
+                          setEditingDateId(txId)
+                          setDateDraft(toDateInputValue(tx.date))
+                        }}
+                      >
+                        <span>{formatDateAustralian(tx.date)}</span>
+                        {!isLocked && <Edit2 className="w-3 h-3 opacity-50" />}
+                      </button>
+                    )}
+                    {isLocked && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700"
+                        title="Locked period — cannot edit"
+                      >
+                        <Lock className="w-3 h-3" />
+                        Locked
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <span title={tx.description}>{cleanDescription(tx.description)}</span>
+                    <span title={tx.description}>{cleanTransactionDescription(tx.description)}</span>
                     {(tx as any).receiptImageId && (
                       <button
                         onClick={async () => {
@@ -803,15 +1103,74 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                  {tx.debit ? formatCurrency(tx.debit) : '-'}
+                  {editingAmountKey === `${txId}:debit` && !isLocked ? (
+                    <div className="inline-flex items-center gap-1 justify-end">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoFocus
+                        value={amountDraft}
+                        onChange={(e) => setAmountDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void handleAmountChange(txId, 'debit', amountDraft, index)
+                          }
+                          if (e.key === 'Escape') setEditingAmountKey(null)
+                        }}
+                        className="w-28 px-2 py-1 border border-emerald-400 rounded text-sm text-right"
+                        placeholder="0.00"
+                      />
+                      <button
+                        type="button"
+                        className="p-1 text-emerald-700 hover:bg-emerald-50 rounded"
+                        title="Save amount"
+                        onClick={() => void handleAmountChange(txId, 'debit', amountDraft, index)}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                        title="Cancel"
+                        onClick={() => setEditingAmountKey(null)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      title={
+                        isLocked
+                          ? 'Locked period — cannot edit'
+                          : 'Click to correct debit / expense amount'
+                      }
+                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5 ${
+                        isLocked
+                          ? 'cursor-not-allowed text-gray-500'
+                          : 'hover:bg-emerald-50 hover:text-emerald-800'
+                      }`}
+                      onClick={() => {
+                        if (isLocked) return
+                        setEditingAmountKey(`${txId}:debit`)
+                        setAmountDraft(toAmountInputValue(tx.debit))
+                      }}
+                    >
+                      <span>{tx.debit ? formatCurrency(tx.debit) : '-'}</span>
+                      {!isLocked && <Edit2 className="w-3 h-3 opacity-50" />}
+                    </button>
+                  )}
                 </td>
                 {accountType !== 'individual' && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                     {(tx.debit || tx.credit) && (
                       <button
                         onClick={() => handleDebitCreditSwap(txId, index)}
-                        className="inline-flex items-center justify-center p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200"
-                        title="Swap Debit and Credit"
+                        disabled={isLocked}
+                        className="inline-flex items-center justify-center p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={isLocked ? 'Locked period' : 'Swap Debit and Credit'}
                       >
                         <ArrowLeftRight className="w-4 h-4" />
                       </button>
@@ -819,7 +1178,65 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                   </td>
                 )}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
-                  {tx.credit ? formatCurrency(tx.credit) : '-'}
+                  {editingAmountKey === `${txId}:credit` && !isLocked ? (
+                    <div className="inline-flex items-center gap-1 justify-end">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        autoFocus
+                        value={amountDraft}
+                        onChange={(e) => setAmountDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void handleAmountChange(txId, 'credit', amountDraft, index)
+                          }
+                          if (e.key === 'Escape') setEditingAmountKey(null)
+                        }}
+                        className="w-28 px-2 py-1 border border-emerald-400 rounded text-sm text-right"
+                        placeholder="0.00"
+                      />
+                      <button
+                        type="button"
+                        className="p-1 text-emerald-700 hover:bg-emerald-50 rounded"
+                        title="Save amount"
+                        onClick={() => void handleAmountChange(txId, 'credit', amountDraft, index)}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                        title="Cancel"
+                        onClick={() => setEditingAmountKey(null)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      title={
+                        isLocked
+                          ? 'Locked period — cannot edit'
+                          : 'Click to correct credit / income amount'
+                      }
+                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5 ${
+                        isLocked
+                          ? 'cursor-not-allowed text-gray-500'
+                          : 'hover:bg-emerald-50 hover:text-emerald-800'
+                      }`}
+                      onClick={() => {
+                        if (isLocked) return
+                        setEditingAmountKey(`${txId}:credit`)
+                        setAmountDraft(toAmountInputValue(tx.credit))
+                      }}
+                    >
+                      <span>{tx.credit ? formatCurrency(tx.credit) : '-'}</span>
+                      {!isLocked && <Edit2 className="w-3 h-3 opacity-50" />}
+                    </button>
+                  )}
                 </td>
                 {accountType !== 'individual' && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">
@@ -832,7 +1249,8 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                       <select
                         value={tx.category || 'UNCATEGORIZED'}
                         onChange={(e) => handleCategoryChange(txId, e.target.value, index)}
-                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full min-w-[150px]"
+                        disabled={isLocked}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full min-w-[150px] disabled:bg-gray-100 disabled:cursor-not-allowed"
                       >
                       {/* Income */}
                       <optgroup label="Income">
@@ -894,8 +1312,11 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                         {CATEGORIES.filter(cat => 
                           cat === 'LIABILITY_DIRECTORS_LOAN' ||
                           cat === 'EXPENSE_DIRECTOR_LOAN_REPAYMENT' ||
+                          cat === 'NON_TAXABLE_DIRECTOR_REIMBURSEMENT' ||
                           cat === 'EXPENSE_DIVIDENDS_PAID' ||
                           cat === 'NON_TAXABLE_TRANSFER' ||
+                          cat === 'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT' ||
+                          cat === 'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN' ||
                           cat === 'UNCATEGORIZED'
                         ).map((cat) => (
                           <option key={cat} value={cat}>
@@ -904,6 +1325,20 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                         ))}
                       </optgroup>
                     </select>
+                    {tx.category?.startsWith('EXPENSE_') && tx.debit ? (
+                      <select
+                        value={isPurchaseGstClaimable(tx) ? 'claim' : 'free'}
+                        onChange={(e) =>
+                          handleGstClaimChange(txId, e.target.value === 'claim', index)
+                        }
+                        disabled={isLocked}
+                        title="AU GST on purchases (BAS 1B). Company expense stays in P&L either way."
+                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[110px] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="free">GST-free (no 1B)</option>
+                        <option value="claim">Claim GST (1B)</option>
+                      </select>
+                    ) : null}
                     {tx.isLearnedMapping && (
                       <span 
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap"
@@ -921,7 +1356,8 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                     <select
                       value={tx.department === 'sticker' ? 'cleaning' : (tx.department || 'personal')} // Auto-convert 'sticker' to 'cleaning'
                       onChange={(e) => handleDepartmentChange(txId, e.target.value, index)}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full min-w-[120px]"
+                      disabled={isLocked}
+                      className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full min-w-[120px] disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="cleaning">{strings.departments.cleaning}</option>
                       <option value="personal">{strings.departments.personal}</option>
@@ -1002,6 +1438,7 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                           className="relative group"
                           title="View receipt"
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable */}
                           <img
                             src={transactionReceipts[baseTxId]}
                             alt="Receipt"
@@ -1020,6 +1457,10 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                             e.stopPropagation()
                             e.preventDefault()
                             
+                            if (isLocked) {
+                              showLockedPeriodAlert()
+                              return
+                            }
                             if (confirm('Delete this receipt?')) {
                               try {
                                 // Get receipt ID from current transaction
@@ -1097,7 +1538,9 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                         </button>
                       </>
                     ) : (
-                      <label className="cursor-pointer">
+                      <label
+                        className={`cursor-pointer ${isLocked ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+                      >
                         <input
                           type="file"
                           accept="image/*,.pdf"
@@ -1105,6 +1548,11 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                           onChange={async (e) => {
                             const file = e.target.files?.[0]
                             if (!file) return
+                            if (isLocked) {
+                              showLockedPeriodAlert()
+                              e.target.value = ''
+                              return
+                            }
                             
                             // Validate file type
                             const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
@@ -1176,6 +1624,68 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                         </div>
                       </label>
                     )}
+                    {onCashExpenseDelete &&
+                      isManualCashExpenseRow(tx) &&
+                      resolveCashExpenseId(tx) && (
+                        <button
+                          type="button"
+                          disabled={
+                            isLocked || deletingCashId === resolveCashExpenseId(tx)
+                          }
+                          title={
+                            isLocked
+                              ? 'Locked period — cannot delete'
+                              : 'Delete Cash Expense'
+                          }
+                          className={`p-2 rounded-md transition-colors ${
+                            isLocked || deletingCashId === resolveCashExpenseId(tx)
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-red-50 hover:bg-red-100 text-red-600'
+                          }`}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            if (isLocked) {
+                              showLockedPeriodAlert()
+                              return
+                            }
+                            const cashId = resolveCashExpenseId(tx)
+                            if (!cashId) return
+                            const amountLabel = formatCurrency(tx.debit || 0)
+                            const ok = window.confirm(
+                              [
+                                'Delete this Cash Expense?',
+                                '',
+                                tx.description || 'Cash Expense',
+                                amountLabel,
+                                `Date: ${formatDateAustralian(tx.date)}`,
+                                '',
+                                'This removes it from the ledger (P&L / GST / Director Loan will update). Bank statement rows are not affected.',
+                              ].join('\n')
+                            )
+                            if (!ok) return
+                            try {
+                              setDeletingCashId(cashId)
+                              await onCashExpenseDelete(cashId)
+                            } catch (err) {
+                              console.error('[CashExpense] Delete failed:', err)
+                              alert(
+                                err instanceof Error
+                                  ? err.message
+                                  : 'Failed to delete Cash Expense. Try again.'
+                              )
+                            } finally {
+                              setDeletingCashId(null)
+                            }
+                          }}
+                        >
+                          {deletingCashId === resolveCashExpenseId(tx) ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
                   </div>
                 </td>
               </tr>
@@ -1242,6 +1752,7 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                 
                 if (isImage) {
                   return (
+                    // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                     <img
                       src={receiptImage}
                       alt="Receipt"
@@ -1263,6 +1774,7 @@ export function TransactionTable({ transactions, onTransactionUpdate, accountTyp
                 } else {
                   // Fallback: try as image (supports external URLs)
                   return (
+                    // eslint-disable-next-line @next/next/no-img-element -- dynamic blob/data URL — next/image not suitable
                     <img
                       src={receiptImage}
                       alt="Receipt"

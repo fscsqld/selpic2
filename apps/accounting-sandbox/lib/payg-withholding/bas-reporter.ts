@@ -5,22 +5,32 @@
  */
 
 import * as XLSX from 'xlsx'
-import { PAYGWithholdingEngine } from './index'
 import { PAYGConfigManager } from './config'
 import { formatDateAustralian } from '@/lib/utils/date-format'
-import { gstCalculator } from '@/lib/gst-settlement'
+import { calculateBusinessMetrics } from '@/lib/utils/business-calculations'
+import { applyKnownPurchaseGstTags } from '@/lib/gst/apply-known-purchase-gst'
+import { calculatePAYG } from '@/src/shared/utils/tax-calculator'
 import { 
-  getAustralianQuarter, 
-  getAustralianQuarterDates,
-  getAustralianFinancialYear,
-  getCurrentMonthDates
+  getAustralianQuarterDates
 } from '@/lib/utils/australian-financial-year'
+import { toIsoDateString } from '@/lib/utils/parse-transaction-date'
+import {
+  resolveBasReportPeriod,
+  type BasReportPeriodType,
+} from '@/lib/export/bas-report-period'
+
+function formatBasPeriodTypeLabel(type: BasReportPeriodType | string): string {
+  if (type === 'monthly') return 'Monthly (one BAS GST period)'
+  if (type === 'quarterly') return 'Quarterly (one BAS GST period)'
+  if (type === 'custom') return 'Custom / multi-period (not one BAS cycle)'
+  return String(type)
+}
 
 export interface BASReport {
   period: {
     startDate: string
     endDate: string
-    type: 'monthly' | 'quarterly'
+    type: BasReportPeriodType
     label: string // e.g., "Q1 2026", "March 2026"
   }
   
@@ -62,11 +72,21 @@ export interface BASReport {
     registrationDate?: string
   }
   
+  /** Aligns with Biz Intel GST Summary / calculateBusinessMetrics */
   gstSummary?: {
-    gstCollected: number           // G1: Total sales (GST inclusive)
-    gstPaid: number                // G11: Total purchases (GST inclusive)
-    gstNet: number                 // 1A: GST Net (납부/환급 금액)
-    gstRefund: boolean             // 환급 여부
+    /** G1 — Total sales (GST-inclusive business income) */
+    g1TotalSales: number
+    /** 1A — GST on sales (= income / 11) */
+    label1A: number
+    /** 1B — GST on purchases (= taxable expenses / 11) */
+    label1B: number
+    /** 1A − 1B (negative = refund) */
+    gstNet: number
+    gstRefund: boolean
+    /** @deprecated alias of label1A — keep for older callers */
+    gstCollected: number
+    /** @deprecated alias of label1B */
+    gstPaid: number
   }
 }
 
@@ -92,25 +112,36 @@ export function generateBASReport(
     debit: number | null
     credit: number | null
     category?: string
+    department?: string
+    source?: string
     requiresPAYG?: boolean
     isPayrollTransaction?: boolean
     payrollType?: 'employee' | 'director' | 'contractor' | 'partner'
     noABNWarning?: {
-      shouldWarn: boolean
+      shouldWarn?: boolean
       withholdingAmount?: number
     }
+    payrollMeta?: {
+      payslipId?: string
+      grossPay?: number
+      withholdingTax?: number
+      netPay?: number
+      superannuation?: number
+    }
     gstInfo?: {
-      isGSTIncluded: boolean
-      gstType: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+      isGSTIncluded?: boolean
+      gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
       gstAmount?: number
       netAmount?: number
     }
   }>,
   startDate: string,
   endDate: string,
-  periodType: 'monthly' | 'quarterly' = 'quarterly'
+  periodType: 'monthly' | 'quarterly' = 'quarterly',
+  accountType: 'individual' | 'company' | 'sole_trader' = 'company',
+  /** When false, 1A/1B are 0 (not GST-registered). Default true. */
+  gstRegistered: boolean = true
 ): BASReport {
-  const paygEngine = new PAYGWithholdingEngine()
   const config = PAYGConfigManager.loadConfig()
   
   // Filter payroll transactions within date range
@@ -130,16 +161,19 @@ export function generateBASReport(
       return
     }
     
-    const grossAmount = Math.abs(tx.debit)
+    const grossAmount = tx.payrollMeta?.grossPay ?? Math.abs(tx.debit)
     const recipientType = tx.payrollType || 'employee'
     
     // Calculate withholding tax
     let withholdingTax = 0
-    if (config.isEnabled && config.autoCalculate) {
-      const calculated = paygEngine.calculateWithholding(
+    if (typeof tx.payrollMeta?.withholdingTax === 'number') {
+      withholdingTax = tx.payrollMeta.withholdingTax
+    } else if (config.isEnabled && config.autoCalculate) {
+      const calculated = calculatePAYG(
         grossAmount,
         recipientType,
-        true // taxFreeThreshold
+        true,
+        'monthly'
       )
       withholdingTax = calculated || 0
     }
@@ -149,7 +183,7 @@ export function generateBASReport(
       withholdingTax = tx.noABNWarning.withholdingAmount
     }
     
-    const netAmount = grossAmount - withholdingTax
+    const netAmount = tx.payrollMeta?.netPay ?? grossAmount - withholdingTax
     
     payrollTransactions.push({
       date: tx.date,
@@ -206,48 +240,33 @@ export function generateBASReport(
     }
   })
   
-  // Generate period label and adjust dates to match Australian BAS reporting periods
-  // Use Australian Financial Year utilities for accurate period calculation
-  const start = new Date(startDate)
-  let periodLabel = ''
-  let reportStartDate = startDate
-  let reportEndDate = endDate
+  // Period label — exact BAS quarter/month only; FY/custom keep caller window
+  const resolved = resolveBasReportPeriod(startDate, endDate, periodType)
+  const reportStartDate = resolved.startDate
+  const reportEndDate = resolved.endDate
+  const periodLabel = resolved.label
   
-  if (periodType === 'quarterly') {
-    // Get Australian quarter for the start date
-    const { quarter, financialYear } = getAustralianQuarter(start)
-    const quarterDates = getAustralianQuarterDates(quarter, financialYear)
-    
-    // Use standard quarter dates (1st of quarter start month to last day of quarter end month)
-    reportStartDate = quarterDates.startDateStr
-    reportEndDate = quarterDates.endDateStr
-    periodLabel = `Q${quarter} ${financialYear}`
-  } else {
-    // Monthly reporting: use actual month boundaries
-    const monthDates = getCurrentMonthDates()
-    reportStartDate = monthDates.startDateStr
-    reportEndDate = monthDates.endDateStr
-    
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December']
-    const year = start.getFullYear()
-    const month = start.getMonth() // 0-11
-    periodLabel = `${monthNames[month]} ${year}`
-  }
-  
-  // Calculate GST Summary
-  const gstSummaryResult = gstCalculator.calculateGSTNet(
-    transactions,
-    reportStartDate,
-    reportEndDate,
-    periodType
+  // GST — same engine as Biz Intel GST Summary / ATO lodgment (÷11 on taxable income & expenses)
+  const startIso = toIsoDateString(reportStartDate) || reportStartDate.slice(0, 10)
+  const endIso = toIsoDateString(reportEndDate) || reportEndDate.slice(0, 10)
+  const periodTxs = applyKnownPurchaseGstTags(
+    transactions.filter((tx) => {
+      const iso = toIsoDateString(tx.date)
+      if (!iso) return false
+      return iso >= startIso && iso <= endIso
+    })
   )
+  const metrics = calculateBusinessMetrics(periodTxs, 0, accountType, 0, gstRegistered)
+  const label1A = Math.round(metrics.gstPayable * 100) / 100
+  const label1B = Math.round(metrics.gstClaimable * 100) / 100
+  const gstNet = Math.round((label1A - label1B) * 100) / 100
+  const g1TotalSales = Math.round(metrics.totalIncome * 100) / 100
   
   return {
     period: {
       startDate: reportStartDate, // BAS 신고 기간 시작일 (분기/월 시작일)
       endDate: reportEndDate, // BAS 신고 기간 종료일 (분기/월 종료일)
-      type: periodType,
+      type: resolved.type,
       label: periodLabel,
     },
     paygSummary: {
@@ -263,10 +282,13 @@ export function generateBASReport(
       registrationDate: config.registrationDate,
     },
     gstSummary: {
-      gstCollected: gstSummaryResult.gstCollected.total,
-      gstPaid: gstSummaryResult.gstPaid.total,
-      gstNet: gstSummaryResult.gstNet,
-      gstRefund: gstSummaryResult.gstRefund,
+      g1TotalSales,
+      label1A,
+      label1B,
+      gstNet,
+      gstRefund: gstNet < 0,
+      gstCollected: label1A,
+      gstPaid: label1B,
     },
   }
 }
@@ -287,7 +309,13 @@ export function exportBASToExcel(
   allRows.push(['Period:', report.period.label])
   allRows.push(['Start Date:', formatDateAustralian(report.period.startDate)])
   allRows.push(['End Date:', formatDateAustralian(report.period.endDate)])
-  allRows.push(['Period Type:', report.period.type === 'quarterly' ? 'Quarterly' : 'Monthly'])
+  allRows.push(['Period Type:', formatBasPeriodTypeLabel(report.period.type)])
+  if (report.period.type === 'custom') {
+    allRows.push([
+      'Note:',
+      'Not one BAS GST cycle — pick a single quarter/month in Export BAS before lodging.',
+    ])
+  }
   allRows.push([''])
   
   // PAYG Registration Info
@@ -342,12 +370,16 @@ export function exportBASToExcel(
   allRows.push([''])
   allRows.push([''])
   
-  // GST Summary Section
+  // GST Summary — ATO field labels (same as on-screen GST Summary)
   if (report.gstSummary) {
-    allRows.push(['GST Summary'])
-    allRows.push(['GST Collected (G1):', report.gstSummary.gstCollected])
-    allRows.push(['GST Paid (G11):', report.gstSummary.gstPaid])
-    allRows.push(['GST Net (1A):', report.gstSummary.gstNet])
+    allRows.push(['GST Summary (ATO labels — matches Biz Intel)'])
+    allRows.push(['G1 — Total sales (GST inclusive):', Number(report.gstSummary.g1TotalSales.toFixed(2))])
+    allRows.push(['1A — GST on sales:', Number(report.gstSummary.label1A.toFixed(2))])
+    allRows.push(['1B — GST on purchases:', Number(report.gstSummary.label1B.toFixed(2))])
+    allRows.push([
+      report.gstSummary.gstRefund ? '7C — GST refund due:' : '1C — Net GST payable:',
+      Number(Math.abs(report.gstSummary.gstNet).toFixed(2)),
+    ])
     allRows.push(['GST Refund:', report.gstSummary.gstRefund ? 'Yes' : 'No'])
     allRows.push([''])
     allRows.push([''])
@@ -385,27 +417,17 @@ export function exportBASToExcel(
     }
   }
   
-  // Format GST Summary amounts (if present)
   if (report.gstSummary) {
-    const gstRowStart = allRows.findIndex(row => Array.isArray(row) && row[0] === 'GST Summary')
-    if (gstRowStart > 0) {
-      // GST Collected (row after "GST Summary")
-      const gstCollectedCell = XLSX.utils.encode_cell({ c: 1, r: gstRowStart + 1 })
-      if (worksheet[gstCollectedCell] && typeof worksheet[gstCollectedCell].v === 'number') {
-        worksheet[gstCollectedCell].t = 'n'
-        worksheet[gstCollectedCell].z = '#,##0.00'
-      }
-      // GST Paid
-      const gstPaidCell = XLSX.utils.encode_cell({ c: 1, r: gstRowStart + 2 })
-      if (worksheet[gstPaidCell] && typeof worksheet[gstPaidCell].v === 'number') {
-        worksheet[gstPaidCell].t = 'n'
-        worksheet[gstPaidCell].z = '#,##0.00'
-      }
-      // GST Net
-      const gstNetCell = XLSX.utils.encode_cell({ c: 1, r: gstRowStart + 3 })
-      if (worksheet[gstNetCell] && typeof worksheet[gstNetCell].v === 'number') {
-        worksheet[gstNetCell].t = 'n'
-        worksheet[gstNetCell].z = '#,##0.00'
+    const gstRowStart = allRows.findIndex(
+      (row) => Array.isArray(row) && String(row[0] || '').startsWith('GST Summary')
+    )
+    if (gstRowStart >= 0) {
+      for (let i = 1; i <= 4; i++) {
+        const cell = XLSX.utils.encode_cell({ c: 1, r: gstRowStart + i })
+        if (worksheet[cell] && typeof worksheet[cell].v === 'number') {
+          worksheet[cell].t = 'n'
+          worksheet[cell].z = '#,##0.00'
+        }
       }
     }
   }

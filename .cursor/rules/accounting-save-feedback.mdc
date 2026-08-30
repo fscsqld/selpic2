@@ -1,0 +1,56 @@
+---
+description: Save buttons must show visible success/error feedback next to the action
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Save feedback (accounting sandbox)
+
+## Invariant
+
+Every explicit **Save** (or Post / Save snapshot) must give the user a **visible confirmation or error** they can notice without opening DevTools. Silent success feels like “nothing happened.”
+
+## Correct pattern
+
+1. User clicks Save → loading state on button optional (`Saving…`).
+2. On success → **banner and/or button label** within the same viewport as the button (not only at the top of a long form).
+3. Clear after ~2–4s, or keep until next edit.
+4. On failure → red/error message in the same place.
+5. Profile / settings forms: **Save is the commit** (draft toggles do not replace the success message).
+
+Preferred UX (pick one or combine):
+
+| Pattern | Example in repo |
+|---------|-----------------|
+| Green/blue banner beside or just above the Save row | `ApiKeyForm`, lodgment `snapshotMessage` |
+| Button text flips to **Saved!** briefly | `TaxReportingForm` in SettingsPage, `FyStartPreferencesEditor` |
+| Inline status line under the control | ABA `message`, worksheets `message` |
+
+## Audit (Settings + common Save)
+
+| Location | Save control | Feedback today | Notes |
+|----------|--------------|----------------|-------|
+| `BusinessProfileForm` | Save | Banner **at form top** only | Easy to miss after scrolling to GST / Save at bottom — must also show **next to Save** |
+| `ApiKeyForm` | Save | Banner above buttons | OK |
+| `TaxReportingForm` (SettingsPage) | Save Tax & Reporting | Button → Saved! | OK |
+| `FyStartPreferencesEditor` | Save starting quarter | Button label | OK |
+| `PAYGConfigForm` | enable/disable flows | Banner when `isSaved` | OK when path sets it |
+| `DirectorsLoanSettingsForm` | Save ×2 | **None** | Gap — add brief Saved / error |
+| `RemittanceAndAbaPanel` | Save ABA settings | `message` | OK |
+| `ManualJournalPanel` | Post journal | `success` / `error` | OK |
+| `TaxWorksheetsPanel` | Save worksheets | `message` | OK if rendered near button |
+| `ATOLodgmentGuide` / Individual | Save snapshot | `snapshotMessage` | OK |
+| Transaction History date/amount | check icons | Inline | OK (not a form Save) |
+| Cash expense | onSave | dashboard toast / expand | Prefer explicit success string |
+
+## Do
+
+- Place success UI **adjacent to the Save button** on long Settings forms.
+- Keep English copy (default language).
+- Failures must be as visible as success.
+
+## Do not
+
+- Rely only on a banner at the **top** of a scrolled form.
+- Treat console.log as user feedback.
+- Auto-save critical settings without any confirmation when a Save button exists (see GST Registered → Save commit model).

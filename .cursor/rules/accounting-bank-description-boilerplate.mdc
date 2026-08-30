@@ -1,0 +1,28 @@
+---
+description: Strip NAB Transaction Listing footers from bank descriptions
+globs: apps/accounting-sandbox/lib/classification/bank-advisory*,apps/accounting-sandbox/lib/pdf-parser/nab-parser*,apps/accounting-sandbox/lib/dashboard/clean-transaction-description*
+alwaysApply: false
+---
+
+# Bank description — no PDF footers
+
+## Bug
+
+NAB Transaction Listing PDF multi-line extract glued legal text onto the prior merchant:
+
+`BP (Wishart) Page 1 of 2 Important This Transaction Listing is not a statement…`
+
+Amount ($60.39) was correct; description only was polluted.
+
+## Do
+
+- `stripBankStatementBoilerplate` / `isBankStatementBoilerplateLine` in `lib/classification/bank-advisory.ts`
+- NAB parser: do not append boilerplate continuation lines; strip before `cleanDescription`
+- Display: `cleanTransactionDescription` + Bank Reconciliation panel
+- Load: `sanitizeBankTransactionDescriptions` in `loadAllTransactions` (all merchants)
+
+## Do not
+
+- Drop the BP debit because description contained footer text
+- Apply strip to manual Cash Expense narratives
+---

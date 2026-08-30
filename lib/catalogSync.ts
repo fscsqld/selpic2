@@ -24,6 +24,7 @@ export async function syncCatalogToServer(products: Product[]): Promise<{ ok: bo
       method: 'POST',
       headers,
       cache: 'no-store',
+      credentials: 'same-origin',
       body: JSON.stringify({ products: snapshots })
     })
     if (!res.ok) {

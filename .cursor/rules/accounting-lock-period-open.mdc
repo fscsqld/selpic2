@@ -1,0 +1,44 @@
+---
+description: Lock accounting period — meaning of “still open for edits”
+alwaysApply: false
+globs: apps/accounting-sandbox/**/month-end*,apps/accounting-sandbox/**/period-lock*,apps/accounting-sandbox/**/MonthEnd*
+---
+
+# Lock accounting period
+
+## UI text
+
+`Lock accounting period` → `Period 2025-07 is still open for edits.`
+
+Means: month **`2025-07`** (July 2025) is **not locked**. Users can still edit/delete/reclassify transactions dated in that month.
+
+## What lock does
+
+When a period is **locked** (`isLocked`):
+
+- Edits to dates/amounts/categories in that month are blocked (or require unlock)
+- Protects figures used for BAS / year-end packs from accidental change
+- Month-End checklist marks the lock task **done**
+
+When **open** (current message):
+
+- Normal editing allowed
+- Checklist shows this as a remaining / blocking item until locked
+
+## July 2025 empty
+
+Default checklist month is often **calendar/default** (e.g. 2025-07). If bank activity is Apr–Jun 2026:
+
+- July 2025 with “no bank lines” is expected
+- Lock July only if you truly finished that empty month, or **change Period** to a month that has statements before locking
+
+## SELPIC cash workflow
+
+- Lock **after** categorisation + bank reconcile for months that have data
+- Do not treat “still open” on an empty July as an error in FY P&L
+- Unlock only when a deliberate correction is needed
+
+## Code
+
+- Checklist copy: `lib/subledger/month-end-checklist.ts` (`lock-period` task)
+- Enforcement: `lib/period-management/period-lock.ts` / period storage `isLocked`

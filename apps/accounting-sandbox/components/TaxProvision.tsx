@@ -1,191 +1,219 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Calculator, AlertCircle, Info } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/currency-format'
-
-interface Transaction {
-  date: string
-  debit: number | null
-  credit: number | null
-  category?: string
-  department?: string
-}
+import { indexedDBStorage } from '@/lib/storage/indexed-db'
+import { resolveCompanyTaxRate } from '@/lib/ato-lodgment/business-profile-tax'
+import { calculatePeriodTaxProvision } from '@/lib/utils/period-tax-provision'
+import type { Transaction } from '@/lib/utils/business-calculations'
 
 interface TaxProvisionProps {
+  /** Already filtered to the selected P&L period (same rows as Real-Time P&L). */
   transactions: Transaction[]
-  currentFinancialYear?: {
-    start: string
-    end: string
-  }
+  periodLabel?: string
+  periodStart?: string
+  periodEnd?: string
+  gstRegistered?: boolean
+  /** @deprecated Prefer periodLabel + period-scoped transactions */
+  currentFinancialYear?: { start: string; end: string }
 }
 
 /**
- * Calculate Company Tax Provision based on current profit
- * Australian Company Tax Rate: 30% (for base rate entities) or 25% (for small business)
- * Small business threshold: $50M aggregated turnover
+ * Company tax provision for the selected P&L period — not a silent full-FY overlay.
+ * Taxable Income / provision use tax (ex GST) estimates; cash P&L stays visible.
  */
-export function TaxProvision({ transactions, currentFinancialYear }: TaxProvisionProps) {
-  // Calculate taxable income for current financial year
-  const taxCalculation = useMemo(() => {
-    // Get current financial year (July 1 to June 30)
-    const now = new Date()
-    const month = now.getMonth() + 1 // 1-12
-    const year = now.getFullYear()
-    
-    let fyStart: Date
-    let fyEnd: Date
-    
-    if (month >= 7) {
-      // Current FY: July 1 (this year) to June 30 (next year)
-      fyStart = new Date(year, 6, 1) // July 1
-      fyEnd = new Date(year + 1, 5, 30) // June 30
-    } else {
-      // Current FY: July 1 (last year) to June 30 (this year)
-      fyStart = new Date(year - 1, 6, 1) // July 1
-      fyEnd = new Date(year, 5, 30) // June 30
+export function TaxProvision({
+  transactions,
+  periodLabel = 'Selected period',
+  periodStart,
+  periodEnd,
+  gstRegistered = true,
+  currentFinancialYear,
+}: TaxProvisionProps) {
+  const [companyTaxRate, setCompanyTaxRate] = useState(0.25)
+  const [isSmallBusiness, setIsSmallBusiness] = useState(true)
+  const [profileGstRegistered, setProfileGstRegistered] = useState(gstRegistered)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        await indexedDBStorage.init()
+        const profile = await indexedDBStorage.getBusinessProfile()
+        const rate = resolveCompanyTaxRate(profile)
+        setCompanyTaxRate(rate)
+        setIsSmallBusiness(rate < 0.3)
+        if (typeof profile?.gstRegistered === 'boolean') {
+          setProfileGstRegistered(profile.gstRegistered)
+        }
+      } catch {
+        /* keep defaults */
+      }
     }
+    load()
+    const onUpdate = () => load()
+    window.addEventListener('businessProfileUpdated', onUpdate)
+    return () => window.removeEventListener('businessProfileUpdated', onUpdate)
+  }, [])
 
-    // Filter transactions for current financial year
-    const fyTransactions = transactions.filter(tx => {
-      const txDate = new Date(tx.date)
-      return txDate >= fyStart && txDate <= fyEnd
-    })
+  const effectiveGstRegistered = profileGstRegistered && gstRegistered
 
-    // Calculate taxable income (revenue - expenses)
-    const revenue = fyTransactions
-      .filter(tx => {
-        const isBusiness = tx.department !== 'personal' && 
-                          tx.department !== 'unknown' &&
-                          (tx.department === 'cleaning' || 
-                           tx.department === 'sticker' || 
-                           !tx.department)
-        
-        const isRefund = tx.category === 'INCOME_REFUND_REIMBURSEMENT' ||
-                        (tx.description?.toUpperCase().includes('REFUND') && tx.credit)
-        
-        return isBusiness &&
-               tx.credit && 
-               tx.category?.startsWith('INCOME_') &&
-               tx.category !== 'TRANSFER_INTERNAL' &&
-               tx.category !== 'NON_TAXABLE_CASH_DEPOSIT' &&
-               !isRefund
-      })
-      .reduce((sum, tx) => sum + Math.abs(tx.credit || 0), 0)
+  const tax = useMemo(
+    () =>
+      calculatePeriodTaxProvision(
+        transactions,
+        companyTaxRate,
+        'company',
+        effectiveGstRegistered
+      ),
+    [transactions, companyTaxRate, effectiveGstRegistered]
+  )
 
-    const expenses = fyTransactions
-      .filter(tx => {
-        const isBusiness = tx.department !== 'personal' && 
-                          tx.department !== 'unknown' &&
-                          (tx.department === 'cleaning' || 
-                           tx.department === 'sticker' || 
-                           !tx.department)
-        
-        return isBusiness &&
-               tx.debit &&
-               tx.category?.startsWith('EXPENSE_') &&
-               tx.category !== 'TRANSFER_INTERNAL' &&
-               tx.category !== 'LIABILITY_DIRECTORS_LOAN' &&
-               tx.category !== 'EXPENSE_DIRECTOR_LOAN_REPAYMENT'
-      })
-      .reduce((sum, tx) => sum + Math.abs(tx.debit || 0), 0)
+  const showGstDual =
+    effectiveGstRegistered &&
+    (Math.abs(tax.taxableIncome - tax.taxableIncomeCash) > 0.005 ||
+      Math.abs(tax.revenueExGst - tax.revenue) > 0.005 ||
+      Math.abs(tax.netExpensesExGst - tax.netExpenses) > 0.005)
 
-    // Subtract refunds from expenses
-    const refunds = fyTransactions
-      .filter(tx => {
-        const isBusiness = tx.department !== 'personal' && 
-                          tx.department !== 'unknown'
-        const isRefund = tx.category === 'INCOME_REFUND_REIMBURSEMENT' ||
-                        (tx.description?.toUpperCase().includes('REFUND') && tx.credit)
-        return isBusiness && tx.credit && isRefund
-      })
-      .reduce((sum, tx) => sum + Math.abs(tx.credit || 0), 0)
-
-    const netExpenses = expenses - refunds
-    const taxableIncome = revenue - netExpenses
-
-    // Determine tax rate (assuming small business for now - can be configured)
-    // Small business: 25% (aggregated turnover < $50M)
-    // Base rate: 30% (aggregated turnover >= $50M)
-    const isSmallBusiness = true // TODO: Get from business profile
-    const taxRate = isSmallBusiness ? 0.25 : 0.30
-
-    // Calculate tax provision
-    const taxProvision = taxableIncome > 0 ? taxableIncome * taxRate : 0
-
-    return {
-      taxableIncome,
-      taxRate: taxRate * 100,
-      taxProvision,
-      fyStart: fyStart.toISOString().split('T')[0],
-      fyEnd: fyEnd.toISOString().split('T')[0],
-      isSmallBusiness,
-    }
-  }, [transactions, currentFinancialYear])
+  const rangeHint =
+    periodStart && periodEnd
+      ? ` (${periodStart} → ${periodEnd})`
+      : currentFinancialYear
+        ? ` (${currentFinancialYear.start} → ${currentFinancialYear.end})`
+        : ''
 
   return (
-    <div className="card bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200 mb-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="card bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 mb-6">
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
         <div className="flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-purple-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Tax Provision (Company Tax)</h3>
+          <Calculator className="w-6 h-6 text-purple-600" />
+          <h3 className="text-xl font-semibold text-gray-900">Company Tax Provision</h3>
         </div>
-        <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded">
-          FY {new Date(taxCalculation.fyStart).getFullYear()}-{new Date(taxCalculation.fyEnd).getFullYear()}
-        </span>
+        <span className="text-sm text-gray-600 font-medium">{periodLabel}</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        {/* Taxable Income */}
-        <div className="bg-white rounded-lg p-4 border border-gray-200">
-          <p className="text-sm text-gray-600 mb-1">Taxable Income</p>
-          <p className={`text-2xl font-bold ${
-            taxCalculation.taxableIncome >= 0 ? 'text-green-600' : 'text-red-600'
-          }`}>
-            {formatCurrency(taxCalculation.taxableIncome)}
+        <div className="bg-white rounded-lg p-4 border border-purple-100">
+          <p className="text-sm text-gray-600 mb-1">
+            {showGstDual ? 'Taxable Income (tax est.)' : 'Taxable Income'}
+          </p>
+          <p className="text-2xl font-bold text-gray-900">
+            {formatCurrency(tax.taxableIncome)}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Revenue - Expenses
+            {showGstDual ? 'Ex GST · this P&L period' : 'This P&L period'}
           </p>
+          {showGstDual && (
+            <p className="text-xs text-gray-600 mt-1.5">
+              Cash P&amp;L (GST incl.):{' '}
+              <span className="font-semibold">
+                {formatCurrency(tax.taxableIncomeCash)}
+              </span>
+            </p>
+          )}
         </div>
-
-        {/* Tax Rate */}
-        <div className="bg-white rounded-lg p-4 border border-gray-200">
+        <div className="bg-white rounded-lg p-4 border border-purple-100">
           <p className="text-sm text-gray-600 mb-1">Tax Rate</p>
-          <p className="text-2xl font-bold text-purple-600">
-            {taxCalculation.taxRate}%
-          </p>
+          <p className="text-2xl font-bold text-purple-600">{tax.taxRatePercent}%</p>
           <p className="text-xs text-gray-500 mt-1">
-            {taxCalculation.isSmallBusiness ? 'Small Business' : 'Base Rate'}
+            {isSmallBusiness ? 'Small Business' : 'Base Rate'} — from Settings
           </p>
         </div>
-
-        {/* Tax Provision */}
-        <div className="bg-white rounded-lg p-4 border border-purple-300 bg-purple-50">
+        <div className="bg-white rounded-lg p-4 border border-purple-100">
           <p className="text-sm text-gray-600 mb-1">Estimated Tax Provision</p>
-          <p className="text-2xl font-bold text-purple-600">
-            {formatCurrency(taxCalculation.taxProvision)}
+          <p className="text-2xl font-bold text-red-600">
+            {formatCurrency(tax.taxProvision)}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
-            Estimated Company Tax
-          </p>
+          {showGstDual && (
+            <p className="text-xs text-gray-500 mt-1">On tax (ex GST) estimate</p>
+          )}
         </div>
       </div>
 
-      {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-        <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-blue-800">
-          <p className="font-medium mb-1">Tax Provision Information:</p>
-          <ul className="list-disc list-inside space-y-0.5 text-blue-700">
-            <li>This is an <strong>estimate</strong> based on current financial year transactions</li>
-            <li>Actual tax liability may vary based on deductions, offsets, and ATO assessments</li>
-            <li>Small business rate (25%) applies if aggregated turnover &lt; $50M</li>
-            <li>Base rate (30%) applies if aggregated turnover ≥ $50M</li>
-            <li>Consult with your accountant for accurate tax planning</li>
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-white/80 rounded-lg p-3 border border-purple-100 text-sm">
+          <p className="text-gray-500">Revenue (this period)</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {formatCurrency(tax.revenue)}
+            <span className="text-xs font-normal text-gray-500 ml-1">GST incl.</span>
+          </p>
+          {showGstDual && (
+            <p className="text-xs text-gray-600 mt-1">
+              Ex GST (est.): {formatCurrency(tax.revenueExGst)}
+            </p>
+          )}
+        </div>
+        <div className="bg-white/80 rounded-lg p-3 border border-purple-100 text-sm">
+          <p className="text-gray-500">Expenses (this period)</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {formatCurrency(tax.netExpenses)}
+            <span className="text-xs font-normal text-gray-500 ml-1">GST incl.</span>
+          </p>
+          {showGstDual && (
+            <p className="text-xs text-gray-600 mt-1">
+              Ex GST (est.): {formatCurrency(tax.netExpensesExGst)} · FREE at face
+            </p>
+          )}
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-600 mb-4">
+        {showGstDual ? (
+          <>
+            Tax est.: {formatCurrency(tax.revenueExGst)} −{' '}
+            {formatCurrency(tax.netExpensesExGst)} ={' '}
+            <strong>{formatCurrency(tax.taxableIncome)}</strong>
+            {' · '}
+            Cash: {formatCurrency(tax.taxableIncomeCash)}
+          </>
+        ) : (
+          <>
+            {formatCurrency(tax.revenue)} − {formatCurrency(tax.netExpenses)} ={' '}
+            <strong>{formatCurrency(tax.taxableIncome)}</strong>
+          </>
+        )}
+        {' · '}
+        {periodLabel}
+        {rangeHint} · {tax.txCount} txs · bank expenses {tax.bankExpenseCount} · cash/manual{' '}
+        {tax.cashExpenseCount}
+      </p>
+
+      <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800">
+          <p className="font-medium mb-1">Matches Real-Time P&amp;L period</p>
+          <ul className="list-disc list-inside space-y-1 text-xs">
+            <li>
+              <strong>Cash (GST incl.)</strong> matches bank / Business Summary. Do not replace it
+              with the tax estimate.
+            </li>
+            <li>
+              <strong>Taxable Income (tax est.)</strong> = income − 1A, expenses − 1B. GST-FREE
+              purchases stay at face value (not ÷11).
+            </li>
+            <li>
+              ATO company tax is assessed on the <strong>full financial year</strong>. Switch the
+              banner to FY / Full statement for a year-to-date estimate.
+            </li>
+            <li>Director reimbursements / share capital / ATO GST refunds are excluded here</li>
+            <li>Rate matches Business Profile and ATO Lodgment → CTR</li>
           </ul>
         </div>
       </div>
+
+      {tax.taxableIncome < 0 && (
+        <div className="mt-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-yellow-800">
+            This period shows a loss on the tax estimate. Tax provision is $0.00. Losses may be
+            carried forward when the full year is lodged.
+            {showGstDual &&
+              Math.abs(tax.taxableIncomeCash - tax.taxableIncome) > 0.005 && (
+                <> Cash P&amp;L is {formatCurrency(tax.taxableIncomeCash)}.</>
+              )}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

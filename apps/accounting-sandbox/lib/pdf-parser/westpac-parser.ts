@@ -5,6 +5,7 @@
  */
 
 import { PDFParser, ParsedStatement, BankTransaction } from './types'
+import pdfParse from 'pdf-parse'
 
 export class WestpacParser implements PDFParser {
   /**
@@ -95,14 +96,10 @@ export class WestpacParser implements PDFParser {
     
     let pdfData
     try {
-      console.log('[WESTPAC-PARSER] Extracting text from PDF...');
-      // 임포트 결과 전체를 any로 취급하여 타입 체크를 완전히 피함
-      const pdfImport: any = await import('pdf-parse');
-      const pdf = pdfImport.default || pdfImport;
-      pdfData = await pdf(pdfBuffer);
-
-      console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters');
-      console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages);
+      console.log('[WESTPAC-PARSER] Extracting text from PDF...')
+      pdfData = await pdfParse(pdfBuffer)
+      console.log('[WESTPAC-PARSER] PDF text length:', pdfData.text.length, 'characters')
+      console.log('[WESTPAC-PARSER] PDF pages:', pdfData.numpages)
     } catch (error: any) {
       console.error('[WESTPAC-PARSER] Error parsing PDF:', error)
       throw new Error(`Failed to extract text from PDF: ${error.message}`)
@@ -423,9 +420,7 @@ export class WestpacParser implements PDFParser {
     }
 
     // Fallback: use first and last transaction dates
-    const dateMatches = Array.from(
-      text.matchAll(/(\d{1,2}\/\d{1,2}\/\d{4})/g)
-    )
+    const dateMatches = text.matchAll(/(\d{1,2}\/\d{1,2}\/\d{4})/g)
     const dates: string[] = []
     for (const match of dateMatches) {
       const formatted = this.formatDate(match[1])
@@ -492,9 +487,7 @@ export class WestpacParser implements PDFParser {
 
     // Fallback: extract from transaction balances
     if (opening === 0 || closing === 0) {
-      const balanceMatches = Array.from(
-        text.matchAll(/([\d,]+\.?\d*)\s*$/gm)
-      )
+      const balanceMatches = text.matchAll(/([\d,]+\.?\d*)\s*$/gm)
       const balances: number[] = []
       for (const match of balanceMatches) {
         const balance = parseFloat(match[1].replace(/,/g, ''))

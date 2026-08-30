@@ -1,0 +1,32 @@
+---
+description: When Manual Journal / GL / Month-End / AR-AP are needed vs bank+cash P&L
+alwaysApply: false
+globs: apps/accounting-sandbox/**/ManualJournal*,apps/accounting-sandbox/**/GeneralLedger*,apps/accounting-sandbox/**/MonthEnd*,apps/accounting-sandbox/**/ARAP*
+---
+
+# Reports lower tools — need vs optional (SELPIC-style cash books)
+
+Bank statements + Add Cash Expense already drive Biz Intel, BAS, Income Statement, BS/TB. The blocks below are **fuller double-entry / accrual tooling**. Empty screens with $0 are normal until used.
+
+## Feature map
+
+| Tool | Purpose | Needed for SELPIC-like cash+BAS FY? |
+|------|---------|-------------------------------------|
+| **Manual Journal Entries** | Adjusting entries (depreciation, accruals, prepayments, YE journals). Debits must equal credits. | **Optional now.** Use when accountant asks for non-cash adjustments not on the bank. |
+| **General Ledger** | Unified double-entry view (bank + cash + payroll + manuals). | **Optional view.** Empty if no journals / GL feed yet; P&L still comes from classified bank/cash. |
+| **Month-End Closing Checklist** | Gate period lock (categorise, bank reconcile, AR/AP, timesheets). | **Useful hygiene** before locking a month; July 2025 empty is OK if statements start later (e.g. Apr–Jun 2026). Pick the month that has bank lines. |
+| **Accounts Receivable & Payable** | Invoices / bills / allocate bank payments (accrual AR/AP). | **Optional** if you run **cash** (income when banked). Needed when you invoice customers or receive supplier bills before payment. |
+
+## Do not confuse
+
+- Empty GL / no manuals ≠ missing FY P&L ($14,419 / $15,346). Those use **classified transactions**, not this journal store.
+- Month-End on **2025-07** with “no bank-statement lines” is expected if activity is in another month — change Period to the statement month.
+- AR/AP $0 does not mean Revenue is wrong under cash accounting.
+
+## When to introduce each
+
+1. **Cash BAS / CTR pack** — bank + cash expense + Reports P&L/BS/BAS is enough.
+2. **Asset depreciation / prepaid insurance** — Manual Journal.
+3. **Invoice before payment / bill before payment** — AR/AP.
+4. **Period lock for audit trail** — Month-End checklist on the correct month.
+5. **Accountant wants full GL CSV** — General Ledger export after journals exist.

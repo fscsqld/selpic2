@@ -17,6 +17,20 @@ export interface AustralianQuarter {
   endDateStr: string // YYYY-MM-DD
 }
 
+/** True for labels like "2025-2026" (rejects "NaN-NaN" and empty). */
+export function isValidAustralianFinancialYear(
+  financialYear: string | null | undefined
+): boolean {
+  if (!financialYear || typeof financialYear !== 'string') return false
+  const trimmed = financialYear.trim()
+  const match = /^(\d{4})-(\d{4})$/.exec(trimmed)
+  if (!match) return false
+  const startYear = Number(match[1])
+  const endYear = Number(match[2])
+  if (!Number.isFinite(startYear) || !Number.isFinite(endYear)) return false
+  return endYear === startYear + 1
+}
+
 /**
  * Get Australian Financial Year from a date
  * Financial Year runs from July 1 to June 30

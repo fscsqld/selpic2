@@ -57,7 +57,7 @@ import FundraisingChangeRequestsPanel from '@/components/admin/FundraisingChange
 
 export default function FundraisingPartnersPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['fundraising:read']}>
       <PartnersContent />
     </AdminRoute>
   )

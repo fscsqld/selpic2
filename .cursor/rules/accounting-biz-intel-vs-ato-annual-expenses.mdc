@@ -1,0 +1,56 @@
+---
+description: Biz Intel vs ATO Annual/CTR — same cash universe; ATO lodges GST-ex
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Biz Intel vs ATO Annual / Company CTR
+
+## Two different bugs (do not conflate)
+
+| Issue | Symptom | Cause |
+|-------|---------|--------|
+| **Cash universe drop** | Annual expenses ~$13,012 vs Biz Intel ~$15,346 (gap **$2,334.20** = one Stamp zone) | OCR/Manual collapse on bank+cash feed |
+| **GST basis** | Biz Intel cash Net **−$927** vs tax Net **~−$1,674** | Inclusive cash vs ex-GST (`total*ExGst`) |
+
+ATO Lodgment Annual / CTR are **for OSB / myTax entry** → primary figures must be **GST-exclusive (tax)**.  
+Biz Intel keeps **cash (GST-incl.)** as the large P&L figure, with tax beside it.
+
+## Confirmed SELPIC FY 2025–26 (same ledger)
+
+| Screen | Basis | Income | Expenses | Net |
+|--------|-------|--------|----------|-----|
+| **Biz Intel** | Cash (incl.) | ~$14,419.48 | ~$15,346.61 | **−$927.13** |
+| **Biz Intel** | Tax (ex GST est.) | cash − 1A | cash − 1B | **~−$1,674** class |
+| **ATO Annual / CTR** (lodge) | **Tax (ex GST)** | `totalIncomeExGst` | `totalExpensesExGst` | `netProfitExGst` |
+
+Cash reconciliation footnote on Annual card may still show −$927 — **do not paste cash into CTR**.
+
+## Cash-universe root cause (fixed)
+
+Same metrics formula, different post-processing of Cash Expenses:
+
+| Path | Cash Expenses |
+|------|----------------|
+| **Biz Intel** | Merge into period; **no** OCR collapse on bank+cash |
+| **ATO (old)** | `repairStatementDateAnomalies` on combined set collapsed two same-day Stamp zones → kept one |
+
+Guards: skip OCR collapse for `manual` / `cash_*`; `prepareLodgmentTransactions` repairs bank only then reattaches cash; ISO date filter in period-scope.
+
+## Invariant
+
+For the **same FY** and scope `full`:
+
+1. **Transaction set** — Biz Intel and ATO Annual/CTR include the **same** cash + bank P&L rows (both Stamp zones).
+2. **ATO copy fields** — Annual totals / CTR Item 6–7 / profit use **`*ExGst`**, not cash totals.
+3. **Biz Intel cards** — primary cash; tax secondary (see `accounting-pl-gst-basis.mdc`).
+
+Regression: `lib/ato-lodgment/biz-intel-annual-ctr-cash-parity.test.ts`  
+(cash universe vs Biz Intel cash; Annual/CTR field amounts vs `totalExpensesExGst`).
+
+## Do not
+
+- Treat ~$13,012 as “correct FY cash expenses” when Biz Intel shows ~$15,346
+- Explain the **$2,334** Stamp-zone gap as GST ÷11
+- Paste Biz Intel cash Net (−$927) into company tax return / myTax as taxable profit
+- Run OCR date-collapse on a feed that already includes Manual Cash Expenses

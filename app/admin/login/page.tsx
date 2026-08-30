@@ -7,6 +7,7 @@ import { Eye, EyeOff, Lock, User, AlertCircle, Home, Shield } from 'lucide-react
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useUserAuth } from '@/lib/userAuth'
 import { hasUsableSupabaseBrowserEnv } from '@/lib/supabase/publicEnv'
+import { resolveAdminBrowserSession } from '@/lib/supabase/resolveAdminBrowserSession'
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState('')
@@ -19,81 +20,31 @@ export default function AdminLoginPage() {
   const router = useRouter()
 
   /**
-   * Staff already signed in → dashboard.
-   * Supabase session without admin JWT → customer; send home (must not use staff console).
-   * Local customer session only → home.
+   * Hydrate staff session from Supabase cookies when valid.
+   * Never redirect on Zustand isLoggedIn alone — persist can outlive auth cookies.
    */
   useEffect(() => {
     let cancelled = false
 
     const enforceAccess = async () => {
-      if (useAdminAuth.getState().isLoggedIn) {
-        const hasSupabase = hasUsableSupabaseBrowserEnv()
-        if (hasSupabase) {
-          try {
-            const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
-            const { data } = await createSupabaseBrowserClient().auth.getSession()
-            if (cancelled) return
-            if (data.session) {
-              const r = await fetch(`${window.location.origin}/api/admin/registry-access`, {
-                credentials: 'same-origin',
-              })
-              if (cancelled) return
-              if (!r.ok) {
-                useAdminAuth.getState().logout()
-                return
-              }
-            }
-          } catch {
-            if (!cancelled) useAdminAuth.getState().logout()
-            return
-          }
-        }
-        router.replace('/admin/dashboard')
-        return
-      }
-
       const hasSupabase = hasUsableSupabaseBrowserEnv()
 
       if (hasSupabase) {
         try {
           const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
-          const { userHasAdminAccess } = await import('@/lib/supabase/adminClaims')
-          const { mapSupabaseUserToAdminUser } = await import('@/lib/supabase/mapSupabaseAdminUser')
-          const { syncAdminRegistryWithSession } = await import('@/lib/supabase/syncAdminRegistryClient')
           const supabase = createSupabaseBrowserClient()
-          const { data } = await supabase.auth.getSession()
+          const resolved = await resolveAdminBrowserSession(supabase)
           if (cancelled) return
-          if (data.session?.user) {
-            if (!userHasAdminAccess(data.session.user)) {
-              router.replace('/')
-              return
-            }
-            await syncAdminRegistryWithSession(supabase, data.session.access_token)
-            const { data: after } = await supabase.auth.getSession()
-            const sess = after.session ?? data.session
-            if (cancelled || !sess?.user) return
-            if (!userHasAdminAccess(sess.user)) {
-              router.replace('/')
-              return
-            }
-            const accessRes = await fetch(`${window.location.origin}/api/admin/registry-access`, {
-              credentials: 'same-origin',
-            })
-            if (cancelled) return
-            if (!accessRes.ok) {
-              await supabase.auth.signOut()
-              useAdminAuth.setState({ isLoggedIn: false, adminUser: null })
-              return
-            }
-            const mapped = mapSupabaseUserToAdminUser(sess.user)
-            useAdminAuth.setState({ isLoggedIn: true, adminUser: mapped })
+          if (resolved.ok) {
             router.replace('/admin/dashboard')
             return
           }
         } catch {
-          /* ignore */
+          if (!cancelled) useAdminAuth.getState().logout()
         }
+      } else if (useAdminAuth.getState().isLoggedIn) {
+        router.replace('/admin/dashboard')
+        return
       }
 
       if (cancelled) return
@@ -142,7 +93,6 @@ export default function AdminLoginPage() {
           if (!allowLegacy) {
             const msg = sbError?.message || ''
             const code = (sbError as { code?: string })?.code
-            // Wrong password / email — not an env issue
             if (
               /invalid login credentials/i.test(msg) ||
               code === 'invalid_credentials' ||
@@ -153,7 +103,7 @@ export default function AdminLoginPage() {
             }
             if (/invalid value/i.test(msg) || /failed to fetch/i.test(msg)) {
               setError(
-                '브라우저에서 Supabase로 연결하지 못했습니다. (1) Vercel 환경 변수·재배포 확인 (2) 광고 차단/프라이버시 확장 끄고 재시도 (3) 프로젝트가 일시 중지됐는지 Supabase 대시보드 확인'
+                'Could not reach Supabase from the browser. Check Vercel env vars, disable ad blockers, and confirm the Supabase project is active.'
               )
             } else {
               setError(msg || 'Invalid email or password.')
@@ -165,7 +115,7 @@ export default function AdminLoginPage() {
             const msg = err instanceof Error ? err.message : String(err)
             if (/invalid value/i.test(msg)) {
               setError(
-                'Supabase URL이 잘못되었습니다. 환경 변수에 따옴표 없이 https://…supabase.co 형태로 넣었는지, Preview 배포에도 변수가 적용됐는지 확인하세요.'
+                'Supabase URL misconfigured. Use https://….supabase.co without quotes in Vercel env vars.'
               )
             } else {
               setError(
@@ -227,7 +177,7 @@ export default function AdminLoginPage() {
               <h2 className="text-xl font-semibold text-zinc-100">Administrator Sign-in</h2>
               <p className="mt-3 mx-auto sm:mx-0 max-w-[280px] sm:max-w-xs text-sm text-zinc-400 leading-relaxed text-balance">
                 <span className="block">Sign in with your staff email</span>
-                <span className="block">to manage Selpic operations.</span>
+                <span className="block">at /admin/login (not customer Sign-in).</span>
               </p>
             </div>
 

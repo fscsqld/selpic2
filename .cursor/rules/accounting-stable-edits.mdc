@@ -1,0 +1,45 @@
+---
+alwaysApply: true
+description: Accounting edits must match the pre-Grok working style — display-heal only, never rewrite IndexedDB dates
+---
+
+# Accounting stable edits (pre-Grok working pattern)
+
+`apps/accounting-sandbox` data lives in the **user’s browser** (`selpic-accounting` IndexedDB on **http://localhost:3001**). Disk code is not the ledger. Storefront `3005` will never show these edits.
+
+## What broke after Grok (19 Aug 2026)
+
+- Incomplete search-replace → `ReferenceError` → accounting **500** / Fast Refresh loop
+- Root `npm run clean` used to **kill port 3001**
+- `persistRepairedDatesToStatements` wrote speculative US/month+3 folds into IndexedDB, so later code “fixes” never matched the screen
+- A mistaken “Q3 $7,570.19 looks wrong” request **folded real Q3 bank into Q4**; the user then said the **pre-change** logic was correct
+- **Recover to Statement History** saved the merged cache as `recovered_*.cache` beside the real PDF → doubled History / Q3 32 vs 13
+
+## Pre-Grok pattern (do this)
+
+- Change **display/filter** helpers; do **not** rewrite statement dates or `period` in IndexedDB
+- Date repair is **per statement file** only: `repairStatementDateAnomalies` → `repairUsMisparsedAustralianDates`. Never compare one statement against the merged ledger
+- `loadAllTransactions` must read **every** saved statement plus all cash expenses. Filtering, skipping, or deleting a History row inside the loader looks exactly like data loss
+- Q3 Jan–Mar 2026 = **8 cash + 5 company bank** (13 txs), expenses **$7,570.19**, Bank **$304.38**. That is not Q4 leakage
+- Keep both Stamp Zone cash rows (`cash_*` ids)
+- `syncLegacyTransactionCache` must never overwrite a non-empty `accounting_transactions` cache with `[]`
+- P&L period options must stay selectable at `0 txs`, and every FY the user may pick (ledger FYs + current FY + selected FY) must be listed. A `disabled` empty quarter or a `find(...)` miss that returns without calling `onChangeViewPeriod` reads as "Q4 cannot be selected"
+- Surface IndexedDB read failures as an error banner — a silent catch renders “No saved statements found” and reads as deleted data
+- The mount effect in `useAccountingDashboard` must call `loadAllTransactions()` / `loadStatementHistory()` **before** its cleanup `return`. A `return` placed mid-effect made every line after it dead code, so the dashboard showed only the small `localStorage` cache and *no* code fix could change the screen (19 Aug 2026 root cause)
+- `IDBObjectStore.delete()` resolves even when the key never matched — re-read the record after delete and report failure, otherwise a delete looks ignored
+- After a Fast Refresh 500: hard-refresh **3001**, do not Recover unless History is truly empty
+
+## Confirmed fixtures (do not “fix”)
+
+- **ASSOCIATEDCLEANING $3,526.60** on **2026-05-07** and **2026-06-05** — legitimate monthly recurring payment; statement parse is correct. Same amount + description on different dates is **not** a duplicate by itself. Only a **month +3 fold of the same day-of-month** (e.g. 15 Jan → 15 Apr) was corruption from Recover / date heal.
+- **ATO GST/BAS refund ~$18** — **not** company income. Increases Cash (asset); P&L Revenue must ignore it. See `.cursor/rules/accounting-ato-gst-refund.mdc`.
+- **Nab Intnl Tran Fee** — Bank Fees & Interest expense, but **GST FREE** (no BAS 1B). See `.cursor/rules/accounting-nab-intnl-tran-fee-gst-free.mdc`.
+
+## Do not
+
+- Persist US MM/DD or month±3 folds on every `loadAllTransactions`
+- Treat “P&L period 55 vs This statement 50” as a reason to move Q3 bank into Q4
+- Add cross-statement date modules (e.g. a `restore-folded-q3-bank-dates` style helper) — deleted 19 Aug 2026 after it moved real rows between quarters
+- Compound date heals that fight each other
+- Deduplicate or delete rows solely because amount + description match across months (recurring merchants)
+- Verify accounting on the homepage port

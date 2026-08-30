@@ -33,7 +33,7 @@ import { buildFundraisingSettlementCoverPlainText } from '@/lib/fundraising/docu
 
 export default function FundraisingPayoutPage() {
   return (
-    <AdminRoute requiredPermissions={['analytics:read']}>
+    <AdminRoute requiredPermissions={['fundraising:finance']}>
       <PayoutContent />
     </AdminRoute>
   )

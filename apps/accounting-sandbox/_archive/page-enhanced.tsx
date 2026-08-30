@@ -19,7 +19,7 @@ import { exportToExcel, exportSummary, ExportTransaction } from '@/lib/excel-exp
 import { calculateFinancialSummary, FinancialSummary as SummaryType } from '@/lib/utils/financial-summary'
 import { BankTransaction } from '@/lib/pdf-parser/types'
 
-interface ClassifiedTransaction extends BankTransaction {
+interface ClassifiedTransaction extends Omit<BankTransaction, 'department'> {
   id?: string
   category?: string
   confidence?: number

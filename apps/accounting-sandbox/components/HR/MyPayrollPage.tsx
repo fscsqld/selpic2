@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { LogOut, User, Clock, DollarSign, FileText, AlertCircle, Lock, Trash2, ChevronDown, ChevronUp, XCircle } from 'lucide-react'
 import { getCurrentEmployeeSession, logoutEmployee, EmployeeSession } from '@/lib/auth/employee-auth'
 import { TimesheetEntryForm } from '@/components/Payroll/TimesheetEntryForm'
@@ -35,12 +35,12 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
     return true
   })
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logoutEmployee()
     if (onLogout) {
       onLogout()
     }
-  }
+  }, [onLogout])
 
   // 자동 로그아웃 타이머 (30분 비활성 시)
   useEffect(() => {
@@ -91,10 +91,11 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
         window.removeEventListener(event, handleActivity)
       })
     }
-  }, [session, employee, onLogout])
+  }, [session, employee, handleLogout])
 
   useEffect(() => {
     loadEmployeeData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
   // 타임시트 상태 업데이트 이벤트 리스너 (관리자가 승인/거부/삭제 시 실시간 반영)
@@ -287,6 +288,7 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
         <EmployeePasswordManagement
           employeeId={employee.employeeId}
           employeeName={employee.name}
+          hasPassword={!!employee.password}
           isSelfChange={true}
           onPasswordChanged={() => {
             // 비밀번호 변경 후 아무 작업 없음 (성공 메시지 표시됨)
@@ -388,14 +390,14 @@ export function MyPayrollPage({ onLogout }: MyPayrollPageProps) {
                             ✗ Rejected on {formatDateAustralian(timesheet.rejectedAt)}
                           </p>
                         )}
-                        {(timesheet.rejectedReason || timesheet.rejectionReason) && (
+                        {timesheet.rejectedReason && (
                           <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
                             <div className="flex items-start gap-2">
                               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                               <div className="flex-1">
                                 <p className="text-sm font-semibold text-red-800 mb-1">Rejection Reason:</p>
                                 <p className="text-sm text-red-700 whitespace-pre-wrap">
-                                  {timesheet.rejectedReason || timesheet.rejectionReason}
+                                  {timesheet.rejectedReason}
                                 </p>
                               </div>
                             </div>

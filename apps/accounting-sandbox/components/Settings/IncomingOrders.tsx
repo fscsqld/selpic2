@@ -408,6 +408,7 @@ export function IncomingOrders() {
     }, 3000) // 3초마다 체크 (더 빠른 반응)
     
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; interval polls stable loaders
   }, [])
 
   // 에러 로그 로드

@@ -31,6 +31,9 @@ let pendingState: Record<string, unknown> | undefined
 
 let flushHandlersInstalled = false
 
+/** False after logout / outside authenticated admin — skip schedule/flush so 401 is not shown on login. */
+let cloudWritesAllowed = false
+
 const DEBOUNCE_MS = 400
 
 type SiteConfigWriteStatus =
@@ -55,18 +58,49 @@ export function getLastSiteConfigWriteStatus(): SiteConfigWriteStatus {
   return lastStatus
 }
 
+/** Drop debounced payloads without calling the API (logout / leave admin). */
+export function cancelPendingSiteConfigWrites(): void {
+  clearTimeout(saveTimer)
+  saveTimer = undefined
+  pendingSerialized = undefined
+  clearTimeout(stateTimer)
+  stateTimer = undefined
+  pendingState = undefined
+}
+
+export function resetSiteConfigWriteStatus(): void {
+  emitStatus({ kind: 'idle' })
+}
+
+/**
+ * Gate for CMS cloud upserts. Call with false on admin logout before signOut so
+ * template remount / pagehide flushes do not POST with a dead session.
+ */
+export function setSiteConfigCloudWritesAllowed(allowed: boolean): void {
+  cloudWritesAllowed = allowed
+  if (!allowed) {
+    cancelPendingSiteConfigWrites()
+    resetSiteConfigWriteStatus()
+  }
+}
+
+export function areSiteConfigCloudWritesAllowed(): boolean {
+  return cloudWritesAllowed
+}
+
 /**
  * Persists the Zustand persist payload (JSON string of `{ state, version }`) to Supabase.
  * Prefer `scheduleSiteConfigStateUpsert` / `SiteConfigStoreAutosave`; kept for manual/legacy callers.
  */
 export function scheduleSiteConfigPersistString(serialized: string): void {
+  if (!cloudWritesAllowed) return
   pendingSerialized = serialized
   installFlushHandlersOnce()
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     const payload = pendingSerialized
     pendingSerialized = undefined
-    if (!payload) return
+    if (!payload || !cloudWritesAllowed) return
     void pushPersistStringToSupabase(payload).catch(() => {})
   }, DEBOUNCE_MS)
 }
@@ -76,19 +110,21 @@ export function scheduleSiteConfigPersistString(serialized: string): void {
  * localStorage 디바운스/누락과 무관하게 동일 페이로드를 보냅니다.
  */
 export function scheduleSiteConfigStateUpsert(state: Record<string, unknown>): void {
+  if (!cloudWritesAllowed) return
   pendingState = state
   installFlushHandlersOnce()
   clearTimeout(stateTimer)
   stateTimer = setTimeout(() => {
     const s = pendingState
     pendingState = undefined
-    if (!s) return
+    if (!s || !cloudWritesAllowed) return
     void upsertSiteConfigValue(s).catch(() => {})
   }, DEBOUNCE_MS)
 }
 
 /** 디바운스 없이 즉시 Supabase에 반영 (백업 가져오기 등) */
 export function persistSiteConfigPayloadNow(serialized: string): Promise<void> {
+  if (!cloudWritesAllowed) return Promise.resolve()
   pendingSerialized = undefined
   clearTimeout(saveTimer)
   saveTimer = undefined
@@ -96,6 +132,7 @@ export function persistSiteConfigPayloadNow(serialized: string): Promise<void> {
 }
 
 export function persistSiteConfigStateNow(state: Record<string, unknown>): Promise<void> {
+  if (!cloudWritesAllowed) return Promise.resolve()
   pendingState = undefined
   clearTimeout(stateTimer)
   stateTimer = undefined
@@ -106,6 +143,10 @@ export function persistSiteConfigStateNow(state: Record<string, unknown>): Promi
  * 페이지 이탈/백그라운드 전환 시 디바운스 저장이 유실되지 않도록 즉시 플러시합니다.
  */
 export function flushPendingSiteConfigPersist(): void {
+  if (!cloudWritesAllowed) {
+    cancelPendingSiteConfigWrites()
+    return
+  }
   clearTimeout(saveTimer)
   saveTimer = undefined
   const payload = pendingSerialized
@@ -115,6 +156,10 @@ export function flushPendingSiteConfigPersist(): void {
 }
 
 export function flushPendingSiteConfigState(): void {
+  if (!cloudWritesAllowed) {
+    cancelPendingSiteConfigWrites()
+    return
+  }
   clearTimeout(stateTimer)
   stateTimer = undefined
   const s = pendingState
@@ -141,6 +186,7 @@ function installFlushHandlersOnce(): void {
 }
 
 async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<void> {
+  if (!cloudWritesAllowed) return
   emitStatus({ kind: 'saving', source: 'state' })
   const value = unwrapSiteConfigValue(state)
   if (!value) {
@@ -186,6 +232,7 @@ async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<vo
 }
 
 async function pushPersistStringToSupabase(serialized: string): Promise<void> {
+  if (!cloudWritesAllowed) return
   emitStatus({ kind: 'saving', source: 'string' })
   try {
     const parsed = JSON.parse(serialized) as { state?: Record<string, unknown>; version?: number }

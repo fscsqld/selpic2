@@ -7,6 +7,9 @@
 import * as XLSX from 'xlsx'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { strings } from '@/lib/i18n/strings'
+import { isPurchaseGstClaimable } from '@/lib/gst/purchase-gst-claimable'
+import { roundMoney } from '@/lib/utils/currency-format'
+import { buildExportSummaryRows, type ExportSummaryMetrics } from '@/lib/reporting/reporting-layer-labels'
 
 export interface ExportTransaction {
   date: string
@@ -18,6 +21,57 @@ export interface ExportTransaction {
   department: string
   status: string
   balance?: number
+  /** Needed so Excel GST matches History Claim GST (1B) */
+  source?: string
+  gstInfo?: {
+    isGSTIncluded?: boolean
+    gstType?: 'INCLUDED' | 'EXCLUDED' | 'FREE'
+    gstAmount?: number
+    netAmount?: number
+  }
+}
+
+/**
+ * GST / net for General Ledger Excel — must match Transaction History Claim GST (1B).
+ * Do NOT use category-only hasGST() for this.
+ */
+export function gstAndNetForExport(tx: {
+  debit?: number | null
+  credit?: number | null
+  category?: string
+  source?: string
+  gstInfo?: ExportTransaction['gstInfo']
+}): { gst: number; net: number } {
+  const amount = Math.abs(tx.debit || tx.credit || 0)
+  if (amount < 0.0005) return { gst: 0, net: 0 }
+
+  const cat = tx.category || ''
+
+  if (tx.debit && cat.startsWith('EXPENSE_')) {
+    if (!isPurchaseGstClaimable(tx)) {
+      return { gst: 0, net: roundMoney(amount) }
+    }
+    const tagged = tx.gstInfo?.gstAmount
+    const gst =
+      typeof tagged === 'number' && Number.isFinite(tagged)
+        ? roundMoney(Math.abs(tagged))
+        : roundMoney(amount / 11)
+    return { gst, net: roundMoney(amount - gst) }
+  }
+
+  if (tx.credit && cat.startsWith('INCOME_')) {
+    if (tx.gstInfo?.gstType === 'FREE' || tx.gstInfo?.gstType === 'EXCLUDED') {
+      return { gst: 0, net: roundMoney(amount) }
+    }
+    const tagged = tx.gstInfo?.gstAmount
+    const gst =
+      typeof tagged === 'number' && Number.isFinite(tagged) && tx.gstInfo?.gstType === 'INCLUDED'
+        ? roundMoney(Math.abs(tagged))
+        : roundMoney(amount / 11)
+    return { gst, net: roundMoney(amount - gst) }
+  }
+
+  return { gst: 0, net: roundMoney(amount) }
 }
 
 /**
@@ -35,13 +89,16 @@ export function calculateGST(amount: number, isInclusive: boolean = true): numbe
 }
 
 /**
- * Check if category has GST
+ * @deprecated Category-only guess — wrong for CrazyDomains/Startup, Hanaone, manual FREE.
+ * Use gstAndNetForExport / isPurchaseGstClaimable instead. Kept for rare legacy callers.
  */
 export function hasGST(category: string): boolean {
   // Categories that typically have GST
   const gstCategories = [
     'EXPENSE_OFFICE_SUPPLIES',
+    'EXPENSE_SOFTWARE_SUBSCRIPTIONS',
     'EXPENSE_MARKETING',
+    'EXPENSE_MERCHANT_FEES',
     'EXPENSE_RENT',
     'EXPENSE_UTILITIES',
     'EXPENSE_CLEANING_SUBCONTRACTOR',
@@ -61,6 +118,7 @@ export function hasGST(category: string): boolean {
     'LIABILITY_DIRECTORS_LOAN',
     'LIABILITY_DIRECTORS_LOAN_WITHDRAWAL',
     'EXPENSE_STARTUP_INCORPORATION', // Incorporation fees may not have GST
+    'EXPENSE_BANK_FEES_INTEREST',
     'TRANSFER_PARTNERSHIP_TO_COMPANY',
   ]
 
@@ -215,8 +273,11 @@ function getCategoryDisplayName(category: string): string {
     'EXPENSE_REPAIRS_MAINTENANCE': 'Repairs & Maintenance',
     'EXPENSE_OFFICE_EQUIPMENT': 'Office Equipment & Assets',
     'EXPENSE_OFFICE_SUPPLIES': 'Office Supplies',
+    'EXPENSE_SOFTWARE_SUBSCRIPTIONS': 'Software & Subscriptions',
+    'EXPENSE_BANK_FEES_INTEREST': 'Bank Fees & Interest',
     'EXPENSE_RENT': 'Rent',
     'EXPENSE_MARKETING': 'Marketing & Advertising',
+    'EXPENSE_MERCHANT_FEES': 'Merchant & Platform Fees',
     'EXPENSE_WAGES_SALARIES': 'Wages & Salaries',
     'EXPENSE_SUPERANNUATION': 'Superannuation',
     'EXPENSE_ATO_GST_BAS': 'ATO - GST & BAS',
@@ -231,6 +292,10 @@ function getCategoryDisplayName(category: string): string {
     
     // 이체 및 기타
     'NON_TAXABLE_TRANSFER': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
+    'NON_TAXABLE_ATO_GST_REFUND': 'ATO GST/BAS Refund',
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_OUT': 'Erroneous Payment (Out)',
+    'NON_TAXABLE_ERRONEOUS_PAYMENT_RETURN': 'Erroneous Payment Return (In)',
+    'NON_TAXABLE_DIRECTOR_REIMBURSEMENT': 'Director Reimbursement (Prior Period)',
     'TRANSFER_INTERNAL': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
     'TRANSFER_PARTNERSHIP_TO_COMPANY': 'Non-Taxable Transfer', // Non-Taxable Transfer (통합)
     'UNCATEGORIZED': 'Uncategorized',
@@ -274,15 +339,14 @@ export function exportToExcel(
   // Prepare main transaction data with cleaned descriptions
   const mainData = transactions.map((tx) => {
     const amount = tx.debit || tx.credit || 0
-    const gst = hasGST(tx.category) ? calculateGST(Math.abs(amount)) : 0
-    const netAmount = Math.abs(amount) - gst
+    const { gst, net: netAmount } = gstAndNetForExport(tx)
 
     return {
       Date: formatDateAustralian(tx.date), // Australian format: DD/MM/YYYY
       Description: cleanDescriptionForExport(tx.description), // Use cleaned description
       Category: getCategoryDisplayName(tx.category || 'UNCATEGORIZED'), // Use display name (matches UI)
-      'GST (10%)': gst,
-      'Net Amount': netAmount,
+      'GST (L2 est.)': gst,
+      'Net (L2 est.)': netAmount,
       Debit: tx.debit || 0,
       Credit: tx.credit || 0,
       Department: getDepartmentDisplayName(tx.department), // Use display name (matches UI: 'cleaning' → 'Company')
@@ -299,7 +363,18 @@ export function exportToExcel(
   const allRows: any[][] = []
   
   // Step 1: Add main data headers (Row 1)
-  allRows.push(['Date', 'Description', 'Category', 'GST (10%)', 'Net Amount', 'Debit', 'Credit', 'Department', 'Status', 'Balance'])
+  allRows.push([
+    'Date',
+    'Description',
+    'Category',
+    'GST (L2 est.)',
+    'Net (L2 est.)',
+    'Debit (L1)',
+    'Credit (L1)',
+    'Department',
+    'Status',
+    'Balance',
+  ])
   
   // Step 2: Add main transaction data (Rows 2+)
   mainData.forEach((row) => {
@@ -307,8 +382,8 @@ export function exportToExcel(
       row.Date,
       row.Description,
       row.Category,
-      row['GST (10%)'],
-      row['Net Amount'],
+      row['GST (L2 est.)'],
+      row['Net (L2 est.)'],
       row.Debit,
       row.Credit,
       row.Department,
@@ -492,35 +567,18 @@ export function exportToExcel(
 }
 
 /**
- * Export summary to Excel
+ * Export summary to Excel (aligned with Biz Intel P&L / GST cards)
  */
 export function exportSummary(
-  summary: {
-    totalIncome: number
-    totalExpenses: number
-    netProfit: number
-    totalGSTPayable: number
-    totalGSTClaimable: number
-    directorsLoanBalance: number
-    cleaningIncome: number
-    stickerIncome: number
-  },
+  summary: ExportSummaryMetrics,
   fileName: string = 'financial-summary'
 ): void {
-  const summaryData = [
-    { Metric: 'Total Income', Amount: summary.totalIncome.toFixed(2) },
-    { Metric: 'Total Expenses', Amount: summary.totalExpenses.toFixed(2) },
-    { Metric: 'Net Profit', Amount: summary.netProfit.toFixed(2) },
-    { Metric: 'Total GST Payable', Amount: summary.totalGSTPayable.toFixed(2) },
-    { Metric: 'Total GST Claimable', Amount: summary.totalGSTClaimable.toFixed(2) },
-    { Metric: "Director's Loan Balance", Amount: summary.directorsLoanBalance.toFixed(2) },
-    // Cleaning Income과 Sticker Income은 Trading Revenue로 통합되어 Total Income에 포함됨
-  ]
+  const summaryData = buildExportSummaryRows(summary)
 
   const workbook = XLSX.utils.book_new()
   const worksheet = XLSX.utils.json_to_sheet(summaryData)
 
-  worksheet['!cols'] = [{ wch: 25 }, { wch: 15 }]
+  worksheet['!cols'] = [{ wch: 36 }, { wch: 18 }]
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Financial Summary')
 

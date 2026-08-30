@@ -1,0 +1,46 @@
+---
+description: ATO Lodgment BAS entry = one lodging quarter, not Biz Intel FY sum
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# ATO Lodgment BAS vs Biz Intel period
+
+## Invariant
+
+**ATO entry order** fields (G1, 1A, 1B, 1C/7C) are values to type into Online Services for **one BAS cycle** (usually one quarter). They must **not** equal Biz Intel when the P&L banner is **Financial Year** or another multi-quarter window.
+
+Confirmed SELPIC example:
+
+| Source | 1B | 1C (net) |
+|--------|-----|----------|
+| Biz Intel **FY** | ~$563.83 (Q3+Q4 claimable) | ~$747.03 |
+| ATO lodge **Q4** | ~$545.38 | Q4-only 1A−1B |
+| ATO lodge **Q3** | ~$18.45 (or already lodged / near-zero net after refund) | that quarter only |
+
+Copying FY $747.03 into a quarterly BAS is wrong.
+
+## Default lodging window
+
+`resolveBasLodgmentQuarterForFiling`:
+
+1. Banner is exact Q1–Q4 → that quarter  
+2. Banner is FY / Full statement / custom → **BAS quarter of banner end date** (FY 30 Jun → **Q4**)  
+3. Else density fallback  
+
+Optional dropdown: “Biz Intel P&L only (do not lodge this sum)” for comparison — never the default.
+
+## CTR / Annual
+
+Still full FY (company tax / annual forms). Different from BAS.
+
+## Do
+
+- Match ATO entry to **selected BAS quarter** (and Biz Intel only when banner is that same quarter)
+- Warn when Biz Intel is on FY while BAS tab shows Q4
+
+## Do not
+
+- Default ATO BAS fields to the full P&L / FY window  
+- Treat FY GST Net as one quarterly remittance  
+- Assume Q3 “0” on screen means Q3 1B was zero — check that quarter’s BAS (refund ≠ 1B)

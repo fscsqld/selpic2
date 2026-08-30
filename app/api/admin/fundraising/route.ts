@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
+import { permissionsForFundraisingPut } from '@/lib/admin/fundraisingApiPermissions'
 import {
   listFundraisingDocumentsFromDb,
   listFundraisingGrantAccountEventsFromDb,
@@ -115,8 +116,8 @@ type LifecycleAction =
   | { kind: 'd14_d15_pack'; period?: string; netSales?: number; commission?: number; email?: boolean }
 
 export async function GET() {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('fundraising:read')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   try {
     const [partners, documents, settlements, settings, grantAccountEvents, changeRequests] =
@@ -145,9 +146,6 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   try {
     const body = (await req.json().catch(() => null)) as
       | {
@@ -164,6 +162,14 @@ export async function PUT(req: Request) {
           changedByLabel?: string
         }
       | null
+
+    const required = permissionsForFundraisingPut(body)
+    if (required.length === 0) {
+      return NextResponse.json({ error: 'No supported mutation in request body' }, { status: 400 })
+    }
+
+    const gate = await requireAdminPermission(required)
+    if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const results: Record<string, unknown> = {}
 
@@ -601,8 +607,8 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const user = await requireSupabaseAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('fundraising:write')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
   try {
     const url = new URL(req.url)

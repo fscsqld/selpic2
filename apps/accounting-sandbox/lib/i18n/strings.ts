@@ -111,6 +111,9 @@ export const strings = {
     expenseFreightShipping: 'Freight & Shipping',
     expenseRent: 'Rent',
     expenseMarketing: 'Marketing & Advertising',
+    expenseSoftwareSubscriptions: 'Software & Subscriptions',
+    expenseBankFeesInterest: 'Bank Fees & Interest',
+    expenseMerchantFees: 'Merchant & Platform Fees',
     expenseWagesSalaries: 'Wages & Salaries',
     expenseSuperannuation: 'Superannuation',
     expenseATOGSTBAS: 'ATO - GST & BAS',
@@ -122,6 +125,10 @@ export const strings = {
     expenseDividendsPaid: 'Dividends Paid',
     expenseDirectorsFees: "Director's Fees",
     cashExpensePetty: 'Cash & Petty Cash', // 현금 지출
+    atoGstRefund: 'ATO GST/BAS Refund',
+    erroneousPaymentOut: 'Erroneous Payment (Out)',
+    erroneousPaymentReturn: 'Erroneous Payment Return (In)',
+    directorReimbursementPriorPeriod: 'Director Reimbursement (Prior Period)',
     
     // 이체 및 기타
     internalTransfer: 'Non-Taxable Transfer', // Non-Taxable Transfer (통합: TRANSFER_INTERNAL, TRANSFER_PARTNERSHIP_TO_COMPANY 포함)

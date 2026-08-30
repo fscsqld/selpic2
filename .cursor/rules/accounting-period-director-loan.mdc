@@ -1,0 +1,58 @@
+---
+description: Period Management — bank Director Loan vs director personal advances (learned)
+globs: apps/accounting-sandbox/lib/period-management/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Period Management — owing to director (learned)
+
+## User principle (Selpic)
+
+Bank **Director Loan** (statement) and **director personal pays** (Add Cash Expense · Paid by Director, e.g. Dec 2025 airfare) are **both** amounts the company owes the director.
+
+- They share one liability balance for accounting (correct to combine).
+- UI must **not** look like only “bank Director Loan”: when bank DL is **$0** but the director paid company costs personally, that month still shows **`Director's Loan (Company owes Director)`**.
+- Same rule every period from the first advance/loan month onward.
+
+## Sync invariant (SSOT)
+
+1. `hydrateFundedByDirectorOnLedger` before metrics / monthly chain / Period sync.
+2. `computePeriodDirectorLoanChain` — Settings opening applies **once** on the first DL-activity month (bank loan, reimbursement, **or** director-funded cash). Later months roll prior closing.
+3. Pass **`throughPeriodId`** through the latest stored/current month so **empty Jul/Aug after June reimbursement stay on the chain** (never fall back to bare Settings `$1,000`).
+4. `seedOpeningsBeforePeriod` walks **month-by-month** backward (do not skip unlocked June to an older locked row).
+5. `syncAllOpenPeriods` must use that chain; Period Management **syncs once on mount** then soft-reloads on `PERIOD_CHANGED` (never sync→event→sync — that flickered the screen).
+6. Period UI prefers live chain openings/closings when ledger is loaded.
+7. Opening/Closing Cash = **bank cash book** roll-forward only (exclude manual Cash Expense).
+8. Empty unlocked month: Closing Cash = Opening Cash (prior close). Statement parse → auto `syncAllOpenPeriods` only for **unlocked** months.
+9. If a later month is **Locked** at Cash $0 while an earlier month is still Active with Closing Cash > 0 → stale lock; UI may display rolled cash; persist via **Unlock & Recalculate** (`unlockPeriod` + sync). Close Period is reversible the same way (ledger txs are not deleted).
+
+## Root cause of wrong Period figures (observed)
+
+| Bug | Effect |
+|-----|--------|
+| Settings opening applied every unlocked month | Jul = bare $1,000 after Jun −$8,781 |
+| Missing `fundedByDirector` on Cash Expense + no hydrate | Dec airfare showed None |
+| Period UI only read stale IndexedDB closings | Captions / reimbursements disappeared after tab extraction |
+| Cash Expense form lacked Paid by | New rows did not persist director funding |
+| Later month Locked at Cash $0 while prior Active still holds Closing Cash | `syncAllOpenPeriods` skips Locked; cash never carried (DL may still look correct via live chain) |
+
+## Two sources (display separately)
+
+| Source | Where it comes from | Effect |
+|--------|---------------------|--------|
+| Bank Director Loan | Statement parse `LIABILITY_DIRECTORS_LOAN` / personal | ± closing |
+| Director advances | Cash Expense `fundedByDirector` / Paid by Director | + closing (expense month) |
+| Reimbursements | `NON_TAXABLE_DIRECTOR_REIMBURSEMENT` | − closing (that month) |
+
+## Do not
+
+- Dump auto-match Prior into one Period month (Biz Intel only).
+- Show Dec airfare month as `None` when it is a Cash Expense (heal `fundedByDirector`).
+- Treat Bank cash as Cash Expense or DL.
+- Use Cash Expense `balance: 0` as statement closing cash on the Balance Sheet.
+- Leave Locked empty months at $0 cash when prior Closing Cash should roll — unlock + resync (or keep Active until ready to close).
+
+## Sister paths
+
+`lib/cash-expense/funded-by-director.ts` · `syncAllOpenPeriods` · `summarizePeriodActivity` · `calculateBusinessMetrics` hydrate · Biz Intel auto-match.
+---

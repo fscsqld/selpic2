@@ -16,9 +16,11 @@ import { EmployeeLogin } from '@/components/Payroll/EmployeeLogin'
 interface EmployeeListProps {
   onEmployeeClick: (employee: Employee) => void
   onAddEmployee: () => void
+  /** Remount/reload trigger from parent (optional) */
+  refreshKey?: number
 }
 
-export function EmployeeList({ onEmployeeClick, onAddEmployee }: EmployeeListProps) {
+export function EmployeeList({ onEmployeeClick, onAddEmployee, refreshKey }: EmployeeListProps) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -35,7 +37,7 @@ export function EmployeeList({ onEmployeeClick, onAddEmployee }: EmployeeListPro
 
   useEffect(() => {
     loadEmployees()
-  }, [])
+  }, [refreshKey])
 
   const loadEmployees = async () => {
     setIsLoading(true)

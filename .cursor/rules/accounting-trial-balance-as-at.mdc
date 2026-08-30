@@ -1,0 +1,41 @@
+---
+description: Trial Balance purpose + As-at date (FY end vs empty future year)
+alwaysApply: false
+globs: apps/accounting-sandbox/**/TrialBalance*,apps/accounting-sandbox/**/trial-balance*
+---
+
+# Trial Balance
+
+## Why it exists
+
+Snapshot check that **Total Debits = Total Credits** as at a date: BS accounts + period P&L (ex GST) in one list. Used before lodgment / year-end packs to catch out-of-balance books.
+
+## As at semantics
+
+Filter = all ledger rows with `date ≤ asAt`. Not “activity in that month only”.
+
+So if the latest transaction is **2026-06-24**:
+
+| As at | Included set | Totals |
+|-------|----------------|--------|
+| Today (e.g. 2026-08-25) | All current txs | Same |
+| 30/06/2026 (FY end) | All current txs | Same |
+| 30/06/2027 (future empty FY end) | Still all current txs | **Same** |
+
+Identical totals are **correct** when no later activity exists — not a frozen bug.
+
+## UX bug (learned)
+
+`End of Financial Year (30 Jun)` used **calendar today**’s FY end. In Aug 2026 that is **30/06/2027**, not the reporting FY **30/06/2026**.
+
+**Fix:** pass Reports `reportsFyRange.endDate` into Trial Balance; FY preset prefers that (else FY of latest tx date).
+
+## Do
+
+- Default / FY preset → reporting FY end (e.g. 2026-06-30)
+- Note when as-at ≥ latest tx that totals will not change until new activity
+
+## Do not
+
+- Expect As at changes to move totals when all dates are already ≤ every option
+- Use empty future FY end as the primary year-end as-at for an earlier statement year

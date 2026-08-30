@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminManagePermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 
@@ -25,10 +28,9 @@ function siteBase(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminManagePermission()
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   }

@@ -94,7 +94,7 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
 
 export default function InvoicePreviewPage() {
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['invoices:read']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Create & Send Invoice / Quote"
@@ -621,7 +621,7 @@ function InvoicePreviewPageContent() {
   }, [pendingResendLogId, pageTab])
 
   return (
-    <AdminRoute>
+    <AdminRoute requiredPermissions={['invoices:read']}>
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto p-6">
           {/* Header */}

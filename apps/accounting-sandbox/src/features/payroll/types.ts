@@ -19,6 +19,9 @@ export interface Payslip {
   netPay: number
   payDate: string
   status: 'draft' | 'approved' | 'paid'
+  /** Fingerprint of bank debit matched when marking payslip paid */
+  bankMatchedTransactionKey?: string
+  bankMatchedAt?: string
   createdAt: string
   updatedAt: string
 }

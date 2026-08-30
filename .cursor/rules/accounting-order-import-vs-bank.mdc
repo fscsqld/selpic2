@@ -1,0 +1,41 @@
+---
+description: SELPIC order import vs bank/Stripe — soft-retired; bank is revenue SSOT
+globs: apps/accounting-sandbox/**/IncomingOrders*,apps/accounting-sandbox/**/OrderReconciliation*,apps/accounting-sandbox/**/order-reconciliation*,apps/accounting-sandbox/lib/orders/incoming-orders-retired.ts,lib/admin/recordOrderToAccountingBridge.ts,app/api/accounting/orders/**
+alwaysApply: false
+---
+
+# Order import / Order Reconciliation — soft-retired (26 Aug 2026)
+
+## Invariant
+
+**Bank statement deposits (classified) are the revenue SSOT.** Homepage order gross must not post as synthetic P&L income alongside Stripe/bank CREDITS.
+
+## Cash path
+
+1. Customer pays on SELPIC (often Stripe/PayPal).
+2. Platform fees; bank receives **net** payout (batched).
+3. Accounting uploads bank PDF → CREDIT lines become income.
+
+## Soft retire (implemented)
+
+| Layer | Behaviour |
+|-------|-----------|
+| Settings UI | **Incoming Orders** and **Order Reconciliation** hidden; Bank Reconciliation only |
+| `syncIncomingOrders` | No-op (`INCOMING_ORDERS_RETIRED`) |
+| `POST` accounting `/api/orders/import` | 200 retired no-op (no pending save) |
+| Storefront `POST /api/accounting/orders/import` | 200 retired no-op (no fetch to :3001) |
+| `recordOrderToAccountingAsyncWithRetry` | No-op (approve never waits on accounting) |
+| Admin Orders UI | Send-to-Accounting removed; short note only |
+| IndexedDB `incomingOrders` | Store kept; no new writes from import path |
+| SetupWizard | Copy says order import retired |
+
+## Do not
+
+- Hard-delete IndexedDB store or import route stubs yet (schema / bridge safety)
+- Import sandbox modules into storefront
+- Treat Approve-to-ledger + bank income as both active
+
+## Existing `selpic_orders` rows
+
+Rare. Soft retire prevents new ones. If present, recategorise/exclude from P&L manually or with a future filter.
+---

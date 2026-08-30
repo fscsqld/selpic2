@@ -1,0 +1,65 @@
+---
+description: Director's Loan Balance must follow period/FY date window + roll-forward opening
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Director's Loan Balance — period / quarter / FY (learned)
+
+## Invariant
+
+For any Biz Intel (or sister) date window `[start, end]`:
+
+\[
+\text{DL}_{end} = f(\text{txs in window},\ \text{opening at start},\ \text{prior plug})
+\]
+
+where **opening at start** = Settings opening rolled forward through **all ledger txs strictly before `start`** (not the Settings figure alone, and not “first month of range if unlocked → Settings”).
+
+Positive balance ⇒ Company owes Director.
+
+## Why Biz Intel looked wrong (class of bugs)
+
+| Bug | Effect on quarter / FY |
+|-----|-------------------------|
+| **`fundedByDirector` cash missing from `calculateBusinessMetrics`** | Dec airfare / Stamp-zone cash never increase DL → FY/quarter understated (Period tests expect +cash) |
+| **Unlocked months all get Settings opening** (`syncAllOpenPeriods`) | April opening ignores Dec advances; Q4 / single month wrong |
+| **`metricsOpeningDirectorLoan` = Settings unless that month is locked** | Multi-month FY uses Settings + in-window txs only — drops pre-window DL movement when viewing a quarter |
+| **Auto-match prior = full reimbursements** while funded cash is already in the same window | Double-count (see `accounting-directors-loan-fy-double-count.mdc`) → FY ~$10,281 instead of ~$1,500 |
+| **localStorage keys stored as literal `"PRIOR_…_STORAGE_KEY"`** | Settings prior/auto-match never persist to the real keys |
+
+## Correct openings (examples)
+
+Settings opening $1,000; Dec director cash $1,516.08; Apr loan +$500; Jun reimburse −$8,781.89.
+
+| View | Opening used | In-window movement | Closing |
+|------|----------------|--------------------|---------|
+| FY (Jul–Jun) | $1,000 (pre-FY empty) | +1516.08 +500 −8781.89 | **−5765.81** (Director owes) or with full SELPIC mix ~ remaining bank loan |
+| Q4 Apr–Jun | **$1,000 + 1516.08** (roll Dec) | +500 −8781.89 | same chain continuity |
+| Dec only | $1,000 | +1516.08 | **2516.08** Company owes |
+
+Period Management monthly chain and Biz Intel range balance must agree on the same `f`.
+
+## SSOT formula
+
+`calculateBusinessMetrics` / `calculateBusinessMetrics`:
+
+`Opening + Prior plug + bank DL credits − bank DL debits/withdrawals + director-funded cash debits − reimbursements ± personal`
+
+Auto-match prior plug:
+
+`max(0, reimbursements − director-funded cash in the same window)`  
+(or **0** when opening was already roll-forwarded from full history before the window).
+
+## Sister surfaces
+
+Biz Intel cards · **Reports → Director's Loan Ledger (BAS)** · Period Management · Balance Sheet / TB · ATO lodgment metrics opening.
+
+Reports bug (confirmed): Q4 opening already rolled Dec cash (~$9,781.89) then auto prior +$8,781.89 again → opening $18,563.78 and closing **$10,281.89**. Fix: `resolvePriorAdvancesForScopedWindow(..., hasHistoryBeforeWindow=true)` → prior 0; closing ~$1,500.
+
+## Do not
+
+- Show Settings opening as the period opening on a mid-FY quarter
+- OCR-collapse or omit Cash Expense `fundedByDirector` rows when computing DL
+- Dump auto-match prior into a single Period month
+- Paste Biz Intel cash P&L Net into CTR (separate GST-basis rule)

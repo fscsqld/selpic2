@@ -1,0 +1,30 @@
+---
+description: Admin Manual transaction edits must persist across refresh
+alwaysApply: false
+globs: apps/accounting-sandbox/**
+---
+
+# Manual transaction edits (admin) — persist on refresh
+
+## Fields edited in Transaction History
+
+| Field | Persist target | Survive reload |
+|-------|----------------|----------------|
+| Category | Statement History row(s) + cache | `confidence: Manual` skips auto re-classify |
+| Department | same | same |
+| Date / amount | same | patched via soft amount+description match |
+| GST claim / FREE | same | `gstInfo.reasoning` starts with `Manual:` |
+| FBT flag | same | written with other Manual fields |
+| Cash expense rows | `cashExpenses` store | by `cash_*` id |
+
+## Invariants
+
+1. Write bank edits into **every** History statement that contains the row — not only `currentStatementId`.
+2. Never let `applyKnownExpenseCategoriesIfMissing` overwrite `Manual` / `Learned` categories.
+3. Never let `applyKnownPurchaseGstTags` overwrite `Manual:` GST tags.
+4. Sync `accounting_transactions` cache after a successful edit.
+
+## Do not
+
+- Persist only when the user clicked Load on that PDF first
+- Re-run strong company rules on Manual rows after refresh

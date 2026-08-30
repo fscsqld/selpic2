@@ -1,0 +1,59 @@
+---
+description: Learned — all ATO income/expense lodgment lines use per-line GST-ex (user 2026-08-27)
+globs: apps/accounting-sandbox/**/ato-lodgment/**,apps/accounting-sandbox/**/ato-lodgment-rounding*,apps/accounting-sandbox/**/business-calculations*
+alwaysApply: false
+---
+
+# ATO alignment — all income & expense lodgment (learned 2026-08-27)
+
+## Product decision (user)
+
+Align **all** income and expense areas used for ATO copy (Annual/myTax, BAS, CTR) with Australian ATO + Xero-class practice — **not only Motor vehicle**.
+
+Scope includes (non-exhaustive): Gross payments, Other income, Total income, Purchases, Contractor, Motor, Depreciation (manual), All other expenses, Total expenses, Net, GST 1A/1B hints, BAS G/W labels, CTR income/expense items, individual myTax hints where bank-derived.
+
+## Two-layer model (invariant)
+
+| Layer | Basis | Rounding |
+|-------|--------|----------|
+| **A. Books / P&L / Biz Intel / History** | Cash face as today (often GST-**inclusive** bank/cash) | Cents (`roundMoney`) |
+| **B. ATO preparation fields** | **Per-line GST-exclusive** (or GST-free full amount) summed by ATO bucket | Cents while calculating; **leave cents out once** (`roundAtoWholeDollars`) only on fields that ATO forms require as whole dollars (BAS labels, CTR labels; Annual may show cents + optional whole-$ preview) |
+
+Never: FY-wide `cashTotal × (exGst/cash)` scale on category maps (`scaleMap` in `buildMyTaxAnnualFields`) — that is the gap to remove for **income and expense**.
+
+Never: round each transaction to whole dollars then sum.
+
+## Per-line GST-ex (same for income & expense)
+
+For each transaction in the lodgment period:
+
+1. Classify: income vs expense (existing P&L / lodgment filters).  
+2. Resolve GST treatment (existing `gstInfo` / `isPurchaseGstClaimable` / sales GST rules):  
+   - **INCLUDED** → exclusive = face − GST (or ×10/11 when 1/11 applies)  
+   - **EXCLUDED** → exclusive = face (GST separate if tracked)  
+   - **FREE / not claimable** → exclusive = face (full amount)  
+3. Add exclusive amount into the correct **ATO bucket** (Motor, Contractor, Purchases, Other, Gross payments, …) — category rules stay (e.g. airfare ≠ Motor).  
+4. After all lines: `roundMoney(bucketSum)` for worksheet cents.  
+5. For BAS/CTR export labels: `roundAtoWholeDollars(bucketOrMetric)`.
+
+`totalExpensesExGst` / `totalIncomeExGst` for lodgment should be **sum of the same per-line amounts** (or proven equal), not a second formula that drifts.
+
+## Target build order (when user starts implementation)
+
+1. **Shared helper** — e.g. `lineAmountGstExclusive(tx)` + `aggregateGstExclusiveByCategory(txs)` in `lib/gst/` or `lib/ato-lodgment/` (one place for income & expense).  
+2. **`computeAnnualLodgment`** — stop passing cash maps + scale into `buildMyTaxAnnualFields`; pass GST-ex category maps (or build buckets from lines). Remove incomeScale/expenseScale path.  
+3. **Bucket matchers** — keep `isMotorExpenseCategory` (airfare out), contractor, purchases; apply to **ex-GST** maps.  
+4. **BAS / CTR** — already `atoLabel`; verify inputs are same per-line ex-GST universe as Annual totals (parity tests).  
+5. **UI** — Annual entry order: show GST-ex cents; optional “ATO whole $” column using `roundAtoWholeDollars`. Label cash vs tax clearly.  
+6. **Tests** — per-line fuel motor; GST-free line not diluted by others’ 1B; section sum = total expenses; income side same; fixture SELPIC FY; no scaleMap.  
+7. **Docs / rules** — update `accounting-mytax-motor-vehicle.mdc` amounts after ship; Biz Intel cash figures unchanged.
+
+## Deliberate non-goals
+
+- Do not rewrite P&L cash display to GST-ex unless user asks (books stay cash; ATO sheet is tax basis).  
+- Do not start Track B for this.  
+- Do not hardcode $910.82 / $911.17.
+
+## Resume phrase
+
+**「ATO GST-ex 정렬」** or **「Annual per-line GST-ex」** — implement the plan above.

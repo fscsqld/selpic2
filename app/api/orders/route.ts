@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import type { OrderRecord } from '@/lib/store'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 
@@ -9,9 +9,9 @@ import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
  * List orders from Supabase (server ledger). Requires Supabase Auth session with admin JWT claims.
  */
 export async function GET(_req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireAdminPermission('orders:read')
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
   if (!isSupabaseConfigured()) {

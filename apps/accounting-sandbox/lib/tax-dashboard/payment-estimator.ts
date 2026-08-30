@@ -9,10 +9,10 @@ import { generateBASReport } from '@/lib/payg-withholding/bas-reporter'
 import { getFinancialYearQuarter } from '../tax-deadlines/tracker'
 
 export interface BusinessProfile {
-  companyName: string
-  abn: string
-  gstReportingCycle: 'Monthly' | 'Quarterly'
-  paygReportingCycle: 'Monthly' | 'Quarterly'
+  companyName?: string
+  abn?: string
+  gstReportingCycle?: 'Monthly' | 'Quarterly'
+  paygReportingCycle?: 'Monthly' | 'Quarterly'
 }
 
 export interface PaymentEstimate {

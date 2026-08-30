@@ -36,7 +36,7 @@ export class PAYGConfigManager {
   /**
    * 기본 설정 반환
    */
-  private static getDefaultConfig(): PAYGConfig {
+  static getDefaultConfig(): PAYGConfig {
     return {
       isEnabled: false,
       autoCalculate: false,

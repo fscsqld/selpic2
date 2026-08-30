@@ -1,0 +1,44 @@
+---
+description: Manual Cash Expense (director advances vs company float) — open-source consistency
+globs: apps/accounting-sandbox/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Manual Cash Expense — open-source invariants
+
+## Two funding modes
+
+| Paid by | Meaning | P&L | Director Loan | Bank cash |
+|---------|---------|-----|---------------|-----------|
+| **Director** | Personal pay for company cost (startup, airfare, …) | Expense ↑ | Company owes director ↑ | Unchanged |
+| **Company** | Petty / company float | Expense ↑ | Unchanged | Unchanged (not bank) |
+
+Later **company-bank repayment to the director** (Q4 Osko / `NON_TAXABLE_DIRECTOR_REIMBURSEMENT`) is on the statement and in Transaction History, but **must not** be a second P&L expense. Real-Time P&L = cash costs + bank operating costs; reimbursements reduce Director Loan only.
+
+Biz Intel **Company Tax Provision** uses the **same P&L period** as Real-Time P&L (Q2 airfare-only is not FY sales). ATO company tax is still lodged for the full FY — user switches the banner to FY / Full statement for YTD.
+
+Director's Loan on Business Summary: director-funded Cash Expense (incorporation/setup) is **Company owes Director**, not “Opening (cash loan)” and not “personal auto-synced”.
+
+## Choke points (must stay aligned)
+
+1. **`calculateBusinessMetrics`** — always `hydrateFundedByDirectorOnLedger` first (Biz Intel, BS, TB, BAS, Period closing).
+2. **`syncAllOpenPeriods`** — same hydrate before monthly DL chain.
+3. **`calculateCashBalance` / `resolvePeriodCashBalances`** — exclude `isManualCashExpenseLike` so `balance: 0` never becomes bank close.
+4. **`isDirectorsLoanLedgerTransaction`** — include `fundedByDirector` for History filters.
+
+## Late entry
+
+User may omit Dec costs then add Cash Expense later. Unlocked months re-sync via `transactions` → `syncAllOpenPeriods`. Locked months reject save (`assertWritableDate`).
+
+## Legacy rows
+
+Missing `paidBy` / `fundedByDirector` → infer director-funded for `source: manual` / `cash_*` (explicit Company stays company). Prefer categories `EXPENSE_*` (form default `EXPENSE_STARTUP_INCORPORATION`); `CASH_EXPENSE_*` still counts in P&L via `isBusinessExpenseCategory`.
+
+Two Add Cash Expense rows may share date + amount + merchant (e.g. Stamp Zone $2,334.20 × 2 on 29 Jan). Distinct `cash_*` ids must both appear in History / P&L. Do not fingerprint-collapse or OCR-collapse them.
+
+## Do not
+
+- Treat Cash Expense as bank statement cash.
+- Paint Settings bank DL opening from Cash Expense alone.
+- Dump auto-match Prior advances into one Period month.
+---

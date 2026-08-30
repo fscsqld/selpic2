@@ -4,6 +4,21 @@ import { useAdminActivityLog } from './adminActivityLog'
 import { useAdminSession } from './adminSession'
 import { useAdminIPControl } from './adminIPControl'
 import { useAdminPasswordPolicy } from './adminPasswordPolicy'
+import {
+  DEFAULT_ADMIN_PERMISSIONS,
+  SUPER_ADMIN_DEFAULT_PERMISSIONS,
+} from './adminPermissionCatalog'
+import { setSiteConfigCloudWritesAllowed } from './siteConfigClient'
+
+/** Drop stale Zustand persist immediately (avoids login ↔ dashboard redirect loops). */
+export function clearAdminAuthPersistStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem('admin-auth-store')
+  } catch {
+    /* ignore */
+  }
+}
 
 export interface AdminUser {
   username: string
@@ -47,52 +62,14 @@ export const useAdminAuth = create<AdminAuthState>()(
         {
           username: 'admin',
           role: 'admin',
-          permissions: [
-            'dashboard:read',
-            'products:read',
-            'products:write',
-            'content:read',
-            'content:write',
-            'users:read',
-            'analytics:read',
-            'orders:read',
-            'messages:read',
-            'community:read',
-            'images:read',
-            'images:write',
-            'invoices:read',
-            'invoices:write',
-            'system:admin',
-          ],
+          permissions: [...DEFAULT_ADMIN_PERMISSIONS],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
         },
         {
           username: 'superadmin',
           role: 'super_admin',
-          permissions: [
-            'dashboard:read',
-            'products:read',
-            'products:write',
-            'content:read',
-            'content:write',
-            'users:read',
-            'users:write',
-            'analytics:read',
-            'orders:read',
-            'orders:write',
-            'messages:read',
-            'messages:write',
-            'community:read',
-            'community:write',
-            'community:moderate',
-            'images:read',
-            'images:write',
-            'invoices:read',
-            'invoices:write',
-            'system:admin',
-            'admin:manage',
-          ],
+          permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z'
         }
@@ -165,18 +142,7 @@ export const useAdminAuth = create<AdminAuthState>()(
               adminUserData = {
                 username: 'admin',
                 role: 'admin' as const,
-                permissions: [
-                  'dashboard:read',
-                  'products:read',
-                  'products:write',
-                  'content:read',
-                  'content:write',
-                  'users:read',
-                  'analytics:read',
-                  'orders:read',
-                  'messages:read',
-                  'community:read'
-                ],
+                permissions: [...DEFAULT_ADMIN_PERMISSIONS],
                 isActive: true,
                 createdAt: '2024-01-01T00:00:00.000Z',
                 lastLogin: now
@@ -244,18 +210,7 @@ export const useAdminAuth = create<AdminAuthState>()(
               adminUserData = {
                 username: 'superadmin',
                 role: 'super_admin' as const,
-                permissions: [
-                  'dashboard:read',
-                  'products:read',
-                  'products:write',
-                  'content:read',
-                  'content:write',
-                  'users:read',
-                  'users:write',
-                  'analytics:read',
-                  'system:admin',
-                  'admin:manage'
-                ],
+                permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
                 isActive: true,
                 createdAt: '2024-01-01T00:00:00.000Z',
                 lastLogin: now
@@ -372,6 +327,9 @@ export const useAdminAuth = create<AdminAuthState>()(
       logout: () => {
         const { adminUser } = get()
 
+        // Stop CMS cloud upserts before clearing the Supabase session (avoids 401 toast on login).
+        setSiteConfigCloudWritesAllowed(false)
+
         if (typeof window !== 'undefined') {
           try {
             const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -408,6 +366,7 @@ export const useAdminAuth = create<AdminAuthState>()(
           isLoggedIn: false,
           adminUser: null,
         })
+        clearAdminAuthPersistStorage()
       },
 
       checkAuth: () => {
@@ -1114,33 +1073,14 @@ export const useAdminAuth = create<AdminAuthState>()(
             {
               username: 'admin',
               role: 'admin',
-              permissions: [
-                'dashboard:read',
-                'products:read',
-                'products:write',
-                'content:read',
-                'content:write',
-                'users:read',
-                'analytics:read'
-              ],
+              permissions: [...DEFAULT_ADMIN_PERMISSIONS],
               isActive: true,
               createdAt: '2024-01-01T00:00:00.000Z'
             },
             {
               username: 'superadmin',
               role: 'super_admin',
-              permissions: [
-                'dashboard:read',
-                'products:read',
-                'products:write',
-                'content:read',
-                'content:write',
-                'users:read',
-                'users:write',
-                'analytics:read',
-                'system:admin',
-                'admin:manage'
-              ],
+              permissions: [...SUPER_ADMIN_DEFAULT_PERMISSIONS],
               isActive: true,
               createdAt: '2024-01-01T00:00:00.000Z'
             }

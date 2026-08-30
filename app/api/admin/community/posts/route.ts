@@ -3,13 +3,16 @@ import { NextResponse } from 'next/server'
 import { buildPostsWithComments } from '@/lib/community/serialize'
 import { hasBannedCommunityContent, sanitizeCommunityText } from '@/lib/community/moderation'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedOkEnvelope,
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 
 export async function POST(req: Request) {
-  const adminUser = await requireSupabaseAdminUser()
-  if (!adminUser) {
-    return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('community:write')
+  if (!gate.ok) return adminPermissionDeniedOkEnvelope(gate)!
+  const user = gate.user
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: 'SERVICE_UNAVAILABLE' }, { status: 503 })
@@ -27,12 +30,12 @@ export async function POST(req: Request) {
   const category = sanitizeCommunityText(body.category, 120)
   const authorRaw = sanitizeCommunityText(body.author, 200)
   const metaName =
-    adminUser.user_metadata &&
-    typeof adminUser.user_metadata.username === 'string' &&
-    adminUser.user_metadata.username.trim()
-      ? adminUser.user_metadata.username.trim()
+    user.user_metadata &&
+    typeof user.user_metadata.username === 'string' &&
+    user.user_metadata.username.trim()
+      ? user.user_metadata.username.trim()
       : null
-  const authorDisplay = authorRaw || `Admin (${metaName || adminUser.email || 'staff'})`
+  const authorDisplay = authorRaw || `Admin (${metaName || user.email || 'staff'})`
 
   if (!title || !content || !category) {
     return NextResponse.json({ ok: false, error: 'VALIDATION_ERROR' }, { status: 400 })

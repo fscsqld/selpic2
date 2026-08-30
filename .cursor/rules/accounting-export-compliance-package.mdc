@@ -1,0 +1,21 @@
+# Export Compliance Package (ZIP) — P&L period
+
+## Invariant
+
+Every sheet in **Export Compliance Package (ZIP)** uses the **Biz Intel P&L banner** window (`periodStart` / `periodEnd`), same as GST Summary / Export BAS — not an automatic expand of a selected quarter to the containing FY.
+
+## Bug class (fixed)
+
+- Exporter stored banner dates in `periodStart`/`periodEnd` for BAS, but Financial Statements / Trial Balance used `financialYear` expanded from the **start month** → Q4 export labeled as full FY while rows were only the banner-filtered txs.
+- ZIP always named `Accountant_Pack_FY…` even for Q4.
+
+## Do
+
+- Resolve window via `resolveComplianceReportPeriod` (prefer banner; label exact BAS quarters as `Q# FY`).
+- Pass `gstRegistered` into metrics fallback (Settings Save).
+- Name ZIP from the report period label (e.g. `Accountant_Pack_Q4_2025-2026.zip`).
+
+## Do not
+
+- Snap any range to Q1 of the start date (same class as Export BAS).
+- Relabel a quarter pack as the full FY when the banner is Q1–Q4.

@@ -1,0 +1,31 @@
+---
+description: Accounting sandbox ESLint — ignoreDuringBuilds removed when warnings-only
+globs: apps/accounting-sandbox/**/*
+alwaysApply: false
+---
+
+# Accounting sandbox — ESLint
+
+## Status (2026-08-27)
+
+- `npm run lint` (`next lint`): **0 errors**, **0 warnings**
+- `eslint.ignoreDuringBuilds` **removed** from `next.config.js` (Next fails builds on **errors**, not warnings)
+- Local config: `apps/accounting-sandbox/.eslintrc.json` extends `next/core-web-vitals`
+
+## Invariant
+
+Do **not** re-add `ignoreDuringBuilds: true` to hide new **errors**. Fix errors before deploy.
+
+Keep lint clean when touching sandbox files (hooks deps, `no-img-element` for blob/data receipts, unescaped `'`/`"`).
+
+## Commands
+
+```bash
+cd apps/accounting-sandbox
+npm run lint
+npx tsc --noEmit -p tsconfig.json
+```
+
+## Resume
+
+User: **「ESLint 정리부터」** — further warning cleanup if requested.

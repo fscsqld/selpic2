@@ -456,7 +456,7 @@ export default function NewsletterManagementPage() {
   }
 
   return (
-    <AdminRoute requiredPermissions={['users:read']}>
+    <AdminRoute requiredPermissions={['newsletter:read']}>
       <div className="min-h-screen bg-gray-50">
         <AdminPageHeader
           title="Newsletter Management"

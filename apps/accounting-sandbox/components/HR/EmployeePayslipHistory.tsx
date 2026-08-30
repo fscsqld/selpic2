@@ -8,7 +8,6 @@ import { useState, useEffect } from 'react'
 import { FileText, Download, Calendar, DollarSign, Trash2 } from 'lucide-react'
 import { Employee } from '@/src/shared/types/employee'
 import { indexedDBStorage } from '@/lib/storage/indexed-db'
-import { COMPANY_LEGAL } from '@/lib/companyLegal'
 import { formatDateAustralian } from '@/lib/utils/date-format'
 import { formatCurrency } from '@/lib/utils/currency-format'
 import { generatePayslipPDF, preparePayslipPDFData } from '@/src/features/payroll/payslip-generator'
@@ -43,14 +42,15 @@ export function EmployeePayslipHistory({ employee }: EmployeePayslipHistoryProps
     acn?: string
     address?: string
   }>({
-    name: COMPANY_LEGAL.companyName,
-    abn: COMPANY_LEGAL.abn,
-    acn: COMPANY_LEGAL.acn,
+    name: 'SELPIC PTY LTD',
+    abn: '79 694 194 011',
+    acn: '694 194 011',
   })
 
   useEffect(() => {
     loadPayslipHistory()
     loadCompanyInfo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when employee.id changes
   }, [employee.id])
 
   const loadCompanyInfo = async () => {
@@ -58,9 +58,9 @@ export function EmployeePayslipHistory({ employee }: EmployeePayslipHistoryProps
       const profile = await indexedDBStorage.getBusinessProfile()
       if (profile) {
         setCompanyInfo({
-          name: profile.companyName || COMPANY_LEGAL.companyName,
-          abn: profile.abn || COMPANY_LEGAL.abn,
-          acn: profile.acn || COMPANY_LEGAL.acn,
+          name: profile.companyName || 'SELPIC PTY LTD',
+          abn: profile.abn || '79 694 194 011',
+          acn: profile.acn || '694 194 011',
           address: profile.address,
         })
       }

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminPermission,
+} from '@/lib/supabase/requireAdminPermission'
 import { runEtsyReceiptSync } from '@/lib/integrations/etsy/runEtsyReceiptSync'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 
@@ -10,10 +13,9 @@ export const runtime = 'nodejs'
  * Default: paid + not yet shipped ("open" for fulfillment). Set `openOnly: false` to include shipped receipts.
  */
 export async function POST(request: Request) {
-  const admin = await requireSupabaseAdminUser()
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdminPermission('integrations:write')
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
 
   let sinceDays = 90
   let openOnly = true

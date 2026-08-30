@@ -1,0 +1,31 @@
+---
+description: When adding features, learn related edge cases and future variables so open-source / multi-user regressions are prevented
+alwaysApply: true
+---
+
+# Future edge-case learning (all features)
+
+When implementing or fixing a feature, do **not** stop at the reported case. Learn adjacent variables and ship preventive guards in the same change when cheap and scoped.
+
+## Mandatory before coding
+
+1. **Blast radius** — Which inputs, periods, locales, account types, empty states, and third-party parses can skew the same totals/UI?
+2. **One-sided data** — Anything that updates one report/store but not another (cash vs P&L, banner vs tab, client vs server)?
+3. **Future users** — Assume other merchants, banks, GST cycles, and statement formats — not only the current fixture.
+4. **Shared helpers** — Prefer one clearing/normalize helper over copy-paste fixes per screen.
+
+## Do
+
+- Audit sister paths (exports, lodgment, history, uploads) for the same invariant.
+- Add a focused unit test for the failure mode (and one nearby variant).
+- Keep fixes minimal; no drive-by refactors.
+
+## Do not
+
+- Fix only the user’s sample and leave the generic class of bug open.
+- Invent large frameworks; extend existing patterns (e.g. statement-cash clearing).
+- Violate homepage protection or accounting-sandbox independence.
+
+## Accounting hint
+
+Non-P&L cash in statement closing balance needs matching BS/TB clearing or loan fold — see `apps/accounting-sandbox/lib/utils/statement-cash-clearing.ts`.
