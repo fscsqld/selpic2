@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react'
 import Header from '@/components/Header'
+import FundraisingAcquisitionCapture from '@/components/fundraising/FundraisingAcquisitionCapture'
 import {
   CheckCircle,
   ChevronDown,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/fundraising/types'
 import { FUNDRAISING_COPY } from '@/lib/fundraising/copy'
 import { SAMPLE_STICKER_PRINT_NAME_MAX, normalizeSampleKitRequest } from '@/lib/fundraising/sampleKitRequest'
+import { readAcquisitionFromSession } from '@/lib/fundraising/acquisition'
 
 const ORG_OPTIONS = FUNDRAISING_ORG_TYPE_OPTIONS.map(
   (value) => [value, FUNDRAISING_ORG_TYPE_LABELS[value]] as const
@@ -111,6 +113,7 @@ export default function FundraisingLandingPage() {
       if (!sampleKit.ok) {
         throw new Error(sampleKit.error)
       }
+      const acquisition = readAcquisitionFromSession()
       const res = await fetch('/api/fundraising/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,6 +129,7 @@ export default function FundraisingLandingPage() {
           postcode: form.postcode.trim(),
           sampleKitRequested: form.sampleKitRequested,
           sampleKitPrintName: form.sampleKitRequested ? form.sampleKitPrintName.trim() : '',
+          ...(acquisition ? { acquisition } : {}),
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -186,6 +190,7 @@ export default function FundraisingLandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-amber-50">
       <Header />
+      <FundraisingAcquisitionCapture />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
         <section className="text-center mb-14">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-semibold mb-4">

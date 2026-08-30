@@ -3,6 +3,35 @@
  * Does not modify promo / checkout / payment engines.
  */
 
+import type { FundraisingPartnerAcquisition } from '@/lib/fundraising/acquisition'
+
+export type { FundraisingPartnerAcquisition } from '@/lib/fundraising/acquisition'
+
+/** Outreach target lifecycle for the Fundraising AI Agent (v1). */
+export type FundraisingOutreachTargetStatus =
+  | 'PENDING'
+  | 'CONTACTED'
+  | 'CONVERTED'
+  | 'FAILED'
+  | 'OPTED_OUT'
+
+export interface FundraisingOutreachTarget {
+  id: string
+  organizationName: string
+  contactEmail?: string
+  contactName?: string
+  orgType?: string
+  state?: string
+  status: FundraisingOutreachTargetStatus
+  lastSentAt?: string
+  lastError?: string
+  convertedPartnerId?: string
+  /** Extra meta (template id, notes, scrape source later — not used in A1). */
+  payload?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 export type FundraisingPartnerStatus =
   | 'pending'
   | 'active'
@@ -155,6 +184,11 @@ export interface FundraisingPartner {
   retentionUntil?: string
   /** Years applied when retentionUntil was computed (audit). */
   retentionYearsApplied?: number
+  /**
+   * Optional acquisition attribution (AI agent / UTM).
+   * Omit for organic apply — must stay optional forever.
+   */
+  acquisition?: FundraisingPartnerAcquisition
   createdAt: string
   updatedAt: string
 }

@@ -1,9 +1,9 @@
 # Fundraising session handoff
 
-**Updated:** 2026-08-07 (end of day)  
+**Updated:** 2026-08-19  
 **Branch:** typically `cursor/fundraising-b2b-partner-program` (confirm with `git branch`)  
 **Dev server:** often `http://localhost:3005` (`npm run dev` at repo root)  
-**Commit / push / deploy:** still **hold** until explicit user ask + QA
+**Commit / push / deploy:** only when the user asks. Accounting sandbox stays local until they request deploy.
 
 Language: **UI/copy = English**; chat with user may be Korean.
 
@@ -87,6 +87,7 @@ Language: **UI/copy = English**; chat with user may be Korean.
 | `docs/fundraising-change-requests.sql` | `fundraising_change_requests` |
 | `docs/fundraising-change-request-storage-mime.sql` | Allow PDF/Word on `selpic-contents` |
 | `docs/fundraising-grant-account-events.sql` | Grant-account audit events |
+| `docs/fundraising-outreach-targets.sql` | AI Agent outreach targets (A1; apply before prod CONVERTED) |
 
 ---
 
@@ -129,12 +130,15 @@ From prior handoff (2026-08-04 and related rules):
 
 ## Next work (priority order)
 
-### Manual QA (do before commit)
+### Manual QA
 
-1. E2E: apply → admin approve/activate → Lookup OTP → change request → D22 notice → Documents download → reply upload → admin Save → Mark applied → confirm D16 only on Save (bank change), not on Mark applied
-2. Multi-partner: two orgs with open CRs → inbox jumps correctly; actions only affect selected partner
-3. Grant history filter toggles with Clear · new partner
-4. Regression: payout Mark Paid still blocked without Official Grant Account
+**Locked partner cycle — passed (ops, 2026-08).** SELPIC admin ran apply → Save welcome pack → Lookup OTP → D22 change request → bank Save → Mark Paid and it processed normally. Do **not** re-run that path unless a later change touches it and the user asks. See `.cursor/rules/fundraising-ops-e2e-passed.mdc`.
+
+Optional later (not blockers):
+
+1. Multi-partner: two orgs with open CRs → inbox jumps correctly; actions only affect selected partner
+2. Grant history filter toggles with Clear · new partner
+3. After sample-kit deploy: live `/fundraising` shows the optional personalised-sample checkbox (default off)
 
 ### Product / UX backlog
 
@@ -142,6 +146,10 @@ From prior handoff (2026-08-04 and related rules):
 2. Optional: server-side pagination for CRs / grant events if volume grows
 3. Phase 2 bank: recognised BSB list block on Save (noted in controlled-update rule)
 4. Dispute archive: browse closed CRs beyond recent slice / API mix
+
+### Unified AI Agent (planning)
+
+See **`docs/selpic-unified-ai-agent-plan.md`**. Fundraising outreach v1 remains the first slice (`.cursor/rules/fundraising-ai-sales-agent.mdc`). Do not implement until the user says **「개발 시작하자」**.
 
 ### Release
 
