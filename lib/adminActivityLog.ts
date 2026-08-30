@@ -32,6 +32,7 @@ export type ActivityLogAction =
   | 'fundraising_document_sent'
   | 'fundraising_maintenance_run'
   | 'fundraising_agent_target_saved'
+  | 'fundraising_agent_target_deleted'
   | 'fundraising_agent_outreach_sent'
 
 export interface ActivityLog {
@@ -97,6 +98,7 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'fundraising_document_sent',
   'fundraising_maintenance_run',
   'fundraising_agent_target_saved',
+  'fundraising_agent_target_deleted',
   'fundraising_agent_outreach_sent',
 ] as const satisfies ReadonlyArray<ActivityLogAction>
 

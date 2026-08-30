@@ -6,7 +6,7 @@ import { FundraisingAdminShell } from '@/components/admin/FundraisingAdminNav'
 import { FUNDRAISING_ORG_TYPE_LABELS, FUNDRAISING_ORG_TYPE_OPTIONS } from '@/lib/fundraising/types'
 import type { FundraisingOutreachTarget, FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { logAdminActivity } from '@/lib/logAdminActivity'
-import { Bot, Loader2, Mail, Plus, RefreshCw } from 'lucide-react'
+import { Bot, Loader2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -184,6 +184,48 @@ function AgentContent() {
     }
   }
 
+  const onDelete = async (t: FundraisingOutreachTarget) => {
+    if (
+      !window.confirm(
+        `Delete outreach target “${t.organizationName}” (${t.id})? This cannot be undone.`
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch(
+        `/api/admin/fundraising/agent/targets?id=${encodeURIComponent(t.id)}`,
+        { method: 'DELETE', credentials: 'include' }
+      )
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Delete failed')
+      logAdminActivity({
+        action: 'fundraising_agent_target_deleted',
+        target: t.id,
+        field: 'outreach_target',
+        oldValue: {
+          organizationName: t.organizationName,
+          contactEmail: t.contactEmail,
+          status: t.status,
+        },
+        description: `Fundraising agent target deleted · ${t.organizationName} (${t.id})`,
+      })
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(t.id)
+        return next
+      })
+      setMessage(`Deleted “${t.organizationName}”.`)
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <FundraisingAdminShell
       title="Fundraising Agent"
@@ -336,18 +378,19 @@ function AgentContent() {
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Last sent</th>
               <th className="px-3 py-2">Id</th>
+              <th className="px-3 py-2 w-24">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
                   Loading…
                 </td>
               </tr>
             ) : targets.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
                   No outreach targets yet. Add one above.
                 </td>
               </tr>
@@ -389,6 +432,18 @@ function AgentContent() {
                       {t.lastSentAt ? new Date(t.lastSentAt).toLocaleString() : '—'}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-gray-500">{t.id}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onDelete(t)}
+                        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        title="Delete target"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 )
               })

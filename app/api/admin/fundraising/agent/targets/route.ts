@@ -5,6 +5,7 @@ import {
   getFundraisingOutreachTargetById,
   listFundraisingOutreachTargetsFromDb,
   upsertFundraisingOutreachTarget,
+  deleteFundraisingOutreachTarget,
 } from '@/lib/fundraising/persistence'
 import { newFundraisingId } from '@/lib/fundraising/ids'
 import type {
@@ -118,6 +119,44 @@ export async function POST(req: Request) {
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Failed to save target' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(req: Request) {
+  const gate = await requireAdminPermission('fundraising:write')
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 })
+  }
+
+  try {
+    const url = new URL(req.url)
+    const id = String(url.searchParams.get('id') || '').trim()
+    if (!id) {
+      return NextResponse.json({ error: 'Target id is required.' }, { status: 400 })
+    }
+
+    const existing = await getFundraisingOutreachTargetById(id)
+    if (!existing) {
+      return NextResponse.json({ error: 'Target not found.' }, { status: 404 })
+    }
+
+    const deleted = await deleteFundraisingOutreachTarget(id)
+    if (!deleted.ok) {
+      return NextResponse.json({ error: deleted.error }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      id,
+      organizationName: existing.organizationName,
+    })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to delete target' },
       { status: 500 }
     )
   }
