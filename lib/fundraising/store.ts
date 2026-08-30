@@ -124,7 +124,12 @@ export const useFundraisingStore = create<FundraisingStore>()(
               retentionArchiveClass: input.retentionArchiveClass,
               retentionUntil: input.retentionUntil,
               retentionYearsApplied: input.retentionYearsApplied,
-              id: input.id || newPartnerId(input.organizationName || 'ORG'),
+              id:
+                input.id ||
+                newPartnerId(
+                  input.organizationName || 'ORG',
+                  get().partners.map((p) => p.id)
+                ),
               createdAt: input.createdAt || now,
               updatedAt: now,
             }
