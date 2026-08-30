@@ -1,0 +1,27 @@
+---
+description: Fundraising partner-cycle E2E already passed by SELPIC admin — do not re-run or list as missing
+globs: docs/fundraising-session-handoff.md,app/fundraising/**/*.tsx,app/admin/fundraising/**/*.tsx,lib/fundraising/**
+alwaysApply: false
+---
+
+# Fundraising ops E2E — already passed
+
+SELPIC admin (ops) already ran the locked partner cycle and it processed normally:
+
+Apply → Approve… → Save welcome pack (D2→D3→D4) → Lookup OTP → change request → D22 notice → Documents download / reply → admin Save (D16/D17 if bank changed) → Mark applied → Mark Paid (blocked without Official Grant Account, then paid with bank on file).
+
+## Do not
+
+- List this as “code exists, no run recorded” or “Go-live QA not closed”
+- Re-run the full path in chat (creates extra partners and sends real D1/D2/OTP/D22/D9/D10 mail)
+- Treat a later session without the transcript as proof it was never done
+
+## Re-run only if
+
+A later change **touches** apply persist, welcome pack order, Lookup OTP, change-request/D22, admin bank Save, or Mark Paid/D9/D10 — and the user asks to verify that change.
+
+The 19 Aug 2026 personalised-sample apply checkbox is **opt-in, default off**. It does **not** invalidate the passed cycle. Do not re-run E2E for that alone.
+
+## Related
+
+Partner Lookup still cannot PUT bank (`405`). Sample after enrolment is email-to-SELPIC until a Lookup request is built.

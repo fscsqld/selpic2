@@ -1,0 +1,79 @@
+---
+description: AI fundraising sales agent — final architecture, steps, standby until "개발 시작하자"
+globs: app/admin/fundraising/**/*,app/api/admin/agent/**/*,app/api/fundraising/apply/**/*,app/fundraising/**/*,lib/fundraising/**/*,docs/*fundraising*
+alwaysApply: false
+---
+
+# Fundraising AI Sales Agent — FINAL PLAN (standby)
+
+**Status:** **A1 in progress** on branch `feature/ai-fundraising-agent`. Broader vision (multi-sector unified agent) is in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md). Implement steps in order; after A1 recommend commit and wait unless user says continue.
+
+## Goal
+
+AU kindergartens / schools / daycares → personalised B2B email → link `?ref=ai_agent&target_id=xxx` → `/fundraising` apply → partner created + `payload.acquisition` saved + matching `outreach_targets` → **`CONVERTED`**.
+
+## Value prop (copy consistency)
+
+- Org: zero cost, zero forced sales quota  
+- Families: ~5% community discount  
+- Org: ~15% Fundraising Cashback Grant (AU FY quarterly)  
+- SELPIC: print, ship, CS  
+
+## Data flow
+
+**v1 (A1–A3):** Admin registers / imports `outreach_targets` → Resend send API (A3) → landing UTM/`ref`/`target_id` capture → Apply API (`payload.acquisition` + target `CONVERTED`).
+
+**Not v1:** Auto-scraping AU school/kindergarten directories from the open web + fully unsupervised daily mass mail. That is a later Wave (licensed lists + cron quota + privacy/opt-out). Until then, targets are **manual or semi-manual**.
+
+## Strict tech rules
+
+1. **No ORM** — Supabase JS + `lib/fundraising/persistence.ts` JSONB `payload` pattern.  
+2. **Email only** — `sendEmailViaResendServer` (`lib/email/resendServer.ts`). Never Nodemailer/SendGrid.  
+3. **Admin UI** — `app/admin/fundraising/*` + Zustand `lib/fundraising/store.ts`; extend `FundraisingAdminNav`.  
+4. **`useSearchParams`** — wrap in `<Suspense>`.  
+5. **Backward compatible** — all acquisition/UTM fields **optional (`?`)**. Organic apply (no UTM) must keep working 100%.
+
+## Git & deploy
+
+- Branch: **`feature/ai-fundraising-agent`** (protect live site).  
+- Deploy once when all steps done.  
+- After each Step: recommend a local git commit message (do not commit unless user asks).
+
+## Build order (3 Steps)
+
+| Step | Scope |
+|------|--------|
+| **1** | Supabase `outreach_targets` schema + landing capture + Apply API `payload.acquisition` (+ optional CONVERTED update when `target_id` present) |
+| **2** | Admin `/admin/fundraising/agent` — monitor / manage targets |
+| **3** | `/api/admin/agent/send` — Resend B2B outreach mail |
+
+## Fit with current fundraising (verified)
+
+Already exists and must stay intact:
+
+- Public apply: `app/fundraising/page.tsx` → `POST /api/fundraising/apply`  
+- Persist: `fundraising_partners` / `fundraising_documents` via persistence  
+- Confirm email: Resend + D1 HTML  
+- Admin: partners, settings, report, payout, documents  
+- Lookup OTP portal, settlements, D-docs, sample kit rules  
+
+**Gaps this plan fills:** no `outreach_targets` table yet; no acquisition/UTM on partner payload; no agent admin or send API.
+
+## Extra items to include when building (learned add-ons)
+
+Not blockers for Step 1, but plan for them so the agent sector stays consistent:
+
+1. **Admin nav** — add “Agent” link in `components/admin/FundraisingAdminNav.tsx`.  
+2. **Idempotency** — same `target_id` re-apply: update acquisition, don’t break existing pending partner; avoid duplicate spam converts.  
+3. **Auth on send API** — reuse admin session / same guards as `app/api/admin/fundraising/*`.  
+4. **Resend rate limits / batching** — Step 3: queue or throttle; log send status on `outreach_targets` (`PENDING` → `CONTACTED` → `CONVERTED` / `FAILED`).  
+5. **Privacy / unsubscribe** — AU email outreach: store opt-out if added; don’t email terminated partners.  
+6. **Do not** change checkout/promo engines or accounting-sandbox; don’t auto-dispatch sample kits.  
+7. **Activity log** — prefer `logAdminActivity` for agent sends / target status changes (super-admin audit).  
+8. **SQL** — add `docs/fundraising-outreach-targets.sql` (and/or migration) alongside partners schema docs.
+
+## On 「개발 시작하자」
+
+1. Create/use branch `feature/ai-fundraising-agent` if missing.  
+2. Implement **Step 1** only first (schema + landing Suspense capture + apply acquisition + optional CONVERTED).  
+3. Recommend commit message; wait for next step unless user says continue.

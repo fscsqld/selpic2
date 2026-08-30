@@ -5,6 +5,8 @@ import type {
   FundraisingChangeRequest,
   FundraisingDocument,
   FundraisingGrantAccountEvent,
+  FundraisingOutreachTarget,
+  FundraisingOutreachTargetStatus,
   FundraisingPartner,
   FundraisingSettlement,
   FundraisingSettings,
@@ -224,6 +226,98 @@ export async function getFundraisingChangeRequestById(
     .maybeSingle()
   if (error || !data?.payload) return null
   return data.payload as FundraisingChangeRequest
+}
+
+function mapOutreachTargetRow(row: {
+  id: string
+  organization_name?: string | null
+  contact_email?: string | null
+  contact_name?: string | null
+  org_type?: string | null
+  state?: string | null
+  status?: string | null
+  last_sent_at?: string | null
+  last_error?: string | null
+  converted_partner_id?: string | null
+  payload?: Record<string, unknown> | null
+  created_at?: string | null
+  updated_at?: string | null
+}): FundraisingOutreachTarget {
+  return {
+    id: row.id,
+    organizationName: String(row.organization_name || ''),
+    contactEmail: row.contact_email || undefined,
+    contactName: row.contact_name || undefined,
+    orgType: row.org_type || undefined,
+    state: row.state || undefined,
+    status: (row.status || 'PENDING') as FundraisingOutreachTargetStatus,
+    lastSentAt: row.last_sent_at || undefined,
+    lastError: row.last_error || undefined,
+    convertedPartnerId: row.converted_partner_id || undefined,
+    payload: (row.payload as Record<string, unknown>) || {},
+    createdAt: row.created_at || nowIso(),
+    updatedAt: row.updated_at || nowIso(),
+  }
+}
+
+export async function getFundraisingOutreachTargetById(
+  id: string
+): Promise<FundraisingOutreachTarget | null> {
+  if (!isSupabaseConfigured() || !id) return null
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
+    .from('fundraising_outreach_targets')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error || !data) return null
+  return mapOutreachTargetRow(data as Parameters<typeof mapOutreachTargetRow>[0])
+}
+
+/**
+ * Mark an outreach target CONVERTED when apply succeeds with target_id.
+ * Idempotent: already-CONVERTED rows keep status; partner id fills only if empty.
+ * Missing target / Supabase off → soft no-op (apply must still succeed).
+ */
+export async function markFundraisingOutreachTargetConverted(opts: {
+  targetId: string
+  partnerId: string
+}): Promise<{ ok: true; skipped?: boolean } | { ok: false; error: string }> {
+  const targetId = String(opts.targetId || '').trim()
+  const partnerId = String(opts.partnerId || '').trim()
+  if (!targetId || !partnerId) return { ok: true, skipped: true }
+  if (!isSupabaseConfigured()) return { ok: true, skipped: true }
+
+  try {
+    const admin = getSupabaseAdmin()
+    const { data: existing, error: readErr } = await admin
+      .from('fundraising_outreach_targets')
+      .select('id,status,converted_partner_id')
+      .eq('id', targetId)
+      .maybeSingle()
+
+    if (readErr) return { ok: false, error: readErr.message }
+    if (!existing) return { ok: true, skipped: true }
+
+    const convertedPartnerId =
+      String(existing.converted_partner_id || '').trim() || partnerId
+    const updatedAt = nowIso()
+
+    const { error: writeErr } = await admin
+      .from('fundraising_outreach_targets')
+      .update({
+        status: 'CONVERTED',
+        converted_partner_id: convertedPartnerId,
+        last_error: null,
+        updated_at: updatedAt,
+      })
+      .eq('id', targetId)
+
+    if (writeErr) return { ok: false, error: writeErr.message }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'mark converted failed' }
+  }
 }
 
 export { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'

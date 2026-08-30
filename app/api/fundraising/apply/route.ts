@@ -3,11 +3,13 @@ import { NextResponse } from 'next/server'
 import { buildFundraisingDocumentHtml } from '@/lib/fundraising/documents'
 import {
   loadFundraisingSettingsFromDb,
+  markFundraisingOutreachTargetConverted,
   newFundraisingId,
   newPartnerId,
   upsertFundraisingDocumentRow,
   upsertFundraisingPartnerRow,
 } from '@/lib/fundraising/persistence'
+import { normalizeFundraisingAcquisition } from '@/lib/fundraising/acquisition'
 import {
   FUNDRAISING_DOCUMENT_LABELS,
   FUNDRAISING_ORG_TYPE_LABELS,
@@ -34,6 +36,15 @@ type ApplyBody = {
   postcode?: string
   sampleKitRequested?: boolean
   sampleKitPrintName?: string
+  /** Optional AI agent / UTM attribution — omit for organic apply */
+  acquisition?: {
+    ref?: string
+    targetId?: string
+    utmSource?: string
+    utmMedium?: string
+    utmCampaign?: string
+    capturedAt?: string
+  }
 }
 
 function formatPostal(b: ApplyBody): string {
@@ -62,6 +73,8 @@ export async function POST(req: Request) {
     if (!sampleKit.ok) {
       return NextResponse.json({ ok: false, error: sampleKit.error }, { status: 400 })
     }
+
+    const acquisition = normalizeFundraisingAcquisition(body?.acquisition)
 
     if (!organizationName || !contactName || !contactEmail || !phone) {
       return NextResponse.json({ ok: false, error: 'Please complete all required fields.' }, { status: 400 })
@@ -106,6 +119,7 @@ export async function POST(req: Request) {
       sampleKitStatus: sampleKit.sampleKitStatus,
       linkedPromoCode: '',
       status: 'pending',
+      ...(acquisition ? { acquisition } : {}),
       createdAt: now,
       updatedAt: now,
     }
@@ -147,6 +161,16 @@ export async function POST(req: Request) {
       const d = await upsertFundraisingDocumentRow(document)
       if (!p.ok) dbError = p.error
       else if (!d.ok) dbError = d.error
+      else if (acquisition?.targetId) {
+        // Soft: missing target or table not migrated must not fail the application
+        const conv = await markFundraisingOutreachTargetConverted({
+          targetId: acquisition.targetId,
+          partnerId,
+        })
+        if (!conv.ok) {
+          console.warn('[fundraising/apply] outreach convert soft-fail:', conv.error)
+        }
+      }
     } else {
       dbError = 'Supabase not configured — partner saved for email only; run fundraising SQL migration for persistence.'
     }
