@@ -67,10 +67,11 @@ Not blockers for Step 1, but plan for them so the agent sector stays consistent:
 2. **Idempotency** — same `target_id` re-apply: update acquisition, don’t break existing pending partner; avoid duplicate spam converts.  
 3. **Auth on send API** — reuse admin session / same guards as `app/api/admin/fundraising/*`.  
 4. **Resend rate limits / batching** — Step 3: queue or throttle; log send status on `outreach_targets` (`PENDING` → `CONTACTED` → `CONVERTED` / `FAILED`).  
-5. **Privacy / unsubscribe** — AU email outreach: store opt-out if added; don’t email terminated partners.  
-6. **Do not** change checkout/promo engines or accounting-sandbox; don’t auto-dispatch sample kits.  
-7. **Activity log** — prefer `logAdminActivity` for agent sends / target status changes (super-admin audit).  
-8. **SQL** — add `docs/fundraising-outreach-targets.sql` (and/or migration) alongside partners schema docs.
+5. **Privacy / unsubscribe** — AU email outreach: unique unsubscribe link + `OPTED_OUT`; reply “unsubscribe” webhook optional. Don’t email opted-out or terminated partners.  
+6. **Outreach address line** — cold outreach footer uses **locality only** (no street number) via `fundraisingOutreachSenderLocality()` so mail clients are less likely to open Maps/Street View of the residential facade. Full `COMPANY_CONTACT.address` stays for invoices/legal. **Restore street number in outreach only when the user asks** (e.g. after Google listing photos are updated).  
+7. **Do not** change checkout/promo engines or accounting-sandbox; don’t auto-dispatch sample kits.  
+8. **Activity log** — prefer `logAdminActivity` for agent sends / target status changes (super-admin audit).  
+9. **SQL** — add `docs/fundraising-outreach-targets.sql` (and/or migration) alongside partners schema docs.
 
 ## On 「개발 시작하자」
 

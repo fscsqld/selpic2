@@ -236,9 +236,10 @@ function AgentContent() {
         <div className="flex items-start gap-2">
           <Bot className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            Targets are added here (or later licensed imports). Emails include an apply link with{' '}
-            <code className="text-xs bg-white/80 px-1 rounded">ref=ai_agent&amp;target_id=…</code>. Converted
-            applications update status automatically. Requires <strong>fundraising:write</strong> to save or send.
+            Targets are added here (or later licensed imports). Emails use a Spam Act–oriented template with apply
+            tracking (<code className="text-xs bg-white/80 px-1 rounded">ref=ai_agent&amp;target_id=…</code>) and a
+            unique unsubscribe link. Opt-outs become <strong>OPTED_OUT</strong> and are never re-sent. Requires{' '}
+            <strong>fundraising:write</strong> to save or send.
           </div>
         </div>
       </div>

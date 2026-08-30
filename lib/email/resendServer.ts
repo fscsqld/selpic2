@@ -18,9 +18,13 @@ export async function sendEmailViaResendServer(params: {
   to: string | string[]
   subject: string
   html: string
+  /** Plain-text alternative (recommended for outreach / Spam Act–friendly multipart). */
+  text?: string
   replyTo?: string
   skipBranding?: boolean
   skipTracking?: boolean
+  /** Extra RFC headers (e.g. List-Unsubscribe). */
+  headers?: Record<string, string>
   attachments?: ResendAttachmentInput[]
 }): Promise<{ ok: true } | { ok: false; logMessage: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
@@ -52,6 +56,8 @@ export async function sendEmailViaResendServer(params: {
     to: recipients,
     subject: params.subject.slice(0, 500),
     html,
+    ...(params.text ? { text: params.text } : {}),
+    ...(params.headers && Object.keys(params.headers).length > 0 ? { headers: params.headers } : {}),
     ...(params.attachments && params.attachments.length > 0
       ? {
           attachments: params.attachments.map((a) => ({

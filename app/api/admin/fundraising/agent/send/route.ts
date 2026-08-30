@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server'
 
 import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import {
+  ensureFundraisingOutreachUnsubscribeToken,
   getFundraisingOutreachTargetById,
   upsertFundraisingOutreachTarget,
 } from '@/lib/fundraising/persistence'
 import {
   buildFundraisingOutreachApplyUrl,
   buildFundraisingOutreachEmail,
+  buildFundraisingOutreachUnsubscribeApiUrl,
+  buildFundraisingOutreachUnsubscribeUrl,
 } from '@/lib/fundraising/outreachEmail'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
     }> = []
 
     for (const id of ids) {
-      const target = await getFundraisingOutreachTargetById(id)
+      let target = await getFundraisingOutreachTargetById(id)
       if (!target) {
         results.push({ id, ok: false, reason: 'Target not found' })
         continue
@@ -84,13 +87,33 @@ export async function POST(req: Request) {
         continue
       }
 
+      const ensured = await ensureFundraisingOutreachUnsubscribeToken(target)
+      if (!ensured.ok) {
+        results.push({ id, ok: false, reason: ensured.error, status: target.status })
+        continue
+      }
+      target = ensured.target
+
       const applyUrl = buildFundraisingOutreachApplyUrl(target.id)
-      const { subject, html } = buildFundraisingOutreachEmail({ target, applyUrl })
+      const unsubscribeUrl = buildFundraisingOutreachUnsubscribeUrl(ensured.token)
+      const listUnsubscribeUrl = buildFundraisingOutreachUnsubscribeApiUrl(ensured.token)
+      const rendered = buildFundraisingOutreachEmail({
+        target,
+        applyUrl,
+        unsubscribeUrl,
+        listUnsubscribeUrl,
+      })
+
+      // Outreach: skip transactional confidentiality footer; template includes Spam Act identity + unsub.
       const sent = await sendEmailViaResendServer({
         to: email,
-        subject,
-        html,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        headers: rendered.headers,
         replyTo: process.env.RESEND_FROM_EMAIL || 'info@selpic.com.au',
+        skipBranding: true,
+        skipTracking: true,
       })
 
       const now = new Date().toISOString()
@@ -112,6 +135,10 @@ export async function POST(req: Request) {
         lastSentAt: now,
         lastError: undefined,
         updatedAt: now,
+        payload: {
+          ...(target.payload || {}),
+          lastTemplateSubject: rendered.subject,
+        },
       }
       await upsertFundraisingOutreachTarget(contacted)
       results.push({ id, ok: true, status: 'CONTACTED' })
