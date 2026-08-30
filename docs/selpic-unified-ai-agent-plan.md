@@ -1,7 +1,7 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-08-30 (vision expansion: CS draft bot, performance coach, SELPIC N / community content)  
-**Status:** Planning only — **do not implement** until the user says **「개발 시작하자」** (or equivalent).  
+**Updated:** 2026-08-30 (Wave 2 Agent Core hub in progress on `feature/ai-fundraising-agent`)  
+**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub (`/admin/agent`) under implementation — commit/deploy only when the user asks.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
@@ -265,7 +265,7 @@ v1 implements **only** the fundraising sector behaviours (even if files live und
 | **B1** | `/admin/agent` hub page + dashboard Quick Action (“AI Agent”) gated by new `agent:read` **or** temporarily `fundraising:read` until multi-sector |
 | **B2** | Shared types: `agent_runs`, drafts, sector id; SQL docs under `docs/` |
 | **B3** | Move fundraising send/monitor behind sector adapter without breaking A-routes (redirects OK) |
-| **B4** | Catalog: add `agent:read` / `agent:run` when second sector is real — sync `permissionUtils`, presets, AdminRoute |
+| **B4** | **MANDATORY before 2nd live sector:** add `agent:read` / `agent:run` to catalog + `permissionUtils` + hub/API/dashboard gates. Rule: `.cursor/rules/selpic-agent-permissions.mdc`. Code flag: `AGENT_HUB_PERMISSION_NOTE` in `lib/agent/sectors.ts`. Explain to user if they did not ask, then implement in the same PR. |
 
 ### Phase C — More sectors (human-approve by default)
 
@@ -292,11 +292,12 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 #### Wave 2 — Agent Core hub
 
 - `/admin/agent` + dashboard Quick Action.  
-- Shared **Drafts** queue (email / reply / community post / insight card).  
-- Sector registry stub: `fundraising` live; others `coming_soon`.
+- Fundraising stats + sector cards (`lib/agent/sectors.ts`).  
+- **Permission:** hub temporarily `fundraising:read`. **Before Wave 3 marks inbound (or any other sector) live → execute Phase B4 (`agent:read`)** — enforced by `.cursor/rules/selpic-agent-permissions.mdc`.
 
 #### Wave 3 — Customer Care draft bot (Messages + Bespoke)
 
+- **Prerequisite:** Phase B4 `agent:read` if this is the second live sector (it will be).  
 - On new inbound: classify intent (order status, product, fundraising partner, shipping).  
 - Draft first-line English reply grounded in FAQs / order facts the API already exposes to that admin.  
 - Admin: **Edit → Send** (or Reject). Escalation flag when confidence low / payment dispute.  

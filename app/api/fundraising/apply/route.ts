@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { buildFundraisingDocumentHtml } from '@/lib/fundraising/documents'
 import {
   loadFundraisingSettingsFromDb,
+  listFundraisingPartnersFromDb,
   markFundraisingOutreachTargetConverted,
   newFundraisingId,
   newPartnerId,
@@ -94,7 +95,11 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString()
     const settings = await loadFundraisingSettingsFromDb()
-    const partnerId = newPartnerId(organizationName)
+    const existingPartners = await listFundraisingPartnersFromDb().catch(() => [])
+    const partnerId = newPartnerId(
+      organizationName,
+      existingPartners.map((p) => p.id)
+    )
     const postalAddress = formatPostal({
       streetAddress,
       suburb,

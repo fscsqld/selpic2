@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Shield,
   HeartHandshake,
+  Bot,
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
@@ -537,6 +538,16 @@ export default function AdminDashboard() {
       href: '/admin/fundraising/partners',
       color: 'bg-emerald-600',
       badge: inboundCount('fundraising') > 0 ? inboundCount('fundraising') : undefined,
+      requiredPermission: 'fundraising:read',
+    },
+    {
+      title: 'AI Agent',
+      description:
+        'Governed agent hub — Fundraising outreach is live; more sectors (CS drafts, performance, community) coming later',
+      icon: Bot,
+      href: '/admin/agent',
+      color: 'bg-indigo-600',
+      /** Temporary: fundraising:read. Switch to agent:read in Phase B4 before 2nd live sector. */
       requiredPermission: 'fundraising:read',
     },
     {
