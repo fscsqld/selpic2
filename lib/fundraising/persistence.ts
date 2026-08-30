@@ -13,6 +13,7 @@ import type {
 } from '@/lib/fundraising/types'
 import { DEFAULT_FUNDRAISING_SETTINGS, FUNDRAISING_CHANGE_REQUEST_OPEN_STATUSES } from '@/lib/fundraising/types'
 import { healFundraisingDocument } from '@/lib/fundraising/partnerFacingSite'
+import { newFundraisingOutreachUnsubscribeToken } from '@/lib/fundraising/outreachEmail'
 
 function nowIso() {
   return new Date().toISOString()
@@ -397,6 +398,106 @@ export async function deleteFundraisingOutreachTarget(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'delete outreach target failed' }
   }
+}
+
+export async function getFundraisingOutreachTargetByUnsubscribeToken(
+  token: string
+): Promise<FundraisingOutreachTarget | null> {
+  const t = String(token || '').trim()
+  if (!t || !isSupabaseConfigured()) return null
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
+    .from('fundraising_outreach_targets')
+    .select('*')
+    .filter('payload->>unsubscribeToken', 'eq', t)
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  return mapOutreachTargetRow(data as Parameters<typeof mapOutreachTargetRow>[0])
+}
+
+/**
+ * Ensure payload.unsubscribeToken exists (persisted). Used before every outbound send.
+ */
+export async function ensureFundraisingOutreachUnsubscribeToken(
+  target: FundraisingOutreachTarget
+): Promise<
+  | { ok: true; target: FundraisingOutreachTarget; token: string }
+  | { ok: false; error: string }
+> {
+  const existing = String((target.payload as { unsubscribeToken?: string } | undefined)?.unsubscribeToken || '').trim()
+  if (existing) {
+    return { ok: true, target, token: existing }
+  }
+  const token = newFundraisingOutreachUnsubscribeToken()
+  const now = nowIso()
+  const next: FundraisingOutreachTarget = {
+    ...target,
+    payload: { ...(target.payload || {}), unsubscribeToken: token },
+    updatedAt: now,
+  }
+  const saved = await upsertFundraisingOutreachTarget(next)
+  if (!saved.ok) return { ok: false, error: saved.error }
+  return { ok: true, target: next, token }
+}
+
+export async function markFundraisingOutreachTargetOptedOut(opts: {
+  targetId?: string
+  unsubscribeToken?: string
+  contactEmail?: string
+  source: 'link' | 'reply' | 'admin'
+}): Promise<
+  | { ok: true; target: FundraisingOutreachTarget; already?: boolean }
+  | { ok: false; error: string; notFound?: boolean }
+> {
+  if (!isSupabaseConfigured()) return { ok: false, error: 'Supabase not configured' }
+
+  let target: FundraisingOutreachTarget | null = null
+  if (opts.unsubscribeToken) {
+    target = await getFundraisingOutreachTargetByUnsubscribeToken(opts.unsubscribeToken)
+  } else if (opts.targetId) {
+    target = await getFundraisingOutreachTargetById(opts.targetId)
+  } else if (opts.contactEmail) {
+    const email = opts.contactEmail.trim().toLowerCase()
+    if (!email) return { ok: false, error: 'Email required', notFound: true }
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('fundraising_outreach_targets')
+      .select('*')
+      .eq('contact_email', email)
+      .neq('status', 'OPTED_OUT')
+      .order('updated_at', { ascending: false })
+      .limit(5)
+    if (error) return { ok: false, error: error.message }
+    const rows = (data || []).map((r) => mapOutreachTargetRow(r as Parameters<typeof mapOutreachTargetRow>[0]))
+    // Prefer CONTACTED/PENDING over CONVERTED for reply opt-out
+    target =
+      rows.find((r) => r.status === 'CONTACTED' || r.status === 'PENDING' || r.status === 'FAILED') ||
+      rows[0] ||
+      null
+  }
+
+  if (!target) return { ok: false, error: 'Target not found', notFound: true }
+  if (target.status === 'OPTED_OUT') {
+    return { ok: true, target, already: true }
+  }
+
+  const now = nowIso()
+  const next: FundraisingOutreachTarget = {
+    ...target,
+    status: 'OPTED_OUT',
+    lastError: undefined,
+    updatedAt: now,
+    payload: {
+      ...(target.payload || {}),
+      unsubscribed: true,
+      unsubscribedAt: now,
+      unsubscribeSource: opts.source,
+    },
+  }
+  const saved = await upsertFundraisingOutreachTarget(next)
+  if (!saved.ok) return { ok: false, error: saved.error }
+  return { ok: true, target: next }
 }
 
 export { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
