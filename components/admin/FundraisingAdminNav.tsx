@@ -5,6 +5,7 @@ import { ReactNode } from 'react'
 
 const links = [
   { href: '/admin/fundraising/partners', label: 'Partners' },
+  { href: '/admin/fundraising/agent', label: 'Agent' },
   { href: '/admin/fundraising/settings', label: 'Settings' },
   { href: '/admin/fundraising/report', label: 'Impact' },
   { href: '/admin/fundraising/payout', label: 'Grant Tracker' },

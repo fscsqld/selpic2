@@ -4921,6 +4921,8 @@ function ActivityLogView() {
     fundraising_settlement_paid: 'bg-amber-100 text-amber-800',
     fundraising_document_sent: 'bg-sky-100 text-sky-800',
     fundraising_maintenance_run: 'bg-violet-100 text-violet-800',
+    fundraising_agent_target_saved: 'bg-indigo-100 text-indigo-800',
+    fundraising_agent_outreach_sent: 'bg-indigo-100 text-indigo-800',
   }
 
   return (
@@ -4999,6 +5001,8 @@ function ActivityLogView() {
             <option value="fundraising_settlement_paid">Fundraising Settlement Paid</option>
             <option value="fundraising_document_sent">Fundraising Document Sent</option>
             <option value="fundraising_maintenance_run">Fundraising Maintenance</option>
+            <option value="fundraising_agent_target_saved">Fundraising Agent Target</option>
+            <option value="fundraising_agent_outreach_sent">Fundraising Agent Send</option>
           </select>
         </div>
         <div className="flex items-end gap-2">
