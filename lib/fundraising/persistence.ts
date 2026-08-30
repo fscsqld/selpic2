@@ -367,4 +367,36 @@ export async function upsertFundraisingOutreachTarget(
   }
 }
 
+export async function deleteFundraisingOutreachTarget(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const targetId = String(id || '').trim()
+  if (!targetId) return { ok: false, error: 'Target id required' }
+  if (!isSupabaseConfigured()) return { ok: false, error: 'Supabase not configured' }
+  try {
+    const admin = getSupabaseAdmin()
+    const { data: existing, error: readErr } = await admin
+      .from('fundraising_outreach_targets')
+      .select('id')
+      .eq('id', targetId)
+      .maybeSingle()
+    if (readErr) return { ok: false, error: readErr.message }
+    if (!existing) return { ok: false, error: 'Target not found' }
+
+    const { error: delErr } = await admin.from('fundraising_outreach_targets').delete().eq('id', targetId)
+    if (delErr) return { ok: false, error: delErr.message }
+
+    const { data: stillThere } = await admin
+      .from('fundraising_outreach_targets')
+      .select('id')
+      .eq('id', targetId)
+      .maybeSingle()
+    if (stillThere) return { ok: false, error: 'Delete did not remove the row' }
+
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'delete outreach target failed' }
+  }
+}
+
 export { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
