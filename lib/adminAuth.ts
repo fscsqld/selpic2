@@ -10,6 +10,16 @@ import {
 } from './adminPermissionCatalog'
 import { setSiteConfigCloudWritesAllowed } from './siteConfigClient'
 
+/** Drop stale Zustand persist immediately (avoids login ↔ dashboard redirect loops). */
+export function clearAdminAuthPersistStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem('admin-auth-store')
+  } catch {
+    /* ignore */
+  }
+}
+
 export interface AdminUser {
   username: string
   role: 'admin' | 'super_admin'
@@ -356,6 +366,7 @@ export const useAdminAuth = create<AdminAuthState>()(
           isLoggedIn: false,
           adminUser: null,
         })
+        clearAdminAuthPersistStorage()
       },
 
       checkAuth: () => {
