@@ -500,4 +500,4 @@ export async function markFundraisingOutreachTargetOptedOut(opts: {
   return { ok: true, target: next }
 }
 
-export { newFundraisingId, newPartnerId } from '@/lib/fundraising/ids'
+export { newFundraisingId, newPartnerId, newOutreachTargetId } from '@/lib/fundraising/ids'

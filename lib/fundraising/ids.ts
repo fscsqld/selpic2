@@ -1,12 +1,12 @@
 /**
- * Human-friendly fundraising partner IDs.
+ * Human-friendly fundraising IDs.
  *
- * Format (new partners): `TP-{ORGSLUG}-{n}` e.g. `TP-SELPIC-7`
- * - TP = Trading Partner (avoids clash with invoice SP-*)
+ * Partners (new): `TP-{ORGSLUG}-{n}` e.g. `TP-SELPIC-7`
+ * Outreach targets (new): `OT-{ORGSLUG}-{n}` e.g. `OT-SUNNYBAN-1`
  * - ORGSLUG = A–Z/0–9 from organisation name (max 8)
- * - n = next integer for that slug among existing partner ids
+ * - n = next integer for that prefix among existing ids
  *
- * Existing legacy ids (`TP-SLUG-YYMMDD-XXX`) are left unchanged; only new rows use this format.
+ * Legacy partner ids (`TP-SLUG-YYMMDD-XXX`) and legacy outreach (`fot-*`) are unchanged.
  */
 
 /** Org name → short A–Z/0–9 slug (e.g. "selpic&co" → "SELPICCO"). */
@@ -23,13 +23,18 @@ export function partnerIdPrefix(organizationName: string, maxLen = 8): string {
   return `TP-${slugOrgForPartnerId(organizationName, maxLen)}`
 }
 
+/** `OT-SUNNYBAN` prefix for outreach target rows (Fundraising Agent). */
+export function outreachTargetIdPrefix(organizationName: string, maxLen = 8): string {
+  return `OT-${slugOrgForPartnerId(organizationName, maxLen)}`
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /**
- * Highest trailing sequence for `TP-{slug}-{n}` among existing ids, then +1.
- * Ignores legacy `TP-SLUG-YYMMDD-RND` ids (they do not match).
+ * Highest trailing sequence for `{prefix}-{n}` among existing ids, then +1.
+ * Ignores legacy ids that do not match (e.g. `TP-SLUG-YYMMDD-RND`, `fot-*`).
  */
 export function nextPartnerSequence(prefix: string, existingIds: string[]): number {
   const p = String(prefix || '').trim()
@@ -52,6 +57,16 @@ export function nextPartnerSequence(prefix: string, existingIds: string[]): numb
  */
 export function newPartnerId(organizationName: string, existingIds: string[] = []): string {
   const prefix = partnerIdPrefix(organizationName)
+  const seq = nextPartnerSequence(prefix, existingIds)
+  return `${prefix}-${seq}`
+}
+
+/**
+ * Example: "Sunnybank Kindergarten" with OT-SUNNYBAN-1 existing → `OT-SUNNYBAN-2`
+ * Pass existing outreach target ids from DB so sequences stay unique per org slug.
+ */
+export function newOutreachTargetId(organizationName: string, existingIds: string[] = []): string {
+  const prefix = outreachTargetIdPrefix(organizationName)
   const seq = nextPartnerSequence(prefix, existingIds)
   return `${prefix}-${seq}`
 }
