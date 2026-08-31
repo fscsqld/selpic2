@@ -7,7 +7,7 @@ import {
   upsertFundraisingOutreachTarget,
   deleteFundraisingOutreachTarget,
 } from '@/lib/fundraising/persistence'
-import { newFundraisingId } from '@/lib/fundraising/ids'
+import { newOutreachTargetId } from '@/lib/fundraising/ids'
 import type {
   FundraisingOutreachTarget,
   FundraisingOutreachTargetStatus,
@@ -81,7 +81,13 @@ export async function POST(req: Request) {
     }
 
     const now = new Date().toISOString()
-    const id = String(body?.id || '').trim() || newFundraisingId('fot')
+    const existingTargets = await listFundraisingOutreachTargetsFromDb({ limit: 500 })
+    const id =
+      String(body?.id || '').trim() ||
+      newOutreachTargetId(
+        organizationName,
+        existingTargets.map((t) => t.id)
+      )
     const existing = await getFundraisingOutreachTargetById(id)
     const statusRaw = String(body?.status || existing?.status || 'PENDING').trim()
     const status = STATUSES.has(statusRaw as FundraisingOutreachTargetStatus)
