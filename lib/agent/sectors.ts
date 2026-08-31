@@ -1,16 +1,15 @@
 /**
- * SELPIC Agent Core — sector registry (Wave 2).
- * Fundraising is live; other sectors are placeholders until later waves.
+ * SELPIC Agent Core — sector registry (Wave 2–3).
+ * Fundraising + inbound (CS drafts) are live; other sectors are placeholders.
  *
  * =============================================================================
  * AGENT_HUB_PERMISSION_NOTE (do not delete)
  * -----------------------------------------------------------------------------
- * Wave 2 hub UI/API uses `fundraising:read` as a temporary gate while only
- * Fundraising is live. BEFORE setting any other sector below to `status: 'live'`,
- * you MUST add `agent:read` (+ optional `agent:run`) to the permission catalog,
- * switch `/admin/agent` + dashboard Quick Action + `/api/admin/agent/*` to that
- * gate, and tell the user. See `.cursor/rules/selpic-agent-permissions.mdc` and
- * `docs/selpic-unified-ai-agent-plan.md` Phase B4.
+ * Phase B4 DONE: hub UI/API/dashboard use `agent:read`. Legacy aliases still
+ * accept fundraising:read / messages:read / bespoke:read until staff JWTs are
+ * updated. Per-sector deep-links keep domain permissions. Before a 3rd live
+ * sector, confirm all relevant staff have explicit `agent:read` and trim aliases.
+ * See `.cursor/rules/selpic-agent-permissions.mdc` and plan Phase B4.
  * =============================================================================
  */
 
@@ -50,9 +49,11 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     id: 'inbound',
     label: 'Customer care drafts',
     description: 'Draft first-line replies for Messages and Bespoke (human Approve → Send).',
-    status: 'coming_soon',
+    status: 'live',
+    href: '/admin/agent/inbound',
     requiredPermission: 'messages:read',
-    autonomyNote: 'Wave 3 — draft only by default.',
+    autonomyNote:
+      'Wave 3 — template drafts only. Send uses existing Resend paths; needs messages:write or bespoke:write.',
   },
   {
     id: 'performance',

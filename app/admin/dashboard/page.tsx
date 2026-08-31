@@ -543,12 +543,12 @@ export default function AdminDashboard() {
     {
       title: 'AI Agent',
       description:
-        'Governed agent hub — Fundraising outreach is live; more sectors (CS drafts, performance, community) coming later',
+        'Governed agent hub — Fundraising outreach and Customer care drafts are live; more sectors coming later',
       icon: Bot,
       href: '/admin/agent',
       color: 'bg-indigo-600',
-      /** Temporary: fundraising:read. Switch to agent:read in Phase B4 before 2nd live sector. */
-      requiredPermission: 'fundraising:read',
+      /** Phase B4: agent:read (legacy aliases still honour fundraising/messages/bespoke read). */
+      requiredPermission: 'agent:read',
     },
     {
       title: 'Invoice preview',

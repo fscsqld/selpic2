@@ -39,6 +39,8 @@ export const ADMIN_PERMISSION_CATALOG = [
   'accounting:admin',
   'payroll:access',
   'settings:personal',
+  'agent:read',
+  'agent:run',
   'system:admin',
   'admin:manage',
 ] as const
@@ -63,6 +65,7 @@ export const ADMIN_PERMISSION_IMPLIES: Partial<Record<AdminPermission, AdminPerm
   'fundraising:write': ['fundraising:read'],
   'fundraising:finance': ['fundraising:read'],
   'accounting:admin': ['accounting:read'],
+  'agent:run': ['agent:read'],
   'system:admin': ['settings:personal'],
 }
 
@@ -84,6 +87,11 @@ export const ADMIN_PERMISSION_LEGACY_ALIASES: Partial<Record<AdminPermission, st
   'bespoke:read': ['messages:read'],
   'bespoke:write': ['messages:write'],
   'accounting:read': ['accounting:admin', 'system:admin'],
+  /**
+   * Hub access during Wave 3 migration — staff with fundraising or CS read can open /admin/agent
+   * until JWTs explicitly include agent:read. Remove aliases after registries are updated.
+   */
+  'agent:read': ['fundraising:read', 'messages:read', 'bespoke:read', 'system:admin'],
   /** Older JWT/registry values still seen in the wild */
   'accounting:admin': ['system:admin', 'accounting:full'],
   'payroll:access': ['payroll:read'],

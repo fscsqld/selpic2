@@ -6,7 +6,7 @@ import { COMPANY_CONTACT, COMPANY_WEBSITE_URL } from '@/lib/companyLegal'
 export const dynamic = 'force-dynamic'
 
 type PageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 }
 
 function pickToken(sp: Record<string, string | string[] | undefined> | undefined): string {
@@ -16,10 +16,7 @@ function pickToken(sp: Record<string, string | string[] | undefined> | undefined
 }
 
 export default async function FundraisingOutreachUnsubscribePage({ searchParams }: PageProps) {
-  const resolved = typeof (searchParams as Promise<unknown>)?.then === 'function'
-    ? await (searchParams as Promise<Record<string, string | string[] | undefined>>)
-    : (searchParams as Record<string, string | string[] | undefined> | undefined)
-
+  const resolved = searchParams ? await searchParams : undefined
   const token = pickToken(resolved)
 
   let title = 'Unsubscribe'

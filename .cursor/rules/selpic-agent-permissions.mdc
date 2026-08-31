@@ -1,36 +1,29 @@
 ---
-description: Agent hub permissions — fundraising:read is temporary; agent:read required before second live sector
+description: Agent hub permissions — Phase B4 agent:read is live with Wave 3 inbound
 globs: app/admin/agent/**/*,app/api/admin/agent/**/*,lib/agent/**/*,lib/adminPermissionCatalog.ts,lib/permissionUtils.ts
 alwaysApply: false
 ---
 
 # SELPIC Agent permissions (do not forget)
 
-## Current (Wave 2 — fundraising-only hub)
+## Current (Wave 3 — fundraising + inbound live)
 
-- `/admin/agent` and `GET /api/admin/agent/summary` are gated with **`fundraising:read`**.
-- Dashboard Quick Action **AI Agent** also uses **`fundraising:read`**.
-- This is **intentional and temporary** while Fundraising is the only **live** sector.
+- `/admin/agent`, dashboard Quick Action **AI Agent**, and `GET /api/admin/agent/summary` are gated with **`agent:read`**.
+- Legacy aliases still treat `fundraising:read` / `messages:read` / `bespoke:read` as satisfying `agent:read` until staff JWTs are updated.
+- Hub UI also accepts `requiredAnyPermissions: ['agent:read', 'fundraising:read']` during migration.
+- Per-sector deep-links keep domain permissions (`fundraising:read`, `messages:read`, …).
+- Inbound draft send audits as `agent_inbound_draft_sent`.
 
-## Mandatory before enabling a second live sector
+## Before enabling another live sector (Wave 4+)
 
-When ANY sector in `lib/agent/sectors.ts` other than `fundraising` is set to `status: 'live'` (Wave 3+ inbound, performance, community, newsletter, …), the developer **must** stop and do the following **in the same change set** — explain to the user first if they did not ask, then implement:
-
-1. Add **`agent:read`** (and later **`agent:run`** for mutations that span sectors) to:
-   - `lib/adminPermissionCatalog.ts` (`ADMIN_PERMISSION_CATALOG`)
-   - `lib/permissionUtils.ts` (name + description + accessible pages)
-   - Presets / Standard staff only if product asks (default: **not** on Standard staff — assign via specialty preset)
-2. Change hub gates from `fundraising:read` to **`agent:read`** (or `requiredAnyPermissions: ['agent:read', 'fundraising:read']` during migration).
-3. Update `AdminRoute` on `/admin/agent`, dashboard Quick Action `requiredPermission`, and `requireAdminPermission` on `/api/admin/agent/*`.
-4. Per-sector cards still check their own domain permission (`messages:read`, `community:read`, …) for deep-links.
-5. Document in `docs/selpic-unified-ai-agent-plan.md` Phase B4 as **done**.
+1. Prefer explicit **`agent:read`** on staff who should see the hub; then trim legacy aliases in `ADMIN_PERMISSION_LEGACY_ALIASES`.
+2. Keep Standard staff **without** `agent:read` unless product asks (specialty preset / manual grant).
+3. Per-sector cards still check their own domain permission for deep-links.
+4. Do not skip `logAdminActivity` on agent mutations.
+5. Keep `AGENT_HUB_PERMISSION_NOTE` in `lib/agent/sectors.ts` in sync with this rule.
 
 ## Do not
 
-- Leave the hub on `fundraising:read` alone once two+ sectors are live (staff without fundraising would be blocked incorrectly, or fundraising-only would see CS tools they should not).
+- Gate the multi-sector hub on `fundraising:read` alone.
 - Broaden `analytics:read` legacy aliases to mean agent access.
-- Skip `logAdminActivity` on agent mutations.
-
-## Checklist comment in code
-
-Keep `AGENT_HUB_PERMISSION_NOTE` in `lib/agent/sectors.ts` in sync with this rule.
+- Auto-send inbound drafts without HITL Edit → Send.

@@ -265,7 +265,7 @@ v1 implements **only** the fundraising sector behaviours (even if files live und
 | **B1** | `/admin/agent` hub page + dashboard Quick Action (“AI Agent”) gated by new `agent:read` **or** temporarily `fundraising:read` until multi-sector |
 | **B2** | Shared types: `agent_runs`, drafts, sector id; SQL docs under `docs/` |
 | **B3** | Move fundraising send/monitor behind sector adapter without breaking A-routes (redirects OK) |
-| **B4** | **MANDATORY before 2nd live sector:** add `agent:read` / `agent:run` to catalog + `permissionUtils` + hub/API/dashboard gates. Rule: `.cursor/rules/selpic-agent-permissions.mdc`. Code flag: `AGENT_HUB_PERMISSION_NOTE` in `lib/agent/sectors.ts`. Explain to user if they did not ask, then implement in the same PR. |
+| **B4** | **DONE (Wave 3):** `agent:read` / `agent:run` in catalog + `permissionUtils`; hub/API/dashboard on `agent:read` (legacy aliases for fundraising/messages/bespoke read). Rule: `.cursor/rules/selpic-agent-permissions.mdc`. |
 
 ### Phase C — More sectors (human-approve by default)
 
@@ -293,17 +293,14 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 - `/admin/agent` + dashboard Quick Action.  
 - Fundraising stats + sector cards (`lib/agent/sectors.ts`).  
-- **Permission:** hub temporarily `fundraising:read`. **Before Wave 3 marks inbound (or any other sector) live → execute Phase B4 (`agent:read`)** — enforced by `.cursor/rules/selpic-agent-permissions.mdc`.
+- **Permission:** Phase **B4 done** — hub uses `agent:read` (legacy aliases until JWTs updated).
 
 #### Wave 3 — Customer Care draft bot (Messages + Bespoke)
 
-- **Prerequisite:** Phase B4 `agent:read` if this is the second live sector (it will be).  
-- On new inbound: classify intent (order status, product, fundraising partner, shipping).  
-- Draft first-line English reply grounded in FAQs / order facts the API already exposes to that admin.  
-- Admin: **Edit → Send** (or Reject). Escalation flag when confidence low / payment dispute.  
-- Optional later: small storefront help widget that **only** opens a ticket / FAQ — not a second unsupervised admin.
-
-**Error / ops assist (same wave or adjacent):** when admin APIs return repeated 4xx/5xx or inbound spike, Agent hub shows **alert card** + suggested checklist (restart not required; link to failing sector). Does **not** auto-run `git` or kill servers.
+- **Status:** minimal HITL live — `/admin/agent/inbound` + `POST /api/admin/agent/inbound/draft` (template drafts, not LLM).  
+- Admin: **Edit → Send** via existing `emailService.sendResponse` + status PATCH; audit `agent_inbound_draft_sent`.  
+- Intent hint classifier (order / shipping / fundraising / payment / general). Escalation tone for payment disputes.  
+- Optional later: LLM grounding, storefront help widget, ops alert cards.
 
 #### Wave 4 — Performance coach (Sales / Traffic / Fundraising Impact)
 

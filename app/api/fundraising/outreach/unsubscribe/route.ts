@@ -5,13 +5,18 @@ import { isSupabaseConfigured } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
-async function processUnsubscribe(token: string) {
+type UnsubscribeStatus = 200 | 400 | 404 | 500 | 503
+
+async function processUnsubscribe(token: string): Promise<{
+  status: UnsubscribeStatus
+  body: Record<string, unknown>
+}> {
   const t = String(token || '').trim()
   if (!t) {
-    return { status: 400 as const, body: { ok: false, error: 'Missing unsubscribe token.' } }
+    return { status: 400, body: { ok: false, error: 'Missing unsubscribe token.' } }
   }
   if (!isSupabaseConfigured()) {
-    return { status: 503 as const, body: { ok: false, error: 'Service unavailable.' } }
+    return { status: 503, body: { ok: false, error: 'Service unavailable.' } }
   }
 
   const result = await markFundraisingOutreachTargetOptedOut({
@@ -20,14 +25,15 @@ async function processUnsubscribe(token: string) {
   })
 
   if (!result.ok) {
+    const status: 404 | 500 = result.notFound ? 404 : 500
     return {
-      status: (result.notFound ? 404 : 500) as const,
+      status,
       body: { ok: false, error: result.error },
     }
   }
 
   return {
-    status: 200 as const,
+    status: 200,
     body: {
       ok: true,
       already: Boolean(result.already),

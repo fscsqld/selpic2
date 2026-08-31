@@ -2,11 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
+import AdminPageHeader from '@/components/AdminPageHeader'
 import { FundraisingAdminShell } from '@/components/admin/FundraisingAdminNav'
 import { FUNDRAISING_ORG_TYPE_LABELS, FUNDRAISING_ORG_TYPE_OPTIONS } from '@/lib/fundraising/types'
 import type { FundraisingOutreachTarget, FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { logAdminActivity } from '@/lib/logAdminActivity'
-import { Bot, Loader2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Bot, HeartHandshake, Loader2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -227,11 +228,21 @@ function AgentContent() {
   }
 
   return (
-    <FundraisingAdminShell
-      title="Fundraising Agent"
-      subtitle="Register outreach targets and send personalised B2B emails (v1: manual list, max 10 per send — not auto-scrape / daily blast)."
-      current="/admin/fundraising/agent"
-    >
+    <div className="min-h-screen bg-gray-50">
+      <AdminPageHeader
+        title="Fundraising Agent"
+        icon={<HeartHandshake className="w-6 h-6" />}
+        showBackButton
+        backUrl="/admin/dashboard"
+        backLabel="Dashboard"
+        showHomepageLink={false}
+        showLanguageSelector={false}
+      />
+      <FundraisingAdminShell
+        title="Fundraising Agent"
+        subtitle="Register outreach targets and send personalised B2B emails (v1: manual list, max 10 per send — not auto-scrape / daily blast)."
+        current="/admin/fundraising/agent"
+      >
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <div className="flex items-start gap-2">
           <Bot className="h-4 w-4 mt-0.5 shrink-0" />
@@ -453,5 +464,6 @@ function AgentContent() {
         </table>
       </div>
     </FundraisingAdminShell>
+    </div>
   )
 }

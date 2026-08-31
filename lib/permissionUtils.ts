@@ -462,6 +462,23 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
     category: 'Admin Settings',
     accessiblePages: ['/admin/settings'],
   },
+  'agent:read': {
+    permission: 'agent:read',
+    name: 'AI Agent hub',
+    description:
+      'Open the AI Agent hub (/admin/agent) and view sector summaries. Domain sends still need fundraising/messages/bespoke write permissions.',
+    category: 'AI Agent',
+    accessiblePages: ['/admin/agent'],
+  },
+  'agent:run': {
+    permission: 'agent:run',
+    name: 'AI Agent run',
+    description:
+      'Run cross-sector agent actions that are not covered by a domain write permission (future). Implies agent:read.',
+    category: 'AI Agent',
+    accessiblePages: ['/admin/agent'],
+    requires: ['agent:read'],
+  },
   'system:admin': {
     permission: 'system:admin',
     name: 'System Management',
@@ -495,6 +512,7 @@ export const permissionDependencies: Record<string, string[]> = {
   'fundraising:write': ['fundraising:read'],
   'fundraising:finance': ['fundraising:read'],
   'accounting:admin': ['accounting:read'],
+  'agent:run': ['agent:read'],
 }
 
 export function getPermissionDescription(permission: string): PermissionDescription | undefined {

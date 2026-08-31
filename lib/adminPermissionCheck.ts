@@ -44,6 +44,12 @@ export function adminHasAllPermissions(admin: AdminLike, required: string[]): bo
   return required.every((p) => adminHasPermission(admin, p))
 }
 
+/** True if admin holds at least one of the listed permissions. */
+export function adminHasAnyPermission(admin: AdminLike, required: string[]): boolean {
+  if (!required.length) return false
+  return required.some((p) => adminHasPermission(admin, p))
+}
+
 /** System Management — super_admin or explicit `system:admin` (not admin:manage bypass). */
 export function adminHasSystemAdminAccess(admin: AdminLike): boolean {
   if (!admin) return false

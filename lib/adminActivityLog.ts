@@ -34,6 +34,7 @@ export type ActivityLogAction =
   | 'fundraising_agent_target_saved'
   | 'fundraising_agent_target_deleted'
   | 'fundraising_agent_outreach_sent'
+  | 'agent_inbound_draft_sent'
 
 export interface ActivityLog {
   id: string
@@ -100,6 +101,7 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'fundraising_agent_target_saved',
   'fundraising_agent_target_deleted',
   'fundraising_agent_outreach_sent',
+  'agent_inbound_draft_sent',
 ] as const satisfies ReadonlyArray<ActivityLogAction>
 
 const KNOWN_ACTIONS = new Set<string>(SUPER_ADMIN_AUDIT_ACTIONS)
