@@ -678,15 +678,15 @@ export default function CategoryHeroSlideManager({
                   onChange={(e) => setFormData(prev => ({ ...prev, effect: e.target.value as any }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="slide">Slide (슬라이딩)</option>
-                  <option value="fade">Fade (페이드 인/아웃)</option>
-                  <option value="zoom">Zoom (줌 인/아웃)</option>
-                  <option value="rotate">Rotate (회전)</option>
-                  <option value="blend">Blend (블렌드 모드)</option>
+                  <option value="slide">Slide</option>
+                  <option value="fade">Fade</option>
+                  <option value="zoom">Zoom</option>
+                  <option value="rotate">Rotate</option>
+                  <option value="blend">Blend</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {formData.effect === 'slide' && 'Direction 설정이 필요합니다'}
-                  {formData.effect !== 'slide' && 'Direction 설정은 Slide 효과에서만 사용됩니다'}
+                  {formData.effect === 'slide' && 'Direction is required for the slide effect.'}
+                  {formData.effect !== 'slide' && 'Direction applies only to the slide effect.'}
                 </p>
               </div>
 
@@ -726,7 +726,7 @@ export default function CategoryHeroSlideManager({
                   <span>Opaque</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  기본값 (데스크톱). 반응형 설정에서 각 화면 크기별로 다르게 설정할 수 있습니다.
+                  Desktop default. You can set different values per breakpoint in responsive settings.
                 </p>
               </div>
 
@@ -758,7 +758,7 @@ export default function CategoryHeroSlideManager({
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    📱 모바일 (&lt;768px)
+                    📱 Mobile (&lt;768px)
                   </button>
                   <button
                     type="button"
@@ -769,7 +769,7 @@ export default function CategoryHeroSlideManager({
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    📱 태블릿 (768-1024px)
+                    📱 Tablet (768-1024px)
                   </button>
                   <button
                     type="button"
@@ -780,7 +780,7 @@ export default function CategoryHeroSlideManager({
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    💻 데스크톱 (&gt;1024px)
+                    💻 Desktop (&gt;1024px)
                   </button>
                 </div>
 

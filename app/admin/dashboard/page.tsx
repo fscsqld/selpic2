@@ -59,8 +59,9 @@ import {
 import { adminHasAdminSettingsPageAccess, adminHasPermissionStrict } from '@/lib/adminPermissionCheck'
 import { useUserAuth } from '@/lib/userAuth'
 import AdminRoute from '@/components/AdminRoute'
-import { useTranslation } from '@/lib/useTranslation'
 import AdminOrderNotification from '@/components/AdminOrderNotification'
+import { useTranslation } from '@/lib/useTranslation'
+import { importLogAdminActivity } from '@/lib/loadLogAdminActivity'
 import AdminInboundAlertBanner from '@/components/AdminInboundAlertBanner'
 import { useAdminInboundStore } from '@/lib/adminInboundStore'
 import { useSalesGoals } from '@/lib/salesGoals'
@@ -100,8 +101,8 @@ export default function AdminDashboard() {
   const activityLogs = useAdminActivityLog((s) => s.logs)
 
   useEffect(() => {
-    void import('@/lib/logAdminActivity').then(({ pullAdminActivityLogsFromServer }) => {
-      void pullAdminActivityLogsFromServer()
+    void importLogAdminActivity().then((mod) => {
+      if (mod) void mod.pullAdminActivityLogsFromServer()
     })
   }, [])
   const {

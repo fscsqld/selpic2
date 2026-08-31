@@ -1353,7 +1353,7 @@ function InvoicePreviewPageContent() {
                         </div>
                         <div className="space-y-3">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Description (줄바꿈 가능)</label>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Description (line breaks allowed)</label>
                             <textarea
                               value={item.description}
                               onChange={e => {
@@ -1369,7 +1369,7 @@ function InvoicePreviewPageContent() {
                               }}
                               rows={3}
                               className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
-                              placeholder="상품/서비스명 또는 상세 설명 (여러 줄 입력 가능)"
+                              placeholder="Product or service name / detailed description (multi-line)"
                             />
                           </div>
                           <div className="grid grid-cols-3 gap-2">
@@ -1651,7 +1651,7 @@ function InvoicePreviewPageContent() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Account Name (받는이)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Account Name (payee)</label>
                         <input
                           type="text"
                           value={documentType === 'invoice' ? (invoiceData.payment?.accountName || '') : (quoteData.payment?.accountName || '')}

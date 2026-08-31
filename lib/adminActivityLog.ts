@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { scheduleSyncActivityLogToServer } from '@/lib/loadLogAdminActivity'
 import { persist } from 'zustand/middleware'
 
 /** Staff account events + operational storefront changes (super-admin audit). */
@@ -146,9 +147,7 @@ export const useAdminActivityLog = create<AdminActivityLogState>()(
         }))
 
         if (typeof window !== 'undefined' && !opts?.skipRemote) {
-          void import('@/lib/logAdminActivity').then(({ syncActivityLogToServer }) => {
-            void syncActivityLogToServer(log)
-          })
+          scheduleSyncActivityLogToServer(log)
         }
       },
 

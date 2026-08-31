@@ -7,6 +7,7 @@
  */
 import { createSupabaseBrowserClientNoStore } from '@/lib/supabase/browser'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
+import { scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 
 function siteConfigSupabase() {
@@ -214,12 +215,10 @@ async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<vo
       throw new Error(message)
     }
     emitStatus({ kind: 'saved', source: 'state', at: Date.now() })
-    void import('@/lib/logAdminActivity').then(({ logAdminActivityThrottled }) => {
-      logAdminActivityThrottled('cms-blob:storefront_cms', {
-        action: 'cms_content_updated',
-        target: STOREFRONT_CMS_CONFIG_KEY,
-        description: 'Saved storefront CMS snapshot to site_configs',
-      })
+    scheduleLogAdminActivityThrottled('cms-blob:storefront_cms', {
+      action: 'cms_content_updated',
+      target: STOREFRONT_CMS_CONFIG_KEY,
+      description: 'Saved storefront CMS snapshot to site_configs',
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unknown error'

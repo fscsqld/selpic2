@@ -975,7 +975,7 @@ export default function StickersPage() {
                           <option value="Round">Round (28mm)</option>
                           <option value="Custom">Custom Size</option>
                         </select>
-                        <p className="mt-1 text-xs text-gray-500">선택한 크기가 커스텀·미리보기 등 모든 페이지에 반영됩니다. Custom 선택 시 아래 치수를 입력하세요.</p>
+                        <p className="mt-1 text-xs text-gray-500">The selected size applies across customize and preview pages. For Custom, enter dimensions below.</p>
                       </>
                     )}
                   </div>
@@ -984,26 +984,26 @@ export default function StickersPage() {
                   {/* Sticker dimensions (optional): grid name labels only */}
                   {!isMixedLabelsProduct && (
                   <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <label className="col-span-2 md:col-span-5 text-sm font-medium text-gray-700">스티커 치수 (선택) — 입력 시 해당 상품에만 적용</label>
+                    <label className="col-span-2 md:col-span-5 text-sm font-medium text-gray-700">Sticker dimensions (optional) — applies to this product only</label>
                     <div>
-                      <label className="block text-xs text-gray-500">가로(mm)</label>
-                      <input type="number" name="stickerWidthMm" value={formData.stickerWidthMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="예: 30" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <label className="block text-xs text-gray-500">Width (mm)</label>
+                      <input type="number" name="stickerWidthMm" value={formData.stickerWidthMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="e.g. 30" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500">세로(mm)</label>
-                      <input type="number" name="stickerHeightMm" value={formData.stickerHeightMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="예: 15" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <label className="block text-xs text-gray-500">Height (mm)</label>
+                      <input type="number" name="stickerHeightMm" value={formData.stickerHeightMm ?? ''} onChange={handleInputChange} min={1} step={1} placeholder="e.g. 15" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500">열(cols)</label>
-                      <input type="number" name="stickerCols" value={formData.stickerCols ?? ''} onChange={handleInputChange} min={1} placeholder="예: 3" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <label className="block text-xs text-gray-500">Columns</label>
+                      <input type="number" name="stickerCols" value={formData.stickerCols ?? ''} onChange={handleInputChange} min={1} placeholder="e.g. 3" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500">행(rows)</label>
-                      <input type="number" name="stickerRows" value={formData.stickerRows ?? ''} onChange={handleInputChange} min={1} placeholder="예: 8" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <label className="block text-xs text-gray-500">Rows</label>
+                      <input type="number" name="stickerRows" value={formData.stickerRows ?? ''} onChange={handleInputChange} min={1} placeholder="e.g. 8" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500">간격(mm)</label>
-                      <input type="number" name="stickerGapMm" value={formData.stickerGapMm ?? ''} onChange={handleInputChange} min={0} step={0.5} placeholder="예: 2" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
+                      <label className="block text-xs text-gray-500">Gap (mm)</label>
+                      <input type="number" name="stickerGapMm" value={formData.stickerGapMm ?? ''} onChange={handleInputChange} min={0} step={0.5} placeholder="e.g. 2" className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm" />
                     </div>
                   </div>
                   )}

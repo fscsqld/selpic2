@@ -41,12 +41,12 @@ export default function VIPGradeConfigManager() {
       {
         id: 'grade-config-basic-0',
         code: 0,
-        name: '일반',
+        name: 'Basic',
         nameEn: 'Basic',
         minAmount: 0,
         maxAmount: 100,
         color: 'gray',
-        benefits: ['기본 5% 할인 쿠폰 (자동 할인 없음)'],
+        benefits: ['5% coupon (no automatic discount)'],
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -54,12 +54,12 @@ export default function VIPGradeConfigManager() {
       {
         id: 'grade-config-silver-1',
         code: 1,
-        name: '실버',
+        name: 'Silver',
         nameEn: 'Silver',
         minAmount: 100,
         maxAmount: 300,
         color: 'silver',
-        benefits: ['5% 상시 할인', '최대 할인 $10,000', '생일 쿠폰'],
+        benefits: ['5% ongoing discount', 'Max discount $10,000', 'Birthday coupon'],
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -67,12 +67,12 @@ export default function VIPGradeConfigManager() {
       {
         id: 'grade-config-gold-2',
         code: 2,
-        name: '골드',
+        name: 'Gold',
         nameEn: 'Gold',
         minAmount: 300,
         maxAmount: 1000,
         color: 'gold',
-        benefits: ['10% 상시 할인', '무료 배송', '최대 할인 $20,000'],
+        benefits: ['10% ongoing discount', 'Free shipping', 'Max discount $20,000'],
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -80,12 +80,12 @@ export default function VIPGradeConfigManager() {
       {
         id: 'grade-config-black-3',
         code: 3,
-        name: '블랙',
+        name: 'Black',
         nameEn: 'Black',
         minAmount: 1000,
         maxAmount: 3000,
         color: 'black',
-        benefits: ['20% 상시 할인', '무료 배송', '최대 할인 $50,000', '전용 고객 센터'],
+        benefits: ['20% ongoing discount', 'Free shipping', 'Max discount $50,000', 'Dedicated support'],
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -98,7 +98,7 @@ export default function VIPGradeConfigManager() {
         minAmount: 3000,
         maxAmount: undefined,
         color: 'purple',
-        benefits: ['50% 상시 할인', '무료 배송', '최대 할인 $100,000', '특별 선물'],
+        benefits: ['50% ongoing discount', 'Free shipping', 'Max discount $100,000', 'Special gift'],
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()

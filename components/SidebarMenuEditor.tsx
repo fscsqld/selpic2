@@ -55,7 +55,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
 
   // 메뉴 아이템 삭제
   const handleDeleteItem = (itemId: string) => {
-    if (confirm('이 메뉴 항목을 삭제하시겠습니까?')) {
+    if (confirm('Delete this menu item?')) {
       const updatedItems = menuItems.filter(item => item.id !== itemId)
       setMenuItems(updatedItems)
       saveSidebarMenuConfig(updatedItems)
@@ -66,7 +66,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
   // 새 메뉴 아이템 추가
   const handleAddItem = () => {
     if (!newItem.id || !newItem.label || !newItem.href) {
-      alert('모든 필드를 입력해주세요.')
+      alert('Please fill in all fields.')
       return
     }
 
@@ -105,7 +105,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
 
   // 기본 설정으로 복원
   const handleReset = () => {
-    if (confirm('기본 설정으로 복원하시겠습니까? 모든 사용자 정의 설정이 삭제됩니다.')) {
+    if (confirm('Restore default settings? All custom menu items will be removed.')) {
       const defaultConfig = loadSidebarMenuConfig()
       setMenuItems(defaultConfig)
       saveSidebarMenuConfig(defaultConfig)
@@ -130,14 +130,14 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">사이드바 메뉴 편집</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Edit sidebar menu</h2>
           <div className="flex space-x-2">
             <button
               onClick={handleReset}
               className="px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
               <RotateCcw className="h-4 w-4 mr-1 inline" />
-              기본값 복원
+              Restore defaults
             </button>
             <button
               onClick={onClose}
@@ -151,7 +151,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
         <div className="flex-1 overflow-y-auto p-6">
           {/* 기존 메뉴 아이템 목록 */}
           <div className="mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">메뉴 항목</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Menu items</h3>
             <div className="space-y-3">
               {menuItems.map((item, index) => (
                 <div
@@ -174,7 +174,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
                         value={editingItem.label}
                         onChange={(e) => setEditingItem({ ...editingItem, label: e.target.value })}
                         className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                        placeholder="라벨"
+                        placeholder="Label"
                       />
                       <input
                         type="text"
@@ -189,21 +189,21 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
                           value={editingItem.icon}
                           onChange={(e) => setEditingItem({ ...editingItem, icon: e.target.value })}
                           className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
-                          placeholder="아이콘 이름 (예: Home, Package, Users)"
+                          placeholder="Icon name (e.g. Home, Package, Users)"
                         />
                         <button
                           onClick={() => setIsIconSelectorOpen(true)}
                           className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-                          title="아이콘 선택"
+                          title="Choose icon"
                         >
-                          선택
+                          Select
                         </button>
                         <input
                           type="text"
                           value={editingItem.color}
                           onChange={(e) => setEditingItem({ ...editingItem, color: e.target.value })}
                           className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
-                          placeholder="색상 클래스"
+                          placeholder="Color class"
                         />
                       </div>
                     </div>
@@ -246,21 +246,21 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
 
           {/* 새 메뉴 아이템 추가 */}
           <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">새 메뉴 항목 추가</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Add menu item</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
               <input
                 type="text"
                 value={newItem.id}
                 onChange={(e) => setNewItem({ ...newItem, id: e.target.value })}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="ID (고유값)"
+                placeholder="ID (unique)"
               />
               <input
                 type="text"
                 value={newItem.label}
                 onChange={(e) => setNewItem({ ...newItem, label: e.target.value })}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="라벨"
+                placeholder="Label"
               />
               <input
                 type="text"
@@ -275,21 +275,21 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
                   value={newItem.icon}
                   onChange={(e) => setNewItem({ ...newItem, icon: e.target.value })}
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
-                  placeholder="아이콘 이름 (예: Home, Package, Users)"
+                  placeholder="Icon name (e.g. Home, Package, Users)"
                 />
                 <button
                   onClick={() => setIsIconSelectorOpen(true)}
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-                  title="아이콘 선택"
+                  title="Choose icon"
                 >
-                  선택
+                  Select
                 </button>
                 <input
                   type="text"
                   value={newItem.color}
                   onChange={(e) => setNewItem({ ...newItem, color: e.target.value })}
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1"
-                  placeholder="색상 클래스"
+                  placeholder="Color class"
                 />
               </div>
             </div>
@@ -298,7 +298,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-4 w-4 mr-2 inline" />
-              메뉴 항목 추가
+              Add menu item
             </button>
           </div>
         </div>
@@ -309,7 +309,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
             onClick={onClose}
             className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            닫기
+            Close
           </button>
         </div>
       </div>
@@ -320,7 +320,7 @@ export default function SidebarMenuEditor({ isOpen, onClose, onMenuUpdated }: Si
         onClose={() => setIsIconSelectorOpen(false)}
         onSelectIcon={handleIconSelect}
         currentIcon={editingItem?.icon || newItem.icon || 'Home'}
-        title="아이콘 선택"
+        title="Choose icon"
       />
     </div>
   )

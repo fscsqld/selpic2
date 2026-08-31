@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { useDocumentTemplateStore, DocumentType } from './documentTemplateStore'
 import { COMPANY_LEGAL, getCompanyBrandName } from './companyLegal'
 import { scheduleCatalogSyncToServer } from './catalogSyncScheduler'
+import { scheduleLogAdminActivity } from '@/lib/loadLogAdminActivity'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import {
@@ -2115,14 +2116,12 @@ export const useStore = create<Store>()(
             console.error('❌ [addProduct] Failed to update localStorage:', error)
           }
           scheduleCatalogSyncToServer(limitedProducts)
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'product_created',
               target: String(sanitized.id),
               description: `Created product “${sanitized.name || sanitized.id}”`,
               newValue: { id: sanitized.id, name: sanitized.name, category: sanitized.category },
             })
-          })
         }
       },
 
@@ -2206,14 +2205,12 @@ export const useStore = create<Store>()(
             console.error('Failed to update localStorage:', error)
           }
           scheduleCatalogSyncToServer(updatedProducts)
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'product_updated',
               target: String(product.id),
               description: `Updated product “${existing.name || product.name || product.id}”`,
               newValue: { id: product.id, name: product.name ?? existing.name },
             })
-          })
         }
       },
 
@@ -2258,8 +2255,7 @@ export const useStore = create<Store>()(
             }
           }, 100)
           scheduleCatalogSyncToServer(updatedProducts)
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'product_deleted',
               target: String(productId),
               description: `Deleted product “${removed?.name || productId}”`,
@@ -2267,7 +2263,6 @@ export const useStore = create<Store>()(
                 ? { id: removed.id, name: removed.name, category: removed.category }
                 : { id: productId },
             })
-          })
         }
       },
       refreshProducts: () => {
@@ -2345,15 +2340,13 @@ export const useStore = create<Store>()(
           scheduleCatalogSyncToServer(updatedProducts)
           // Order-driven stock changes stay on order audit; log admin/manual adjustments for oversight.
           if ((source ?? 'manual') !== 'order') {
-            void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-              logAdminActivity({
-                action: 'product_stock_adjusted',
-                target: String(productId),
-                description: `Stock ${delta >= 0 ? '+' : ''}${delta} for “${product.name || productId}” (${currentStock} → ${newStock})${reason ? ` · ${reason}` : ''}`,
-                oldValue: currentStock,
-                newValue: newStock,
-                field: 'stockQuantity',
-              })
+            scheduleLogAdminActivity({
+              action: 'product_stock_adjusted',
+              target: String(productId),
+              description: `Stock ${delta >= 0 ? '+' : ''}${delta} for “${product.name || productId}” (${currentStock} → ${newStock})${reason ? ` · ${reason}` : ''}`,
+              oldValue: currentStock,
+              newValue: newStock,
+              field: 'stockQuantity',
             })
           }
         }

@@ -2192,6 +2192,8 @@ export const translations = {
             detailDescriptionLabel: 'Detail Page Description (detailed description shown only on detail page)',
             detailDescriptionPlaceholder: 'Enter detailed product description to show customers on the detail page.\nExample: Product features, usage instructions, precautions, shipping information, etc.',
             detailDescriptionNote: '* This description is only shown on the detail page. The basic description is shown on the listing page.',
+            fallbackImageLabel: 'Fallback Image (Optional)',
+            fallbackImageHelp: 'Image shown before or while a video loads. Used in ProductGallery.',
             // Customization options
             customizationOptionsTitle: 'Customization Options (options customers can customize)',
             customizationOptionsPlaceholder: 'e.g., Text, Color, Size',

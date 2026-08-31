@@ -477,7 +477,7 @@ export default function HeroSlideManager({
 
     if (url && !url.startsWith('indexeddb://') && !url.includes('://') && !url.startsWith('/')) {
       // 상대 경로나 파일명만 입력된 경우 경고
-      if (confirm('입력한 경로가 올바른 형식이 아닐 수 있습니다. 계속 진행하시겠습니까?')) {
+      if (confirm('The path may not be in a valid format. Continue anyway?')) {
         // 사용자가 계속 진행하기로 선택한 경우
       } else {
         return
@@ -971,7 +971,7 @@ export default function HeroSlideManager({
                       ) : (
                         <img
                           src={previewSrc}
-                          alt="미리보기"
+                          alt="Preview"
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
@@ -1084,7 +1084,7 @@ export default function HeroSlideManager({
                           }}
                           className="mr-2"
                         />
-                        <span className="text-sm text-gray-700">파일 업로드</span>
+                        <span className="text-sm text-gray-700">File upload</span>
                       </label>
                       <label className="flex items-center">
                         <input
@@ -1104,7 +1104,7 @@ export default function HeroSlideManager({
                           }}
                           className="mr-2"
                         />
-                        <span className="text-sm text-gray-700">URL 직접 입력</span>
+                        <span className="text-sm text-gray-700">Enter URL directly</span>
                       </label>
                     </div>
                   </div>
@@ -1250,7 +1250,7 @@ export default function HeroSlideManager({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          이벤트 시작일 (선택사항)
+                          Event start date (optional)
                         </label>
                         <input
                           type="date"
@@ -1262,7 +1262,7 @@ export default function HeroSlideManager({
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          이벤트 종료일 (선택사항)
+                          Event end date (optional)
                         </label>
                         <input
                           type="date"
@@ -1273,7 +1273,7 @@ export default function HeroSlideManager({
                       </div>
                     </div>
                     <p className="text-xs text-gray-500">
-                      시작일/종료일을 설정하면 해당 기간에만 배너가 표시됩니다. 설정하지 않으면 항상 표시됩니다.
+                      When start/end dates are set, the banner shows only during that period. Leave blank to show always.
                     </p>
                   </div>
                 )}
