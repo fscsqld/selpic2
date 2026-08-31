@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AdminUser } from '@/lib/adminAuth'
+import type { AdminUser } from './adminAuth'
 import {
   adminHasAdminSettingsPageAccess,
   adminHasAllPermissions,
+  adminHasAnyPermission,
   adminHasFullAccess,
   adminHasPermission,
   adminHasSystemAdminAccess,
-} from '@/lib/adminPermissionCheck'
+} from './adminPermissionCheck'
 
 function admin(over: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -51,6 +52,17 @@ describe('adminPermissionCheck', () => {
     const user = admin({ permissions: ['orders:read', 'products:read'] })
     expect(adminHasAllPermissions(user, ['orders:read', 'products:read'])).toBe(true)
     expect(adminHasAllPermissions(user, ['orders:read', 'orders:write'])).toBe(false)
+  })
+
+  it('accepts any match in adminHasAnyPermission', () => {
+    const user = admin({ permissions: ['messages:read'] })
+    expect(adminHasAnyPermission(user, ['agent:read', 'orders:write'])).toBe(true)
+    expect(adminHasAnyPermission(user, ['orders:write', 'products:write'])).toBe(false)
+  })
+
+  it('treats fundraising/messages read as legacy agent:read', () => {
+    expect(adminHasPermission(admin({ permissions: ['fundraising:read'] }), 'agent:read')).toBe(true)
+    expect(adminHasPermission(admin({ permissions: ['messages:read'] }), 'agent:read')).toBe(true)
   })
 
   it('splits Admin Settings personal vs system management', () => {

@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server'
 
 import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { listFundraisingOutreachTargetsFromDb } from '@/lib/fundraising/persistence'
-import { isSupabaseConfigured } from '@/lib/supabase/admin'
+import { isSupabaseConfigured, getSupabaseAdmin } from '@/lib/supabase/admin'
 import type { FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { AGENT_SECTORS } from '@/lib/agent/sectors'
+import {
+  countBespokeStickerRequestsByStatus,
+  readBespokeStickerRequests,
+} from '@/lib/server/bespokeStickerRequests'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,16 +26,12 @@ function emptyCounts(): StatusCounts {
 }
 
 /**
- * Agent Core hub summary — Wave 2.
- * Fundraising stats when caller has fundraising:read; sectors list is always returned.
- *
- * PERMISSION: temporary `fundraising:read`. Before a second live sector, switch to
- * `agent:read` — see `.cursor/rules/selpic-agent-permissions.mdc` / Phase B4.
+ * Agent Core hub summary — Wave 3.
+ * Gate: agent:read (legacy aliases: fundraising/messages/bespoke read).
  */
 export async function GET() {
-  const gate = await requireAdminPermission('fundraising:read')
+  const gate = await requireAdminPermission('agent:read')
   if (!gate.ok) {
-    // Soft: allow hub metadata for other future perms — for now fundraising:read is the Wave 2 gate
     return NextResponse.json({ error: gate.error }, { status: gate.status })
   }
 
@@ -45,10 +45,48 @@ export async function GET() {
     autonomyNote: s.autonomyNote,
   }))
 
+  let inbound = {
+    available: false as boolean,
+    newMessages: 0,
+    newBespoke: 0,
+    workspaceHref: '/admin/agent/inbound',
+    warning: undefined as string | undefined,
+  }
+
+  try {
+    let newMessages = 0
+    if (isSupabaseConfigured()) {
+      const admin = getSupabaseAdmin()
+      const { count, error } = await admin
+        .from('contact_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'new')
+      if (!error) newMessages = count ?? 0
+    }
+    const bespoke = await readBespokeStickerRequests()
+    const newBespoke = countBespokeStickerRequestsByStatus(bespoke, 'new')
+    inbound = {
+      available: true,
+      newMessages,
+      newBespoke,
+      workspaceHref: '/admin/agent/inbound',
+      warning: undefined,
+    }
+  } catch (e) {
+    inbound = {
+      available: false,
+      newMessages: 0,
+      newBespoke: 0,
+      workspaceHref: '/admin/agent/inbound',
+      warning: e instanceof Error ? e.message : 'Failed to load inbound stats',
+    }
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({
       ok: true,
       sectors,
+      inbound,
       fundraising: { available: false, counts: emptyCounts(), warning: 'Supabase not configured' },
     })
   }
@@ -66,6 +104,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       sectors,
+      inbound,
       fundraising: {
         available: true,
         counts,
@@ -77,6 +116,7 @@ export async function GET() {
       {
         ok: true,
         sectors,
+        inbound,
         fundraising: {
           available: false,
           counts: emptyCounts(),

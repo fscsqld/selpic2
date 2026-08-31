@@ -33,6 +33,13 @@ type SummaryResponse = {
     workspaceHref?: string
     warning?: string
   }
+  inbound?: {
+    available: boolean
+    newMessages: number
+    newBespoke: number
+    workspaceHref?: string
+    warning?: string
+  }
   error?: string
 }
 
@@ -45,9 +52,8 @@ const SECTOR_ICONS: Record<string, typeof Bot> = {
 }
 
 export default function AdminAgentHubPage() {
-  // Gate: fundraising:read until Phase B4 adds agent:read (see selpic-agent-permissions.mdc)
   return (
-    <AdminRoute requiredPermissions={['fundraising:read']}>
+    <AdminRoute requiredAnyPermissions={['agent:read', 'fundraising:read']}>
       <AgentHubContent />
     </AdminRoute>
   )
@@ -70,6 +76,7 @@ function AgentHubContent() {
       if (!res.ok) throw new Error(json?.error || 'Failed to load agent summary')
       setSummary(json)
       if (json?.fundraising?.warning) setMessage(json.fundraising.warning)
+      else if (json?.inbound?.warning) setMessage(json.inbound.warning)
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load')
       setSummary(null)
@@ -90,7 +97,7 @@ function AgentHubContent() {
       <AdminPageHeader title="AI Agent" icon={<Bot className="w-7 h-7 text-indigo-600" />} />
       <div className="max-w-7xl mx-auto p-6">
         <p className="text-sm text-gray-600 mb-6 -mt-2">
-          Governed hub for SELPIC admin sectors — start with Fundraising outreach; more sectors unlock in later waves.
+          Governed hub for SELPIC admin sectors — Fundraising outreach and Customer care drafts are live.
         </p>
 
       <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
@@ -148,6 +155,33 @@ function AgentHubContent() {
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
           >
             Open Fundraising Agent workspace
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-gray-900 mb-3">Customer care drafts — live</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">New messages</div>
+            <div className="mt-1 text-2xl font-bold text-gray-900">
+              {summary?.inbound?.available ? summary.inbound.newMessages : '—'}
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">New bespoke</div>
+            <div className="mt-1 text-2xl font-bold text-gray-900">
+              {summary?.inbound?.available ? summary.inbound.newBespoke : '—'}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4">
+          <Link
+            href="/admin/agent/inbound"
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            Open draft workspace
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
