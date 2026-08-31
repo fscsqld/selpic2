@@ -38,6 +38,7 @@ import {
 import PermissionManager from '@/components/PermissionManager'
 import { useWatermarkStore, WatermarkPosition } from '@/lib/watermarkStore'
 import { hasPublicSupabaseEnv, useAdminEmailRegistry } from '@/lib/useAdminEmailRegistry'
+import { importLogAdminActivity } from '@/lib/loadLogAdminActivity'
 
 export default function AdminSettingsPage() {
   const { t } = useTranslation()
@@ -1694,7 +1695,7 @@ System Status: ${totalSize > 5 * 1024 * 1024 ? '⚠️ Warning: High storage usa
                       <option value="MM/DD/YYYY">MM/DD/YYYY ({getDateFormatPreview('MM/DD/YYYY')})</option>
                       <option value="DD/MM/YYYY">DD/MM/YYYY ({getDateFormatPreview('DD/MM/YYYY')})</option>
                       <option value="DD MMM YYYY">DD MMM YYYY ({getDateFormatPreview('DD MMM YYYY')})</option>
-                      <option value="YYYY년 MM월 DD일">YYYY년 MM월 DD일 ({getDateFormatPreview('YYYY년 MM월 DD일')})</option>
+                      <option value="YYYY년 MM월 DD일">YYYY-MM-DD with Korean units ({getDateFormatPreview('YYYY년 MM월 DD일')})</option>
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
                       Current preview: {getDateFormatPreview(dateFormat)}
@@ -4743,8 +4744,9 @@ function ActivityLogView() {
 
   useEffect(() => {
     let cancelled = false
-    void import('@/lib/logAdminActivity').then(async ({ pullAdminActivityLogsFromServer }) => {
-      const added = await pullAdminActivityLogsFromServer()
+    void importLogAdminActivity().then(async (mod) => {
+      if (!mod) return
+      const added = await mod.pullAdminActivityLogsFromServer()
       if (cancelled) return
       if (added > 0) {
         setRemoteSyncNote(`Merged ${added} shared audit entr${added === 1 ? 'y' : 'ies'} from server.`)
@@ -4803,7 +4805,12 @@ function ActivityLogView() {
 
     setIsClearing(true)
     try {
-      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+      const mod = await importLogAdminActivity()
+      if (!mod) {
+        window.alert('Activity log module failed to load. Hard refresh (Ctrl+Shift+R) and try again.')
+        return
+      }
+      const { deleteActivityLogsOnServer } = mod
 
       if (clearMode === 'all') {
         const result = await deleteActivityLogsOnServer({ mode: 'all' })
@@ -4851,7 +4858,12 @@ function ActivityLogView() {
 
     setIsDeletingLog(true)
     try {
-      const { deleteActivityLogsOnServer } = await import('@/lib/logAdminActivity')
+      const mod = await importLogAdminActivity()
+      if (!mod) {
+        window.alert('Activity log module failed to load. Hard refresh (Ctrl+Shift+R) and try again.')
+        return
+      }
+      const { deleteActivityLogsOnServer } = mod
       const result = await deleteActivityLogsOnServer({ mode: 'id', id: logId })
       if (!result.ok) {
         window.alert(result.error || 'Failed to delete activity log on server.')

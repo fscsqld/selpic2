@@ -561,10 +561,10 @@ function VIPGradeBenefitForm({
   const getAllGradeConfigsForForm = () => {
     // 기본 등급 정의 (0-4 모두 포함)
     const defaultGradeDefinitions = [
-      { code: 0, name: '일반', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray' },
-      { code: 1, name: '실버', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver' },
-      { code: 2, name: '골드', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold' },
-      { code: 3, name: '블랙', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black' },
+      { code: 0, name: 'Basic', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray' },
+      { code: 1, name: 'Silver', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver' },
+      { code: 2, name: 'Gold', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold' },
+      { code: 3, name: 'Black', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black' },
       { code: 4, name: 'VVIP', nameEn: 'VVIP', minAmount: 3000, maxAmount: undefined, color: 'purple' }
     ]
     

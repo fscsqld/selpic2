@@ -819,7 +819,7 @@ export default function PhoneCaseManager() {
                     className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                   />
                   <label htmlFor="hasDetailPage" className="ml-2 text-sm font-medium text-gray-700">
-                    상세 페이지 표시 (이미지 클릭 시 상세 페이지로 이동)
+                    Show detail page (click image to open product detail)
                   </label>
                 </div>
 
@@ -878,7 +878,7 @@ export default function PhoneCaseManager() {
                 {/* Product description */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Description * (목록 페이지에 표시되는 간단한 설명)
+                    Product Description * (short summary for listing pages)
                   </label>
                   <textarea
                     name="description"
@@ -895,7 +895,7 @@ export default function PhoneCaseManager() {
               {/* 상세 페이지 전용 상세 설명 */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  상세 페이지 설명 (상세 페이지에서만 표시되는 자세한 설명)
+                  Detail page description (shown on the product detail page only)
                 </label>
                 <textarea
                   name="detailDescription"
@@ -903,10 +903,10 @@ export default function PhoneCaseManager() {
                   onChange={handleInputChange}
                   rows={8}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  placeholder="상세 페이지에서 고객에게 보여줄 자세한 상품 설명을 입력하세요.&#10;예: 제품의 특징, 사용 방법, 주의사항, 배송 정보 등을 포함할 수 있습니다."
+                  placeholder="Enter a detailed product description for customers on the product page.&#10;Example: features, how to use, care notes, shipping info."
                 />
                 <p className="mt-2 text-xs text-gray-500">
-                  * 이 설명은 상세 페이지에서만 표시됩니다. 목록 페이지에는 기본 설명이 표시됩니다.
+                  * This text appears on the detail page only. The listing page uses the short description above.
                 </p>
               </div>
 

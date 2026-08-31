@@ -6,7 +6,7 @@ import { useContentStore } from '@/lib/contentStore'
 import { Plus, Edit, Trash2, Eye, Search, Filter, X, CheckCircle, AlertCircle, Package } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import MediaUpload from '@/components/MediaUpload'
-import { useTranslation } from '@/lib/useTranslation'
+import { useAdminTranslation } from '@/lib/useAdminTranslation'
 import AdminRoute from '@/components/AdminRoute'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
@@ -139,7 +139,7 @@ function AdminProductsPageContent() {
   const { products, addProduct, updateProduct, deleteProduct, refreshProducts, adjustProductStock, defaultPageSize } = useStore()
   const { adminUser } = useAdminAuth()
   const { subcategoryItems } = useContentStore()
-  const { t } = useTranslation()
+  const { t } = useAdminTranslation()
   const canWriteProducts = adminHasPermission(adminUser, 'products:write')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null)
@@ -2024,10 +2024,10 @@ function AdminProductsPageContent() {
                 {/* 🆕 Fallback Image 업로드 (동영상 로딩 전 표시) */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fallback Image (Optional)
+                    {t('admin.products.fallbackImageLabel')}
                   </label>
                   <p className="text-xs text-gray-500 mb-2">
-                    동영상이 표시되기 전이나 로딩 중에 보여줄 대체 이미지입니다. ProductGallery에서 사용됩니다.
+                    {t('admin.products.fallbackImageHelp')}
                   </p>
                   <MediaUpload
                     type="image"
@@ -2538,10 +2538,10 @@ function AdminProductsPageContent() {
                               </select>
                               {/* 타입별 안내 텍스트 */}
                               <p className="mt-1 text-xs text-gray-500">
-                                {option.type === 'text' && '자유 입력 또는 선택지 목록 추가 가능'}
-                                {option.type === 'color' && '색상 선택지 목록 필요'}
-                                {option.type === 'size' && '크기 선택지 목록 필요'}
-                                {option.type === 'image' && '고객이 이미지를 업로드할 수 있는 옵션'}
+                                {option.type === 'text' && 'Free text or add a list of choices'}
+                                {option.type === 'color' && 'Add a list of color choices'}
+                                {option.type === 'size' && 'Add a list of size choices'}
+                                {option.type === 'image' && 'Customers can upload an image for this option'}
                               </p>
                             </div>
                             
@@ -2578,8 +2578,8 @@ function AdminProductsPageContent() {
                             <div className="mt-3">
                               <label className="block text-xs font-medium text-gray-600 mb-2">
                                 {option.type === 'text' 
-                                  ? '선택 가능한 값들 (비워두면 자유 입력)' 
-                                  : '선택 가능한 값들'}
+                                  ? 'Allowed values (leave empty for free text)' 
+                                  : 'Allowed values'}
                               </label>
                               {option.options && option.options.length > 0 ? (
                                 <>
@@ -2603,7 +2603,7 @@ function AdminProductsPageContent() {
                                   <div className="flex space-x-2">
                                     <input
                                       type="text"
-                                      placeholder={option.type === 'text' ? '새 선택지 입력 후 Enter (예: Normal, Bold, Italic)' : '새 값 입력 후 Enter'}
+                                      placeholder={option.type === 'text' ? 'Type a choice and press Enter (e.g. Normal, Bold, Italic)' : 'Type a value and press Enter'}
                                       className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                       onKeyPress={(e) => {
                                         if (e.key === 'Enter') {
@@ -2627,7 +2627,7 @@ function AdminProductsPageContent() {
                                       }}
                                       className="px-3 py-1.5 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
                                     >
-                                      추가
+                                      Add
                                     </button>
                                   </div>
                                 </>
@@ -2635,13 +2635,13 @@ function AdminProductsPageContent() {
                                 <div className="space-y-2">
                                   <p className="text-xs text-gray-500 mb-2">
                                     {option.type === 'text' 
-                                      ? '선택지를 추가하지 않으면 고객이 자유롭게 텍스트를 입력할 수 있습니다.'
-                                      : '선택 가능한 값들을 추가해주세요.'}
+                                      ? 'If you add no choices, customers can enter any text.'
+                                      : 'Add one or more allowed values.'}
                                   </p>
                                   <div className="flex space-x-2">
                                     <input
                                       type="text"
-                                      placeholder={option.type === 'text' ? '새 선택지 입력 후 Enter (예: Normal, Bold, Italic)' : '새 값 입력 후 Enter'}
+                                      placeholder={option.type === 'text' ? 'Type a choice and press Enter (e.g. Normal, Bold, Italic)' : 'Type a value and press Enter'}
                                       className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                       onKeyPress={(e) => {
                                         if (e.key === 'Enter') {
@@ -2665,7 +2665,7 @@ function AdminProductsPageContent() {
                                       }}
                                       className="px-3 py-1.5 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
                                     >
-                                      추가
+                                      Add
                                     </button>
                                   </div>
                                 </div>

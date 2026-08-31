@@ -42,11 +42,11 @@ export default function VIPGradeConfigAddForm({
   }
 
   const quickAddPresets = [
-    { code: 0, name: '일반', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray', benefits: '기본 5% 할인 쿠폰' },
-    { code: 1, name: '실버', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver', benefits: '5% 상시 할인\n생일 쿠폰' },
-    { code: 2, name: '골드', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold', benefits: '7% 상시 할인\n무료 배송 쿠폰' },
-    { code: 3, name: '블랙', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black', benefits: '10% 상시 할인\n전용 고객 센터' },
-    { code: 4, name: 'VVIP', nameEn: 'VVIP', minAmount: 3000, maxAmount: undefined, color: 'purple', benefits: '15% 상시 할인\n특별 선물' }
+    { code: 0, name: 'Basic', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray', benefits: '5% coupon' },
+    { code: 1, name: 'Silver', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver', benefits: '5% ongoing discount\nBirthday coupon' },
+    { code: 2, name: 'Gold', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold', benefits: '7% ongoing discount\nFree shipping coupon' },
+    { code: 3, name: 'Black', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black', benefits: '10% ongoing discount\nDedicated support' },
+    { code: 4, name: 'VVIP', nameEn: 'VVIP', minAmount: 3000, maxAmount: undefined, color: 'purple', benefits: '15% ongoing discount\nSpecial gift' }
   ]
 
   const applyPreset = (preset: typeof quickAddPresets[0]) => {

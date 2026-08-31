@@ -2473,7 +2473,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 1 내용"
+                      title="Section 1 content"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 1 내용')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2487,7 +2487,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 1 목록"
+                      title="Section 1 list"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 1 목록')?.content || ''}
                       placeholder="Enter list items (one per line, or separated by commas)"
                       type="textarea"
@@ -2522,7 +2522,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 2 내용"
+                      title="Section 2 content"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 2 내용')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2536,7 +2536,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 2 목록"
+                      title="Section 2 list"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 2 목록')?.content || ''}
                       placeholder="Enter list items (one per line, or separated by commas)"
                       type="textarea"
@@ -2571,7 +2571,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 3 내용"
+                      title="Section 3 content"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 3 내용')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2585,7 +2585,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Section 3 목록"
+                      title="Section 3 list"
                       value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 3 목록')?.content || ''}
                       placeholder="Enter list items (one per line, or separated by commas)"
                       type="textarea"
@@ -2671,7 +2671,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">Header</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <QuickEditCard
-                      title="Privacy Policy 제목"
+                      title="Privacy Policy title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 제목')?.content || 'Selpic Privacy Policy'}
                       placeholder="Enter Privacy Policy title"
                       type="text"
@@ -2685,7 +2685,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Privacy Policy 부제목"
+                      title="Privacy Policy subtitle"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Privacy Policy 부제목')?.content || 'Effective Date: December 2025 (Last Updated: December 2025)'}
                       placeholder="Enter subtitle"
                       type="text"
@@ -2706,7 +2706,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">1. Introduction and Commitment</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Introduction 제목"
+                      title="Introduction title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 제목')?.content || '1. Introduction and Commitment'}
                       placeholder="Enter section title"
                       type="text"
@@ -2720,7 +2720,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Introduction 내용"
+                      title="Introduction content"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Introduction 내용')?.content || ''}
                       placeholder="Enter section content"
                       type="text"
@@ -2741,7 +2741,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">2. Personal Information We Collect</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Information We Collect 제목"
+                      title="Information We Collect title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Information We Collect 제목')?.content || '2. Personal Information We Collect'}
                       placeholder="Enter section title"
                       type="text"
@@ -2755,7 +2755,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Information We Collect 설명"
+                      title="Information We Collect description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Information We Collect 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2832,7 +2832,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">3. How We Collect Information</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="How We Collect Information 제목"
+                      title="How We Collect Information title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Collect Information 제목')?.content || '3. How We Collect Information'}
                       placeholder="Enter section title"
                       type="text"
@@ -2846,7 +2846,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="How We Collect Information 설명"
+                      title="How We Collect Information description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Collect Information 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2860,7 +2860,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="How We Collect Information 설명2"
+                      title="How We Collect Information description 2"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Collect Information 설명2')?.content || ''}
                       placeholder="Enter section description 2"
                       type="text"
@@ -2874,7 +2874,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="How We Collect Information 목록"
+                      title="How We Collect Information list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Collect Information 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -2895,7 +2895,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">4. Purpose of Collection and Use</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Purpose of Collection and Use 제목"
+                      title="Purpose of Collection and Use title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Purpose of Collection and Use 제목')?.content || '4. Purpose of Collection and Use (Why We Need Your Data)'}
                       placeholder="Enter section title"
                       type="text"
@@ -2909,7 +2909,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Purpose of Collection and Use 설명"
+                      title="Purpose of Collection and Use description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Purpose of Collection and Use 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2923,7 +2923,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="How We Use Information 목록"
+                      title="How We Use Information list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'How We Use Information 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -2944,7 +2944,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">5. Direct Marketing (APP 7)</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Direct Marketing 제목"
+                      title="Direct Marketing title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Direct Marketing 제목')?.content || '5. Direct Marketing (APP 7)'}
                       placeholder="Enter section title"
                       type="text"
@@ -2958,7 +2958,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Direct Marketing 설명"
+                      title="Direct Marketing description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Direct Marketing 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -2972,7 +2972,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Direct Marketing 목록"
+                      title="Direct Marketing list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Direct Marketing 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -2993,7 +2993,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">6. Disclosure to Third Parties</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Disclosure to Third Parties 제목"
+                      title="Disclosure to Third Parties title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Disclosure to Third Parties 제목')?.content || '6. Disclosure to Third Parties'}
                       placeholder="Enter section title"
                       type="text"
@@ -3007,7 +3007,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Disclosure to Third Parties 설명"
+                      title="Disclosure to Third Parties description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Disclosure to Third Parties 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -3021,7 +3021,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Disclosure to Third Parties 목록"
+                      title="Disclosure to Third Parties list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Disclosure to Third Parties 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3035,7 +3035,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Disclosure to Third Parties 설명2"
+                      title="Disclosure to Third Parties description 2"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Disclosure to Third Parties 설명2')?.content || ''}
                       placeholder="Enter additional description"
                       type="text"
@@ -3056,7 +3056,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">7. Data Quality and Security</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Data Security 제목"
+                      title="Data Security title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 제목')?.content || '7. Data Quality and Security (APPs 10 & 11)'}
                       placeholder="Enter section title"
                       type="text"
@@ -3070,7 +3070,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Data Security 설명"
+                      title="Data Security description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -3084,7 +3084,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Data Security 목록"
+                      title="Data Security list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Data Security 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3105,7 +3105,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">8. Access and Correction</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Access and Correction 제목"
+                      title="Access and Correction title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Access and Correction 제목')?.content || '8. Access and Correction (APPs 12 & 13)'}
                       placeholder="Enter section title"
                       type="text"
@@ -3119,7 +3119,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Your Rights 설명"
+                      title="Your Rights description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -3133,7 +3133,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Your Rights 목록"
+                      title="Your Rights list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Your Rights 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3154,7 +3154,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">9. Making a Complaint</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Making a Complaint 제목"
+                      title="Making a Complaint title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Making a Complaint 제목')?.content || '9. Making a Complaint'}
                       placeholder="Enter section title"
                       type="text"
@@ -3168,7 +3168,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Making a Complaint 설명"
+                      title="Making a Complaint description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Making a Complaint 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -3182,7 +3182,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Making a Complaint 목록"
+                      title="Making a Complaint list"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Making a Complaint 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3203,7 +3203,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">10. Contact Us</h4>
                   <div className="grid grid-cols-1 gap-4 mb-4">
                     <QuickEditCard
-                      title="Contact Information 제목"
+                      title="Contact Information title"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 제목')?.content || '10. Contact Us'}
                       placeholder="Enter section title"
                       type="text"
@@ -3217,7 +3217,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Contact Information 설명"
+                      title="Contact Information description"
                       value={contentItems.find(item => item.section === 'privacy' && item.title === 'Contact Information 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"
@@ -3298,7 +3298,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">Header</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <QuickEditCard
-                      title="Terms and Conditions 제목"
+                      title="Terms and Conditions title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 제목')?.content || 'Terms and Conditions'}
                       placeholder="Enter Terms and Conditions title"
                       type="text"
@@ -3312,7 +3312,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Terms and Conditions 부제목"
+                      title="Terms and Conditions subtitle"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Terms and Conditions 부제목')?.content || 'Last updated: September 3, 2025'}
                       placeholder="Enter subtitle"
                       type="text"
@@ -3333,7 +3333,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">1. Agreement to Terms</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Agreement to Terms 제목"
+                      title="Agreement to Terms title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 제목')?.content || 'Agreement to Terms'}
                       placeholder="Enter section title"
                       type="text"
@@ -3347,7 +3347,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Agreement to Terms 내용"
+                      title="Agreement to Terms content"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Agreement to Terms 내용')?.content || ''}
                       placeholder="Enter section content"
                       type="text"
@@ -3368,7 +3368,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">2. Use of Service</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Use of Service 제목"
+                      title="Use of Service title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Use of Service 제목')?.content || 'Use of Service'}
                       placeholder="Enter section title"
                       type="text"
@@ -3382,7 +3382,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Permitted Uses 제목"
+                      title="Permitted Uses title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 제목')?.content || 'Permitted Uses'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3396,7 +3396,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Permitted Uses 목록"
+                      title="Permitted Uses list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Permitted Uses 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3410,7 +3410,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Prohibited Uses 제목"
+                      title="Prohibited Uses title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 제목')?.content || 'Prohibited Uses'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3424,7 +3424,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Prohibited Uses 내용"
+                      title="Prohibited Uses content"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 내용')?.content || ''}
                       placeholder="Enter subsection description"
                       type="text"
@@ -3438,7 +3438,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Prohibited Uses 목록"
+                      title="Prohibited Uses list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Prohibited Uses 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3459,7 +3459,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">3. Orders and Payment</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Orders and Payment 제목"
+                      title="Orders and Payment title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Orders and Payment 제목')?.content || 'Orders and Payment'}
                       placeholder="Enter section title"
                       type="text"
@@ -3473,7 +3473,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Order Processing 제목"
+                      title="Order Processing title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Order Processing 제목')?.content || 'Order Processing'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3487,7 +3487,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Order Processing 목록"
+                      title="Order Processing list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Order Processing 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3501,7 +3501,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Payment Terms 제목"
+                      title="Payment Terms title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Payment Terms 제목')?.content || 'Payment Terms'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3515,7 +3515,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Payment Terms 목록"
+                      title="Payment Terms list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Payment Terms 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3536,7 +3536,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">4. Intellectual Property</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Intellectual Property 제목"
+                      title="Intellectual Property title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Intellectual Property 제목')?.content || 'Intellectual Property'}
                       placeholder="Enter section title"
                       type="text"
@@ -3578,7 +3578,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="User Content 제목"
+                      title="User Content title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'User Content 제목')?.content || 'User Content'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3592,7 +3592,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="User Content 목록"
+                      title="User Content list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'User Content 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3613,7 +3613,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">5. Limitation of Liability</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Limitation of Liability 제목"
+                      title="Limitation of Liability title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Limitation of Liability 제목')?.content || 'Limitation of Liability'}
                       placeholder="Enter section title"
                       type="text"
@@ -3627,7 +3627,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Limitation of Liability 내용"
+                      title="Limitation of Liability content"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Limitation of Liability 내용')?.content || ''}
                       placeholder="Enter section content"
                       type="text"
@@ -3641,7 +3641,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Limitation of Liability 목록"
+                      title="Limitation of Liability list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Limitation of Liability 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3655,7 +3655,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Limitation of Liability 내용2"
+                      title="Limitation of Liability content 2"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Limitation of Liability 내용2')?.content || ''}
                       placeholder="Enter additional section content"
                       type="text"
@@ -3669,7 +3669,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Limitation of Liability 목록2"
+                      title="Limitation of Liability list 2"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Limitation of Liability 목록2')?.content || ''}
                       placeholder="Enter additional list items separated by commas"
                       type="text"
@@ -3690,7 +3690,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">6. Returns and Refunds</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Returns and Refunds 제목"
+                      title="Returns and Refunds title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Returns and Refunds 제목')?.content || 'Returns and Refunds'}
                       placeholder="Enter section title"
                       type="text"
@@ -3704,7 +3704,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Return Policy 제목"
+                      title="Return Policy title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Return Policy 제목')?.content || 'Return Policy'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3718,7 +3718,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Return Policy 목록"
+                      title="Return Policy list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Return Policy 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3732,7 +3732,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Refund Process 제목"
+                      title="Refund Process title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Refund Process 제목')?.content || 'Refund Process'}
                       placeholder="Enter subsection title"
                       type="text"
@@ -3746,7 +3746,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Refund Process 목록"
+                      title="Refund Process list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Refund Process 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3767,7 +3767,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">7. Changes to Terms</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Changes to Terms 제목"
+                      title="Changes to Terms title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Changes to Terms 제목')?.content || 'Changes to Terms'}
                       placeholder="Enter section title"
                       type="text"
@@ -3781,7 +3781,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Changes to Terms 내용"
+                      title="Changes to Terms content"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Changes to Terms 내용')?.content || ''}
                       placeholder="Enter section content"
                       type="text"
@@ -3802,7 +3802,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">8. Governing Law</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <QuickEditCard
-                      title="Governing Law 제목"
+                      title="Governing Law title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Governing Law 제목')?.content || '8. Governing Law'}
                       placeholder="Enter section title"
                       type="text"
@@ -3816,7 +3816,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Governing Law 내용"
+                      title="Governing Law content"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Governing Law 내용')?.content || ''}
                       placeholder="Enter section content"
                       type="text"
@@ -3830,7 +3830,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Governing Law 목록"
+                      title="Governing Law list"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Governing Law 목록')?.content || ''}
                       placeholder="Enter list items separated by commas"
                       type="text"
@@ -3851,7 +3851,7 @@ export default function ContentManagementPage() {
                   <h4 className="text-md font-semibold text-gray-900 mb-4">9. Contact Information</h4>
                   <div className="grid grid-cols-1 gap-4 mb-4">
                     <QuickEditCard
-                      title="Contact Information 제목"
+                      title="Contact Information title"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Contact Information 제목')?.content || 'Contact Us'}
                       placeholder="Enter section title"
                       type="text"
@@ -3865,7 +3865,7 @@ export default function ContentManagementPage() {
                       }}
                     />
                     <QuickEditCard
-                      title="Contact Information 설명"
+                      title="Contact Information description"
                       value={contentItems.find(item => item.section === 'terms' && item.title === 'Contact Information 설명')?.content || ''}
                       placeholder="Enter section description"
                       type="text"

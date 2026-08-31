@@ -303,7 +303,7 @@ export default function SidebarMenuManager({
                     setFormData({ ...formData, url })
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  placeholder={formData.type === 'link' ? '/stamp 또는 https://example.com' : formData.type === 'scroll' ? '#section-id' : '#'}
+                  placeholder={formData.type === 'link' ? '/stamp or https://example.com' : formData.type === 'scroll' ? '#section-id' : '#'}
                   required
                 />
                 {formData.url && (formData.url.includes('#app/') || formData.url.includes('/page.tsx')) && (

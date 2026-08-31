@@ -3,6 +3,7 @@ import { dedupeHeaderLogoImageItems } from '@/lib/pickLogoImageItem'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
+import { scheduleLogAdminActivity, scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 
 const CONTENT_STORE_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -3284,12 +3285,12 @@ const defaultVIPGradeConfigs: VIPGradeConfig[] = [
   {
     id: 'grade-config-basic-0',
     code: 0,
-    name: '일반',
+    name: 'Basic',
     nameEn: 'Basic',
     minAmount: 0,
     maxAmount: 100,           // $100 미만
     color: 'gray',
-    benefits: ['기본 5% 할인 쿠폰 (자동 할인 없음)'],
+    benefits: ['5% coupon (no automatic discount)'],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3297,12 +3298,12 @@ const defaultVIPGradeConfigs: VIPGradeConfig[] = [
   {
     id: 'grade-config-silver-1',
     code: 1,
-    name: '실버',
+    name: 'Silver',
     nameEn: 'Silver',
     minAmount: 100,          // $100 이상
     maxAmount: 300,          // $300 미만
     color: 'silver',
-    benefits: ['5% 상시 할인', '최대 할인 $10,000', '생일 쿠폰'],
+    benefits: ['5% ongoing discount', 'Max discount $10,000', 'Birthday coupon'],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3310,12 +3311,12 @@ const defaultVIPGradeConfigs: VIPGradeConfig[] = [
   {
     id: 'grade-config-gold-2',
     code: 2,
-    name: '골드',
+    name: 'Gold',
     nameEn: 'Gold',
     minAmount: 300,          // $300 이상
     maxAmount: 1000,         // $1,000 미만
     color: 'gold',
-    benefits: ['10% 상시 할인', '무료 배송', '최대 할인 $20,000'],
+    benefits: ['10% ongoing discount', 'Free shipping', 'Max discount $20,000'],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3323,12 +3324,12 @@ const defaultVIPGradeConfigs: VIPGradeConfig[] = [
   {
     id: 'grade-config-black-3',
     code: 3,
-    name: '블랙',
+    name: 'Black',
     nameEn: 'Black',
     minAmount: 1000,         // $1,000 이상
     maxAmount: 3000,        // $3,000 미만
     color: 'black',
-    benefits: ['20% 상시 할인', '무료 배송', '최대 할인 $50,000', '전용 고객 센터'],
+    benefits: ['20% ongoing discount', 'Free shipping', 'Max discount $50,000', 'Dedicated support'],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3341,7 +3342,7 @@ const defaultVIPGradeConfigs: VIPGradeConfig[] = [
     minAmount: 3000,         // $3,000 이상
     maxAmount: undefined,    // 무제한
     color: 'purple',
-    benefits: ['50% 상시 할인', '무료 배송', '최대 할인 $100,000', '특별 선물'],
+    benefits: ['50% ongoing discount', 'Free shipping', 'Max discount $100,000', 'Special gift'],
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -3357,7 +3358,7 @@ const defaultVIPGradeBenefits: VIPGradeBenefit[] = [
     baseDiscountPercentage: 0,
     freeShipping: false,
     minPurchaseAmount: 0,
-    additionalBenefits: ['기본 5% 할인 쿠폰'],
+    additionalBenefits: ['5% coupon'],
     isActive: true,
     priority: 1,
     allowPromoCodeStacking: true,
@@ -3372,7 +3373,7 @@ const defaultVIPGradeBenefits: VIPGradeBenefit[] = [
     freeShipping: false,
     maxDiscountAmount: 10000,
     minPurchaseAmount: 0,
-    additionalBenefits: ['5% 상시 할인', '생일 쿠폰'],
+    additionalBenefits: ['5% ongoing discount', 'Birthday coupon'],
     isActive: true,
     priority: 2,
     allowPromoCodeStacking: true,
@@ -3387,7 +3388,7 @@ const defaultVIPGradeBenefits: VIPGradeBenefit[] = [
     freeShipping: true,
     maxDiscountAmount: 20000,
     minPurchaseAmount: 0,
-    additionalBenefits: ['10% 상시 할인', '무료 배송 쿠폰'],
+    additionalBenefits: ['10% ongoing discount', 'Free shipping coupon'],
     isActive: true,
     priority: 3,
     allowPromoCodeStacking: true,
@@ -3402,7 +3403,7 @@ const defaultVIPGradeBenefits: VIPGradeBenefit[] = [
     freeShipping: true,
     maxDiscountAmount: 50000,
     minPurchaseAmount: 0,
-    additionalBenefits: ['20% 상시 할인', '전용 고객 센터'],
+    additionalBenefits: ['20% ongoing discount', 'Dedicated support'],
     categoryDiscounts: { 'HotGoods': 5 }, // MARKET S 상품 5% 할인 (Stickers/Stamps는 baseDiscountPercentage 20% 적용)
     isActive: true,
     priority: 4,
@@ -3418,7 +3419,7 @@ const defaultVIPGradeBenefits: VIPGradeBenefit[] = [
     freeShipping: true,
     maxDiscountAmount: 100000,
     minPurchaseAmount: 0,
-    additionalBenefits: ['50% 상시 할인', '특별 선물'],
+    additionalBenefits: ['50% ongoing discount', 'Special gift'],
     categoryDiscounts: { 'HotGoods': 10 }, // MARKET S 상품 10% 할인 (Stickers/Stamps는 baseDiscountPercentage 50% 적용)
     isActive: true,
     priority: 5,
@@ -4105,12 +4106,12 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
         missingConfigs.push({
           id: 'grade-config-basic-0',
           code: 0,
-          name: '일반',
+          name: 'Basic',
           nameEn: 'Basic',
           minAmount: 0,
           maxAmount: 100,
           color: 'gray',
-          benefits: ['기본 5% 할인 쿠폰 (자동 할인 없음)'],
+          benefits: ['5% coupon (no automatic discount)'],
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -4120,12 +4121,12 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
         missingConfigs.push({
           id: 'grade-config-silver-1',
           code: 1,
-          name: '실버',
+          name: 'Silver',
           nameEn: 'Silver',
           minAmount: 100,
           maxAmount: 300,
           color: 'silver',
-          benefits: ['5% 상시 할인', '최대 할인 $10,000', '생일 쿠폰'],
+          benefits: ['5% ongoing discount', 'Max discount $10,000', 'Birthday coupon'],
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -4135,12 +4136,12 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
         missingConfigs.push({
           id: 'grade-config-gold-2',
           code: 2,
-          name: '골드',
+          name: 'Gold',
           nameEn: 'Gold',
           minAmount: 300,
           maxAmount: 1000,
           color: 'gold',
-          benefits: ['10% 상시 할인', '무료 배송', '최대 할인 $20,000'],
+          benefits: ['10% ongoing discount', 'Free shipping', 'Max discount $20,000'],
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -4150,12 +4151,12 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
         missingConfigs.push({
           id: 'grade-config-black-3',
           code: 3,
-          name: '블랙',
+          name: 'Black',
           nameEn: 'Black',
           minAmount: 1000,
           maxAmount: 3000,
           color: 'black',
-          benefits: ['20% 상시 할인', '무료 배송', '최대 할인 $50,000', '전용 고객 센터'],
+          benefits: ['20% ongoing discount', 'Free shipping', 'Max discount $50,000', 'Dedicated support'],
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -4170,7 +4171,7 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
           minAmount: 3000,
           maxAmount: undefined,
           color: 'purple',
-          benefits: ['50% 상시 할인', '무료 배송', '최대 할인 $100,000', '특별 선물'],
+          benefits: ['50% ongoing discount', 'Free shipping', 'Max discount $100,000', 'Special gift'],
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -4226,14 +4227,12 @@ export const useContentStore = create<ContentStore>()(
           contentItems: dedupeHeaderLogoImageItems([...state.contentItems, newContent])
         }))
         if (typeof window !== 'undefined') {
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'cms_content_created',
               target: newContent.id,
               description: `Created CMS “${newContent.title || newContent.section}” (${newContent.section})`,
               newValue: { id: newContent.id, section: newContent.section, title: newContent.title },
             })
-          })
         }
       },
 
@@ -4257,15 +4256,13 @@ export const useContentStore = create<ContentStore>()(
         })
         console.log('콘텐츠 스토어 업데이트 완료')
         if (typeof window !== 'undefined') {
-          void import('@/lib/logAdminActivity').then(({ logAdminActivityThrottled }) => {
-            const label = before?.title || updates.title || before?.section || id
-            logAdminActivityThrottled(`cms-content:${id}`, {
+          const label = before?.title || updates.title || before?.section || id
+          scheduleLogAdminActivityThrottled(`cms-content:${id}`, {
               action: 'cms_content_updated',
               target: id,
               description: `Updated CMS “${label}”`,
               field: Object.keys(updates).join(','),
             })
-          })
         }
       },
 
@@ -4275,8 +4272,7 @@ export const useContentStore = create<ContentStore>()(
           contentItems: state.contentItems.filter((item: ContentItem) => item.id !== id)
         }))
         if (typeof window !== 'undefined') {
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'cms_content_deleted',
               target: id,
               description: `Deleted CMS “${before?.title || before?.section || id}”`,
@@ -4284,7 +4280,6 @@ export const useContentStore = create<ContentStore>()(
                 ? { id: before.id, section: before.section, title: before.title }
                 : { id },
             })
-          })
         }
       },
 
@@ -5411,8 +5406,7 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'promo_code_created',
               target: newCode.id,
               description: `Created promo code ${normalizedCode}`,
@@ -5423,7 +5417,6 @@ export const useContentStore = create<ContentStore>()(
                 discountValue: newCode.discountValue,
               },
             })
-          })
         }
       },
 
@@ -5454,14 +5447,12 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'promo_code_updated',
               target: id,
               description: `Updated promo code ${before?.code || id}`,
               newValue: normalizedUpdates,
             })
-          })
         }
       },
 
@@ -5476,8 +5467,7 @@ export const useContentStore = create<ContentStore>()(
           window.dispatchEvent(new CustomEvent('content-store-updated', {
             detail: { type: 'promoCodes' }
           }))
-          void import('@/lib/logAdminActivity').then(({ logAdminActivity }) => {
-            logAdminActivity({
+scheduleLogAdminActivity({
               action: 'promo_code_deleted',
               target: id,
               description: `Deleted promo code ${existing?.code || id}`,
@@ -5485,7 +5475,6 @@ export const useContentStore = create<ContentStore>()(
                 ? { id: existing.id, code: existing.code }
                 : { id },
             })
-          })
         }
       },
 
