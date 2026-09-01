@@ -9,6 +9,7 @@ import {
   countBespokeStickerRequestsByStatus,
   readBespokeStickerRequests,
 } from '@/lib/server/bespokeStickerRequests'
+import { loadPerformanceOpportunities } from '@/lib/agent/performanceCoach'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,11 +84,36 @@ export async function GET() {
     }
   }
 
+  let performance = {
+    available: false as boolean,
+    opportunityCount: 0,
+    workspaceHref: '/admin/agent/performance',
+    warning: undefined as string | undefined,
+  }
+
+  try {
+    const opportunities = await loadPerformanceOpportunities()
+    performance = {
+      available: true,
+      opportunityCount: opportunities.length,
+      workspaceHref: '/admin/agent/performance',
+      warning: undefined,
+    }
+  } catch (e) {
+    performance = {
+      available: false,
+      opportunityCount: 0,
+      workspaceHref: '/admin/agent/performance',
+      warning: e instanceof Error ? e.message : 'Failed to load performance stats',
+    }
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({
       ok: true,
       sectors,
       inbound,
+      performance,
       fundraising: { available: false, counts: emptyCounts(), warning: 'Supabase not configured' },
     })
   }
@@ -106,6 +132,7 @@ export async function GET() {
       ok: true,
       sectors,
       inbound,
+      performance,
       fundraising: {
         available: true,
         counts,
@@ -118,6 +145,7 @@ export async function GET() {
         ok: true,
         sectors,
         inbound,
+        performance,
         fundraising: {
           available: false,
           counts: emptyCounts(),

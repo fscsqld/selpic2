@@ -68,8 +68,10 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     id: 'performance',
     label: 'Performance coach',
     description: 'Opportunity cards from Sales, Traffic, and Fundraising Impact.',
-    status: 'coming_soon',
+    status: 'live',
+    href: '/admin/agent/performance',
     requiredPermission: 'analytics:read',
+    requiredAnyPermissions: ['analytics:read', 'agent:read'],
     autonomyNote: 'Wave 4 — suggestions only; no auto Mark Paid or price changes.',
   },
   {

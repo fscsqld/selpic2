@@ -41,6 +41,12 @@ type SummaryResponse = {
     workspaceHref?: string
     warning?: string
   }
+  performance?: {
+    available: boolean
+    opportunityCount: number
+    workspaceHref?: string
+    warning?: string
+  }
   error?: string
 }
 
@@ -79,6 +85,7 @@ function AgentHubContent() {
       setSummary(json)
       if (json?.fundraising?.warning) setMessage(json.fundraising.warning)
       else if (json?.inbound?.warning) setMessage(json.inbound.warning)
+      else if (json?.performance?.warning) setMessage(json.performance.warning)
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load')
       setSummary(null)
@@ -104,13 +111,19 @@ function AgentHubContent() {
     adminUser,
     sectors.find((s) => s.id === 'inbound') || AGENT_SECTORS[1]
   )
+  const showPerformance = adminCanAccessAgentSector(
+    adminUser,
+    sectors.find((s) => s.id === 'performance') || AGENT_SECTORS[2]
+  )
+  const performanceCount = summary?.performance?.opportunityCount ?? 0
 
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminPageHeader title="AI Agent" icon={<Bot className="w-7 h-7 text-indigo-600" />} />
       <div className="max-w-7xl mx-auto p-6">
         <p className="text-sm text-gray-600 mb-6 -mt-2">
-          Governed hub for SELPIC admin sectors — Fundraising outreach and Customer care drafts are live.
+          Governed hub for SELPIC admin sectors — Fundraising outreach, Customer care drafts, and
+          Performance coach are live.
         </p>
 
       <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
@@ -221,6 +234,30 @@ function AgentHubContent() {
           <p className="mt-2 text-xs text-gray-500">
             Needs attention = new/read messages and new/reviewed bespoke. Already replied items are under
             Recently handled inside the workspace.
+          </p>
+        </div>
+      </section>
+      ) : null}
+
+      {showPerformance ? (
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-gray-900 mb-3">Performance coach — live</h2>
+        <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm max-w-xs">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Open opportunities</div>
+          <div className="mt-1 text-2xl font-bold text-gray-900">
+            {summary?.performance?.available ? performanceCount : '—'}
+          </div>
+        </div>
+        <div className="mt-4">
+          <Link
+            href="/admin/agent/performance"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            Open performance workspace
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <p className="mt-2 text-xs text-gray-500">
+            Suggestions from orders, traffic, and fundraising — no auto Mark Paid or price changes.
           </p>
         </div>
       </section>
