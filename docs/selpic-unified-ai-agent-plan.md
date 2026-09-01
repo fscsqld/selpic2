@@ -1,7 +1,7 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-08-30 (Wave 2 Agent Core hub in progress on `feature/ai-fundraising-agent`)  
-**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub (`/admin/agent`) under implementation — commit/deploy only when the user asks.  
+**Updated:** 2026-08-31 (Wave 3 inbound HITL verified; deep-link + send gates shipped locally)  
+**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub **shipped**. Wave 3 inbound drafts **HITL live** (template only, not LLM auto-send). Wave 4+ not started. Commit/deploy when user asks.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
@@ -297,10 +297,12 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 #### Wave 3 — Customer Care draft bot (Messages + Bespoke)
 
-- **Status:** minimal HITL live — `/admin/agent/inbound` + `POST /api/admin/agent/inbound/draft` (template drafts, not LLM).  
-- Admin: **Edit → Send** via existing `emailService.sendResponse` + status PATCH; audit `agent_inbound_draft_sent`.  
-- Intent hint classifier (order / shipping / fundraising / payment / general). Escalation tone for payment disputes.  
-- Optional later: LLM grounding, storefront help widget, ops alert cards.
+- **Status:** **HITL live (verified ops 2026-08-31)** — `/admin/agent/inbound` + `POST /api/admin/agent/inbound/draft` (template drafts, **not LLM**).  
+- **Entry:** Messages/Bespoke **Draft with Agent** → `?channel=message|bespoke&id=` deep-link; hub attention banner + sector cards.  
+- Admin: **Edit → Send** via `emailService.sendResponse` + status PATCH; audit `agent_inbound_draft_sent`; send gated by `messages:write` / `bespoke:write`.  
+- Intent hint classifier (order / shipping / fundraising / payment / bespoke / general). Escalation tone for payment disputes.  
+- Deep-link loads **replied/closed** rows via single GET (not only default queue). Rule: `.cursor/rules/selpic-agent-inbound-wave3.mdc`.  
+- Optional later: LLM grounding (extend `lib/agent/inboundDraft.ts`), sticker/print intent templates, storefront help widget, ops alert cards.
 
 #### Wave 4 — Performance coach (Sales / Traffic / Fundraising Impact)
 

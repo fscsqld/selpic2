@@ -1,7 +1,6 @@
 import type { FundraisingChangeRequest, FundraisingPartner, FundraisingSettings } from '@/lib/fundraising/types'
 import { FUNDRAISING_DOCUMENT_LABELS } from '@/lib/fundraising/types'
 import { formatChangeRequestKind, formatChangeRequestStatus } from '@/lib/fundraising/changeRequests'
-import { COMPANY_CONTACT } from '@/lib/companyLegal'
 import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 import { generateFundraisingDoc } from '@/lib/fundraising/generateDoc'
@@ -11,15 +10,10 @@ import {
   upsertFundraisingDocumentRow,
 } from '@/lib/fundraising/persistence'
 import type { OrderRecord } from '@/lib/store'
+import { COMPANY_CONTACT } from '@/lib/companyLegal'
+import { resolveAdminNotificationRecipients } from '@/lib/server/adminNotificationRecipients'
 
-export function resolveAdminNotificationRecipients(): string[] {
-  const fromEnv = (process.env.ADMIN_NOTIFICATION_EMAIL || process.env.CONTACT_ADMIN_EMAIL || '')
-    .split(/[,;]/)
-    .map((e) => e.trim())
-    .filter(Boolean)
-  if (fromEnv.length > 0) return fromEnv
-  return [COMPANY_CONTACT.email]
-}
+export { resolveAdminNotificationRecipients } from '@/lib/server/adminNotificationRecipients'
 
 export function siteBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_SITE_URL?.trim()) return getPublicSiteUrl()
@@ -125,6 +119,7 @@ export async function notifyAdminsOfBespokeRequest(input: {
   contactName?: string
   contactEmail?: string
   rollPreset?: string
+  requestSummary?: string
 }) {
   return sendAdminInboundEmail({
     subjectPrefix: '[SELPIC Bespoke] New label request',
@@ -136,6 +131,7 @@ export async function notifyAdminsOfBespokeRequest(input: {
       { label: 'Email', value: input.contactEmail || '—' },
       { label: 'Roll / type', value: input.rollPreset || '—' },
     ],
+    bodyText: input.requestSummary,
     adminPath: '/admin/bespoke-requests',
     replyTo: input.contactEmail,
   })

@@ -59,18 +59,38 @@ export async function POST(req: Request) {
     }
 
     const messageId = String(data?.id || '')
+
+    // Await Resend before responding — same as Bespoke. `void notify` was dropped after the
+    // handler returned (Next 16 / serverless), so saves succeeded but company email never sent.
+    let adminNotifyOk = false
+    let adminNotifyError: string | undefined
     if (messageId) {
-      void notifyAdminsOfContactMessage({
-        id: messageId,
-        name,
-        email,
-        subject,
-        message,
-        category,
-      })
+      try {
+        const notifyResult = await notifyAdminsOfContactMessage({
+          id: messageId,
+          name,
+          email,
+          subject,
+          message,
+          category,
+        })
+        adminNotifyOk = notifyResult.ok
+        if (!notifyResult.ok) {
+          adminNotifyError = notifyResult.logMessage
+          console.warn('[contact] admin notify failed:', notifyResult.logMessage)
+        }
+      } catch (err) {
+        adminNotifyError = err instanceof Error ? err.message : 'Admin notify failed'
+        console.warn('[contact] admin notify threw:', adminNotifyError)
+      }
     }
 
-    return NextResponse.json({ ok: true, id: data?.id || null })
+    return NextResponse.json({
+      ok: true,
+      id: data?.id || null,
+      adminNotifyOk,
+      ...(adminNotifyError ? { adminNotifyError } : {}),
+    })
   } catch (e) {
     return NextResponse.json({ ok: false, error: 'UNKNOWN' }, { status: 500 })
   }

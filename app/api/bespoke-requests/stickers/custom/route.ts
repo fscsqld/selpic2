@@ -5,6 +5,11 @@ import { randomUUID } from 'crypto'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
 import { notifyAdminsOfBespokeRequest } from '@/lib/server/adminInboundNotify'
+import { formatBespokeStickerPayloadSummary } from '@/lib/agent/bespokeRequestSummary'
+import {
+  bespokeLogoMetaFromUpload,
+  parseBespokeLogoFormEntry,
+} from '@/lib/server/parseBespokeLogoUpload'
 import {
   BESPOKE_STICKER_FILE_URL_BASE,
   BESPOKE_STICKER_UPLOAD_DIR,
@@ -43,67 +48,43 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: 'Invalid payload JSON' }, { status: 400 })
   }
 
-  const logo = form.get('logoFile')
   let logoMeta: BespokeStickerRequestRecord['logo'] | undefined = undefined
   let logoStoragePath: string | null = null
 
-  if (logo) {
-    const maybeFile = logo as File & { arrayBuffer?: () => Promise<ArrayBuffer> }
-    const isFileLike = typeof maybeFile?.arrayBuffer === 'function'
+  try {
+    const parsedLogo = parseBespokeLogoFormEntry(form.get('logoFile'))
+    if (parsedLogo.kind === 'file') {
+      const fileId = randomUUID()
+      const ext = parsedLogo.mimeType === 'image/svg+xml' ? '.svg' : '.png'
+      const filename = `${fileId}${ext}`
+      const buffer = Buffer.from(await parsedLogo.file.arrayBuffer())
 
-    if (!isFileLike) {
-      return NextResponse.json({ success: false, message: 'Invalid logo file' }, { status: 400 })
-    }
-
-    const mimeType: string = maybeFile.type
-    const allowed = ['image/png', 'image/svg+xml']
-    if (!allowed.includes(mimeType)) {
-      return NextResponse.json({ success: false, message: 'Only PNG or SVG files are allowed.' }, { status: 400 })
-    }
-
-    const size: number = typeof maybeFile.size === 'number' ? maybeFile.size : 0
-    const maxBytes = 10 * 1024 * 1024
-    if (size > maxBytes) {
-      return NextResponse.json({ success: false, message: 'File is too large. Max size is 10MB.' }, { status: 400 })
-    }
-
-    const fileId = randomUUID()
-    const ext = mimeType === 'image/svg+xml' ? '.svg' : '.png'
-    const filename = `${fileId}${ext}`
-
-    const arrayBuffer = await maybeFile.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    if (isSupabaseConfigured()) {
-      try {
-        const uploaded = await uploadBespokeLogoToStorage({ filename, buffer, mimeType })
+      if (isSupabaseConfigured()) {
+        const uploaded = await uploadBespokeLogoToStorage({
+          filename,
+          buffer,
+          mimeType: parsedLogo.mimeType,
+        })
         logoStoragePath = uploaded.storagePath
-        logoMeta = {
-          fileUrl: uploaded.fileUrl,
-          mimeType,
-          originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
-          size,
-        }
-      } catch (err) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: err instanceof Error ? err.message : 'Failed to upload logo',
-          },
-          { status: 500 }
+        logoMeta = bespokeLogoMetaFromUpload(parsedLogo, uploaded.fileUrl)
+      } else {
+        const uploadPath = path.join(BESPOKE_STICKER_UPLOAD_DIR, filename)
+        await ensureDir(BESPOKE_STICKER_UPLOAD_DIR)
+        await fs.writeFile(uploadPath, buffer)
+        logoMeta = bespokeLogoMetaFromUpload(
+          parsedLogo,
+          `${BESPOKE_STICKER_FILE_URL_BASE}/${filename}`
         )
       }
-    } else {
-      const uploadPath = path.join(BESPOKE_STICKER_UPLOAD_DIR, filename)
-      await ensureDir(BESPOKE_STICKER_UPLOAD_DIR)
-      await fs.writeFile(uploadPath, buffer)
-      logoMeta = {
-        fileUrl: `${BESPOKE_STICKER_FILE_URL_BASE}/${filename}`,
-        mimeType,
-        originalName: typeof maybeFile?.name === 'string' ? maybeFile.name : filename,
-        size,
-      }
     }
+  } catch (err) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to upload logo',
+      },
+      { status: 500 }
+    )
   }
 
   const requestId = randomUUID()
@@ -129,12 +110,34 @@ export async function POST(req: Request) {
 
   const contact = (payload?.contact || {}) as { name?: string; email?: string }
   const roll = (payload?.roll || {}) as { preset?: string; variant?: string }
-  void notifyAdminsOfBespokeRequest({
-    id: record.id,
-    contactName: contact.name,
-    contactEmail: contact.email,
-    rollPreset: roll.variant || roll.preset,
-  })
+  const requestSummary = formatBespokeStickerPayloadSummary(payload)
 
-  return NextResponse.json({ success: true, id: record.id })
+  // Await Resend before responding — same reliability as Contact, and avoids Vercel
+  // cutting off fire-and-forget work after logo upload (common Bespoke-only failure).
+  let adminNotifyOk = false
+  let adminNotifyError: string | undefined
+  try {
+    const notifyResult = await notifyAdminsOfBespokeRequest({
+      id: record.id,
+      contactName: contact.name,
+      contactEmail: contact.email,
+      rollPreset: roll.variant || roll.preset,
+      requestSummary,
+    })
+    adminNotifyOk = notifyResult.ok
+    if (!notifyResult.ok) {
+      adminNotifyError = notifyResult.logMessage
+      console.warn('[bespoke] admin notify failed:', notifyResult.logMessage)
+    }
+  } catch (err) {
+    adminNotifyError = err instanceof Error ? err.message : 'Admin notify failed'
+    console.warn('[bespoke] admin notify threw:', adminNotifyError)
+  }
+
+  return NextResponse.json({
+    success: true,
+    id: record.id,
+    adminNotifyOk,
+    ...(adminNotifyError ? { adminNotifyError } : {}),
+  })
 }

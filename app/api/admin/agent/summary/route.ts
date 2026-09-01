@@ -42,6 +42,7 @@ export async function GET() {
     status: s.status,
     href: s.href,
     requiredPermission: s.requiredPermission,
+    requiredAnyPermissions: s.requiredAnyPermissions,
     autonomyNote: s.autonomyNote,
   }))
 

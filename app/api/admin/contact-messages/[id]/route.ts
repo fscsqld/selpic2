@@ -10,6 +10,33 @@ import {
 type ContactMessageStatus = 'new' | 'read' | 'replied' | 'closed'
 type ContactMessagePriority = 'low' | 'medium' | 'high' | 'urgent'
 
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const gate = await requireAdminPermission('messages:read')
+  const denied = adminPermissionDeniedOkEnvelope(gate)
+  if (denied) return denied
+  const { id } = await ctx.params
+  if (!id) {
+    return NextResponse.json({ ok: false, error: 'INVALID_ID' }, { status: 400 })
+  }
+
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin.from('contact_messages').select('*').eq('id', id).maybeSingle()
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: 'SUPABASE_QUERY_FAILED', details: error.message },
+        { status: 500 }
+      )
+    }
+    if (!data) {
+      return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 })
+    }
+    return NextResponse.json({ ok: true, message: data })
+  } catch {
+    return NextResponse.json({ ok: false, error: 'UNKNOWN' }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const gate = await requireAdminPermission('messages:write')
   const denied = adminPermissionDeniedOkEnvelope(gate)

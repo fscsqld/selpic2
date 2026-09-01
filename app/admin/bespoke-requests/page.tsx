@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { emailService, emailTemplates, EmailTemplate } from '@/lib/emailService'
+import { formatBespokeStickerPayloadSummary, bespokePayloadDetailLines } from '@/lib/agent/bespokeRequestSummary'
+import BespokeLogoAsset from '@/components/admin/BespokeLogoAsset'
 import {
   History,
-  Image as ImageIcon,
   Layout,
   Loader2,
   Pencil,
@@ -14,7 +15,10 @@ import {
   Search,
   Send,
   X,
+  Sparkles,
 } from 'lucide-react'
+import Link from 'next/link'
+import { buildAgentInboundDraftHref } from '@/lib/agent/inboundLinks'
 
 type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'replied' | 'approved' | 'rejected'
 
@@ -74,16 +78,7 @@ function buildDefaultReplySubject(record: BespokeStickerRequestRecord): string {
 }
 
 function buildRequestSummary(record: BespokeStickerRequestRecord): string {
-  const roll = record.payload?.roll
-  const text = record.payload?.text
-  const lines = [
-    `Roll: ${roll?.preset || '-'}${roll?.variant ? ` (${roll.variant})` : ''}`,
-    `Text: ${text?.line1 || '-'}${text?.layout === 'two' && text?.line2 ? ` / ${text.line2}` : ''}`,
-    record.payload?.logo?.placementNotes
-      ? `Logo notes: ${record.payload.logo.placementNotes}`
-      : null,
-  ].filter(Boolean)
-  return lines.join('\n')
+  return formatBespokeStickerPayloadSummary(record.payload)
 }
 
 export default function AdminBespokeRequestsPage() {
@@ -455,6 +450,13 @@ function AdminBespokeRequestsContent() {
                     <Reply className="w-4 h-4 mr-2" />
                     Reply
                   </button>
+                  <Link
+                    href={buildAgentInboundDraftHref('bespoke', selected.id)}
+                    className="inline-flex items-center px-4 py-2 bg-indigo-50 text-indigo-800 border border-indigo-200 text-sm font-medium rounded-lg hover:bg-indigo-100 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Draft with Agent
+                  </Link>
                   <button
                     type="button"
                     onClick={() => {
@@ -492,60 +494,24 @@ function AdminBespokeRequestsContent() {
 
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1 bg-gray-50 rounded-2xl border border-gray-100 p-4">
-                    <div className="flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm font-semibold text-gray-900">Logo preview</span>
-                    </div>
-                    {selected.logo?.fileUrl ? (
-                      <img
-                        src={selected.logo.fileUrl}
-                        alt="logo"
-                        className="mt-3 max-h-52 w-full object-contain rounded-xl border border-gray-200 bg-white"
-                      />
-                    ) : (
-                      <div className="mt-3 text-sm text-gray-500">No logo image uploaded.</div>
-                    )}
-                    {selected.logo?.originalName ? (
-                      <div className="mt-2 text-xs text-gray-500">
-                        {selected.logo.originalName} ({Math.max(1, Math.round(selected.logo.size / 1024))} KB)
-                      </div>
-                    ) : null}
+                    <BespokeLogoAsset logo={selected.logo} requestId={selected.id} />
                   </div>
 
                   <div className="flex-1 bg-gray-50 rounded-2xl border border-gray-100 p-4">
                     <div className="text-sm font-semibold text-gray-900">Request details</div>
-                    <div className="mt-3 text-xs text-gray-700 space-y-1">
-                      <div>
-                        <span className="text-gray-500">Contact:</span> {selected.payload?.contact?.name || '-'} (
-                        {selected.payload?.contact?.email || '-'})
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Roll:</span> {selected.payload?.roll?.preset || '-'}
-                        {selected.payload?.roll?.variant ? ` (${selected.payload.roll.variant})` : ''}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Text:</span> {selected.payload?.text?.layout || '-'}{' '}
-                        {selected.payload?.text?.line1 || ''}
-                      </div>
-                      {selected.payload?.text?.layout === 'two' ? (
-                        <div>
-                          <span className="text-gray-500">Text line2:</span> {selected.payload?.text?.line2 || '-'}
+                    <dl className="mt-3 text-xs text-gray-700 space-y-2">
+                      {bespokePayloadDetailLines(selected.payload).map((row) => (
+                        <div key={row.label}>
+                          <dt className="text-gray-500 font-medium">{row.label}</dt>
+                          <dd className="mt-0.5 whitespace-pre-wrap break-words">{row.value}</dd>
                         </div>
+                      ))}
+                      {bespokePayloadDetailLines(selected.payload).length === 0 ? (
+                        <p className="text-gray-500">No request details saved.</p>
                       ) : null}
-                      <div>
-                        <span className="text-gray-500">Logo placement notes:</span>{' '}
-                        {selected.payload?.logo?.placementNotes || '-'}
-                      </div>
-                    </div>
+                    </dl>
                   </div>
                 </div>
-
-                <details className="bg-white border border-gray-100 rounded-2xl p-4">
-                  <summary className="text-sm font-semibold text-gray-900 cursor-pointer">Raw payload (debug)</summary>
-                  <pre className="mt-2 text-xs text-gray-700 overflow-x-auto">
-                    {JSON.stringify(selected.payload, null, 2)}
-                  </pre>
-                </details>
               </div>
             </div>
           </div>

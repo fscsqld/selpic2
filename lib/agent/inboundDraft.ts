@@ -3,6 +3,8 @@
  * No LLM; grounded in the inbound payload the admin already sees.
  */
 
+import { bespokeInboundSubject, formatBespokeStickerPayloadSummary } from './bespokeRequestSummary'
+
 export type InboundDraftChannel = 'message' | 'bespoke'
 
 export type InboundDraftInput = {
@@ -12,6 +14,7 @@ export type InboundDraftInput = {
   subject?: string
   bodyExcerpt?: string
   requestId?: string
+  bespokePayload?: Record<string, unknown>
 }
 
 export type InboundDraftResult = {
@@ -31,12 +34,12 @@ function classifyIntent(text: string): string {
   if (/\b(ship|tracking|delivery|dispatch|where is my)/.test(t)) return 'shipping'
   if (/\b(fundrais|partner|school|commission|payout)/.test(t)) return 'fundraising'
   if (/\b(order|order #|order id|receipt)/.test(t)) return 'order_status'
-  if (/\b(bespoke|custom|logo|label)/.test(t)) return 'bespoke_product'
+  if (/\b(bespoke|custom|logo|label|sticker|print)/.test(t)) return 'bespoke_product'
   return 'general'
 }
 
-function excerpt(text: string, max = 400): string {
-  const t = text.replace(/\s+/g, ' ').trim()
+function bespokeSummaryForDraft(text: string, max = 1200): string {
+  const t = text.trim()
   if (t.length <= max) return t
   return `${t.slice(0, max - 1)}…`
 }
@@ -46,19 +49,25 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
   const name = cleanName(input.customerName)
   const combined = `${input.subject || ''} ${input.bodyExcerpt || ''}`
   const intentHint = classifyIntent(combined)
-  const quote = excerpt(input.bodyExcerpt || input.subject || '')
+  const quote =
+    input.channel === 'bespoke'
+      ? bespokeSummaryForDraft(
+          formatBespokeStickerPayloadSummary(input.bespokePayload) || input.bodyExcerpt || ''
+        )
+      : bespokeSummaryForDraft(input.bodyExcerpt || input.subject || '', 1200)
 
   if (input.channel === 'bespoke') {
-    const subject = `Re: Your bespoke label request${input.requestId ? ` (${input.requestId})` : ''}`
+    const summary = bespokeSummaryForDraft(
+      formatBespokeStickerPayloadSummary(input.bespokePayload) || input.bodyExcerpt || ''
+    )
+    const subject = bespokeInboundSubject(input.bespokePayload)
     const body = [
       `Dear ${name},`,
       '',
       'Thank you for your bespoke label request with SELPIC.',
       '',
       'We have received your details and will review artwork, size, and quantity shortly.',
-      quote
-        ? ['', 'For reference, here is a short summary of what you sent:', '', quote].join('\n')
-        : '',
+      summary ? ['', 'Request summary:', '', summary].join('\n') : '',
       '',
       'If anything in the request has changed (logo file, delivery date, or quantity), reply to this email and we will update the brief.',
       '',
@@ -70,7 +79,7 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
       .join('\n')
       .trim()
 
-    return { subject, body, intentHint }
+    return { subject, body, intentHint: 'bespoke_request' }
   }
 
   const subjectBase = (input.subject || '').trim() || 'your enquiry'
@@ -92,6 +101,9 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
   } else if (intentHint === 'payment_dispute') {
     opening =
       'Thank you for contacting SELPIC. We treat billing questions carefully — a team member will review your message before we reply with next steps.'
+  } else if (intentHint === 'bespoke_product') {
+    opening =
+      'Thank you for contacting SELPIC about custom stickers or labels. We have received your message and will review size, artwork, and quantity with you.'
   }
 
   const body = [

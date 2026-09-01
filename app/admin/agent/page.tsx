@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { AGENT_SECTORS, type AgentSectorDef } from '@/lib/agent/sectors'
+import { AGENT_SECTORS, adminCanAccessAgentSector, type AgentSectorDef } from '@/lib/agent/sectors'
+import { useAdminAuth } from '@/lib/adminAuth'
 import {
   Bot,
   HeartHandshake,
@@ -60,6 +61,7 @@ export default function AdminAgentHubPage() {
 }
 
 function AgentHubContent() {
+  const { adminUser } = useAdminAuth()
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<SummaryResponse | null>(null)
   const [message, setMessage] = useState('')
@@ -90,7 +92,18 @@ function AgentHubContent() {
   }, [load])
 
   const sectors = summary?.sectors?.length ? summary.sectors : AGENT_SECTORS
+  const visibleSectors = sectors.filter((sector) => adminCanAccessAgentSector(adminUser, sector))
   const counts = summary?.fundraising?.counts
+  const inboundAttention =
+    (summary?.inbound?.newMessages ?? 0) + (summary?.inbound?.newBespoke ?? 0)
+  const showFundraising = adminCanAccessAgentSector(
+    adminUser,
+    sectors.find((s) => s.id === 'fundraising') || AGENT_SECTORS[0]
+  )
+  const showInbound = adminCanAccessAgentSector(
+    adminUser,
+    sectors.find((s) => s.id === 'inbound') || AGENT_SECTORS[1]
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -120,7 +133,26 @@ function AgentHubContent() {
         {message ? <span className="text-sm text-amber-800">{message}</span> : null}
       </div>
 
+      {inboundAttention > 0 && showInbound ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">Customer care queue needs attention</p>
+          <p className="mt-1">
+            {summary?.inbound?.newMessages ?? 0} new message
+            {(summary?.inbound?.newMessages ?? 0) === 1 ? '' : 's'},{' '}
+            {summary?.inbound?.newBespoke ?? 0} new bespoke request
+            {(summary?.inbound?.newBespoke ?? 0) === 1 ? '' : 's'}.
+          </p>
+          <Link
+            href="/admin/agent/inbound"
+            className="mt-2 inline-flex items-center gap-1.5 font-medium text-amber-900 hover:text-amber-950"
+          >
+            Open draft workspace <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      ) : null}
+
       {/* Fundraising observability (live sector) */}
+      {showFundraising ? (
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Fundraising outreach — live</h2>
         {loading && !counts ? (
@@ -159,7 +191,9 @@ function AgentHubContent() {
           </Link>
         </div>
       </section>
+      ) : null}
 
+      {showInbound ? (
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Customer care drafts — live</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -184,16 +218,25 @@ function AgentHubContent() {
             Open draft workspace
             <ArrowRight className="h-4 w-4" />
           </Link>
+          <p className="mt-2 text-xs text-gray-500">
+            Needs attention = new/read messages and new/reviewed bespoke. Already replied items are under
+            Recently handled inside the workspace.
+          </p>
         </div>
       </section>
+      ) : null}
 
       {/* Sector cards */}
       <section>
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Sectors</h2>
+        {visibleSectors.length === 0 ? (
+          <p className="text-sm text-gray-500">No agent sectors available for your permissions.</p>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sectors.map((sector) => {
+          {visibleSectors.map((sector) => {
             const Icon = SECTOR_ICONS[sector.id] || Bot
             const live = sector.status === 'live'
+            const canOpen = live && !!sector.href && adminCanAccessAgentSector(adminUser, sector)
             return (
               <div
                 key={sector.id}
@@ -224,13 +267,17 @@ function AgentHubContent() {
                     {live ? 'Live' : 'Soon'}
                   </span>
                 </div>
-                {live && sector.href ? (
+                {canOpen && sector.href ? (
                   <Link
                     href={sector.href}
                     className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-900"
                   >
                     Open workspace <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
+                ) : live && sector.href ? (
+                  <p className="mt-4 text-xs text-amber-700">
+                    Requires {sector.requiredAnyPermissions?.join(' or ') || sector.requiredPermission}.
+                  </p>
                 ) : (
                   <p className="mt-4 text-xs text-gray-400">Not enabled yet — reserved for a later wave.</p>
                 )}
@@ -238,6 +285,7 @@ function AgentHubContent() {
             )
           })}
         </div>
+        )}
       </section>
       </div>
     </div>

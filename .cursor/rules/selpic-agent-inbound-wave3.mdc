@@ -1,0 +1,188 @@
+---
+description: Agent Wave 3 Customer care drafts — shipped behaviour, HITL contract, and extension points (verified ops 2026-08)
+globs: app/admin/agent/**/*,app/admin/messages/page.tsx,app/admin/bespoke-requests/page.tsx,app/api/admin/agent/**/*,app/api/admin/contact-messages/**/*,app/actions/emails.ts,lib/agent/**/*
+alwaysApply: false
+---
+
+# Agent Wave 3 — Customer care drafts (learned / shipped)
+
+**Status:** Live on feature branch + local dev. **Not full auto-reply** — template draft → human Edit → Send only.
+
+Verified example (Messages → Draft with Agent → `/admin/agent/inbound`):
+
+- Customer: Rachele, subject *「Can you print large stickers for a bill kart?」*
+- Inbound excerpt shows full contact-form body (phone included).
+- Intent hint: `general` (see gaps below).
+- Draft: `Dear Rachele,` + quoted *You wrote:* block + generic follow-up + Selpic Customer Care sign-off.
+- Subject: `Re: Can you print large stickers for a bill kart?`
+- Admin must click **Send via Resend** — nothing sends automatically.
+
+---
+
+## Product contract (do not break)
+
+| Rule | Detail |
+|------|--------|
+| **HITL default** | Generate draft only. **No** auto-send, no auto status change until admin Send. |
+| **Autonomy** | L1 — same as unified plan. L2 auto-send is **out of scope** for inbound until explicitly requested. |
+| **English copy** | All draft templates and admin UI labels in English. |
+| **Homepage** | No agent widget or capture on `app/page.tsx`. |
+| **Accounting** | Never import `apps/accounting-sandbox/**` into agent paths. |
+
+---
+
+## User journeys (must keep working)
+
+### A — From Messages
+
+1. `/admin/messages` → select row → **Draft with Agent** (Reply旁边, indigo).
+2. Navigates to `/admin/agent/inbound?channel=message&id=<uuid>`.
+3. Queue pre-selects that message; excerpt + draft populate right panel.
+4. **Replied / closed** messages: still load via deep-link (single GET), flagged `deepLinkOnly` — not only `new`/`read`.
+
+### B — From Bespoke
+
+Same pattern with `channel=bespoke&id=…` (status `new`/`reviewed` in default queue; deep-link fetches any status).
+
+### C — From Agent hub
+
+`/admin/agent` → Customer care stats / attention banner → **Open draft workspace** → `/admin/agent/inbound` **without** `?channel=&id=`.
+
+**Learned (ops 2026-09):** Hub “Open workspace” with an empty left list is **not a bug** when every Message/Bespoke row is already `replied` / `approved` / etc. Admins who only used **Draft with Agent** on finished rows expected a full history page; the workspace is a **triage queue**, not Messages/Bespoke history.
+
+**UX contract (shipped):**
+
+| Tab | Statuses | Empty-state behaviour |
+|-----|----------|------------------------|
+| **Needs attention** | message `new`/`read`; bespoke `new`/`reviewed` | Explain filter; link to **Recently handled** if any; else Messages/Bespoke + “Draft with Agent” |
+| **Recently handled** | message `replied`/`closed`; bespoke `replied`/`approved`/`rejected` (cap 40) | Allow follow-up draft/Send; after Send, switch to this tab |
+
+Hub summary cards still count **`new` only** — narrower than Needs attention (which also includes `read` / `reviewed`). Do not “fix” empty hub→workspace by dumping all statuses into Needs attention.
+
+---
+
+## Architecture map
+
+```
+Messages/Bespoke UI
+  └─ buildAgentInboundDraftHref()     lib/agent/inboundLinks.ts
+       └─ /admin/agent/inbound?channel=&id=
+
+Inbound workspace                     app/admin/agent/inbound/page.tsx
+  ├─ load queue                       GET contact-messages?limit=200, bespoke list
+  ├─ deep-link miss → single fetch    GET contact-messages/[id], bespoke/[id]
+  ├─ map rows                         lib/agent/inboundQueue.ts
+  ├─ POST draft                       /api/admin/agent/inbound/draft
+  │     └─ buildInboundReplyDraft()   lib/agent/inboundDraft.ts  (template, NO LLM)
+  └─ Send (human)                     emailService.sendResponse
+        └─ sendAdminComposeEmailAction  app/actions/emails.ts
+              ├─ gate: messages:write | bespoke:write
+              ├─ Resend send
+              └─ PATCH status → replied + logAdminActivity agent_inbound_draft_sent
+```
+
+---
+
+## Intent classifier (template era)
+
+`classifyIntent()` in `lib/agent/inboundDraft.ts` — regex on subject + excerpt:
+
+| intentHint | Triggers (summary) |
+|------------|-------------------|
+| `payment_dispute` | refund, chargeback, dispute, … |
+| `shipping` | ship, tracking, delivery, … |
+| `fundraising` | fundrais, partner, school, … |
+| `order_status` | order, receipt, … |
+| `bespoke_product` | bespoke, custom, logo, **label** |
+| `general` | default |
+
+**Known gap (Rachele case):** *stickers*, *print*, *billy kart* → still `general`. When extending templates or LLM, treat **print/custom sticker enquiries** as bespoke-adjacent — do not stay on generic opening forever.
+
+**Payment disputes:** special opening + “do not share full card numbers” line — keep for compliance tone.
+
+---
+
+## Draft body shape (messages channel)
+
+Fixed sections — preserve order when editing logic:
+
+1. `Dear {customerName},`
+2. Intent-specific opening (or generic receipt ack)
+3. `You wrote:` + quoted excerpt (max ~400 chars in quote via `excerpt()`)
+4. Closing ask (order # / photos **or** payment-dispute safety line)
+5. `Kind regards,` / `Selpic Customer Care` / `https://selpic.com.au`
+
+Bespoke channel uses separate template (request id in subject when present).
+
+---
+
+## Permissions (send path)
+
+| Action | Permission |
+|--------|------------|
+| Hub / summary | `agent:read` (+ legacy aliases) |
+| Inbound page enter | `messages:read` OR `bespoke:read` OR `agent:read` |
+| Generate draft API | same as enter |
+| **Send** | `messages:write` (message) / `bespoke:write` (bespoke) — enforced in `sendAdminComposeEmailAction` + UI disable |
+
+Read-only staff may draft; cannot Send.
+
+---
+
+## Queue filters vs deep-link
+
+Shared helpers live in `lib/agent/inboundQueue.ts` (`INBOUND_*_ACTIONABLE_STATUSES`, `INBOUND_*_RECENT_STATUSES`, `include*InRecentQueue`).
+
+| Source | Included statuses |
+|--------|-------------------|
+| **Needs attention** tab | message: `new`, `read` — bespoke: `new`, `reviewed` |
+| **Recently handled** tab | message: `replied`, `closed` — bespoke: `replied`, `approved`, `rejected` (newest 40) |
+| Deep-link `?channel=&id=` | **Any** status — pin on Needs attention, `deepLinkOnly: true` if outside actionable statuses |
+
+Do not regress: Messages/Bespoke **Draft with Agent** must always load that row’s excerpt on the draft screen.
+
+**Cousins / edge cases (keep covered):**
+
+- Empty Needs attention + non-empty Recent → empty copy must offer “View N recently handled”
+- Both empty → Messages / Bespoke links + Draft with Agent hint
+- Send → status `replied` → item leaves Needs attention and appears under Recently handled
+- Hub `newMessages`/`newBespoke` = 0 while Needs attention still has `read`/`reviewed` rows (stats ≠ tab count)
+- Multi-admin: another admin marks replied → Refresh queue; no live WS required for Wave 3
+
+---
+
+## What is NOT implemented (future waves)
+
+- **LLM** grounding / OpenAI call — add adapter **behind** `buildInboundReplyDraft` or parallel `buildInboundReplyDraftLlm()`; keep template fallback.
+- **Auto-send** on new inbound — forbidden without new permission + audit design.
+- **Storefront chat widget** — separate project; still HITL if added.
+- **`agent:run`** — catalog only; not wired to inbound.
+- **agent_runs** SQL / shared run history (Phase B2).
+
+---
+
+## Safe extension checklist (next dev session)
+
+1. Read this rule + `docs/selpic-unified-ai-agent-plan.md` Wave 3–4.
+2. Extend `classifyIntent` / templates for sticker-print enquiries before adding LLM.
+3. Any new send path → `messages:write` / `bespoke:write` + `logAdminActivity`.
+4. Deep-link + replied status → add test in `lib/agent/inboundQueue.test.ts`.
+5. Do not remove Edit step or shorten excerpt below what admin needs to verify customer text.
+6. Commit/deploy only when user asks.
+
+---
+
+## Tests to keep green
+
+- `lib/agent/inboundDraft.test.ts` — shipping, bespoke, payment_dispute
+- `lib/agent/inboundLinks.test.ts` — href + preselect parse
+- `lib/agent/inboundQueue.test.ts` — deep-link includes replied id; Needs attention vs Recently handled status splits
+
+---
+
+## Do not
+
+- Auto-send on draft generation or cron.
+- Skip permission gates on `sendAdminComposeEmailAction` for contact/bespoke ids.
+- Filter deep-link targets out of workspace when `?id=` is present.
+- Replace HITL with “one-click send” without explicit product sign-off.

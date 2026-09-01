@@ -185,6 +185,13 @@ export async function updateBespokeStickerRequestStatus(
   return records[idx]
 }
 
+export async function readBespokeStickerRequestById(
+  id: string
+): Promise<BespokeStickerRequestRecord | null> {
+  const records = await readBespokeStickerRequests()
+  return records.find((r) => r.id === id) ?? null
+}
+
 function resolvePublicUploadPath(fileUrl: string): string | null {
   const marker = '/uploads/'
   const idx = fileUrl.indexOf(marker)
@@ -273,6 +280,59 @@ export async function deleteBespokeStickerRequest(id: string): Promise<void> {
         : message
     )
   }
+}
+
+function sanitizeDownloadFilename(name: string): string {
+  const trimmed = name.trim().replace(/[^\w.\-() ]+/g, '_')
+  return trimmed || 'logo'
+}
+
+export async function readBespokeLogoBytes(record: BespokeStickerRequestRecord): Promise<Buffer | null> {
+  const logo = record.logo
+  if (!logo?.fileUrl) return null
+
+  const localPath = resolvePublicUploadPath(logo.fileUrl)
+  if (localPath) {
+    try {
+      return await fs.readFile(localPath)
+    } catch {
+      return null
+    }
+  }
+
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin()
+    const { data } = await admin
+      .from('bespoke_sticker_requests')
+      .select('logo_storage_path')
+      .eq('id', record.id)
+      .maybeSingle()
+
+    const storagePath = data?.logo_storage_path
+    if (storagePath) {
+      const { data: fileData, error } = await admin.storage
+        .from(SELPIC_CONTENTS_BUCKET)
+        .download(storagePath)
+      if (!error && fileData) {
+        return Buffer.from(await fileData.arrayBuffer())
+      }
+    }
+  }
+
+  try {
+    const res = await fetch(logo.fileUrl)
+    if (!res.ok) return null
+    return Buffer.from(await res.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
+export function bespokeLogoDownloadFilename(record: BespokeStickerRequestRecord): string {
+  const original = record.logo?.originalName?.trim()
+  if (original) return sanitizeDownloadFilename(original)
+  const ext = record.logo?.mimeType === 'image/svg+xml' ? '.svg' : '.png'
+  return `logo${ext}`
 }
 
 export async function uploadBespokeLogoToStorage(params: {

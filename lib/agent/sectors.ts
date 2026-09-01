@@ -1,3 +1,9 @@
+import {
+  adminHasAnyPermission,
+  adminHasPermission,
+  type AdminLike,
+} from '@/lib/adminPermissionCheck'
+
 /**
  * SELPIC Agent Core — sector registry (Wave 2–3).
  * Fundraising + inbound (CS drafts) are live; other sectors are placeholders.
@@ -31,6 +37,8 @@ export type AgentSectorDef = {
   href?: string
   /** Permission to open / use this sector */
   requiredPermission: string
+  /** When set, user needs at least one of these instead of requiredPermission alone */
+  requiredAnyPermissions?: string[]
   autonomyNote: string
 }
 
@@ -52,6 +60,7 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     status: 'live',
     href: '/admin/agent/inbound',
     requiredPermission: 'messages:read',
+    requiredAnyPermissions: ['messages:read', 'bespoke:read', 'agent:read'],
     autonomyNote:
       'Wave 3 — template drafts only. Send uses existing Resend paths; needs messages:write or bespoke:write.',
   },
@@ -83,4 +92,11 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
 
 export function liveAgentSectors(): AgentSectorDef[] {
   return AGENT_SECTORS.filter((s) => s.status === 'live')
+}
+
+export function adminCanAccessAgentSector(admin: AdminLike, sector: AgentSectorDef): boolean {
+  if (sector.requiredAnyPermissions?.length) {
+    return adminHasAnyPermission(admin, sector.requiredAnyPermissions)
+  }
+  return adminHasPermission(admin, sector.requiredPermission)
 }

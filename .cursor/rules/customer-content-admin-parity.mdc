@@ -1,0 +1,207 @@
+---
+description: Customer form → admin display parity — all inbound channels; bespoke payload field map
+globs: app/stickers/custom/**,app/contact/**,app/admin/messages/**,app/admin/bespoke-requests/**,app/admin/agent/inbound/**,lib/agent/bespokeRequestSummary.ts,lib/server/adminInboundNotify.ts
+alwaysApply: false
+---
+
+# Customer content → admin display parity
+
+## Principle
+
+Every field the customer can type or select on the storefront must appear in **human-readable** form for admins — never raw `JSON.stringify(payload)` as the primary UI.
+
+**Single source for bespoke sticker custom:** `lib/agent/bespokeRequestSummary.ts` (`bespokePayloadDetailLines` / `formatBespokeStickerPayloadSummary`).
+
+Used by: Agent inbound, Bespoke admin modal, admin notify email, reply email summaries.
+
+---
+
+## Channel audit (2026-09-01)
+
+| Channel | Storefront | Saved | Admin native UI | Agent inbound | Admin notify email |
+|---------|------------|-------|-----------------|---------------|-------------------|
+| **Contact / Messages** | `app/contact/page.tsx` | `contact_messages.*` | Full message body ✅ | Excerpt 2000 chars ✅ | Full message ✅ |
+| **Bespoke sticker custom** | `app/stickers/custom/page.tsx` | `payload` JSON + logo | Detail lines via shared helper ✅ | Same summary ✅ | Summary in bodyText ✅ |
+| **Newsletter** | email only | email | list ✅ | N/A | email only ✅ |
+| **Fundraising apply** | `app/fundraising/page.tsx` | partner fields + `acquisition?` | form ✅ | N/A | varies |
+| **Community** | post/comment forms | DB | admin community ✅ | N/A | content snippet ✅ |
+
+---
+
+## Bespoke payload — all customer fields (must appear in summary)
+
+From `app/stickers/custom/page.tsx` submit payload:
+
+| Key | Customer UI | Label in summary |
+|-----|-------------|------------------|
+| `roll.preset` / `variant` | Roll dropdown | Roll |
+| `roll.notes` | Roll notes textarea | Roll notes |
+| `roll.characterProductName` | Type F product name | Character product name |
+| `text.line1` / `line2` | Sticker text | Sticker text |
+| `text.notes` | Layout notes | Text layout notes |
+| `font.presets.*` | Font picker | Font preset(s) |
+| `font.name` | Custom font name | Custom font name |
+| `font.source` | Font link | Font source / link |
+| `font.notes` | Font notes | Font notes |
+| `font.sizes.*` | Size pt inputs | Font size(s) |
+| `logo.placementNotes` | Logo placement | Logo placement |
+| `contact.name/email/phone` | Contact form | Contact name / email / Phone |
+| `contact.extra` | “Anything else we should know” textarea | **Additional customer notes** |
+| Logo file | Upload | Logo preview (admin UI only, not in text summary) |
+
+**Free-text gaps were the main bug:** `contact.extra`, `text.notes`, `roll.notes`, `font.*` notes — dropdown selections alone are not enough.
+
+---
+
+## Messages agent draft
+
+- Gray excerpt box: up to **2000** chars (`inboundQueue.contactMessageToQueueItem`).
+- Draft “You wrote:” quote: up to **1200** chars (was 400) — do not shrink below excerpt without reason.
+
+---
+
+## Bespoke save → Resend chain (learned 2026-09 — why UI + email can both “fail”)
+
+**Single pipeline** (`POST /api/bespoke-requests/stickers/custom`):
+
+```
+1) Parse payload (+ optional logoFile)
+2) If logoFile: upload to Supabase Storage (selpic-contents)
+     └─ FAIL → HTTP 500, message "Failed to upload logo…"
+        → browser never clears form
+        → Resend never runs
+3) insertBespokeStickerRequest → Supabase table bespoke_sticker_requests
+     └─ FAIL → HTTP 500, message "Failed to save request…"
+        → browser never clears form
+        → Resend never runs
+4) await notifyAdminsOfBespokeRequest → Resend → info@selpic.com.au (or ADMIN_NOTIFICATION_EMAIL)
+     └─ FAIL → logged + `adminNotifyOk: false` in JSON — customer still gets success + form clear
+5) return { success: true, id, adminNotifyOk, adminNotifyError? }
+6) Client (only after step 5): reset fields + formEpoch remount + `formPhase: 'success'` thank-you screen + toast
+```
+
+**Contact Us** is the same shape but with no logo step — fewer ways to die before notify. Contact still uses `void notify…` (fast JSON body); **Bespoke must `await` notify** because logo upload lengthens the handler and Vercel/serverless can kill fire-and-forget work before Resend finishes.
+
+**Invariant:** Customer form clear is gated on **DB save success**, not on Resend. Resend failure must not block save success or form clear.
+
+**Logo parser:** `lib/server/parseBespokeLogoUpload.ts` — skip 0-byte `logoFile` parts; accept PNG/SVG by extension when Windows sends empty mime.
+
+**Local “changes not reflecting” checklist:**
+
+1. URL must be `http://localhost:3005/stickers/custom` (not www.selpic.com.au, not :3000).
+2. Look for footer note **Form UX v4** under Submit — if missing, hard-refresh Ctrl+F5 or restart `npm run dev`.
+3. Long-lived Next process + webpack HMR can serve a stale tab; restart storefront when UX edits seem ignored.
+4. If Submit fails with toast/error, read the message — upload/save failure explains missing company email.
+
+**Bespoke:** `await` Resend before JSON success is OK — customer clear still runs only after `{ success: true }`; notify latency is acceptable for reliable company email.
+
+---
+
+## Contact Us vs Bespoke Labels submit UX (learned 2026-09)
+
+| | Contact (`app/contact/page.tsx`) | Bespoke (`app/stickers/custom/page.tsx`) |
+|--|----------------------------------|------------------------------------------|
+| Page title | Contact Us | **Bespoke Labels** |
+| Success feel | Fixed **toast** top-right + fields cleared → feels like “refresh” | Must match: toast + clear + `formEpoch` remount |
+| Clear timing | Immediately after `res.ok` (does **not** wait on Resend) | Same — clear after `{ success: true }` (notify already finished server-side for Bespoke) |
+| Admin email | **`await notifyAdminsOfContactMessage`** after save | **`await notifyAdminsOfBespokeRequest`** after save |
+
+**Root cause of “form still filled” reports:**
+
+1. Testing **production** (`www.selpic.com.au`) — local UX not deployed yet.
+2. Success banner at page top while form stayed visible (v2/v3) — fixed in **v4** with full-screen thank-you.
+3. Native file input does not clear without remount — use `key={formEpoch}` after success.
+4. Empty or 0-byte `logoFile` multipart confused old server validation — use `parseBespokeLogoFormEntry`.
+
+**Invariant:** Save request → return success to browser → clear/remount form + thank-you screen + toast. Bespoke awaits admin Resend **before** JSON so company email is not dropped on serverless.
+
+---
+
+## Storefront submit feedback (learned 2026-09 — success + reset)
+
+**Invariant:** After a customer clicks submit on any public intake form, they must see **unmistakable progress + success/error**, and on **success the form must return to the initial empty screen** (or an explicit thank-you state). Leaving a filled form visible after success causes duplicate clicks and duplicate inbound rows.
+
+### Bespoke sticker custom (`app/stickers/custom/page.tsx`) — Form UX **v4**
+
+| Step | Required behaviour |
+|------|-------------------|
+| Pending | Button **Submitting…** + disabled |
+| Success | **`formPhase: 'success'`** — hide entire form grid; show centered thank-you panel (`data-bespoke-ux="success-panel-v4"`) |
+| Reset | `resetBespokeFormToInitial()` + `formEpoch` remount + file input `key={formEpoch}` |
+| Persist | Thank-you screen until **Send another request** |
+| Error | Rose alert near button; form **not** cleared |
+| Client logo | Only append `logoFile` when `logoFile.size > 0` |
+
+**Why “form still filled” reports persisted after v2/v3:**
+
+1. Fields were cleared in state but the **full form grid stayed visible** — looked unchanged at Submit scroll position.
+2. Banner at section top was easy to miss on a long two-column layout.
+3. Production still served old bundle without reset code.
+4. Logo upload fail → no clear (correct); stale HMR tab → no Form UX v4 marker.
+
+**Marker:** footer note **Form UX v4** under Submit (or thank-you panel after send).
+
+### Sister channels (do not regress)
+
+| Form | Progress | Success feedback | Form clear / initial screen |
+|------|----------|------------------|----------------------------|
+| Contact `app/contact/page.tsx` | loading | Fixed toast | ✅ clears fields |
+| Fundraising apply | `Submitting…` | inline notice | varies |
+| Bespoke custom | Submitting… | **Full thank-you screen (v4)** | ✅ reset + Send another |
+
+### Cousins
+
+- Newsletter / community / fundraising apply: same invariant if they add multi-field forms — success must appear **where the submit button was**.
+- Admin reply attach is outbound-only — not this rule.
+- Homepage Hero (`app/page.tsx`) must not be used for this UX.
+- Tall forms: never put the only success signal above-the-fold while CTA is below.
+
+### Do not
+
+- Treat “API returned 200” as enough without visible customer confirmation **in the submit viewport**.
+- Leave submit enabled with a still-filled form after success.
+- Clear the form on **error** (customer would lose their draft).
+- Gate customer clear on Resend completion (clear on `{ success: true }` only).
+
+---
+
+## Admin inbound email alerts (company mailbox — learned 2026-09)
+
+**Purpose:** When a customer submits Contact / Bespoke / order / newsletter / community / fundraising, Resend emails the **company notification address** so staff off-site still see the event (dashboard optional).
+
+**Wiring (do not remove):**
+
+| Event | Caller | Notify fn |
+|-------|--------|-----------|
+| Contact form | `app/api/contact/route.ts` | `notifyAdminsOfContactMessage` |
+| Bespoke custom | `app/api/bespoke-requests/stickers/custom/route.ts` | `notifyAdminsOfBespokeRequest` |
+| Orders | checkout-bank + stripe paid | `notifyAdminsOfNewOrder` |
+| Newsletter / community / fundraising | respective API routes | matching `notifyAdminsOf*` |
+
+**Recipients:** `ADMIN_NOTIFICATION_EMAIL` → else `CONTACT_ADMIN_EMAIL` → else `COMPANY_CONTACT.email` (`info@selpic.com.au`). Implemented in `resolveAdminNotificationRecipients()`.
+
+**Wave 3 local change:** only adds `requestSummary` as email **bodyText** for Bespoke. Does **not** change recipients, Resend call, or fire-and-forget pattern.
+
+**Failure mode (ops):** Notify is `void notify…()` after a successful save. Customer/API can return **success** while the admin email fails (`RESEND_API_KEY` missing, Resend domain error, etc.) — failure is only `console.warn('[admin-inbound] email failed: …')`. Admin Settings → Email notifications checkboxes are **unrelated** local prefs; they do not gate these alerts.
+
+**Local verify (2026-09):** On `http://localhost:3005/stickers/custom`, Submit shows Submitting…, then success banner + cleared form. API returns `adminNotifyOk: true` when Resend accepts the company alert. Production (`www.selpic.com.au`) does **not** include these UX changes until deployed — testers on prod will still see the old filled form.
+
+**Resend:** Contact and Bespoke **`await`** notify and return `adminNotifyOk` / `adminNotifyError` in the JSON (customer still gets success if save worked). Check Resend Dashboard Logs for `[SELPIC Contact]` / `[SELPIC Bespoke]` to `info@selpic.com.au` (or `ADMIN_NOTIFICATION_EMAIL`).
+
+---
+
+## Do not
+
+- Use `JSON.stringify(payload)` in operator-facing panels (debug `<details>` removed from Bespoke admin).
+- Duplicate bespoke summary logic in `bespoke-requests/page.tsx` — import shared helper.
+- Send bespoke admin notify without `requestSummary` bodyText.
+- Remove or skip `notifyAdminsOf*` after successful customer intake without an explicit product decision.
+
+---
+
+## When adding a new storefront form field
+
+1. Add to submit payload in storefront page.
+2. Add line to `bespokePayloadDetailLines` (or channel equivalent).
+3. Add test in `bespokeRequestSummary.test.ts`.
+4. Verify Bespoke admin + Agent inbound + notify email.

@@ -4,10 +4,14 @@ import { useStore } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import Header from '@/components/Header'
 import ProductCard from '@/components/ProductCard'
-import { useState, useEffect, useMemo } from 'react'
-import { Type, Image as ImageIcon, Ruler, Send, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Type, Image as ImageIcon, Ruler, Send, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { getStickerFonts, type FontConfig } from '@/lib/fontList'
 import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
+import { isAllowedBespokeLogoFile } from '@/lib/bespokeLogoFile'
+
+const BESPOKE_SUBMITTED_SESSION_KEY = 'selpic-bespoke-submitted'
+const BESPOKE_SUBMITTED_QUERY = 'submitted'
 
 /** Same numbering as Sticker Customization (Font 1–7) */
 const STICKER_FONT_PRESET_LABELS: Record<string, string> = {
@@ -268,6 +272,21 @@ export default function CustomStickersPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null)
   const [isSubmittingBespoke, setIsSubmittingBespoke] = useState(false)
+  /** `success` hides the whole form grid (Contact-style thank-you screen). */
+  const [formPhase, setFormPhase] = useState<'edit' | 'success'>('edit')
+  /** Bumped after successful submit to remount file inputs. */
+  const [formEpoch, setFormEpoch] = useState(0)
+  const [toast, setToast] = useState<{
+    type: 'success' | 'error'
+    message: string
+    show: boolean
+  }>({ type: 'success', message: '', show: false })
+  const [submitFeedback, setSubmitFeedback] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
+  const submitFeedbackRef = useRef<HTMLDivElement | null>(null)
+  const bespokeFormTopRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     // Revoke object URLs to avoid memory leaks when user changes the selected file.
@@ -281,12 +300,99 @@ export default function CustomStickersPage() {
   const [contactEmail, setContactEmail] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [extraNotes, setExtraNotes] = useState('')
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null)
-  
+
+  const resetBespokeFormToInitial = useCallback(() => {
+    setTextLineMode('single')
+    setLine1Text('')
+    setLine2Text('')
+    setTextLayoutNotes('')
+    setFontName('')
+    setFontSource('')
+    setFontNotes('')
+    setFontSizeSinglePt(12)
+    setFontSizeLine1Pt(14)
+    setFontSizeLine2Pt(10)
+    setSelectedPresetSingle(null)
+    setSelectedPresetLine1(null)
+    setSelectedPresetLine2(null)
+    setIsFontGuideOpen(false)
+    setSelectedRoll(null)
+    setSelectedRollVariant(null)
+    setRollNotes('')
+    setCharacterProductName('')
+    setLogoPlacementNotes('')
+    setLogoFile(null)
+    setLogoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setContactName('')
+    setContactEmail('')
+    setContactPhone('')
+    setExtraNotes('')
+  }, [])
+
+  const [urlSubmitted, setUrlSubmitted] = useState(false)
+  const showThankYou = formPhase === 'success' || urlSubmitted
+
+  const markBespokeSubmittedSuccess = useCallback(() => {
+    setFormPhase('success')
+    setUrlSubmitted(true)
+    resetBespokeFormToInitial()
+    setFormEpoch((n) => n + 1)
+    if (typeof window === 'undefined') return
+    try {
+      sessionStorage.setItem(BESPOKE_SUBMITTED_SESSION_KEY, '1')
+    } catch {
+      // ignore quota / private mode
+    }
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set(BESPOKE_SUBMITTED_QUERY, '1')
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch {
+      // ignore
+    }
+  }, [resetBespokeFormToInitial])
+
+  const clearBespokeSubmittedSuccess = useCallback(() => {
+    setUrlSubmitted(false)
+    setFormPhase('edit')
+    if (typeof window === 'undefined') return
+    try {
+      sessionStorage.removeItem(BESPOKE_SUBMITTED_SESSION_KEY)
+    } catch {
+      // ignore
+    }
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete(BESPOKE_SUBMITTED_QUERY)
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    const fromUrl = url.searchParams.get(BESPOKE_SUBMITTED_QUERY) === '1'
+    let fromSession = false
+    try {
+      fromSession = sessionStorage.getItem(BESPOKE_SUBMITTED_SESSION_KEY) === '1'
+    } catch {
+      fromSession = false
+    }
+    if (!fromUrl && !fromSession) return
+    resetBespokeFormToInitial()
+    setFormEpoch((n) => n + 1)
+    setFormPhase('success')
+    setUrlSubmitted(true)
+  }, [resetBespokeFormToInitial])
+
   useEffect(() => {
     setIsMounted(true)
-  }, [])
-  
+  }, [])  
   const customStickers = useMemo(
     () =>
       sortProductsByCatalogPrice(
@@ -321,6 +427,26 @@ export default function CustomStickersPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
+
+      {/* Contact Us–style fixed toast (visible even when scrolled to Submit) */}
+      {toast.show ? (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+            toast.type === 'success'
+              ? 'bg-green-100 text-green-700 border border-green-300'
+              : 'bg-red-100 text-red-700 border border-red-300'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            )}
+            <span className="text-sm">{toast.message}</span>
+          </div>
+        </div>
+      ) : null}
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
         {/* Page header */}
@@ -335,8 +461,39 @@ export default function CustomStickersPage() {
         </div>
 
         {/* Bespoke name sticker request section */}
-        <section className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 md:p-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <section
+          ref={bespokeFormTopRef}
+          className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 md:p-8"
+        >
+          {showThankYou ? (
+            <div
+              ref={submitFeedbackRef}
+              role="status"
+              data-bespoke-ux="success-panel-v5"
+              className="rounded-3xl border border-emerald-300 bg-emerald-50 p-8 md:p-10 text-emerald-950 text-center"
+            >
+              <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-600" />
+              <h2 className="mt-4 text-2xl font-semibold">Request submitted successfully</h2>
+              <p className="mt-3 text-sm text-emerald-900/90 max-w-lg mx-auto">
+                Thank you. Our team will review your bespoke label details and follow up by email.
+                Your form has been cleared — you can send another request below if needed.
+              </p>
+              <button
+                type="button"
+                data-bespoke-ux="send-another-v4"
+                onClick={() => {
+                  clearBespokeSubmittedSuccess()
+                  resetBespokeFormToInitial()
+                  setFormEpoch((n) => n + 1)
+                  setSubmitFeedback(null)
+                }}
+                className="mt-8 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm md:text-base font-semibold transition-colors"
+              >
+                Send another request
+              </button>
+            </div>
+          ) : (
+          <div key={formEpoch} className="grid grid-cols-1 lg:grid-cols-2 gap-10">
             {/* Left: options & free-text fields */}
             <div className="space-y-8">
               {/* Roll / frame */}
@@ -756,6 +913,7 @@ export default function CustomStickersPage() {
                   </p>
                   <label className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer transition-colors">
                     <input
+                      key={`logo-file-${formEpoch}`}
                       type="file"
                       accept="image/png,image/svg+xml"
                       className="hidden"
@@ -768,9 +926,8 @@ export default function CustomStickersPage() {
                           return
                         }
 
-                        const allowed = ['image/png', 'image/svg+xml']
-                        const isAllowed = allowed.includes(file.type)
-                        if (!isAllowed) {
+                        const allowed = isAllowedBespokeLogoFile(file)
+                        if (!allowed) {
                           alert('Only PNG or SVG files are allowed.')
                           e.target.value = ''
                           return
@@ -829,7 +986,7 @@ export default function CustomStickersPage() {
               </div>
             </div>
 
-            {/* Right: summary & request form */}
+            {/* Right: contact + submit (Contact Us pattern) */}
             <div className="space-y-6">
               <div className="bg-slate-900 text-white rounded-3xl p-6 md:p-7">
                 <h2 className="text-lg md:text-xl font-semibold mb-3">
@@ -842,18 +999,22 @@ export default function CustomStickersPage() {
                   <input
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
+                    autoComplete="off"
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-700 bg-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                     placeholder="Your name / contact person"
                   />
                   <input
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
+                    type="email"
+                    autoComplete="off"
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-700 bg-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                     placeholder="Email"
                   />
                   <input
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
+                    autoComplete="off"
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-700 bg-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                     placeholder="Phone (optional)"
                   />
@@ -867,12 +1028,36 @@ export default function CustomStickersPage() {
                 </div>
                 <button
                   type="button"
+                  data-bespoke-ux="submit-v5"
                   onClick={async () => {
                     if (isSubmittingBespoke) return
 
+                    if (!contactName.trim() || !contactEmail.trim()) {
+                      const message = 'Please enter your name and email.'
+                      setSubmitFeedback({ type: 'error', message })
+                      setToast({ type: 'error', message, show: true })
+                      return
+                    }
+                    if (!contactEmail.includes('@')) {
+                      const message = 'Please enter a valid email address.'
+                      setSubmitFeedback({ type: 'error', message })
+                      setToast({ type: 'error', message, show: true })
+                      return
+                    }
+
                     if (selectedRoll === 'Type F (Additional Character Rolls)' && !characterProductName.trim()) {
-                      setSubmitMessage('Please enter the character roll product name.')
-                      setTimeout(() => setSubmitMessage(null), 6000)
+                      setSubmitFeedback({
+                        type: 'error',
+                        message: 'Please enter the character roll product name.',
+                      })
+                      setToast({
+                        type: 'error',
+                        message: 'Please enter the character roll product name.',
+                        show: true,
+                      })
+                      requestAnimationFrame(() => {
+                        submitFeedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      })
                       return
                     }
 
@@ -920,54 +1105,96 @@ export default function CustomStickersPage() {
                       },
                       logo: { placementNotes: logoPlacementNotes },
                       contact: {
-                        name: contactName,
-                        email: contactEmail,
+                        name: contactName.trim(),
+                        email: contactEmail.trim(),
                         phone: contactPhone,
                         extra: extraNotes
                       }
                     }
 
                     setIsSubmittingBespoke(true)
-                    setSubmitMessage(null)
+                    setSubmitFeedback(null)
 
                     try {
                       const formData = new FormData()
                       formData.append('payload', JSON.stringify(payload))
-                      if (logoFile) formData.append('logoFile', logoFile, logoFile.name)
+                      if (logoFile && logoFile.size > 0) {
+                        formData.append('logoFile', logoFile, logoFile.name)
+                      }
 
                       const res = await fetch('/api/bespoke-requests/stickers/custom', {
                         method: 'POST',
                         body: formData
                       })
 
-                      const data = await res.json().catch(() => ({}))
-                      if (!res.ok) {
+                      const data = (await res.json().catch(() => ({}))) as {
+                        success?: boolean
+                        message?: string
+                        adminNotifyOk?: boolean
+                        adminNotifyError?: string
+                      }
+                      if (!res.ok || !data?.success) {
                         throw new Error(data?.message || 'Upload failed')
                       }
 
-                      setSubmitMessage('Request submitted. Our admin team will review and follow up.')
-                      setTimeout(() => setSubmitMessage(null), 8000)
+                      markBespokeSubmittedSuccess()
+                      const toastMessage = data.adminNotifyOk === false
+                        ? 'Request saved. Company email alert may be delayed — our team will still see it in admin.'
+                        : 'Request submitted successfully.'
+                      setToast({ type: 'success', message: toastMessage, show: true })
+                      setTimeout(() => {
+                        setToast((prev) => ({ ...prev, show: false }))
+                      }, 8000)
+                      requestAnimationFrame(() => {
+                        bespokeFormTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      })
                     } catch (err) {
                       console.error('Bespoke request submission failed:', err)
-                      setSubmitMessage('Submission failed. Please try again.')
-                      setTimeout(() => setSubmitMessage(null), 6000)
+                      const message =
+                        err instanceof Error ? err.message : 'Submission failed. Please try again.'
+                      setSubmitFeedback({ type: 'error', message })
+                      setToast({ type: 'error', message, show: true })
+                      setTimeout(() => {
+                        setToast((prev) => ({ ...prev, show: false }))
+                      }, 6000)
+                      requestAnimationFrame(() => {
+                        submitFeedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      })
                     } finally {
                       setIsSubmittingBespoke(false)
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 hover:bg-blue-600 text-sm md:text-base font-semibold shadow-lg shadow-blue-500/30 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 hover:bg-blue-600 text-sm md:text-base font-semibold shadow-lg shadow-blue-500/30 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={isSubmittingBespoke}
                 >
-                  Submit request
-                  <Send className="w-4 h-4" />
+                  {isSubmittingBespoke ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting…
+                    </>
+                  ) : (
+                    <>
+                      Submit request
+                      <Send className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
-                {submitMessage && (
-                  <p className="mt-3 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-700/50 rounded-lg px-3 py-2">
-                    {submitMessage}
-                  </p>
-                )}
+                {submitFeedback?.type === 'error' ? (
+                  <div
+                    ref={submitFeedbackRef}
+                    role="alert"
+                    className="mt-3 rounded-xl border border-rose-500/60 bg-rose-950/40 px-3 py-3 text-sm text-rose-100"
+                  >
+                    <p className="font-semibold">Could not submit</p>
+                    <p className="mt-1 text-xs md:text-sm opacity-95">{submitFeedback.message}</p>
+                  </div>
+                ) : null}
                 <p className="mt-3 text-[11px] text-slate-400">
                   * After submission, your file and request details are saved for admin review.
+                </p>
+                <p className="mt-1 text-[10px] text-slate-500" data-bespoke-ux="revision-v5">
+                  Form UX v5 — success uses URL + session backup so filled fields cannot “stick” after HMR or
+                  slow Resend. Hard-refresh (Ctrl+F5) if you do not see “Form UX v5” here.
                 </p>
               </div>
 
@@ -982,6 +1209,7 @@ export default function CustomStickersPage() {
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* Ready-made custom sticker products — ProductCard (max 240×240px) */}
