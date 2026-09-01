@@ -18,9 +18,10 @@ import {
   Mail, MailOpen, Search, Filter, Eye, Reply, Trash2, 
   Clock, User, Tag, AlertCircle, CheckCircle, MessageSquare,
   Calendar, Archive, Star, ArrowLeft, Send, Save, FileText,
-  Layout, History, Loader2, Paperclip, File, Plus, X
+  Layout, History, Loader2, Paperclip, File, Plus, X, Sparkles
 } from 'lucide-react'
 import Link from 'next/link'
+import { buildAgentInboundDraftHref } from '@/lib/agent/inboundLinks'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
@@ -682,15 +683,23 @@ function AdminMessagesPageContent() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex items-center space-x-3 flex-wrap gap-2">
+                  <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                     <button
                       onClick={handleStartReply}
-                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      className="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       <Reply className="w-4 h-4 mr-2" />
                       Reply
                     </button>
-                    
+
+                    <Link
+                      href={buildAgentInboundDraftHref('message', selectedMessage.id)}
+                      className="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-2 bg-indigo-50 text-indigo-800 border border-indigo-200 text-sm font-medium rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Draft with Agent
+                    </Link>
+
                     <button
                       onClick={() => {
                         setShowEmailHistory(true)
@@ -700,12 +709,12 @@ function AdminMessagesPageContent() {
                           })
                         }
                       }}
-                      className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                      className="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                     >
                       <History className="w-4 h-4 mr-2" />
                       Email History ({resolveEmailHistory(selectedMessage.id).length})
                     </button>
-                    
+
                     <select
                       value={selectedMessage.status}
                       onChange={(e) => {
@@ -715,14 +724,14 @@ function AdminMessagesPageContent() {
                           alert('Failed to update status on server. Please try again.')
                         })
                       }}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="shrink-0 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="new">New</option>
                       <option value="read">Read</option>
                       <option value="replied">Replied</option>
                       <option value="closed">Closed</option>
                     </select>
-                    
+
                     <select
                       value={selectedMessage.priority}
                       onChange={(e) => {
@@ -732,26 +741,25 @@ function AdminMessagesPageContent() {
                           alert('Failed to update priority on server. Please try again.')
                         })
                       }}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="shrink-0 max-w-[9.5rem] px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="low">Low Priority</option>
-                      <option value="medium">Medium Priority</option>
-                      <option value="high">High Priority</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
                       <option value="urgent">Urgent</option>
                     </select>
-                    
+
                     <button
                       onClick={() => {
                         const id = selectedMessage.id
                         if (!confirm('Delete this message? This will remove it from the database.')) return
-                        // Optimistic local delete
                         deleteMessage(id)
                         setSelectedMessage(null)
                         void deleteMessageOnServer(id).catch(() => {
                           alert('Failed to delete from server. Please refresh and try again.')
                         })
                       }}
-                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                      className="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
                       Delete

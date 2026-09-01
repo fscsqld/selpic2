@@ -2,11 +2,32 @@ import { NextResponse } from 'next/server'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
 import {
   deleteBespokeStickerRequest,
+  readBespokeStickerRequests,
   updateBespokeStickerRequestStatus,
   type BespokeStickerRequestStatus,
 } from '@/lib/server/bespokeStickerRequests'
 
 const ALLOWED: BespokeStickerRequestStatus[] = ['new', 'reviewed', 'replied', 'approved', 'rejected']
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSupabaseAdminUser()
+  if (!admin) {
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id: requestId } = await params
+  try {
+    const records = await readBespokeStickerRequests()
+    const record = records.find((r) => r.id === requestId)
+    if (!record) {
+      return NextResponse.json({ success: false, message: 'Request not found' }, { status: 404 })
+    }
+    return NextResponse.json({ success: true, record })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Load failed'
+    return NextResponse.json({ success: false, message }, { status: 500 })
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireSupabaseAdminUser()

@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers'
 import { requireSupabaseAdminUser } from '@/lib/supabase/requireSupabaseAdmin'
+import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { sendEmailViaResendServer, type ResendAttachmentInput } from '@/lib/email/resendServer'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { normalizeLedgerOrder } from '@/lib/orders/stripePaidOrder'
@@ -148,6 +149,15 @@ export async function sendAdminComposeEmailAction(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requireSupabaseAdminUser()
   if (!admin) return { ok: false, error: 'UNAUTHORIZED' }
+
+  if (input.contactMessageId?.trim()) {
+    const gate = await requireAdminPermission('messages:write')
+    if (!gate.ok) return { ok: false, error: gate.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN' }
+  }
+  if (input.bespokeRequestId?.trim()) {
+    const gate = await requireAdminPermission('bespoke:write')
+    if (!gate.ok) return { ok: false, error: gate.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN' }
+  }
 
   const r = await sendEmailViaResendServer({
     to: input.to,

@@ -1,23 +1,31 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
+import { parseAgentInboundPreselect } from '@/lib/agent/inboundLinks'
+import {
+  bespokeRecordToQueueItem,
+  contactMessageToQueueItem,
+  includeBespokeInInboundQueue,
+  includeBespokeInRecentQueue,
+  includeContactMessageInInboundQueue,
+  includeContactMessageInRecentQueue,
+  isBespokeActionableStatus,
+  isContactMessageActionableStatus,
+  type InboundQueueItem,
+  type InboundQueueTab,
+} from '@/lib/agent/inboundQueue'
 import { emailService } from '@/lib/emailService'
+import BespokeLogoAsset from '@/components/admin/BespokeLogoAsset'
 import { logAdminActivity } from '@/lib/logAdminActivity'
 import { MessageSquare, Loader2, RefreshCw, Send, Sparkles, ArrowLeft } from 'lucide-react'
 
-type QueueItem = {
-  key: string
-  channel: 'message' | 'bespoke'
-  id: string
-  customerName: string
-  customerEmail: string
-  subject: string
-  excerpt: string
-  createdAt: string
-}
+type QueueItem = InboundQueueItem
 
 type DraftPayload = {
   subject: string
@@ -25,17 +33,35 @@ type DraftPayload = {
   intentHint: string
 }
 
+const RECENT_QUEUE_LIMIT = 40
+
 export default function AdminAgentInboundPage() {
   return (
     <AdminRoute requiredAnyPermissions={['messages:read', 'bespoke:read', 'agent:read']}>
-      <InboundDraftWorkspace />
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading draft workspace…
+          </div>
+        }
+      >
+        <InboundDraftWorkspace />
+      </Suspense>
     </AdminRoute>
   )
 }
 
 function InboundDraftWorkspace() {
+  const searchParams = useSearchParams()
+  const preselect = useMemo(
+    () => parseAgentInboundPreselect(searchParams.get('channel'), searchParams.get('id')),
+    [searchParams]
+  )
+  const { adminUser } = useAdminAuth()
   const [loading, setLoading] = useState(true)
-  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [needsAttention, setNeedsAttention] = useState<QueueItem[]>([])
+  const [recentHandled, setRecentHandled] = useState<QueueItem[]>([])
+  const [activeTab, setActiveTab] = useState<InboundQueueTab>('needs_attention')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
@@ -44,21 +70,39 @@ function InboundDraftWorkspace() {
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
 
-  const selected = useMemo(
-    () => queue.find((q) => q.key === selectedKey) || null,
-    [queue, selectedKey]
-  )
+  const queue = activeTab === 'needs_attention' ? needsAttention : recentHandled
+
+  const selected = useMemo(() => {
+    const fromActive = queue.find((q) => q.key === selectedKey)
+    if (fromActive) return fromActive
+    return (
+      needsAttention.find((q) => q.key === selectedKey) ||
+      recentHandled.find((q) => q.key === selectedKey) ||
+      null
+    )
+  }, [queue, selectedKey, needsAttention, recentHandled])
+
+  const canSendSelected = useMemo(() => {
+    if (!selected) return false
+    return selected.channel === 'message'
+      ? adminHasPermission(adminUser, 'messages:write')
+      : adminHasPermission(adminUser, 'bespoke:write')
+  }, [adminUser, selected])
 
   const load = useCallback(async () => {
     setLoading(true)
     setMessage('')
     try {
+      const preselectId = preselect?.channel === 'message' ? preselect.id : undefined
+      const preselectBespokeId = preselect?.channel === 'bespoke' ? preselect.id : undefined
+
       const [msgRes, bespokeRes] = await Promise.all([
-        fetch('/api/admin/contact-messages?limit=50', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/admin/contact-messages?limit=200', { cache: 'no-store', credentials: 'include' }),
         fetch('/api/bespoke-requests/stickers/custom', { cache: 'no-store', credentials: 'include' }),
       ])
 
-      const items: QueueItem[] = []
+      const actionable: QueueItem[] = []
+      const recent: QueueItem[] = []
 
       if (msgRes.ok) {
         const json = (await msgRes.json().catch(() => null)) as {
@@ -66,19 +110,17 @@ function InboundDraftWorkspace() {
         } | null
         for (const m of json?.messages || []) {
           const status = String(m.status || 'new')
-          if (status !== 'new') continue
           const id = String(m.id || '')
           if (!id) continue
-          items.push({
-            key: `message:${id}`,
-            channel: 'message',
-            id,
-            customerName: String(m.name || 'Customer'),
-            customerEmail: String(m.email || ''),
-            subject: String(m.subject || 'Enquiry'),
-            excerpt: String(m.message || m.body || '').slice(0, 500),
-            createdAt: String(m.created_at || m.createdAt || ''),
-          })
+          const item = contactMessageToQueueItem(m)
+          if (!item) continue
+          if (includeContactMessageInInboundQueue(status, id, preselectId)) {
+            const deepLinkOnly =
+              Boolean(preselectId && id === preselectId) && !isContactMessageActionableStatus(status)
+            actionable.push(deepLinkOnly ? { ...item, deepLinkOnly: true } : item)
+          } else if (includeContactMessageInRecentQueue(status)) {
+            recent.push(item)
+          }
         }
       }
 
@@ -88,43 +130,100 @@ function InboundDraftWorkspace() {
         } | null
         for (const r of json?.records || []) {
           const status = String(r.status || 'new')
-          if (status !== 'new') continue
           const id = String(r.id || '')
           if (!id) continue
-          const payload = (r.payload || {}) as Record<string, unknown>
-          const contact = (payload.contact || {}) as { name?: string; email?: string }
-          const product = payload.product ? String(payload.product) : ''
-          items.push({
-            key: `bespoke:${id}`,
-            channel: 'bespoke',
-            id,
-            customerName: String(contact.name || 'Customer'),
-            customerEmail: String(contact.email || ''),
-            subject: `Bespoke request ${id}`,
-            excerpt: product || JSON.stringify(payload).slice(0, 400),
-            createdAt: String(r.createdAt || r.created_at || ''),
-          })
+          const item = bespokeRecordToQueueItem(r)
+          if (!item) continue
+          if (includeBespokeInInboundQueue(status, id, preselectBespokeId)) {
+            const deepLinkOnly =
+              Boolean(preselectBespokeId && id === preselectBespokeId) &&
+              !isBespokeActionableStatus(status)
+            actionable.push(deepLinkOnly ? { ...item, deepLinkOnly: true } : item)
+          } else if (includeBespokeInRecentQueue(status)) {
+            recent.push(item)
+          }
         }
       }
 
-      items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      setQueue(items)
-      setSelectedKey((prev) => {
-        if (prev && items.some((i) => i.key === prev)) return prev
-        return items[0]?.key ?? null
-      })
+      if (preselect && !actionable.some((i) => i.key === preselect.key)) {
+        if (preselect.channel === 'message') {
+          const oneRes = await fetch(
+            `/api/admin/contact-messages/${encodeURIComponent(preselect.id)}`,
+            { cache: 'no-store', credentials: 'include' }
+          )
+          const oneJson = (await oneRes.json().catch(() => null)) as {
+            ok?: boolean
+            message?: Record<string, unknown>
+          } | null
+          if (oneRes.ok && oneJson?.message) {
+            const item = contactMessageToQueueItem(oneJson.message)
+            if (item) actionable.unshift({ ...item, deepLinkOnly: true })
+          }
+        } else {
+          const oneRes = await fetch(
+            `/api/bespoke-requests/stickers/custom/${encodeURIComponent(preselect.id)}`,
+            { cache: 'no-store', credentials: 'include' }
+          )
+          const oneJson = (await oneRes.json().catch(() => null)) as {
+            success?: boolean
+            record?: Record<string, unknown>
+          } | null
+          if (oneRes.ok && oneJson?.record) {
+            const item = bespokeRecordToQueueItem(oneJson.record)
+            if (item) actionable.unshift({ ...item, deepLinkOnly: true })
+          }
+        }
+      }
+
+      const sortDesc = (a: QueueItem, b: QueueItem) => (a.createdAt < b.createdAt ? 1 : -1)
+      actionable.sort(sortDesc)
+      recent.sort(sortDesc)
+      const recentCapped = recent.slice(0, RECENT_QUEUE_LIMIT)
+
+      if (preselect) {
+        const pinned = actionable.find((i) => i.key === preselect.key)
+        if (pinned) {
+          const rest = actionable.filter((i) => i.key !== preselect.key)
+          actionable.splice(0, actionable.length, pinned, ...rest)
+        }
+      }
+
+      setNeedsAttention(actionable)
+      setRecentHandled(recentCapped)
+
+      if (preselect && actionable.some((i) => i.key === preselect.key)) {
+        setActiveTab('needs_attention')
+        setSelectedKey(preselect.key)
+      } else if (preselect && recentCapped.some((i) => i.key === preselect.key)) {
+        setActiveTab('recent')
+        setSelectedKey(preselect.key)
+      } else if (preselect) {
+        setSelectedKey(null)
+        setMessage(
+          'Could not load the linked message from Messages/Bespoke. It may have been deleted or you may lack permission.'
+        )
+      } else {
+        setSelectedKey((prev) => {
+          if (prev && (actionable.some((i) => i.key === prev) || recentCapped.some((i) => i.key === prev))) {
+            return prev
+          }
+          return actionable[0]?.key ?? null
+        })
+        if (actionable[0]) setActiveTab('needs_attention')
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load queue')
-      setQueue([])
+      setNeedsAttention([])
+      setRecentHandled([])
+      setSelectedKey(null)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [preselect])
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
-  }, [])
+  }, [load])
 
   const generateDraft = async () => {
     if (!selected) return
@@ -142,6 +241,7 @@ function InboundDraftWorkspace() {
           subject: selected.subject,
           bodyExcerpt: selected.excerpt,
           requestId: selected.channel === 'bespoke' ? selected.id : undefined,
+          bespokePayload: selected.channel === 'bespoke' ? selected.bespokePayload : undefined,
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -233,15 +333,25 @@ function InboundDraftWorkspace() {
         description: `Agent inbound draft sent (${selected.channel}) to ${selected.customerEmail}`,
       })
 
-      setMessage('Sent. Item marked replied.')
+      setMessage('Sent. Item moved to Recently handled.')
       setDraftBody('')
       setDraftSubject('')
+      setActiveTab('recent')
       await load()
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Send failed')
     } finally {
       setSending(false)
     }
+  }
+
+  const switchTab = (tab: InboundQueueTab) => {
+    setActiveTab(tab)
+    const list = tab === 'needs_attention' ? needsAttention : recentHandled
+    setSelectedKey((prev) => {
+      if (prev && list.some((i) => i.key === prev)) return prev
+      return list[0]?.key ?? null
+    })
   }
 
   return (
@@ -279,15 +389,85 @@ function InboundDraftWorkspace() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
           <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-gray-900">
-              New inbound ({queue.length})
+            <div className="border-b border-gray-100 px-2 pt-2 flex gap-1">
+              <button
+                type="button"
+                onClick={() => switchTab('needs_attention')}
+                className={`flex-1 rounded-t-lg px-3 py-2 text-sm font-semibold ${
+                  activeTab === 'needs_attention'
+                    ? 'bg-indigo-50 text-indigo-900 border-b-2 border-indigo-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Needs attention ({needsAttention.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab('recent')}
+                className={`flex-1 rounded-t-lg px-3 py-2 text-sm font-semibold ${
+                  activeTab === 'recent'
+                    ? 'bg-indigo-50 text-indigo-900 border-b-2 border-indigo-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Recently handled ({recentHandled.length})
+              </button>
             </div>
             {loading ? (
               <div className="flex items-center gap-2 px-4 py-8 text-sm text-gray-500">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading…
               </div>
             ) : queue.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-gray-500">No new Messages or Bespoke items.</p>
+              <div className="px-4 py-8 text-sm text-gray-600 space-y-3">
+                {activeTab === 'needs_attention' ? (
+                  <>
+                    <p className="font-medium text-gray-800">No items need a first reply right now.</p>
+                    <p>
+                      This tab only lists Messages in <span className="font-medium">new</span> /{' '}
+                      <span className="font-medium">read</span> and Bespoke in{' '}
+                      <span className="font-medium">new</span> /{' '}
+                      <span className="font-medium">reviewed</span>.
+                    </p>
+                    {recentHandled.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => switchTab('recent')}
+                        className="text-indigo-700 font-medium hover:underline"
+                      >
+                        View {recentHandled.length} recently handled item
+                        {recentHandled.length === 1 ? '' : 's'}
+                      </button>
+                    ) : (
+                      <p className="text-gray-500">
+                        To open a specific enquiry, use <span className="font-medium">Draft with Agent</span>{' '}
+                        on the Messages or Bespoke page.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Link
+                        href="/admin/messages"
+                        className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Open Messages
+                      </Link>
+                      <Link
+                        href="/admin/bespoke-requests"
+                        className="inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Open Bespoke
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-gray-800">No recently handled items in this list.</p>
+                    <p className="text-gray-500">
+                      After you Send from this workspace, replied items appear here (up to {RECENT_QUEUE_LIMIT}).
+                      You can still draft a follow-up.
+                    </p>
+                  </>
+                )}
+              </div>
             ) : (
               <ul className="max-h-[70vh] overflow-y-auto divide-y divide-gray-100">
                 {queue.map((item) => (
@@ -320,7 +500,22 @@ function InboundDraftWorkspace() {
 
           <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm p-4">
             {!selected ? (
-              <p className="text-sm text-gray-500 py-12 text-center">Select an inbound item.</p>
+              <div className="py-12 text-center space-y-3 text-sm text-gray-500">
+                <p>Select an inbound item from the left.</p>
+                {needsAttention.length === 0 && recentHandled.length === 0 ? (
+                  <p>
+                    Or open a row on{' '}
+                    <Link href="/admin/messages" className="text-indigo-700 hover:underline">
+                      Messages
+                    </Link>{' '}
+                    /{' '}
+                    <Link href="/admin/bespoke-requests" className="text-indigo-700 hover:underline">
+                      Bespoke
+                    </Link>{' '}
+                    and click <span className="font-medium text-gray-700">Draft with Agent</span>.
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <div className="space-y-4">
                 <div>
@@ -335,9 +530,29 @@ function InboundDraftWorkspace() {
                   ) : null}
                 </div>
 
-                <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600 whitespace-pre-wrap max-h-28 overflow-y-auto">
+                <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600 whitespace-pre-wrap max-h-48 overflow-y-auto">
                   {selected.excerpt || '(no excerpt)'}
                 </div>
+                {selected.channel === 'bespoke' ? (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <BespokeLogoAsset
+                      logo={selected.bespokeLogo}
+                      requestId={selected.id}
+                      compact
+                    />
+                  </div>
+                ) : null}
+                {selected.deepLinkOnly ? (
+                  <p className="text-xs text-amber-800">
+                    Opened from Messages/Bespoke — this item is outside the default Needs attention queue. You can
+                    still draft and send a follow-up.
+                  </p>
+                ) : null}
+                {activeTab === 'recent' && !selected.deepLinkOnly ? (
+                  <p className="text-xs text-gray-500">
+                    Recently handled — draft a follow-up if needed. Send will keep status as replied.
+                  </p>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -387,12 +602,18 @@ function InboundDraftWorkspace() {
                 <button
                   type="button"
                   onClick={() => void handleSend()}
-                  disabled={sending || !draftBody.trim()}
+                  disabled={sending || !draftBody.trim() || !canSendSelected}
                   className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Send via Resend
                 </button>
+                {!canSendSelected ? (
+                  <p className="text-xs text-amber-800">
+                    Send requires{' '}
+                    {selected.channel === 'message' ? 'messages:write' : 'bespoke:write'} permission.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>

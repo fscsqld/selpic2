@@ -1,0 +1,75 @@
+---
+description: Learned — ATO BAS leave-cents-out vs ledger cents; year-end gaps; $18.45→$18
+globs: apps/accounting-sandbox/**/ato-lodgment-rounding*,apps/accounting-sandbox/**/balance-sheet*,apps/accounting-sandbox/**/bas-reporter*
+alwaysApply: false
+---
+
+# BAS cents vs ledger vs year-end (learned 2026-08-27 from user)
+
+## User understanding (confirmed correct)
+
+1. Accountant lodges **BAS each quarter** with **whole-dollar** GST figures.  
+2. App ledger can show net GST credit **$18.45** (÷11 cents).  
+3. Bank shows ATO refunded **$18** — matches lodged BAS, not the cent total.  
+4. Worry: quarterly whole-dollar figures vs year-end income/expense totals → **small gaps** across reports.  
+5. Ask: how should Selpic reflect this? Is ATO “round at 1st decimal”? How do Xero-class apps compare?
+
+## ATO rule (official) — not “1st decimal half-up”
+
+ATO BAS tips / Complete your BAS:
+
+- Enter **whole dollars**  
+- **Leave cents out**  
+- **Do not round up** to the next dollar  
+
+That is **`Math.trunc` / floor toward zero on the dollar** — e.g.:
+
+| Ledger cents | ATO BAS label | Nearest-dollar (½ up) |
+|--------------|---------------|------------------------|
+| **18.45** | **18** | 18 |
+| **18.60** | **18** | **19** ← differs |
+| **18.99** | **18** | 19 |
+
+Korean “소수점 첫 자리에서 반올림” often means “look at tenths then round to whole $”. For **18.45** that also yields **18**, so it *looks* like the accountant’s method. Official ATO wording is **leave cents out / don’t round up**, not “round half up to nearest dollar.”
+
+Selpic already uses `roundAtoWholeDollars` = trunc. Fixture: **$18.45 → lodge $18 → bank $18 → BS “ATO GST refund rounding” $0.45**.
+
+## Two layers (do not conflate)
+
+| Layer | Keep | Rounding |
+|-------|------|----------|
+| Books / P&L / History / ÷11 GST calc | **Cents** | `roundMoney` |
+| BAS / CTR / many tax-return labels | **Whole $** | leave cents out once **per label per period** |
+| Bank (ATO payment) | What ATO paid | Whole $ from lodged BAS |
+
+**ATO GST-ex 정렬 (Annual scaleMap)** is a **different** topic (how to build GST-exclusive category lines). This note is only about **cents vs whole dollars on lodgment**.
+
+## Why year-end “errors” appear (expected, not a bug)
+
+1. **Per quarter:** truncate(1A), truncate(1B), net → ATO pays/charges whole $.  
+2. **Four quarters:** sum of four truncated nets **≠** truncate(full-year cent net) in general.  
+3. **Annual return:** also typically whole dollars leave cents out on labels — again not “sum of BAS labels must equal annual line in cents.”  
+4. Books should still **sum transactions in cents** for management P&L; lodgment sheets show ATO dollars.
+
+Gaps of cents to a few dollars across the year are **normal rounding residue**, cleared via:
+
+- Bank vs BAS estimate (**ATO GST refund rounding** on BS — already modelled for $0.45)  
+- Optional rounding / clearing account (Xero/MYOB pattern)
+
+## How Selpic should reflect (product)
+
+1. **Never** rewrite bank/PDF face amounts to whole dollars in History.  
+2. BAS Export / ATO Lodgment BAS: show **ledger cents + ATO whole $** (or label column); lodge = trunc.  
+3. When ATO refund hits bank at $18 vs estimate $18.45 → keep **$0.45 rounding** on BS (already).  
+4. Do **not** force Annual category lines to equal sum of four BAS 1B truncations.  
+5. Toast/docs: explain “ATO pays whole dollars; books keep cents.”
+
+## Xero / MYOB / QBO AU
+
+Same pattern: books in cents; BAS worksheet / SBR lodge whole dollars leave cents out; small GST control / rounding differences vs bank.
+
+## Do not
+
+- Treat $18 bank vs $18.45 ledger as data corruption  
+- Switch BAS to nearest-dollar half-up (wrong vs ATO for .50+)  
+- Round every invoice to whole $ before summing (ATO/software anti-pattern)

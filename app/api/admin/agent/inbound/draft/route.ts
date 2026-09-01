@@ -18,6 +18,7 @@ type DraftBody = {
   subject?: string
   bodyExcerpt?: string
   requestId?: string
+  bespokePayload?: Record<string, unknown>
 }
 
 /**
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
     subject: body.subject ? String(body.subject) : undefined,
     bodyExcerpt: body.bodyExcerpt ? String(body.bodyExcerpt) : undefined,
     requestId: body.requestId ? String(body.requestId) : undefined,
+    bespokePayload:
+      body.bespokePayload && typeof body.bespokePayload === 'object' ? body.bespokePayload : undefined,
   })
 
   return NextResponse.json({ ok: true, draft })

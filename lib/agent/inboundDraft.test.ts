@@ -21,12 +21,18 @@ describe('buildInboundReplyDraft', () => {
       channel: 'bespoke',
       customerName: 'Sam',
       customerEmail: 'sam@school.edu.au',
-      bodyExcerpt: 'Need custom labels for fundraising',
+      bodyExcerpt: 'Roll: Type A\nText: EMMA',
       requestId: 'bsp_1',
+      bespokePayload: {
+        roll: { variant: 'Hologram Medium (30mm×13mm)' },
+        text: { line1: 'EMMA' },
+      },
     })
-    expect(draft.subject).toContain('bsp_1')
+    expect(draft.subject).toContain('Hologram Medium')
     expect(draft.body).toContain('bespoke label request')
-    expect(draft.intentHint).toBe('fundraising')
+    expect(draft.body).toContain('Request summary:')
+    expect(draft.body).not.toContain('{')
+    expect(draft.intentHint).toBe('bespoke_request')
   })
 
   it('uses careful wording for payment disputes', () => {
@@ -40,5 +46,17 @@ describe('buildInboundReplyDraft', () => {
     expect(draft.intentHint).toBe('payment_dispute')
     expect(draft.body).toContain('billing')
     expect(draft.body).toMatch(/card numbers/i)
+  })
+
+  it('classifies custom sticker print enquiries as bespoke_product', () => {
+    const draft = buildInboundReplyDraft({
+      channel: 'message',
+      customerName: 'Rachele',
+      customerEmail: 'r@example.com',
+      subject: 'Can you print large stickers for a bill kart?',
+      bodyExcerpt: 'stickers for a billy kart including the face of this image',
+    })
+    expect(draft.intentHint).toBe('bespoke_product')
+    expect(draft.body).toContain('custom stickers or labels')
   })
 })
