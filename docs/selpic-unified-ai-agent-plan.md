@@ -1,7 +1,7 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-08-31 (Wave 3 inbound HITL verified; deep-link + send gates shipped locally)  
-**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub **shipped**. Wave 3 inbound drafts **HITL live** (template only, not LLM auto-send). Wave 4+ not started. Commit/deploy when user asks.  
+**Updated:** 2026-09-01 (Wave 4 Performance coach v1 shipped locally)  
+**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub **shipped**. Wave 3 inbound drafts **HITL live**. Wave 4 performance coach **v1 live** (on-demand cards, no auto actions). Wave 5+ not started.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
@@ -306,9 +306,12 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 #### Wave 4 — Performance coach (Sales / Traffic / Fundraising Impact)
 
-- Nightly or on-demand job: pull allowed analytics summaries.  
-- Output: **ranked opportunity cards** (e.g. “Traffic up on sticker PDP but add-to-cart flat — draft promo copy for CMS review”, “3 pending fundraising apps > 7 days”).  
-- Never auto Mark Paid, never auto change prices without `products:write` + human confirm.
+- **Status:** **v1 live (2026-09-01)** — `/admin/agent/performance` + `GET /api/admin/agent/performance`.  
+- On-demand ranked **opportunity cards** from existing Supabase data (no new tables).  
+- v1 rules: stale fundraising pending (>7d), bank transfer pending, traffic up + flat conversion, weekly revenue down.  
+- Never auto Mark Paid, never auto change prices without `products:write` + human confirm.  
+- Rule: `.cursor/rules/selpic-agent-performance-wave4.mdc`.  
+- Optional later: nightly cron, PDP-level traffic, LLM draft promo copy.
 
 #### Wave 5 — SELPIC N / Community content agent
 

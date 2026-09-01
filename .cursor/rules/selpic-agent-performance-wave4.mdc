@@ -1,0 +1,44 @@
+---
+description: Wave 4 Performance coach — opportunity cards only, no auto money moves
+globs: app/admin/agent/performance/**,app/api/admin/agent/performance/**,lib/agent/performanceCoach.ts
+---
+
+# Wave 4 — Performance coach
+
+## Purpose
+
+Ranked **read-only opportunity cards** for admins from Sales, Traffic, and Fundraising data. Human decides every follow-up.
+
+## Live surfaces
+
+| Surface | Path |
+|---------|------|
+| Workspace | `/admin/agent/performance` |
+| API | `GET /api/admin/agent/performance` |
+| Hub summary | `GET /api/admin/agent/summary` → `performance.opportunityCount` |
+
+## Permission
+
+- Workspace + API: `analytics:read` **or** `agent:read` (legacy aliases apply).
+- Sector registry: `lib/agent/sectors.ts` → `performance` status `live`.
+
+## v1 card rules (`lib/agent/performanceCoach.ts`)
+
+| ID | Trigger |
+|----|---------|
+| `fundraising_stale_pending` | Partner `status === pending` && created > 7 days |
+| `bank_transfer_pending` | Order `paymentMethod === bank` && `status === pending` |
+| `traffic_up_conversion_flat` | Last 7d pageviews ≥ prior 7d × 1.15 and conversion flat/down |
+| `revenue_week_down` | This week revenue < prior week × 0.85 (prior week ≥ $50) |
+
+## Invariants (do not regress)
+
+- **No auto Mark Paid**, no auto price changes, no outbound sends from this wave.
+- Cards link to existing admin pages only (`/admin/orders`, `/admin/traffic`, etc.).
+- Homepage Hero and accounting sandbox **out of scope**.
+- Pure ranking logic stays in `buildPerformanceOpportunities()` with tests.
+
+## Do not
+
+- Add closed-loop automation (L2/L3) without explicit product decision.
+- Gate cards on LLM — v1 is deterministic rules only.
