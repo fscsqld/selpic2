@@ -315,7 +315,7 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 #### Wave 5 — SELPIC N / Community content agent
 
-- **Status:** **HITL v1.1 (2026-09-03)** — `/admin/agent/community` + `POST/GET /api/admin/agent/community/draft` (template topics + **AU calendar suggestions**, **not LLM**, **not auto-publish**).  
+- **Status:** **HITL v1.2 (2026-09-03)** — `/admin/agent/community` Queue + Compose; `POST …/queue` `generate_week` enqueues calendar drafts (**not** auto-publish).  
 - Target: public **Selpic N** board (`/community`) for AU families, schools, kindergarten/kinder, daycare / early learning.  
 - Pipeline: curated topic (calendar-ranked) → **admin-pasted source notes** → draft (English) → Admin **Approve & publish** → `POST /api/admin/community/posts` (`community:write`).  
 - **Topic design:** daycare/kinder **integrated** into back-to-care drafts; **Market S** specials use separate topic `market_s_event` (CTA `/hot-goods`, calendar-suggested in gifting windows only). Use `custom_brief` for one-off stories.  

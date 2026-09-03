@@ -6,7 +6,22 @@ alwaysApply: false
 
 # Agent Wave 5 — Community / SELPIC N drafts
 
-**Status:** HITL v1.1 — template draft → Edit → Approve & publish. **No silent auto-publish.**
+**Status:** HITL v1.2 — Queue (calendar → pending drafts) + Compose. **No silent auto-publish.**
+
+## Draft queue (v1.2)
+
+| Piece | Path |
+|-------|------|
+| Pure helpers | `lib/agent/communityDraftQueue.ts` |
+| File store | `lib/server/communityDraftQueueStore.ts` → `data/agent/community-draft-queue.json` |
+| API | `GET/POST /api/admin/agent/community/queue`, `PATCH/DELETE …/queue/[id]` |
+| UI | `/admin/agent/community` tabs **Queue** \| **Compose** |
+
+**Generate this week into queue** — `suggestCommunityTopicsForDate` → enqueue pending only; dedupe same `topicId`; optional **Include Market S (drop is live)**.  
+**Approve** — existing `POST /api/admin/community/posts` then remove from queue.  
+**Discard** — delete queue row only.
+
+Serverless note: JSON file is instance-local; fine for single-admin HITL. Supabase table later if multi-instance shared queue is required.
 
 ## Product vision (learned)
 

@@ -38,3 +38,6 @@ pnpm-debug.log*
 # IDE
 .idea/
 .vscode/
+
+# Agent community draft queue (local HITL pending drafts)
+data/agent/community-draft-queue.json
