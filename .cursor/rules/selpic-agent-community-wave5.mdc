@@ -1,0 +1,74 @@
+---
+description: Agent Wave 5 Community / SELPIC N — AU calendar suggestions, HITL drafts, daycare/kinder inclusive topics
+globs: app/admin/agent/community/**/*,app/api/admin/agent/community/**/*,app/community/**/*,lib/agent/communityDraft.ts,lib/agent/auCommunityCalendar.ts,lib/agent/sectors.ts
+alwaysApply: false
+---
+
+# Agent Wave 5 — Community / SELPIC N drafts
+
+**Status:** HITL v1.1 — template draft → Edit → Approve & publish. **No silent auto-publish.**
+
+## Product vision (learned)
+
+SELPIC N (`/community`) is the living AU community board: parents, carers, schools, **kindergarten/kinder**, **daycare / long day care / early learning**, and organisers share tips and polite opinions. The agent should:
+
+1. **Suggest** topics that match the Australian calendar (term starts, mid-year return, Mother’s/Father’s Day AU, end-of-year).
+2. **Draft** English posts (templates now; LLM later) with sources the admin can verify.
+3. **Publish** only after human Approve (`community:write`) in v5.
+4. **Later (Wave 6+):** optional cron that auto-**drafts** on cadence; auto-**publish** only for pre-approved templates + audit — never homepage Hero.
+
+Admin manual posts on `/admin/community` remain first-class.
+
+## Integrate vs split topics (daycare / kinder)
+
+| Decision | Why |
+|----------|-----|
+| **Integrate** daycare, kinder, preschool, OSHC into `back_to_school_labels` (and light mentions in care / fundraising) | Same seasonal moment, same products (labels on bags/bottles/lunchboxes), same audience |
+| **Do not** create a separate “daycare only” topic by default | Duplicates calendar ranking and CTA; fragments the board |
+| **Use `custom_brief`** for a one-off centre-specific story | When a single centre needs a unique post |
+
+## Market S events (separate topic)
+
+| Decision | Why |
+|----------|-----|
+| **Separate** topic `market_s_event` | CTA is `/hot-goods`; different from school/care label tips; avoids turning every post into a shop ad |
+| **Do not** merge into `back_to_school_labels` | Mixed care advice + retail promo hurts board trust |
+| **Calendar** | Suggest in gifting / holiday windows only; admin still picks anytime when a drop is live |
+| **Copy rules** | Edit real product names/dates before Approve; no invented discounts; official store link only |
+
+## Product contract
+
+| Rule | Detail |
+|------|--------|
+| **HITL** | Generate draft only. Publish only on explicit Approve. |
+| **Autonomy** | L1 now. Calendar = L0 suggest. Auto-publish = Wave 6+ gated. |
+| **English copy** | Topics, drafts, admin + public UI English. |
+| **Homepage** | Never write to `app/page.tsx` Hero / SELPIC logo. Category card copy for SELPIC N may describe the board. |
+| **Accounting** | Never import `apps/accounting-sandbox/**`. |
+| **Sources** | Prefer admin-pasted URLs/notes. No ToS-violating scrape in v5. |
+| **Policy** | Block medical / legal / political campaign briefs in custom_brief path. |
+
+## Surfaces
+
+| Surface | Path |
+|---------|------|
+| Workspace | `/admin/agent/community` |
+| Draft API | `GET/POST /api/admin/agent/community/draft` (+ `suggestedTopics`, `calendarWindow`) |
+| Calendar helper | `lib/agent/auCommunityCalendar.ts` |
+| Publish | Existing `POST /api/admin/community/posts` (`community:write`) |
+| Public SELPIC N | `/community` |
+
+## Permissions
+
+| Action | Permission |
+|--------|------------|
+| Open workspace / generate draft | `community:read` **or** `agent:read` |
+| Approve & publish | `community:write` |
+| Audit | `agent_community_draft_published` |
+
+## Do not
+
+- Auto-publish on Generate, calendar tick, or cron in Wave 5.
+- Call public `POST /api/community/posts` as the agent publish path.
+- Split every institution type into its own topic without a clear seasonal CTA difference.
+- Touch homepage Hero / motion logo when enriching SELPIC N.

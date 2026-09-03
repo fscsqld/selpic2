@@ -3,10 +3,16 @@ import { buildPublicMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/community',
-  title: 'Selpic Community',
+  title: 'Selpic N — Community for AU families, schools & early learning',
   description:
-    'Join the Selpic community to discover ideas, share creations, and stay updated on product launches and creative inspiration.',
-  keywords: ['selpic community', 'creative sticker ideas', 'customer showcase'],
+    'Join Selpic N to share name-label tips, custom sticker ideas, and respectful conversation for Australian families, schools, kindergarten/kinder, daycare, and early learning.',
+  keywords: [
+    'selpic n',
+    'selpic community',
+    'name labels australia',
+    'school daycare kinder stickers',
+    'parent tips',
+  ],
 })
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {

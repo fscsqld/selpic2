@@ -1,7 +1,7 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-09-03 (Wave 3 template-era close: print/sticker Contact drafts)  
-**Status:** Wave 1–2 **shipped**. Wave 3 inbound drafts **HITL live** (print/sticker templates + intent priority). Wave 4 performance coach **v1 live**. Wave 5+ not started.  
+**Updated:** 2026-09-03 (Wave 5 SELPIC N AU calendar + daycare/kinder inclusive drafts)  
+**Status:** Wave 1–4 **shipped**. Wave 5 Community drafts **HITL v1.1** (calendar suggestions → Approve → publish). Wave 6+ auto-draft/publish slots not started.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
@@ -315,11 +315,13 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 #### Wave 5 — SELPIC N / Community content agent
 
-- Target: admin Community board (public `/community`) — treat “SELPIC N” as this community news surface unless product renames it later.  
-- Pipeline: topic brief (AU school/parent events, seasonal print ideas) → **source list** → draft post (English) → Admin **Approve** → existing community posts API.  
-- Cadence: weekly/monthly cron draft batch, not silent firehose.  
-- Policy: no scraping that violates site ToS; prefer licensed feeds / admin-pasted source URLs; cite sources in draft metadata; no medical/legal advice; no political campaigning unless asked.  
-- Homepage Hero stays untouched; community/news lives on `/community` (and optional Newsletter mirror after approve).
+- **Status:** **HITL v1.1 (2026-09-03)** — `/admin/agent/community` + `POST/GET /api/admin/agent/community/draft` (template topics + **AU calendar suggestions**, **not LLM**, **not auto-publish**).  
+- Target: public **Selpic N** board (`/community`) for AU families, schools, kindergarten/kinder, daycare / early learning.  
+- Pipeline: curated topic (calendar-ranked) → **admin-pasted source notes** → draft (English) → Admin **Approve & publish** → `POST /api/admin/community/posts` (`community:write`).  
+- **Topic design:** daycare/kinder **integrated** into back-to-care drafts; **Market S** specials use separate topic `market_s_event` (CTA `/hot-goods`, calendar-suggested in gifting windows only). Use `custom_brief` for one-off stories.  
+- Audit: `agent_community_draft_published`. Rule: `.cursor/rules/selpic-agent-community-wave5.mdc`.  
+- **Roadmap:** v5 = suggest + draft + HITL publish; Wave 6+ = optional cron auto-draft / pre-approved auto-publish slots — never homepage Hero.  
+- Policy: no ToS-violating scrape; cite sources; no medical/legal/political campaign copy.
 
 #### Wave 6+ — Deeper automation (only after trust)
 

@@ -122,8 +122,8 @@ function AgentHubContent() {
       <AdminPageHeader title="AI Agent" icon={<Bot className="w-7 h-7 text-indigo-600" />} />
       <div className="max-w-7xl mx-auto p-6">
         <p className="text-sm text-gray-600 mb-6 -mt-2">
-          Governed hub for SELPIC admin sectors — Fundraising outreach, Customer care drafts, and
-          Performance coach are live.
+          Governed hub for SELPIC admin sectors — Fundraising, Customer care, Performance coach, and
+          Community drafts are live.
         </p>
 
       <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">

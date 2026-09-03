@@ -4937,6 +4937,7 @@ function ActivityLogView() {
     fundraising_agent_target_deleted: 'bg-red-100 text-red-800',
     fundraising_agent_outreach_sent: 'bg-indigo-100 text-indigo-800',
     agent_inbound_draft_sent: 'bg-indigo-100 text-indigo-800',
+    agent_community_draft_published: 'bg-violet-100 text-violet-800',
   }
 
   return (
@@ -5019,6 +5020,7 @@ function ActivityLogView() {
             <option value="fundraising_agent_target_deleted">Fundraising Agent Target Deleted</option>
             <option value="fundraising_agent_outreach_sent">Fundraising Agent Send</option>
             <option value="agent_inbound_draft_sent">Agent Inbound Draft Send</option>
+            <option value="agent_community_draft_published">Agent Community Draft Publish</option>
           </select>
         </div>
         <div className="flex items-end gap-2">

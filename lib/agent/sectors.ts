@@ -5,8 +5,8 @@ import {
 } from '@/lib/adminPermissionCheck'
 
 /**
- * SELPIC Agent Core — sector registry (Wave 2–3).
- * Fundraising + inbound (CS drafts) are live; other sectors are placeholders.
+ * SELPIC Agent Core — sector registry (Wave 2–5).
+ * Fundraising, inbound (CS drafts), performance, and community drafts are live.
  *
  * =============================================================================
  * AGENT_HUB_PERMISSION_NOTE (do not delete)
@@ -78,9 +78,12 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     id: 'community',
     label: 'SELPIC N / Community',
     description: 'Draft community news posts for admin Approve → publish.',
-    status: 'coming_soon',
+    status: 'live',
+    href: '/admin/agent/community',
     requiredPermission: 'community:read',
-    autonomyNote: 'Wave 5 — never auto-edit homepage Hero.',
+    requiredAnyPermissions: ['community:read', 'agent:read'],
+    autonomyNote:
+      'Wave 5 — template drafts only. Publish needs community:write. Never auto-edit homepage Hero.',
   },
   {
     id: 'newsletter',

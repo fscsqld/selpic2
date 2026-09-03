@@ -2541,7 +2541,7 @@ const defaultContent: ContentItem[] = [
     type: 'button',
     section: 'categories',
     title: 'SELPIC N',
-    content: 'Community space to share and inspire',
+    content: 'AU community for families, schools, kinder & daycare',
     linkUrl: '/community',
     categoryType: 'others',
     gradientFrom: '#6B7280',
@@ -3019,7 +3019,7 @@ const defaultCategoryItems: CategoryItem[] = [
   {
     id: 'category-5',
     title: 'SELPIC N',
-    description: 'Your social space to share, inspire, and grow together',
+    description: 'Tips and conversation for AU families, schools, kinder, and daycare',
     emoji: '💬',
     gradientFrom: 'from-emerald-500',
     gradientTo: 'to-teal-600',

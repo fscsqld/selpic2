@@ -126,10 +126,10 @@ const checkForBannedContent = (text: string): boolean => {
 const samplePosts: Post[] = [
   {
     id: 1,
-    title: "Welcome to Selpic Community! 🎉",
+    title: "Welcome to Selpic N 🎉",
     author: "Community Manager",
     date: "2025-10-10",
-    content: "Hey everyone! Welcome to our vibrant community space where creativity meets conversation! This is YOUR space to share ideas, connect with like-minded people, and express yourself freely. Whether you're a designer, entrepreneur, student, or just looking for interesting conversations - you belong here! Jump in, introduce yourself, and let's make this community amazing together! 💫",
+    content: "Welcome to Selpic N — SELPIC’s community board for Australian families, schools, kindergarten/kinder, daycare, and early learning. Share label tips, custom sticker ideas, fundraising experiences, and kind questions. Be respectful, stay on-topic when you can, and help each other out. Introduce yourself and say whether you are a parent, carer, or organiser — we are glad you are here.",
     likes: 127,
     comments: 45,
     category: "Daily",
@@ -956,8 +956,9 @@ export default function CommunityPage() {
             Inspire.
           </p>
           <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            A welcoming space for stories, projects, tips, and conversation. Be yourself and meet people who love making
-            things as much as you do.
+            SELPIC N is our Australian community board for families, schools, kindergarten/kinder, daycare,
+            and early learning — tips on labels and stickers, seasonal ideas, and respectful conversation.
+            Share what helps; keep it kind and constructive.
           </p>
           
           {/* Community guidelines — compact icon cards */}
@@ -1290,7 +1291,7 @@ export default function CommunityPage() {
                       No threads yet — you could be first!
                     </h3>
                     <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6">
-                      Welcome to Selpic N — drop a hello, share a project, or ask for advice and start the timeline.
+                      Welcome to Selpic N — share a label tip for school or daycare, ask a kinder bag question, or say hello and start the timeline.
                     </p>
                     {isLoggedIn ? (
                       <button
