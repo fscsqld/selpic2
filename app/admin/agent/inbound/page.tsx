@@ -8,6 +8,7 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { parseAgentInboundPreselect } from '@/lib/agent/inboundLinks'
+import { formatInboundIntentLabel } from '@/lib/agent/inboundDraft'
 import {
   bespokeRecordToQueueItem,
   contactMessageToQueueItem,
@@ -525,7 +526,10 @@ function InboundDraftWorkspace() {
                   </div>
                   {intentHint ? (
                     <div className="mt-1 text-xs text-gray-500">
-                      Intent hint: <span className="font-medium text-gray-700">{intentHint}</span>
+                      Intent hint:{' '}
+                      <span className="font-medium text-gray-700">
+                        {formatInboundIntentLabel(intentHint)}
+                      </span>
                     </div>
                   ) : null}
                 </div>

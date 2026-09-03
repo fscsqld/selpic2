@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildInboundReplyDraft } from './inboundDraft'
+import {
+  buildInboundReplyDraft,
+  classifyIntent,
+  formatInboundIntentLabel,
+} from './inboundDraft'
 
 describe('buildInboundReplyDraft', () => {
   it('builds a message draft with shipping intent', () => {
@@ -58,5 +62,39 @@ describe('buildInboundReplyDraft', () => {
     })
     expect(draft.intentHint).toBe('bespoke_product')
     expect(draft.body).toContain('custom stickers or labels')
+    expect(draft.body).toMatch(/size \(mm\)/i)
+  })
+
+  it('keeps payment_dispute ahead of sticker language (compliance cousin)', () => {
+    expect(
+      classifyIntent('Refund for custom stickers I ordered')
+    ).toBe('payment_dispute')
+  })
+
+  it('keeps shipping ahead of sticker language when tracking is the ask', () => {
+    expect(classifyIntent('Where is my sticker order? Still waiting on tracking')).toBe(
+      'shipping'
+    )
+  })
+
+  it('treats school-bag labels as product, not fundraising (bare school cousin)', () => {
+    expect(classifyIntent('Name labels for our school bags')).toBe('bespoke_product')
+  })
+
+  it('still classifies genuine fundraising copy without product words', () => {
+    expect(classifyIntent('We want to start a school fundraiser and discuss commission')).toBe(
+      'fundraising'
+    )
+  })
+
+  it('does not let generic “order” beat a custom print enquiry', () => {
+    expect(classifyIntent('I ordered custom stickers last week — can you print a larger size?')).toBe(
+      'bespoke_product'
+    )
+  })
+
+  it('labels intents in English for admin UI', () => {
+    expect(formatInboundIntentLabel('bespoke_product')).toBe('Custom print / stickers')
+    expect(formatInboundIntentLabel('unknown_future')).toBe('unknown future')
   })
 })

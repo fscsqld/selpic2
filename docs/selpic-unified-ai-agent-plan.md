@@ -1,7 +1,7 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-09-01 (Wave 4 Performance coach v1 shipped locally)  
-**Status:** Wave 1 fundraising outreach **shipped**. Wave 2 hub **shipped**. Wave 3 inbound drafts **HITL live**. Wave 4 performance coach **v1 live** (on-demand cards, no auto actions). Wave 5+ not started.  
+**Updated:** 2026-09-03 (Wave 3 template-era close: print/sticker Contact drafts)  
+**Status:** Wave 1–2 **shipped**. Wave 3 inbound drafts **HITL live** (print/sticker templates + intent priority). Wave 4 performance coach **v1 live**. Wave 5+ not started.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
@@ -300,9 +300,9 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 - **Status:** **HITL live (verified ops 2026-08-31)** — `/admin/agent/inbound` + `POST /api/admin/agent/inbound/draft` (template drafts, **not LLM**).  
 - **Entry:** Messages/Bespoke **Draft with Agent** → `?channel=message|bespoke&id=` deep-link; hub attention banner + sector cards.  
 - Admin: **Edit → Send** via `emailService.sendResponse` + status PATCH; audit `agent_inbound_draft_sent`; send gated by `messages:write` / `bespoke:write`.  
-- Intent hint classifier (order / shipping / fundraising / payment / bespoke / general). Escalation tone for payment disputes.  
+- Intent hint classifier (payment → shipping → print/sticker product → fundraising → order → general). Escalation tone for payment disputes. Contact print/sticker copy asks size/qty/artwork (HITL still).  
 - Deep-link loads **replied/closed** rows via single GET (not only default queue). Rule: `.cursor/rules/selpic-agent-inbound-wave3.mdc`.  
-- Optional later: LLM grounding (extend `lib/agent/inboundDraft.ts`), sticker/print intent templates, storefront help widget, ops alert cards.
+- **Wave 3 close (template era):** sticker-print Contact templates shipped. Optional later (not blocking): LLM grounding, storefront help widget, ops alert cards.
 
 #### Wave 4 — Performance coach (Sales / Traffic / Fundraising Impact)
 

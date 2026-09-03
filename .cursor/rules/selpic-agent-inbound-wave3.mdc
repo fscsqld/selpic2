@@ -12,8 +12,8 @@ Verified example (Messages → Draft with Agent → `/admin/agent/inbound`):
 
 - Customer: Rachele, subject *「Can you print large stickers for a bill kart?」*
 - Inbound excerpt shows full contact-form body (phone included).
-- Intent hint: `general` (see gaps below).
-- Draft: `Dear Rachele,` + quoted *You wrote:* block + generic follow-up + Selpic Customer Care sign-off.
+- Intent hint: `bespoke_product` (print/sticker language; admin label **Custom print / stickers**).
+- Draft: `Dear Rachele,` + custom print opening + quoted *You wrote:* + ask for size (mm) / quantity / artwork + Selpic Customer Care sign-off.
 - Subject: `Re: Can you print large stickers for a bill kart?`
 - Admin must click **Send via Resend** — nothing sends automatically.
 
@@ -85,18 +85,18 @@ Inbound workspace                     app/admin/agent/inbound/page.tsx
 
 ## Intent classifier (template era)
 
-`classifyIntent()` in `lib/agent/inboundDraft.ts` — regex on subject + excerpt:
+`classifyIntent()` in `lib/agent/inboundDraft.ts` — regex on subject + excerpt. **Order is the contract** (do not reshuffle without tests):
 
-| intentHint | Triggers (summary) |
-|------------|-------------------|
-| `payment_dispute` | refund, chargeback, dispute, … |
-| `shipping` | ship, tracking, delivery, … |
-| `fundraising` | fundrais, partner, school, … |
-| `order_status` | order, receipt, … |
-| `bespoke_product` | bespoke, custom, logo, **label** |
-| `general` | default |
+| Priority | intentHint | Triggers (summary) |
+|---------:|------------|-------------------|
+| 1 | `payment_dispute` | refund, chargeback, dispute, … (wins even if sticker words present) |
+| 2 | `shipping` | ship, tracking, delivery, *where is my* (wins even if sticker words present) |
+| 3 | `bespoke_product` | bespoke, custom, logo, label(s), sticker(s), print/printing, decal, vinyl, iron-on, name tags |
+| 4 | `fundraising` | fundrais, partner, commission, payout, P&C — **not** bare “school” |
+| 5 | `order_status` | order, receipt (only if no product-enquiry words) |
+| 6 | `general` | default |
 
-**Known gap (Rachele case):** *stickers*, *print*, *billy kart* → still `general`. When extending templates or LLM, treat **print/custom sticker enquiries** as bespoke-adjacent — do not stay on generic opening forever.
+**Print/sticker Contact enquiries (Rachele class — closed 2026-09):** *print large stickers for a billy kart* → `bespoke_product` + size/qty/artwork ask. Cousins covered in `inboundDraft.test.ts`: school-bag labels ≠ fundraising; “I ordered custom stickers” ≠ generic order_status.
 
 **Payment disputes:** special opening + “do not share full card numbers” line — keep for compliance tone.
 
@@ -164,7 +164,7 @@ Do not regress: Messages/Bespoke **Draft with Agent** must always load that row�
 ## Safe extension checklist (next dev session)
 
 1. Read this rule + `docs/selpic-unified-ai-agent-plan.md` Wave 3–4.
-2. Extend `classifyIntent` / templates for sticker-print enquiries before adding LLM.
+2. Print/sticker Contact templates + classifier priority are **shipped** (see tests). Next optional: LLM behind `buildInboundReplyDraft` with template fallback — not required to close Wave 3.
 3. Any new send path → `messages:write` / `bespoke:write` + `logAdminActivity`.
 4. Deep-link + replied status → add test in `lib/agent/inboundQueue.test.ts`.
 5. Do not remove Edit step or shorten excerpt below what admin needs to verify customer text.

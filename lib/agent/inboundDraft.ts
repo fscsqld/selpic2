@@ -17,10 +17,35 @@ export type InboundDraftInput = {
   bespokePayload?: Record<string, unknown>
 }
 
+export type InboundIntentHint =
+  | 'payment_dispute'
+  | 'shipping'
+  | 'fundraising'
+  | 'order_status'
+  | 'bespoke_product'
+  | 'bespoke_request'
+  | 'general'
+
 export type InboundDraftResult = {
   subject: string
   body: string
-  intentHint: string
+  intentHint: InboundIntentHint
+}
+
+const INTENT_LABELS: Record<InboundIntentHint, string> = {
+  payment_dispute: 'Payment / billing',
+  shipping: 'Shipping',
+  fundraising: 'Fundraising',
+  order_status: 'Order status',
+  bespoke_product: 'Custom print / stickers',
+  bespoke_request: 'Bespoke request',
+  general: 'General enquiry',
+}
+
+/** Admin-facing English label for intentHint (never show raw snake_case as the only label). */
+export function formatInboundIntentLabel(hint: string): string {
+  if (hint in INTENT_LABELS) return INTENT_LABELS[hint as InboundIntentHint]
+  return hint.replace(/_/g, ' ') || 'General enquiry'
 }
 
 function cleanName(name: string): string {
@@ -28,13 +53,22 @@ function cleanName(name: string): string {
   return n || 'there'
 }
 
-function classifyIntent(text: string): string {
+/** Print / name-label / custom product language (Contact form — not the Bespoke channel). */
+const PRODUCT_ENQUIRY_RE =
+  /\b(bespoke|custom|logo|labels?|stickers?|decal|vinyl|printing|prints?|iron[-\s]?on|name\s+tags?)\b/
+
+/**
+ * Template-era classifier. Order is a product contract:
+ * payment (compliance) → shipping → print/sticker product → fundraising → generic order.
+ * Bare "school" is not fundraising (school-bag labels are the common cousin).
+ */
+export function classifyIntent(text: string): InboundIntentHint {
   const t = text.toLowerCase()
   if (/\b(refund|chargeback|dispute|payment failed|overcharg)/.test(t)) return 'payment_dispute'
   if (/\b(ship|tracking|delivery|dispatch|where is my)/.test(t)) return 'shipping'
-  if (/\b(fundrais|partner|school|commission|payout)/.test(t)) return 'fundraising'
-  if (/\b(order|order #|order id|receipt)/.test(t)) return 'order_status'
-  if (/\b(bespoke|custom|logo|label|sticker|print)/.test(t)) return 'bespoke_product'
+  if (PRODUCT_ENQUIRY_RE.test(t)) return 'bespoke_product'
+  if (/\b(fundrais|partner|commission|payout|p\s*&\s*c)\b/.test(t)) return 'fundraising'
+  if (/\b(order|order #|order id|receipt)\b/.test(t)) return 'order_status'
   return 'general'
 }
 
@@ -116,7 +150,9 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
     '',
     intentHint === 'payment_dispute'
       ? 'Please do not share full card numbers in email. We will confirm the safe next step shortly.'
-      : 'If you have an order number or extra photos, reply to this email and we will include them in the review.',
+      : intentHint === 'bespoke_product'
+        ? 'Please reply with size (mm), quantity, and artwork or a photo of the surface (for example a billy kart, laptop, or bottle) if you have them.'
+        : 'If you have an order number or extra photos, reply to this email and we will include them in the review.',
     '',
     'Kind regards,',
     'Selpic Customer Care',
