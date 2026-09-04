@@ -32,6 +32,12 @@ type DailyQuotaState = {
   suggestedIds: string[]
 }
 
+type AutoSendState = {
+  enabled: boolean
+  lastRunAt: string | null
+  lastResult: string | null
+}
+
 export default function FundraisingAgentPage() {
   return (
     <AdminRoute requiredPermissions={['fundraising:read']}>
@@ -61,6 +67,8 @@ function AgentContent() {
   const [listName, setListName] = useState('')
   const [licenseNote, setLicenseNote] = useState('')
   const [dailyQuota, setDailyQuota] = useState<DailyQuotaState | null>(null)
+  const [autoSend, setAutoSend] = useState<AutoSendState | null>(null)
+  const [autoSendBusy, setAutoSendBusy] = useState(false)
 
   const loadDailyQueue = useCallback(async () => {
     try {
@@ -84,6 +92,24 @@ function AgentContent() {
     }
   }, [])
 
+  const loadAutoSend = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/auto-send', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Failed to load auto-send')
+      setAutoSend({
+        enabled: Boolean(json.enabled),
+        lastRunAt: json.lastRunAt ? String(json.lastRunAt) : null,
+        lastResult: json.lastResult ? String(json.lastResult) : null,
+      })
+    } catch {
+      setAutoSend(null)
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -96,14 +122,14 @@ function AgentContent() {
       if (!res.ok) throw new Error(json?.error || 'Failed to load targets')
       setTargets(Array.isArray(json.targets) ? json.targets : [])
       if (json.warning) setMessage(String(json.warning))
-      await loadDailyQueue()
+      await Promise.all([loadDailyQueue(), loadAutoSend()])
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load targets')
       setTargets([])
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, loadDailyQueue])
+  }, [statusFilter, loadDailyQueue, loadAutoSend])
 
   useEffect(() => {
     void load()
@@ -148,15 +174,16 @@ function AgentContent() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Save failed')
+      const savedName = form.organizationName.trim()
       logAdminActivity({
         action: 'fundraising_agent_target_saved',
         target: json.target?.id || 'outreach-target',
         field: 'outreach_target',
         newValue: {
-          organizationName: form.organizationName.trim(),
+          organizationName: savedName,
           contactEmail: form.contactEmail.trim(),
         },
-        description: `Fundraising agent target saved · ${form.organizationName.trim()}`,
+        description: `Fundraising agent target saved · ${savedName}`,
       })
       setForm({
         organizationName: '',
@@ -166,7 +193,9 @@ function AgentContent() {
         state: '',
         notes: '',
       })
-      setMessage('Target saved.')
+      setMessage(
+        `Outreach target saved · ${savedName} (PENDING). You can Build today’s queue next.`
+      )
       await load()
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Save failed')
@@ -330,6 +359,94 @@ function AgentContent() {
     setMessage(
       `Today’s queue ready · ${dailyQuota.suggestedIds.length} PENDING target(s) selected (${dailyQuota.remaining} slot(s) left · pool ${dailyQuota.pendingPoolSize}). Review, then Confirm Send.`
     )
+  }
+
+  const onToggleAutoSend = async (enabled: boolean) => {
+    setAutoSendBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/auto-send', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Failed to update auto-send')
+      setAutoSend({
+        enabled: Boolean(json.enabled),
+        lastRunAt: json.lastRunAt ? String(json.lastRunAt) : null,
+        lastResult: json.lastResult ? String(json.lastResult) : null,
+      })
+      logAdminActivity({
+        action: 'fundraising_settings_updated',
+        target: 'outreach-auto-send',
+        field: 'outreachAutoSendEnabled',
+        oldValue: !enabled,
+        newValue: enabled,
+        description: `Fundraising agent auto-send ${enabled ? 'enabled' : 'disabled'}`,
+      })
+      setMessage(
+        enabled
+          ? 'Daily auto-send enabled · cron sends up to remaining Sydney slots (≤10) when PENDING exists. Confirm Send still works.'
+          : 'Daily auto-send disabled · only Confirm Send will email targets.'
+      )
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update auto-send')
+    } finally {
+      setAutoSendBusy(false)
+    }
+  }
+
+  const onRunAutoSendNow = async () => {
+    if (
+      !window.confirm(
+        'Run auto-send now for up to today’s remaining PENDING slots? This uses Resend immediately (ignores the Off toggle for this one run).'
+      )
+    ) {
+      return
+    }
+    setAutoSendBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/auto-send', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runNow: true }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Auto-send run failed')
+      setAutoSend({
+        enabled: Boolean(json.enabled),
+        lastRunAt: json.lastRunAt ? String(json.lastRunAt) : null,
+        lastResult: json.lastResult ? String(json.lastResult) : null,
+      })
+      const run = json.run
+      logAdminActivity({
+        action: 'fundraising_agent_outreach_sent',
+        target: 'fundraising-agent-auto-send',
+        field: 'outreach_auto_send',
+        newValue: {
+          sent: run?.sent,
+          failed: run?.failed,
+          skipped: run?.skipped,
+          pickedIds: run?.pickedIds,
+          reason: run?.reason,
+        },
+        description: `Fundraising agent auto-send run · sent ${run?.sent ?? 0}, failed ${run?.failed ?? 0}`,
+      })
+      setMessage(
+        run?.ran
+          ? `Auto-send finished · sent ${run.sent}, failed ${run.failed}, skipped ${run.skipped} · today ${run.sentToday}/${run.dailyCap}`
+          : `Auto-send did not send · ${run?.reason || json.lastResult || 'no action'}`
+      )
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Auto-send run failed')
+    } finally {
+      setAutoSendBusy(false)
+    }
   }
 
   const onDelete = async (t: FundraisingOutreachTarget) => {
@@ -503,8 +620,9 @@ function AgentContent() {
           <ListChecks className="h-4 w-4 text-indigo-700" /> Today’s outreach queue (Sydney)
         </h2>
         <p className="text-xs text-gray-700">
-          Semi-auto Step 2: build up to <strong>10 PENDING</strong> targets for today, review, then{' '}
-          <strong>Confirm Send</strong>. No cron / auto-blast. Cap resets on the Australia/Sydney calendar day.
+          Build up to <strong>10 PENDING</strong> targets for today, review, then{' '}
+          <strong>Confirm Send</strong>. Optional daily cron auto-send stays <strong>off</strong> until you enable it
+          below. Cap resets on the Australia/Sydney calendar day.
         </p>
         <div className="flex flex-wrap gap-3 text-sm text-gray-800">
           <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
@@ -519,7 +637,17 @@ function AgentContent() {
           <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
             PENDING pool: <strong>{dailyQuota?.pendingPoolSize ?? '—'}</strong>
           </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Auto-send:{' '}
+            <strong>{autoSend ? (autoSend.enabled ? 'On' : 'Off') : '—'}</strong>
+          </span>
         </div>
+        {autoSend?.lastResult ? (
+          <p className="text-xs text-gray-600">
+            Last auto-send:{' '}
+            {autoSend.lastRunAt ? new Date(autoSend.lastRunAt).toLocaleString() : '—'} · {autoSend.lastResult}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -553,6 +681,23 @@ function AgentContent() {
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
             Confirm Send ({selectedCount})
+          </button>
+          <button
+            type="button"
+            disabled={autoSendBusy || busy}
+            onClick={() => void onToggleAutoSend(!(autoSend?.enabled))}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {autoSendBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {autoSend?.enabled ? 'Disable daily auto-send' : 'Enable daily auto-send'}
+          </button>
+          <button
+            type="button"
+            disabled={autoSendBusy || busy}
+            onClick={() => void onRunAutoSendNow()}
+            className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+          >
+            Run auto-send now
           </button>
         </div>
       </div>
@@ -680,13 +825,23 @@ function AgentContent() {
         </button>
       </div>
 
-      {message && (
-        <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
-          {message}
+      {message ? (
+        <div
+          role="status"
+          className="mb-3 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
+        >
+          <p className="min-w-0 flex-1 break-words leading-snug">{message}</p>
+          <button
+            type="button"
+            onClick={() => setMessage('')}
+            className="shrink-0 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+          >
+            Dismiss
+          </button>
         </div>
-      )}
+      ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm mb-16">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
             <tr>

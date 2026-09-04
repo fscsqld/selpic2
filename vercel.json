@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/fundraising-renewal",
       "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron/fundraising-outreach-daily",
+      "schedule": "0 21 * * *"
     }
   ],
   "redirects": [

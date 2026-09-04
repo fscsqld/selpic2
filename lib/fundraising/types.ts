@@ -118,6 +118,15 @@ export interface FundraisingSettings {
    * before admins may delete app rows. Default 7 (ATO ~5 years + company financial records).
    */
   legalRetentionYears: number
+  /**
+   * When true, daily cron may auto-send up to Sydney remaining slots (≤10) of PENDING targets.
+   * Default false — HITL Confirm Send remains the safe path until ops turns this on.
+   */
+  outreachAutoSendEnabled?: boolean
+  /** Last auto-send attempt (cron or admin Run now). */
+  outreachAutoSendLastRunAt?: string
+  /** Short last auto-send summary for Agent UI. */
+  outreachAutoSendLastResult?: string
   updatedAt: string
 }
 
@@ -261,6 +270,7 @@ export const DEFAULT_FUNDRAISING_SETTINGS: FundraisingSettings = {
   renewalNoticeDays: 45,
   inactivityMonths: 6,
   legalRetentionYears: 7,
+  outreachAutoSendEnabled: false,
   updatedAt: new Date().toISOString(),
 }
 

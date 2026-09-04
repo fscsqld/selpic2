@@ -63,7 +63,7 @@ export default function AdminInboundSoundAlert() {
   }, [])
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2 pointer-events-none">
+    <div className="fixed bottom-4 left-4 z-[60] flex flex-col items-start gap-2 pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 shadow-lg backdrop-blur-sm px-1 py-1">
         {soundOn ? (
           <>

@@ -60,6 +60,12 @@ check(
   JSON.stringify(crons)
 )
 
+check(
+  'Outreach daily auto-send is registered in vercel.json crons',
+  crons.some((j) => j.path === '/api/cron/fundraising-outreach-daily'),
+  JSON.stringify(crons)
+)
+
 const failed = cases.filter((c) => !c.ok)
 for (const c of cases) {
   console.log(`${c.ok ? 'ok' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`)
