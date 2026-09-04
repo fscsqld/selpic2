@@ -67,8 +67,19 @@ const ORG_HEADERS = new Set([
   'orgname',
   'name',
   'school',
+  'schoolname',
+  'school_name',
+  'campus',
+  'campusname',
+  'facility',
+  'facilityname',
   'centre',
   'center',
+  'centrename',
+  'centername',
+  'servicename',
+  'businessname',
+  'tradingname',
 ])
 
 const EMAIL_HEADERS = new Set([
@@ -78,6 +89,17 @@ const EMAIL_HEADERS = new Set([
   'mail',
   'contact_email',
   'orgemail',
+  'emailaddress',
+  'email_address',
+  'primaryemail',
+  'mainemail',
+  'adminemail',
+  'officeemail',
+  'workemail',
+  'businessemail',
+  'generalemail',
+  'enquiryemail',
+  'inquiryemail',
 ])
 
 const CONTACT_HEADERS = new Set([
@@ -86,6 +108,13 @@ const CONTACT_HEADERS = new Set([
   'contact_person',
   'person',
   'attention',
+  'contactperson',
+  'fullname',
+  'principal',
+  'director',
+  'manager',
+  'firstname',
+  'first_name',
 ])
 
 const TYPE_HEADERS = new Set([
@@ -95,11 +124,33 @@ const TYPE_HEADERS = new Set([
   'type',
   'org_type',
   'category',
+  'sector',
+  'schooltype',
+  'servicetype',
 ])
 
-const STATE_HEADERS = new Set(['state', 'locality', 'location', 'region', 'suburb'])
+const STATE_HEADERS = new Set([
+  'state',
+  'locality',
+  'location',
+  'region',
+  'suburb',
+  'province',
+  'territory',
+  'statecode',
+  'state_code',
+  'st',
+])
 
-const NOTES_HEADERS = new Set(['notes', 'note', 'comment', 'comments', 'memo'])
+const NOTES_HEADERS = new Set([
+  'notes',
+  'note',
+  'comment',
+  'comments',
+  'memo',
+  'remarks',
+  'description',
+])
 
 const ORG_TYPE_ALIASES: Record<string, FundraisingOrganizationType> = {
   daycare: 'daycare',

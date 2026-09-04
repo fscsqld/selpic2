@@ -109,7 +109,7 @@ export async function POST(req: Request) {
       state: String(body?.state || existing?.state || '').trim() || undefined,
       status,
       lastSentAt: existing?.lastSentAt,
-      lastError: existing?.lastError,
+      lastError: status === 'PENDING' && existing?.status === 'FAILED' ? undefined : existing?.lastError,
       convertedPartnerId: existing?.convertedPartnerId,
       payload,
       createdAt: existing?.createdAt || now,

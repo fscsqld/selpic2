@@ -49,6 +49,28 @@ export type OutreachCollectResult = {
   feedHost?: string
 }
 
+/** Dry-run preview — fetch + parse + plan against DB, no writes. */
+export type OutreachCollectPreview = {
+  ok: boolean
+  error?: string
+  feedHost?: string
+  dayKey: string
+  parsed: number
+  wouldInsert: number
+  wouldUpdate: number
+  wouldSkip: number
+  insertBudgetToday: number
+  truncatedFeed: boolean
+  parseErrors: string[]
+  /** First few rows for ops validation (never secrets). */
+  sample: Array<{
+    organizationName: string
+    contactEmail: string
+    action: 'insert' | 'update' | 'skip'
+    skipReason?: string
+  }>
+}
+
 export async function fetchOutreachCollectFeedText(opts: {
   feedUrl: string
   authHeader?: string
@@ -107,6 +129,114 @@ function countInsertsToday(
     if (isInstantOnSydneyCalendarDay(importedAt, dayKey)) n++
   }
   return n
+}
+
+/**
+ * Fetch a licensed feed URL and report what Collect now / cron would do — no DB writes.
+ * Accepts override URL/auth so ops can validate before saving.
+ */
+export async function previewFundraisingOutreachCollectFeed(opts: {
+  feedUrl: string
+  authHeader?: string
+}): Promise<OutreachCollectPreview> {
+  const dayKey = sydneyCalendarDateKey()
+  const empty: OutreachCollectPreview = {
+    ok: false,
+    dayKey,
+    parsed: 0,
+    wouldInsert: 0,
+    wouldUpdate: 0,
+    wouldSkip: 0,
+    insertBudgetToday: 0,
+    truncatedFeed: false,
+    parseErrors: [],
+    sample: [],
+  }
+
+  if (!isSupabaseConfigured()) {
+    return { ...empty, error: 'Supabase not configured' }
+  }
+
+  const fetched = await fetchOutreachCollectFeedText({
+    feedUrl: opts.feedUrl,
+    authHeader: opts.authHeader,
+  })
+  if (!fetched.ok) {
+    return { ...empty, error: fetched.error }
+  }
+
+  const parsed = parseOutreachTargetImportText(fetched.text)
+  if (parsed.rows.length === 0) {
+    return {
+      ...empty,
+      ok: false,
+      error: parsed.parseErrors[0] || 'Feed had no importable rows.',
+      feedHost: fetched.host,
+      truncatedFeed: parsed.truncated,
+      parseErrors: parsed.parseErrors,
+    }
+  }
+
+  const settings = await loadFundraisingSettingsFromDb()
+  const existingTargets = await listFundraisingOutreachTargetsFromDb({ limit: 2000 })
+  const existingByEmail = new Map<string, FundraisingOutreachTarget>()
+  for (const t of existingTargets) {
+    const email = String(t.contactEmail || '')
+      .trim()
+      .toLowerCase()
+    if (!email) continue
+    if (!existingByEmail.has(email)) existingByEmail.set(email, t)
+  }
+
+  const plan = planOutreachTargetImport(parsed.rows, existingByEmail)
+  const insertCap = Math.max(
+    1,
+    Math.min(
+      200,
+      Number(settings.outreachCollectDailyInsertCap) || OUTREACH_COLLECT_DEFAULT_DAILY_INSERT_CAP
+    )
+  )
+  const alreadyInsertedToday = countInsertsToday(existingTargets, dayKey)
+  const insertBudgetToday = Math.max(0, insertCap - alreadyInsertedToday)
+
+  const sample: OutreachCollectPreview['sample'] = []
+  for (let i = 0; i < plan.decisions.length && sample.length < 8; i++) {
+    const d = plan.decisions[i]
+    if (d.action === 'insert') {
+      sample.push({
+        organizationName: d.row.organizationName,
+        contactEmail: d.normalizedEmail,
+        action: 'insert',
+      })
+    } else if (d.action === 'update') {
+      sample.push({
+        organizationName: d.row.organizationName,
+        contactEmail: d.normalizedEmail,
+        action: 'update',
+      })
+    } else {
+      sample.push({
+        organizationName: d.row.organizationName || '(blank org)',
+        contactEmail: String(d.row.contactEmail || '').trim() || '(no email)',
+        action: 'skip',
+        skipReason: d.reason,
+      })
+    }
+  }
+
+  return {
+    ok: true,
+    feedHost: fetched.host,
+    dayKey,
+    parsed: parsed.rows.length,
+    wouldInsert: plan.inserted,
+    wouldUpdate: plan.updated,
+    wouldSkip: plan.skipped,
+    insertBudgetToday,
+    truncatedFeed: parsed.truncated,
+    parseErrors: parsed.parseErrors,
+    sample,
+  }
 }
 
 /**

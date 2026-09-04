@@ -36,6 +36,9 @@ export type ActivityLogAction =
   | 'fundraising_agent_target_deleted'
   | 'fundraising_agent_targets_imported'
   | 'fundraising_agent_outreach_sent'
+  | 'fundraising_agent_collect_settings'
+  | 'fundraising_agent_collect_run'
+  | 'fundraising_agent_feed_previewed'
   | 'agent_inbound_draft_sent'
   | 'agent_community_draft_published'
 
@@ -105,6 +108,9 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'fundraising_agent_target_deleted',
   'fundraising_agent_targets_imported',
   'fundraising_agent_outreach_sent',
+  'fundraising_agent_collect_settings',
+  'fundraising_agent_collect_run',
+  'fundraising_agent_feed_previewed',
   'agent_inbound_draft_sent',
   'agent_community_draft_published',
 ] as const satisfies ReadonlyArray<ActivityLogAction>

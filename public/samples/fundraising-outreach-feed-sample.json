@@ -1,0 +1,23 @@
+[
+  {
+    "organisation": "Sunnybank Early Learning",
+    "email": "office@sunnybank-elc.example.com.au",
+    "contact": "Jane Smith",
+    "type": "daycare",
+    "state": "QLD",
+    "notes": "sample row — replace with licensed list"
+  },
+  {
+    "schoolName": "Westside Primary School",
+    "emailAddress": "admin@westside-ps.example.com.au",
+    "contactName": "Sam Lee",
+    "orgType": "primary_school",
+    "state": "VIC"
+  },
+  {
+    "organisationName": "Harbourview Kindergarten",
+    "contactEmail": "info@harbourview-kinder.example.com.au",
+    "type": "kindergarten",
+    "state": "NSW"
+  }
+]

@@ -12,7 +12,20 @@ import {
   type OutreachListSourceType,
 } from '@/lib/fundraising/outreachListSource'
 import { logAdminActivity } from '@/lib/logAdminActivity'
-import { Bot, HeartHandshake, Loader2, Mail, Plus, RefreshCw, Trash2, Upload, ListChecks } from 'lucide-react'
+import {
+  Bot,
+  HeartHandshake,
+  Loader2,
+  Mail,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+  ListChecks,
+  FlaskConical,
+  Download,
+} from 'lucide-react'
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -36,6 +49,25 @@ type AutoSendState = {
   enabled: boolean
   lastRunAt: string | null
   lastResult: string | null
+}
+
+type CollectPreviewState = {
+  ok: boolean
+  error?: string
+  feedHost?: string
+  parsed: number
+  wouldInsert: number
+  wouldUpdate: number
+  wouldSkip: number
+  insertBudgetToday: number
+  truncatedFeed: boolean
+  parseErrors: string[]
+  sample: Array<{
+    organizationName: string
+    contactEmail: string
+    action: 'insert' | 'update' | 'skip'
+    skipReason?: string
+  }>
 }
 
 type CollectState = {
@@ -72,6 +104,7 @@ function AgentContent() {
     state: '',
     notes: '',
   })
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [importText, setImportText] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importSource, setImportSource] = useState<OutreachListSourceType>('admin_csv_paste')
@@ -87,6 +120,8 @@ function AgentContent() {
   const [collectLicenseNote, setCollectLicenseNote] = useState('')
   const [collectAuthHeader, setCollectAuthHeader] = useState('')
   const [collectDailyInsertCap, setCollectDailyInsertCap] = useState(50)
+  const [clearAuthOnSave, setClearAuthOnSave] = useState(false)
+  const [collectPreview, setCollectPreview] = useState<CollectPreviewState | null>(null)
 
   const loadDailyQueue = useCallback(async () => {
     try {
@@ -209,27 +244,29 @@ function AgentContent() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: editingId || undefined,
           organizationName: form.organizationName.trim(),
           contactName: form.contactName.trim(),
           contactEmail: form.contactEmail.trim(),
           orgType: form.orgType || undefined,
           state: form.state.trim() || undefined,
           notes: form.notes.trim() || undefined,
-          status: 'PENDING',
+          status: editingId ? undefined : 'PENDING',
         }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Save failed')
+      const wasEditing = Boolean(editingId)
       const savedName = form.organizationName.trim()
       logAdminActivity({
         action: 'fundraising_agent_target_saved',
-        target: json.target?.id || 'outreach-target',
+        target: json.target?.id || editingId || 'outreach-target',
         field: 'outreach_target',
         newValue: {
           organizationName: savedName,
           contactEmail: form.contactEmail.trim(),
         },
-        description: `Fundraising agent target saved · ${savedName}`,
+        description: `Fundraising agent target ${wasEditing ? 'updated' : 'saved'} · ${savedName}`,
       })
       setForm({
         organizationName: '',
@@ -239,12 +276,74 @@ function AgentContent() {
         state: '',
         notes: '',
       })
+      setEditingId(null)
       setMessage(
-        `Outreach target saved · ${savedName} (PENDING). You can Build today’s queue next.`
+        wasEditing
+          ? `Outreach target updated · ${savedName}`
+          : `Outreach target saved · ${savedName} (PENDING). You can Build today’s queue next.`
       )
       await load()
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const startEdit = (t: FundraisingOutreachTarget) => {
+    setEditingId(t.id)
+    setForm({
+      organizationName: t.organizationName || '',
+      contactName: t.contactName || '',
+      contactEmail: t.contactEmail || '',
+      orgType: (t.orgType as typeof form.orgType) || '',
+      state: t.state || '',
+      notes: String(t.payload?.notes || ''),
+    })
+    setMessage(`Editing ${t.id} — save to update email / org details.`)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const resetFailedToPending = async (t: FundraisingOutreachTarget) => {
+    if (
+      !window.confirm(
+        `Reset “${t.organizationName}” from FAILED back to PENDING so it can be queued again?`
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/targets', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: t.id,
+          organizationName: t.organizationName,
+          contactEmail: t.contactEmail,
+          contactName: t.contactName,
+          orgType: t.orgType,
+          state: t.state,
+          status: 'PENDING',
+          notes: t.payload?.notes,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Reset failed')
+      logAdminActivity({
+        action: 'fundraising_agent_target_saved',
+        target: t.id,
+        field: 'status',
+        oldValue: 'FAILED',
+        newValue: 'PENDING',
+        description: `Fundraising agent target reset FAILED → PENDING · ${t.organizationName}`,
+      })
+      setMessage(`Reset to PENDING · ${t.organizationName}`)
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Reset failed')
     } finally {
       setBusy(false)
     }
@@ -495,7 +594,10 @@ function AgentContent() {
     }
   }
 
-  const saveCollectSettings = async (extra?: { enabled?: boolean; runNow?: boolean }) => {
+  const saveCollectSettings = async (extra?: {
+    enabled?: boolean
+    runNow?: boolean
+  }) => {
     setCollectBusy(true)
     setMessage('')
     try {
@@ -506,7 +608,8 @@ function AgentContent() {
         dailyInsertCap: collectDailyInsertCap,
       }
       if (typeof extra?.enabled === 'boolean') payload.enabled = extra.enabled
-      if (collectAuthHeader.trim()) payload.authHeader = collectAuthHeader.trim()
+      if (clearAuthOnSave) payload.clearAuth = true
+      else if (collectAuthHeader.trim()) payload.authHeader = collectAuthHeader.trim()
       if (extra?.runNow) payload.runNow = true
 
       const res = await fetch('/api/admin/fundraising/agent/collect', {
@@ -528,8 +631,11 @@ function AgentContent() {
         lastResult: json.lastResult ? String(json.lastResult) : null,
       })
       setCollectAuthHeader('')
+      setClearAuthOnSave(false)
       logAdminActivity({
-        action: 'fundraising_settings_updated',
+        action: extra?.runNow
+          ? 'fundraising_agent_collect_run'
+          : 'fundraising_agent_collect_settings',
         target: 'outreach-collect',
         field: 'outreachCollect',
         newValue: {
@@ -564,6 +670,58 @@ function AgentContent() {
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Collect settings failed')
+    } finally {
+      setCollectBusy(false)
+    }
+  }
+
+  const onTestFeed = async () => {
+    if (!collectFeedUrl.trim()) {
+      setMessage('Enter a HTTPS feed URL before Test feed.')
+      return
+    }
+    setCollectBusy(true)
+    setMessage('')
+    setCollectPreview(null)
+    try {
+      const payload: Record<string, unknown> = {
+        dryRun: true,
+        feedUrl: collectFeedUrl.trim(),
+      }
+      if (clearAuthOnSave) payload.clearAuth = true
+      else if (collectAuthHeader.trim()) payload.authHeader = collectAuthHeader.trim()
+
+      const res = await fetch('/api/admin/fundraising/agent/collect', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Test feed failed')
+      const preview = json.preview as CollectPreviewState | undefined
+      if (!preview) throw new Error('Test feed returned no preview')
+      setCollectPreview(preview)
+      logAdminActivity({
+        action: 'fundraising_agent_feed_previewed',
+        target: 'outreach-collect-preview',
+        field: 'feed_preview',
+        newValue: {
+          feedHost: preview.feedHost,
+          parsed: preview.parsed,
+          wouldInsert: preview.wouldInsert,
+          wouldUpdate: preview.wouldUpdate,
+          wouldSkip: preview.wouldSkip,
+        },
+        description: `Fundraising agent feed preview · host ${preview.feedHost || '—'} · insert ${preview.wouldInsert}`,
+      })
+      setMessage(
+        preview.ok
+          ? `Test feed OK · would insert ${preview.wouldInsert}, update ${preview.wouldUpdate}, skip ${preview.wouldSkip} (budget today ${preview.insertBudgetToday}). No rows written.`
+          : `Test feed failed · ${preview.error || 'unknown'}`
+      )
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Test feed failed')
     } finally {
       setCollectBusy(false)
     }
@@ -644,9 +802,30 @@ function AgentContent() {
           <Bot className="h-4 w-4 text-emerald-700" /> Auto-collect (licensed HTTPS feed)
         </h2>
         <p className="text-xs text-gray-700">
-          Point this at a purchased/official CSV or JSON export URL (https). Daily cron at 19:00 UTC fills PENDING
-          (insert cap/day), then 21:00 UTC auto-send can mail ≤10 if enabled. Not a website scraper.
+          Point this at a purchased/official CSV or JSON export URL (https). Use <strong>Test feed</strong> before
+          Collect now. Daily cron at 19:00 UTC fills PENDING (insert cap/day), then 21:00 UTC auto-send can mail ≤10
+          if enabled. Not a website scraper. Go-live checklist:{' '}
+          <code className="rounded bg-white px-1">docs/fundraising-outreach-licensed-list-golive.md</code>
         </p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <a
+            href="/samples/fundraising-outreach-feed-sample.csv"
+            download
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2.5 py-1.5 font-medium text-emerald-900 hover:bg-emerald-50"
+          >
+            <Download className="h-3.5 w-3.5" /> Sample CSV
+          </a>
+          <a
+            href="/samples/fundraising-outreach-feed-sample.json"
+            download
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2.5 py-1.5 font-medium text-emerald-900 hover:bg-emerald-50"
+          >
+            <Download className="h-3.5 w-3.5" /> Sample JSON
+          </a>
+          <span className="self-center text-gray-600">
+            Required columns: organisation + email (many vendor header aliases accepted).
+          </span>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block text-xs font-medium text-gray-700 sm:col-span-2">
             Feed URL (https)
@@ -695,13 +874,26 @@ function AgentContent() {
             <input
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono"
               value={collectAuthHeader}
-              disabled={collectBusy || busy}
+              disabled={collectBusy || busy || clearAuthOnSave}
               onChange={(e) => setCollectAuthHeader(e.target.value)}
               placeholder={
-                collect?.hasAuthHeader ? 'Saved token on file — enter new value to replace' : 'Bearer … (optional)'
+                collect?.hasAuthHeader
+                  ? 'Saved token on file — enter new value to replace'
+                  : 'Bearer … (optional)'
               }
             />
           </label>
+          {collect?.hasAuthHeader ? (
+            <label className="flex items-center gap-2 text-xs text-gray-700 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={clearAuthOnSave}
+                disabled={collectBusy || busy}
+                onChange={(e) => setClearAuthOnSave(e.target.checked)}
+              />
+              Clear saved auth token on next Save
+            </label>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-3 text-sm text-gray-800">
           <span className="rounded-md bg-white px-2.5 py-1 border border-emerald-100">
@@ -714,7 +906,40 @@ function AgentContent() {
             {collect.lastRunAt ? new Date(collect.lastRunAt).toLocaleString() : '—'} · {collect.lastResult}
           </p>
         ) : null}
+        {collectPreview ? (
+          <div className="rounded-md border border-teal-200 bg-white px-3 py-2 text-xs text-gray-800 space-y-1">
+            <p className="font-semibold text-teal-900">Last Test feed preview</p>
+            <p>
+              Host {collectPreview.feedHost || '—'} · parsed {collectPreview.parsed} · would insert{' '}
+              {collectPreview.wouldInsert} · update {collectPreview.wouldUpdate} · skip {collectPreview.wouldSkip}
+              {collectPreview.truncatedFeed ? ' · truncated' : ''}
+            </p>
+            {collectPreview.sample.length > 0 ? (
+              <ul className="list-disc pl-4 space-y-0.5 font-mono">
+                {collectPreview.sample.map((row, i) => (
+                  <li key={`${row.contactEmail}-${i}`}>
+                    [{row.action}] {row.organizationName} · {row.contactEmail}
+                    {row.skipReason ? ` (${row.skipReason})` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {collectPreview.parseErrors.length > 0 ? (
+              <p className="text-amber-800">{collectPreview.parseErrors.join(' · ')}</p>
+            ) : null}
+            {collectPreview.error ? <p className="text-red-700">{collectPreview.error}</p> : null}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={collectBusy || busy || !collectFeedUrl.trim()}
+            onClick={() => void onTestFeed()}
+            className="inline-flex items-center gap-2 rounded-md border border-teal-300 bg-white px-3 py-2 text-sm font-medium text-teal-900 hover:bg-teal-50 disabled:opacity-50"
+          >
+            {collectBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+            Test feed
+          </button>
           <button
             type="button"
             disabled={collectBusy || busy}
@@ -936,7 +1161,8 @@ function AgentContent() {
 
       <form onSubmit={onCreate} className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Add outreach target
+          {editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {editingId ? `Edit outreach target (${editingId})` : 'Add outreach target'}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-xs text-gray-600">
@@ -1003,14 +1229,37 @@ function AgentContent() {
             />
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Save target
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {editingId ? 'Update target' : 'Save target'}
+          </button>
+          {editingId ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setEditingId(null)
+                setForm({
+                  organizationName: '',
+                  contactName: '',
+                  contactEmail: '',
+                  orgType: '',
+                  state: '',
+                  notes: '',
+                })
+                setMessage('')
+              }}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
       </form>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -1138,16 +1387,39 @@ function AgentContent() {
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-gray-500">{t.id}</td>
                     <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void onDelete(t)}
-                        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                        title="Delete target"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </button>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => startEdit(t)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          title="Edit target"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        {t.status === 'FAILED' ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void resetFailedToPending(t)}
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                            title="Reset FAILED to PENDING"
+                          >
+                            Retry
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void onDelete(t)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          title="Delete target"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

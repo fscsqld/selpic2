@@ -10,6 +10,7 @@ import { DEFAULT_FUNDRAISING_SETTINGS } from '@/lib/fundraising/types'
 import {
   assertSafeOutreachCollectFeedUrl,
   OUTREACH_COLLECT_DEFAULT_DAILY_INSERT_CAP,
+  previewFundraisingOutreachCollectFeed,
   runFundraisingOutreachCollectFromFeed,
 } from '@/lib/fundraising/outreachCollectFeed'
 
@@ -62,7 +63,11 @@ type Body = {
   dailyInsertCap?: number
   /** Set to empty string to clear; omit to leave unchanged. */
   authHeader?: string | null
+  /** True clears saved auth without requiring an empty authHeader field. */
+  clearAuth?: boolean
   runNow?: boolean
+  /** Fetch + parse + plan only — no settings save required beyond optional URL override. */
+  dryRun?: boolean
 }
 
 export async function POST(req: Request) {
@@ -75,6 +80,30 @@ export async function POST(req: Request) {
 
   try {
     const body = (await req.json().catch(() => null)) as Body | null
+
+    if (body?.dryRun) {
+      const settings = await loadFundraisingSettingsFromDb()
+      const feedUrl = String(body.feedUrl ?? settings.outreachCollectFeedUrl ?? '').trim()
+      if (!feedUrl) {
+        return NextResponse.json({ error: 'Feed URL is required for Test feed.' }, { status: 400 })
+      }
+      const safe = assertSafeOutreachCollectFeedUrl(feedUrl)
+      if (!safe.ok) return NextResponse.json({ error: safe.error }, { status: 400 })
+
+      let authHeader: string | undefined
+      if (typeof body.authHeader === 'string' && body.authHeader.trim()) {
+        authHeader = body.authHeader.trim()
+      } else if (!body.clearAuth) {
+        authHeader = settings.outreachCollectFeedAuthHeader || undefined
+      }
+
+      const preview = await previewFundraisingOutreachCollectFeed({
+        feedUrl: safe.url.toString(),
+        authHeader,
+      })
+      return NextResponse.json({ ok: preview.ok, preview })
+    }
+
     const settings = await loadFundraisingSettingsFromDb()
     const now = new Date().toISOString()
     let next = { ...DEFAULT_FUNDRAISING_SETTINGS, ...settings, updatedAt: now }
@@ -101,7 +130,9 @@ export async function POST(req: Request) {
     if (typeof body?.dailyInsertCap === 'number' && Number.isFinite(body.dailyInsertCap)) {
       next.outreachCollectDailyInsertCap = Math.max(1, Math.min(200, Math.floor(body.dailyInsertCap)))
     }
-    if (body && 'authHeader' in body) {
+    if (body?.clearAuth) {
+      next.outreachCollectFeedAuthHeader = ''
+    } else if (body && 'authHeader' in body) {
       const raw = body.authHeader
       if (raw == null || String(raw).trim() === '') {
         next.outreachCollectFeedAuthHeader = ''

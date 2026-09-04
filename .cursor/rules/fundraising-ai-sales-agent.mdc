@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Fundraising AI Sales Agent — FINAL PLAN (standby)
 
-**Status:** **A1–A3 shipped** on `main`. Branch `feature/fundraising-daily-outreach-queue`: **Step 1 CSV/paste import** + **Step 2 daily ≤10 queue + HITL Confirm Send**. Auto-scrape / unsupervised daily mass mail is **not** in v1.
+**Status:** Core pipeline shipped (import · daily ≤10 · licensed feed auto-collect · optional auto-send). **Vendor go-live ready:** Test feed dry-run, sample CSV/JSON, edit/retry targets, provenance, audit. See `docs/fundraising-outreach-licensed-list-golive.md`. Open-web scrape is **not** in scope.
 
 ## Goal
 
@@ -21,9 +21,9 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 
 ## Data flow
 
-**v1 (A1–A3 + import + daily queue):** Admin registers / **CSV·paste imports** `outreach_targets` → **Build today’s queue** (Sydney ≤10) → **Confirm Send** → Resend → landing UTM/`ref`/`target_id` → Apply (`payload.acquisition` + `CONVERTED`).
+**v1 (shipped):** Licensed HTTPS feed / CSV import → `outreach_targets` PENDING → **Build today’s queue** (Sydney ≤10) → **Confirm Send** or optional auto-send → landing UTM/`ref`/`target_id` → Apply (`payload.acquisition` + `CONVERTED`).
 
-**Not v1:** Auto-scraping AU school/kindergarten directories from the open web + fully unsupervised daily mass mail. That is a later Wave (licensed lists + cron quota + privacy/opt-out). Until then, targets are **manual or semi-manual**.
+**Not v1:** Auto-scraping AU school/kindergarten directories from the open web.
 
 ## Semi-auto acquisition track (current)
 
@@ -32,15 +32,18 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 | **1 · Target supply** | CSV / paste / file import on `/admin/fundraising/agent` → `POST …/targets/import` | Cap 200 rows; require valid email; batch + DB email dedupe; **PENDING** update; skip CONTACTED/CONVERTED/FAILED/OPTED_OUT; audit `fundraising_agent_targets_imported`; **no scrape** |
 | **2 · Daily queue** | Sydney day ≤10 + HITL Confirm Send | `GET …/daily-queue`; pick oldest PENDING; enforce remaining in `POST …/send`; UI Build today’s queue + Confirm Send |
 | **A · Licensed list provenance** | Tag imports as manual / licensed / official directory | `outreachListSource.ts`; require list/vendor name for licensed/official; store on `payload` |
-| **C · Auto-collect** | Licensed HTTPS feed → PENDING | `outreachCollectFeed.ts`; SSRF-safe https fetch; daily insert cap; cron `0 19 * * *`; Agent Collect UI; **no open-web scrape**; ACARA marketing contacts not allowed |
+| **C · Auto-collect** | Licensed HTTPS feed → PENDING | `outreachCollectFeed.ts`; SSRF-safe https fetch; **Test feed** dry-run; daily insert cap; cron `0 19 * * *`; Agent Collect UI; samples under `/samples/fundraising-outreach-feed-sample.*`; **no open-web scrape**; ACARA marketing contacts not allowed |
 | **3 · Daily auto-send (L2)** | Optional cron within Sydney remaining ≤10 | Default **off**; cron `0 21 * * *`; Agent toggle + Run now |
+| **Ops · Edit / retry** | Edit target fields; FAILED → PENDING retry | Agent table Edit / Retry |
 
 ### Auto-collect helpers
 
 - Feed pull/import: `lib/fundraising/outreachCollectFeed.ts` (+ `.test.ts`)
-- API: `app/api/admin/fundraising/agent/collect/route.ts`
+- Preview (no write): `previewFundraisingOutreachCollectFeed`
+- API: `app/api/admin/fundraising/agent/collect/route.ts` (`dryRun`, `clearAuth`, `runNow`)
 - Cron: `app/api/cron/fundraising-outreach-collect/route.ts`
 - UI: Auto-collect card on Agent page
+- Go-live: `docs/fundraising-outreach-licensed-list-golive.md`
 
 ### Import helpers
 
@@ -90,11 +93,11 @@ Already exists and must stay intact:
 5. **Privacy / unsubscribe** — unique unsubscribe + `OPTED_OUT`; never re-mail.  
 6. **Outreach address line** — locality only via `fundraisingOutreachSenderLocality()`.  
 7. **Do not** change checkout/promo engines or accounting-sandbox; don’t auto-dispatch sample kits.  
-8. **Activity log** — `logAdminActivity` for saves / **import** / sends.  
+8. **Activity log** — `logAdminActivity` for saves / **import** / sends / **collect** / **feed preview**.  
 9. **SQL** — `docs/fundraising-outreach-targets.sql`.
 
-## On 「개발 시작하자」 / 「1번부터」 / recommended track
+## On 「개발 시작하자」 / vendor contract later
 
-1. Use branch `feature/fundraising-daily-outreach-queue`.  
-2. Step 1 import + Step 2 daily queue are implemented on this branch.  
-3. Recommend commit; wait for Step 3 (optional cron auto-send) or licensed list source unless user says continue.
+1. Engineering is go-live ready for licensed HTTPS feed plug-in (Test feed → Collect → Confirm Send).  
+2. Ops: buy licensed list → follow `docs/fundraising-outreach-licensed-list-golive.md`.  
+3. Do **not** implement open-web scrape without explicit legal + product sign-off.

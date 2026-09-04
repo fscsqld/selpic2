@@ -89,6 +89,19 @@ describe('parseOutreachTargetImportText', () => {
     expect(rows).toHaveLength(OUTREACH_TARGET_IMPORT_MAX_ROWS)
     expect(parseErrors.some((e) => e.includes(String(OUTREACH_TARGET_IMPORT_MAX_ROWS)))).toBe(true)
   })
+
+  it('parses common AU vendor header aliases', () => {
+    const text = [
+      'School Name,Email Address,Contact Person,School Type,State Code',
+      'Northside ELC,hello@northside.example.com.au,Alex,Child Care,QLD',
+    ].join('\n')
+    const { rows } = parseOutreachTargetImportText(text)
+    expect(rows[0].organizationName).toBe('Northside ELC')
+    expect(rows[0].contactEmail).toBe('hello@northside.example.com.au')
+    expect(rows[0].contactName).toBe('Alex')
+    expect(normalizeImportOrgType(rows[0].orgType)).toBe('daycare')
+    expect(rows[0].state).toBe('QLD')
+  })
 })
 
 describe('planOutreachTargetImport', () => {
