@@ -127,6 +127,23 @@ export interface FundraisingSettings {
   outreachAutoSendLastRunAt?: string
   /** Short last auto-send summary for Agent UI. */
   outreachAutoSendLastResult?: string
+  /**
+   * When true, daily cron may pull a licensed HTTPS CSV/JSON feed into PENDING targets.
+   * Default false. Not a web scrape — ops must supply a feed they are licensed to use for outreach.
+   */
+  outreachCollectEnabled?: boolean
+  /** HTTPS URL of licensed list export (CSV/JSON/pipe text). */
+  outreachCollectFeedUrl?: string
+  /** Optional Authorization value (Bearer token or raw token). Never commit secrets to git. */
+  outreachCollectFeedAuthHeader?: string
+  /** Display name stored on imported rows (vendor / list name). */
+  outreachCollectListName?: string
+  /** License / purchase note stored on imported rows. */
+  outreachCollectLicenseNote?: string
+  /** Max NEW inserts per Sydney day from auto-collect (default 50). Send still ≤10. */
+  outreachCollectDailyInsertCap?: number
+  outreachCollectLastRunAt?: string
+  outreachCollectLastResult?: string
   updatedAt: string
 }
 
@@ -271,6 +288,8 @@ export const DEFAULT_FUNDRAISING_SETTINGS: FundraisingSettings = {
   inactivityMonths: 6,
   legalRetentionYears: 7,
   outreachAutoSendEnabled: false,
+  outreachCollectEnabled: false,
+  outreachCollectDailyInsertCap: 50,
   updatedAt: new Date().toISOString(),
 }
 

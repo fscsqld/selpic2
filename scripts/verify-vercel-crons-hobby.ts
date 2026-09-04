@@ -66,6 +66,12 @@ check(
   JSON.stringify(crons)
 )
 
+check(
+  'Outreach licensed-feed collect is registered in vercel.json crons',
+  crons.some((j) => j.path === '/api/cron/fundraising-outreach-collect'),
+  JSON.stringify(crons)
+)
+
 const failed = cases.filter((c) => !c.ok)
 for (const c of cases) {
   console.log(`${c.ok ? 'ok' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`)

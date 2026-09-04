@@ -38,6 +38,17 @@ type AutoSendState = {
   lastResult: string | null
 }
 
+type CollectState = {
+  enabled: boolean
+  feedUrl: string
+  listName: string
+  licenseNote: string
+  dailyInsertCap: number
+  hasAuthHeader: boolean
+  lastRunAt: string | null
+  lastResult: string | null
+}
+
 export default function FundraisingAgentPage() {
   return (
     <AdminRoute requiredPermissions={['fundraising:read']}>
@@ -69,6 +80,13 @@ function AgentContent() {
   const [dailyQuota, setDailyQuota] = useState<DailyQuotaState | null>(null)
   const [autoSend, setAutoSend] = useState<AutoSendState | null>(null)
   const [autoSendBusy, setAutoSendBusy] = useState(false)
+  const [collect, setCollect] = useState<CollectState | null>(null)
+  const [collectBusy, setCollectBusy] = useState(false)
+  const [collectFeedUrl, setCollectFeedUrl] = useState('')
+  const [collectListName, setCollectListName] = useState('')
+  const [collectLicenseNote, setCollectLicenseNote] = useState('')
+  const [collectAuthHeader, setCollectAuthHeader] = useState('')
+  const [collectDailyInsertCap, setCollectDailyInsertCap] = useState(50)
 
   const loadDailyQueue = useCallback(async () => {
     try {
@@ -110,6 +128,34 @@ function AgentContent() {
     }
   }, [])
 
+  const loadCollect = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/collect', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Failed to load collect settings')
+      const next: CollectState = {
+        enabled: Boolean(json.enabled),
+        feedUrl: String(json.feedUrl || ''),
+        listName: String(json.listName || ''),
+        licenseNote: String(json.licenseNote || ''),
+        dailyInsertCap: Number(json.dailyInsertCap) || 50,
+        hasAuthHeader: Boolean(json.hasAuthHeader),
+        lastRunAt: json.lastRunAt ? String(json.lastRunAt) : null,
+        lastResult: json.lastResult ? String(json.lastResult) : null,
+      }
+      setCollect(next)
+      setCollectFeedUrl(next.feedUrl)
+      setCollectListName(next.listName)
+      setCollectLicenseNote(next.licenseNote)
+      setCollectDailyInsertCap(next.dailyInsertCap)
+    } catch {
+      setCollect(null)
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -122,14 +168,14 @@ function AgentContent() {
       if (!res.ok) throw new Error(json?.error || 'Failed to load targets')
       setTargets(Array.isArray(json.targets) ? json.targets : [])
       if (json.warning) setMessage(String(json.warning))
-      await Promise.all([loadDailyQueue(), loadAutoSend()])
+      await Promise.all([loadDailyQueue(), loadAutoSend(), loadCollect()])
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load targets')
       setTargets([])
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, loadDailyQueue, loadAutoSend])
+  }, [statusFilter, loadDailyQueue, loadAutoSend, loadCollect])
 
   useEffect(() => {
     void load()
@@ -449,6 +495,80 @@ function AgentContent() {
     }
   }
 
+  const saveCollectSettings = async (extra?: { enabled?: boolean; runNow?: boolean }) => {
+    setCollectBusy(true)
+    setMessage('')
+    try {
+      const payload: Record<string, unknown> = {
+        feedUrl: collectFeedUrl.trim(),
+        listName: collectListName.trim(),
+        licenseNote: collectLicenseNote.trim(),
+        dailyInsertCap: collectDailyInsertCap,
+      }
+      if (typeof extra?.enabled === 'boolean') payload.enabled = extra.enabled
+      if (collectAuthHeader.trim()) payload.authHeader = collectAuthHeader.trim()
+      if (extra?.runNow) payload.runNow = true
+
+      const res = await fetch('/api/admin/fundraising/agent/collect', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Collect settings failed')
+      setCollect({
+        enabled: Boolean(json.enabled),
+        feedUrl: String(json.feedUrl || ''),
+        listName: String(json.listName || ''),
+        licenseNote: String(json.licenseNote || ''),
+        dailyInsertCap: Number(json.dailyInsertCap) || 50,
+        hasAuthHeader: Boolean(json.hasAuthHeader),
+        lastRunAt: json.lastRunAt ? String(json.lastRunAt) : null,
+        lastResult: json.lastResult ? String(json.lastResult) : null,
+      })
+      setCollectAuthHeader('')
+      logAdminActivity({
+        action: 'fundraising_settings_updated',
+        target: 'outreach-collect',
+        field: 'outreachCollect',
+        newValue: {
+          enabled: json.enabled,
+          feedUrl: json.feedUrl,
+          listName: json.listName,
+          run: json.run
+            ? {
+                inserted: json.run.inserted,
+                updated: json.run.updated,
+                saved: json.run.saved,
+              }
+            : null,
+        },
+        description: extra?.runNow
+          ? `Fundraising agent collect run · saved ${json.run?.saved ?? 0}`
+          : `Fundraising agent collect settings · ${json.enabled ? 'enabled' : 'disabled'}`,
+      })
+      if (json.run) {
+        setMessage(
+          json.run.ran
+            ? `Collect finished · inserted ${json.run.inserted}, updated ${json.run.updated}, skipped ${json.run.skipped}, saved ${json.run.saved}`
+            : `Collect did not run · ${json.run.reason || json.lastResult || 'no action'}`
+        )
+        await load()
+      } else {
+        setMessage(
+          json.enabled
+            ? 'Licensed-feed auto-collect enabled · daily cron pulls into PENDING (then auto-send if also on).'
+            : 'Collect settings saved.'
+        )
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Collect settings failed')
+    } finally {
+      setCollectBusy(false)
+    }
+  }
+
   const onDelete = async (t: FundraisingOutreachTarget) => {
     if (
       !window.confirm(
@@ -504,24 +624,136 @@ function AgentContent() {
       />
       <FundraisingAdminShell
         title="Fundraising Agent"
-        subtitle="Import targets, build today’s Sydney queue (≤10), then Confirm Send — no auto-scrape / unsupervised blast."
+        subtitle="Licensed-feed auto-collect → PENDING pool → Sydney ≤10 send (Confirm or optional auto-send). No open-web scrape."
         current="/admin/fundraising/agent"
       >
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <div className="flex items-start gap-2">
           <Bot className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            Supply targets via CSV/paste or single add, then use <strong>Build today’s queue</strong> +{' '}
-            <strong>Confirm Send</strong> (Sydney day cap 10). Rows without email are skipped on import.
-            Opt-outs become <strong>OPTED_OUT</strong> and are never re-sent. Requires{' '}
-            <strong>fundraising:write</strong> to save, import, or send.
+            Goal path: <strong>auto-collect</strong> from a licensed HTTPS list feed into PENDING, then send up to{' '}
+            <strong>10/day</strong> (Sydney) via Confirm Send or optional auto-send. ACARA/gov school lists do{' '}
+            <strong>not</strong> allow marketing contact use — use a list you are licensed to email. Manual CSV remains
+            a backup. Requires <strong>fundraising:write</strong>.
           </div>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Bot className="h-4 w-4 text-emerald-700" /> Auto-collect (licensed HTTPS feed)
+        </h2>
+        <p className="text-xs text-gray-700">
+          Point this at a purchased/official CSV or JSON export URL (https). Daily cron at 19:00 UTC fills PENDING
+          (insert cap/day), then 21:00 UTC auto-send can mail ≤10 if enabled. Not a website scraper.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block text-xs font-medium text-gray-700 sm:col-span-2">
+            Feed URL (https)
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono"
+              value={collectFeedUrl}
+              disabled={collectBusy || busy}
+              onChange={(e) => setCollectFeedUrl(e.target.value)}
+              placeholder="https://vendor.example.com/exports/au-schools.csv"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            List / vendor name
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={collectListName}
+              disabled={collectBusy || busy}
+              onChange={(e) => setCollectListName(e.target.value)}
+              placeholder="Vendor Co AU schools"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            Daily new-insert cap
+            <input
+              type="number"
+              min={1}
+              max={200}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={collectDailyInsertCap}
+              disabled={collectBusy || busy}
+              onChange={(e) => setCollectDailyInsertCap(Number(e.target.value) || 50)}
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700 sm:col-span-2">
+            License / reference note
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={collectLicenseNote}
+              disabled={collectBusy || busy}
+              onChange={(e) => setCollectLicenseNote(e.target.value)}
+              placeholder="Purchased 2026-09 · contract ref"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700 sm:col-span-2">
+            Optional feed auth header / token
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono"
+              value={collectAuthHeader}
+              disabled={collectBusy || busy}
+              onChange={(e) => setCollectAuthHeader(e.target.value)}
+              placeholder={
+                collect?.hasAuthHeader ? 'Saved token on file — enter new value to replace' : 'Bearer … (optional)'
+              }
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-3 text-sm text-gray-800">
+          <span className="rounded-md bg-white px-2.5 py-1 border border-emerald-100">
+            Collect: <strong>{collect ? (collect.enabled ? 'On' : 'Off') : '—'}</strong>
+          </span>
+        </div>
+        {collect?.lastResult ? (
+          <p className="text-xs text-gray-600">
+            Last collect:{' '}
+            {collect.lastRunAt ? new Date(collect.lastRunAt).toLocaleString() : '—'} · {collect.lastResult}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={collectBusy || busy}
+            onClick={() => void saveCollectSettings()}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {collectBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save collect settings
+          </button>
+          <button
+            type="button"
+            disabled={collectBusy || busy || !collectFeedUrl.trim()}
+            onClick={() => void saveCollectSettings({ enabled: !(collect?.enabled) })}
+            className="inline-flex items-center gap-2 rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            {collect?.enabled ? 'Disable daily collect' : 'Enable daily collect'}
+          </button>
+          <button
+            type="button"
+            disabled={collectBusy || busy || !collectFeedUrl.trim()}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Pull the licensed feed now into PENDING targets? This does not send email by itself.'
+                )
+              ) {
+                void saveCollectSettings({ runNow: true })
+              }
+            }}
+            className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            Collect now
+          </button>
         </div>
       </div>
 
       <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Upload className="h-4 w-4" /> Import targets (CSV / paste)
+          <Upload className="h-4 w-4" /> Import targets (CSV / paste) — backup
         </h2>
         <p className="text-xs text-gray-600">
           Header row recommended:{' '}

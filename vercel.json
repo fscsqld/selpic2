@@ -2,6 +2,10 @@
   "installCommand": "npm install --legacy-peer-deps",
   "crons": [
     {
+      "path": "/api/cron/fundraising-outreach-collect",
+      "schedule": "0 19 * * *"
+    },
+    {
       "path": "/api/cron/fundraising-renewal",
       "schedule": "0 20 * * *"
     },

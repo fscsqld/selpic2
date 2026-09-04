@@ -31,8 +31,16 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 |------|--------|-----|
 | **1 · Target supply** | CSV / paste / file import on `/admin/fundraising/agent` → `POST …/targets/import` | Cap 200 rows; require valid email; batch + DB email dedupe; **PENDING** update; skip CONTACTED/CONVERTED/FAILED/OPTED_OUT; audit `fundraising_agent_targets_imported`; **no scrape** |
 | **2 · Daily queue** | Sydney day ≤10 + HITL Confirm Send | `GET …/daily-queue`; pick oldest PENDING; enforce remaining in `POST …/send`; UI Build today’s queue + Confirm Send |
-| **A · Licensed list provenance** | Tag imports as manual / licensed / official directory | `outreachListSource.ts`; require list/vendor name for licensed/official; store on `payload`; **no vendor API / scrape yet** |
-| **3 · Daily auto-send (L2)** | Optional cron within Sydney remaining ≤10 | Default **off** (`outreachAutoSendEnabled`); `GET /api/cron/fundraising-outreach-daily` at `0 21 * * *`; Agent toggle + Run now; Hobby-safe daily |
+| **A · Licensed list provenance** | Tag imports as manual / licensed / official directory | `outreachListSource.ts`; require list/vendor name for licensed/official; store on `payload` |
+| **C · Auto-collect** | Licensed HTTPS feed → PENDING | `outreachCollectFeed.ts`; SSRF-safe https fetch; daily insert cap; cron `0 19 * * *`; Agent Collect UI; **no open-web scrape**; ACARA marketing contacts not allowed |
+| **3 · Daily auto-send (L2)** | Optional cron within Sydney remaining ≤10 | Default **off**; cron `0 21 * * *`; Agent toggle + Run now |
+
+### Auto-collect helpers
+
+- Feed pull/import: `lib/fundraising/outreachCollectFeed.ts` (+ `.test.ts`)
+- API: `app/api/admin/fundraising/agent/collect/route.ts`
+- Cron: `app/api/cron/fundraising-outreach-collect/route.ts`
+- UI: Auto-collect card on Agent page
 
 ### Import helpers
 
