@@ -31,13 +31,15 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 |------|--------|-----|
 | **1 · Target supply** | CSV / paste / file import on `/admin/fundraising/agent` → `POST …/targets/import` | Cap 200 rows; require valid email; batch + DB email dedupe; **PENDING** update; skip CONTACTED/CONVERTED/FAILED/OPTED_OUT; audit `fundraising_agent_targets_imported`; **no scrape** |
 | **2 · Daily queue** | Sydney day ≤10 + HITL Confirm Send | `GET …/daily-queue`; pick oldest PENDING; enforce remaining in `POST …/send`; UI Build today’s queue + Confirm Send; **no cron** |
-| **3 · Optional L2** | Auto-send within quota | Only after Step 2 accepted |
+| **A · Licensed list provenance** | Tag imports as manual / licensed / official directory | `outreachListSource.ts`; require list/vendor name for licensed/official; store on `payload`; **no vendor API / scrape yet** |
+| **3 · Optional L2** | Auto-send within quota | Only after ops is stable |
 
 ### Import helpers
 
 - Parser/plan: `lib/fundraising/outreachTargetImport.ts` (+ `.test.ts`)
+- List source meta: `lib/fundraising/outreachListSource.ts` (+ `.test.ts`)
 - API: `app/api/admin/fundraising/agent/targets/import/route.ts`
-- UI: Import card on Agent page
+- UI: Import card on Agent page (source type + list name + license note)
 
 ### Daily queue helpers
 

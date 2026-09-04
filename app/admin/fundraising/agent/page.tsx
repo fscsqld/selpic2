@@ -6,6 +6,11 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import { FundraisingAdminShell } from '@/components/admin/FundraisingAdminNav'
 import { FUNDRAISING_ORG_TYPE_LABELS, FUNDRAISING_ORG_TYPE_OPTIONS } from '@/lib/fundraising/types'
 import type { FundraisingOutreachTarget, FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
+import {
+  OUTREACH_LIST_SOURCE_LABELS,
+  OUTREACH_LIST_SOURCE_TYPES,
+  type OutreachListSourceType,
+} from '@/lib/fundraising/outreachListSource'
 import { logAdminActivity } from '@/lib/logAdminActivity'
 import { Bot, HeartHandshake, Loader2, Mail, Plus, RefreshCw, Trash2, Upload, ListChecks } from 'lucide-react'
 
@@ -52,6 +57,9 @@ function AgentContent() {
   })
   const [importText, setImportText] = useState('')
   const [importBusy, setImportBusy] = useState(false)
+  const [importSource, setImportSource] = useState<OutreachListSourceType>('admin_csv_paste')
+  const [listName, setListName] = useState('')
+  const [licenseNote, setLicenseNote] = useState('')
   const [dailyQuota, setDailyQuota] = useState<DailyQuotaState | null>(null)
 
   const loadDailyQueue = useCallback(async () => {
@@ -172,6 +180,14 @@ function AgentContent() {
       setMessage('Paste CSV / JSON / pipe lines, or choose a CSV file first.')
       return
     }
+    if (
+      (importSource === 'licensed_list_upload' ||
+        importSource === 'official_directory_export') &&
+      !listName.trim()
+    ) {
+      setMessage('Enter the list / vendor name for licensed or official directory imports.')
+      return
+    }
     setImportBusy(true)
     setMessage('')
     try {
@@ -179,7 +195,12 @@ function AgentContent() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: importText }),
+        body: JSON.stringify({
+          text: importText,
+          importSource,
+          listName: listName.trim() || undefined,
+          licenseNote: licenseNote.trim() || undefined,
+        }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Import failed')
@@ -196,15 +217,18 @@ function AgentContent() {
           saved: s.saved,
           truncated: s.truncated,
           skipReasons: s.skipReasons,
+          importSource: s.importSource || importSource,
+          listName: s.listName || listName.trim() || null,
+          licenseNote: licenseNote.trim() || null,
         },
-        description: `Fundraising agent import · saved ${s.saved ?? 0} (insert ${s.inserted ?? 0}, update ${s.updated ?? 0}, skip ${s.skipped ?? 0})`,
+        description: `Fundraising agent import · ${OUTREACH_LIST_SOURCE_LABELS[importSource]} · saved ${s.saved ?? 0}`,
       })
       const errNote =
         Array.isArray(json.errors) && json.errors.length > 0
           ? ` · ${json.errors.length} save error(s)`
           : ''
       setMessage(
-        `Import finished · parsed ${s.parsed ?? 0}, inserted ${s.inserted ?? 0}, updated ${s.updated ?? 0}, skipped ${s.skipped ?? 0}, saved ${s.saved ?? 0}${s.truncated ? ' (truncated to 200)' : ''}${errNote}`
+        `Import finished · ${OUTREACH_LIST_SOURCE_LABELS[importSource]} · parsed ${s.parsed ?? 0}, inserted ${s.inserted ?? 0}, updated ${s.updated ?? 0}, skipped ${s.skipped ?? 0}, saved ${s.saved ?? 0}${s.truncated ? ' (truncated to 200)' : ''}${errNote}`
       )
       setImportText('')
       await load()
@@ -387,8 +411,49 @@ function AgentContent() {
           <code className="rounded bg-gray-100 px-1">Organisation, Email, Contact, Type, State, Notes</code>
           . Also accepts JSON arrays or{' '}
           <code className="rounded bg-gray-100 px-1">Org | email | contact | type | state</code> lines.
-          No web scrape — paste licensed / manual lists only.
+          Tag licensed / official exports below — <strong>no web scrape</strong>.
         </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block text-xs font-medium text-gray-700">
+            List source
+            <select
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={importSource}
+              disabled={importBusy || busy}
+              onChange={(e) => setImportSource(e.target.value as OutreachListSourceType)}
+            >
+              {OUTREACH_LIST_SOURCE_TYPES.map((v) => (
+                <option key={v} value={v}>
+                  {OUTREACH_LIST_SOURCE_LABELS[v]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            List / vendor name
+            {(importSource === 'licensed_list_upload' ||
+              importSource === 'official_directory_export') && (
+              <span className="text-red-600"> *</span>
+            )}
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={listName}
+              disabled={importBusy || busy}
+              onChange={(e) => setListName(e.target.value)}
+              placeholder="e.g. Vendor Co AU schools Q3"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-700">
+            License / reference note
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={licenseNote}
+              disabled={importBusy || busy}
+              onChange={(e) => setLicenseNote(e.target.value)}
+              placeholder="Optional · contract id or purchase date"
+            />
+          </label>
+        </div>
         <label className="block text-xs font-medium text-gray-700">
           Paste list
           <textarea

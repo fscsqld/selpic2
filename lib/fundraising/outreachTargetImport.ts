@@ -10,6 +10,7 @@ import type {
 } from './types'
 import { FUNDRAISING_ORG_TYPE_OPTIONS } from './types'
 import { newOutreachTargetId } from './ids'
+import type { OutreachListSourceMeta } from './outreachListSource'
 
 export const OUTREACH_TARGET_IMPORT_MAX_ROWS = 200
 
@@ -452,14 +453,18 @@ export function buildTargetFromImportRow(opts: {
   id: string
   existing?: FundraisingOutreachTarget | null
   nowIso: string
+  source?: OutreachListSourceMeta
 }): FundraisingOutreachTarget {
-  const { row, id, existing, nowIso } = opts
+  const { row, id, existing, nowIso, source } = opts
   const notes = row.notes
+  const importSource = source?.importSource || 'admin_csv_paste'
   const payload = {
     ...(existing?.payload || {}),
     ...(notes ? { notes } : {}),
-    importSource: 'admin_csv_paste',
+    importSource,
     importedAt: nowIso,
+    ...(source?.listName ? { listName: source.listName } : {}),
+    ...(source?.licenseNote ? { licenseNote: source.licenseNote } : {}),
   }
   return {
     id,

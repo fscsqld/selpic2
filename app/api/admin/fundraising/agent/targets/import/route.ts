@@ -12,10 +12,14 @@ import {
   parseOutreachTargetImportText,
   planOutreachTargetImport,
 } from '@/lib/fundraising/outreachTargetImport'
+import { normalizeOutreachListSource } from '@/lib/fundraising/outreachListSource'
 import type { FundraisingOutreachTarget } from '@/lib/fundraising/types'
 
 type ImportBody = {
   text?: string
+  importSource?: string
+  listName?: string
+  licenseNote?: string
 }
 
 export async function POST(req: Request) {
@@ -28,6 +32,16 @@ export async function POST(req: Request) {
 
   try {
     const body = (await req.json().catch(() => null)) as ImportBody | null
+    const sourceNorm = normalizeOutreachListSource({
+      importSource: body?.importSource,
+      listName: body?.listName,
+      licenseNote: body?.licenseNote,
+    })
+    if (!sourceNorm.ok) {
+      return NextResponse.json({ error: sourceNorm.error }, { status: 400 })
+    }
+    const source = sourceNorm.meta
+
     const text = String(body?.text || '')
     const parsed = parseOutreachTargetImportText(text)
     if (parsed.rows.length === 0) {
@@ -74,7 +88,12 @@ export async function POST(req: Request) {
             errors.push(`Missing id for ${d.row.organizationName}`)
             continue
           }
-          const target = buildTargetFromImportRow({ row: d.row, id, nowIso: now })
+          const target = buildTargetFromImportRow({
+            row: d.row,
+            id,
+            nowIso: now,
+            source,
+          })
           const saved = await upsertFundraisingOutreachTarget(target)
           if (!saved.ok) {
             errors.push(`${d.row.organizationName}: ${saved.error}`)
@@ -88,6 +107,7 @@ export async function POST(req: Request) {
             id: d.existingId,
             existing: d.existing,
             nowIso: now,
+            source,
           })
           const saved = await upsertFundraisingOutreachTarget(target)
           if (!saved.ok) {
@@ -120,7 +140,10 @@ export async function POST(req: Request) {
         saved: savedIds.length,
         truncated: parsed.truncated,
         skipReasons,
+        importSource: source.importSource,
+        listName: source.listName || null,
       },
+      source,
       savedIds,
       parseErrors: parsed.parseErrors,
       errors,
