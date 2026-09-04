@@ -48,6 +48,21 @@ function calendarPartsInSydney(d: Date): { year: number; month: number; day: num
   return { year: num('year'), month: num('month'), day: num('day') }
 }
 
+/** `YYYY-MM-DD` for Australia/Sydney calendar (daily outreach quota key). */
+export function sydneyCalendarDateKey(d = new Date()): string {
+  const { year, month, day } = calendarPartsInSydney(d)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** True when an ISO instant falls on the given Sydney `YYYY-MM-DD`. */
+export function isInstantOnSydneyCalendarDay(iso: string, dayKey: string): boolean {
+  const raw = String(iso || '').trim()
+  if (!raw || !dayKey) return false
+  const t = Date.parse(raw)
+  if (!Number.isFinite(t)) return false
+  return sydneyCalendarDateKey(new Date(t)) === dayKey
+}
+
 /** Which AU FY quarter contains `d` (Australia/Sydney calendar). */
 export function auFyQuarterParts(d = new Date()): {
   fyStartYear: number

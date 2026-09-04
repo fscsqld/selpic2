@@ -275,6 +275,25 @@ export async function getFundraisingOutreachTargetById(
   return mapOutreachTargetRow(data as Parameters<typeof mapOutreachTargetRow>[0])
 }
 
+/** Latest outreach target for a normalised contact email (any status). */
+export async function getFundraisingOutreachTargetByEmail(
+  contactEmail: string
+): Promise<FundraisingOutreachTarget | null> {
+  const email = String(contactEmail || '')
+    .trim()
+    .toLowerCase()
+  if (!isSupabaseConfigured() || !email) return null
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
+    .from('fundraising_outreach_targets')
+    .select('*')
+    .eq('contact_email', email)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  if (error || !data?.length) return null
+  return mapOutreachTargetRow(data[0] as Parameters<typeof mapOutreachTargetRow>[0])
+}
+
 /**
  * Mark an outreach target CONVERTED when apply succeeds with target_id.
  * Idempotent: already-CONVERTED rows keep status; partner id fills only if empty.

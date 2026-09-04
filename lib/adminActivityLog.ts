@@ -34,6 +34,7 @@ export type ActivityLogAction =
   | 'fundraising_maintenance_run'
   | 'fundraising_agent_target_saved'
   | 'fundraising_agent_target_deleted'
+  | 'fundraising_agent_targets_imported'
   | 'fundraising_agent_outreach_sent'
   | 'agent_inbound_draft_sent'
   | 'agent_community_draft_published'
@@ -102,6 +103,7 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'fundraising_maintenance_run',
   'fundraising_agent_target_saved',
   'fundraising_agent_target_deleted',
+  'fundraising_agent_targets_imported',
   'fundraising_agent_outreach_sent',
   'agent_inbound_draft_sent',
   'agent_community_draft_published',

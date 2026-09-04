@@ -7,7 +7,7 @@ import { FundraisingAdminShell } from '@/components/admin/FundraisingAdminNav'
 import { FUNDRAISING_ORG_TYPE_LABELS, FUNDRAISING_ORG_TYPE_OPTIONS } from '@/lib/fundraising/types'
 import type { FundraisingOutreachTarget, FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { logAdminActivity } from '@/lib/logAdminActivity'
-import { Bot, HeartHandshake, Loader2, Mail, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Bot, HeartHandshake, Loader2, Mail, Plus, RefreshCw, Trash2, Upload, ListChecks } from 'lucide-react'
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -17,6 +17,15 @@ const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   'FAILED',
   'OPTED_OUT',
 ]
+
+type DailyQuotaState = {
+  dayKey: string
+  dailyCap: number
+  sentToday: number
+  remaining: number
+  pendingPoolSize: number
+  suggestedIds: string[]
+}
 
 export default function FundraisingAgentPage() {
   return (
@@ -41,10 +50,34 @@ function AgentContent() {
     state: '',
     notes: '',
   })
+  const [importText, setImportText] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [dailyQuota, setDailyQuota] = useState<DailyQuotaState | null>(null)
+
+  const loadDailyQueue = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/daily-queue', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Failed to load daily queue')
+      const suggested = Array.isArray(json.suggested) ? json.suggested : []
+      setDailyQuota({
+        dayKey: String(json.dayKey || ''),
+        dailyCap: Number(json.dailyCap) || 10,
+        sentToday: Number(json.sentToday) || 0,
+        remaining: Number(json.remaining) || 0,
+        pendingPoolSize: Number(json.pendingPoolSize) || 0,
+        suggestedIds: suggested.map((t: { id?: string }) => String(t.id || '')).filter(Boolean),
+      })
+    } catch {
+      setDailyQuota(null)
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
-    setMessage('')
     try {
       const q = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ''
       const res = await fetch(`/api/admin/fundraising/agent/targets${q}`, {
@@ -55,13 +88,14 @@ function AgentContent() {
       if (!res.ok) throw new Error(json?.error || 'Failed to load targets')
       setTargets(Array.isArray(json.targets) ? json.targets : [])
       if (json.warning) setMessage(String(json.warning))
+      await loadDailyQueue()
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load targets')
       setTargets([])
     } finally {
       setLoading(false)
     }
-  }, [statusFilter])
+  }, [statusFilter, loadDailyQueue])
 
   useEffect(() => {
     void load()
@@ -133,6 +167,65 @@ function AgentContent() {
     }
   }
 
+  const onImport = async () => {
+    if (!importText.trim()) {
+      setMessage('Paste CSV / JSON / pipe lines, or choose a CSV file first.')
+      return
+    }
+    setImportBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/targets/import', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: importText }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Import failed')
+      const s = json.summary || {}
+      logAdminActivity({
+        action: 'fundraising_agent_targets_imported',
+        target: 'fundraising-agent-import',
+        field: 'outreach_target_import',
+        newValue: {
+          parsed: s.parsed,
+          inserted: s.inserted,
+          updated: s.updated,
+          skipped: s.skipped,
+          saved: s.saved,
+          truncated: s.truncated,
+          skipReasons: s.skipReasons,
+        },
+        description: `Fundraising agent import · saved ${s.saved ?? 0} (insert ${s.inserted ?? 0}, update ${s.updated ?? 0}, skip ${s.skipped ?? 0})`,
+      })
+      const errNote =
+        Array.isArray(json.errors) && json.errors.length > 0
+          ? ` · ${json.errors.length} save error(s)`
+          : ''
+      setMessage(
+        `Import finished · parsed ${s.parsed ?? 0}, inserted ${s.inserted ?? 0}, updated ${s.updated ?? 0}, skipped ${s.skipped ?? 0}, saved ${s.saved ?? 0}${s.truncated ? ' (truncated to 200)' : ''}${errNote}`
+      )
+      setImportText('')
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  const onImportFile = async (file: File | null) => {
+    if (!file) return
+    try {
+      const text = await file.text()
+      setImportText(text)
+      setMessage(`Loaded “${file.name}” (${text.split(/\r?\n/).length} lines). Review then Import.`)
+    } catch {
+      setMessage('Could not read that file.')
+    }
+  }
+
   const onSend = async () => {
     const ids = Array.from(selected)
     if (ids.length === 0) {
@@ -143,9 +236,16 @@ function AgentContent() {
       setMessage('Select at most 10 targets per send (v1 safety cap).')
       return
     }
+    const remaining = dailyQuota?.remaining ?? 10
+    if (ids.length > remaining) {
+      setMessage(
+        `Only ${remaining} send slot(s) left today (Sydney day ${dailyQuota?.dayKey || '—'}). Deselect ${ids.length - remaining}.`
+      )
+      return
+    }
     if (
       !window.confirm(
-        `Send outreach email to ${ids.length} selected target(s)? This uses Resend and marks them CONTACTED.`
+        `Confirm Send to ${ids.length} selected target(s)?\n\nThis uses Resend, marks them CONTACTED, and counts toward today’s Sydney cap (${dailyQuota?.sentToday ?? 0}/${dailyQuota?.dailyCap ?? 10} already sent).`
       )
     ) {
       return
@@ -169,12 +269,15 @@ function AgentContent() {
           sent: json.sent,
           failed: json.failed,
           skipped: json.skipped,
+          dayKey: json.dayKey,
+          sentToday: json.sentToday,
+          remaining: json.remaining,
           ids,
         },
-        description: `Fundraising agent send · sent ${json.sent}, failed ${json.failed}, skipped ${json.skipped}`,
+        description: `Fundraising agent Confirm Send · sent ${json.sent}, failed ${json.failed}, skipped ${json.skipped} · day ${json.dayKey || ''}`,
       })
       setMessage(
-        `Send finished · sent ${json.sent ?? 0}, failed ${json.failed ?? 0}, skipped ${json.skipped ?? 0}`
+        `Confirm Send finished · sent ${json.sent ?? 0}, failed ${json.failed ?? 0}, skipped ${json.skipped ?? 0} · today ${json.sentToday ?? '—'}/${json.dailyCap ?? 10} (Sydney)`
       )
       setSelected(new Set())
       await load()
@@ -183,6 +286,26 @@ function AgentContent() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const onBuildDailyQueue = () => {
+    if (!dailyQuota) {
+      setMessage('Daily queue not loaded yet — refresh and try again.')
+      return
+    }
+    if (dailyQuota.remaining <= 0) {
+      setMessage(`Daily outreach cap reached (${dailyQuota.dailyCap} / Sydney day ${dailyQuota.dayKey}).`)
+      return
+    }
+    if (dailyQuota.suggestedIds.length === 0) {
+      setMessage('No PENDING targets with email available for today’s queue.')
+      return
+    }
+    setSelected(new Set(dailyQuota.suggestedIds))
+    setStatusFilter('PENDING')
+    setMessage(
+      `Today’s queue ready · ${dailyQuota.suggestedIds.length} PENDING target(s) selected (${dailyQuota.remaining} slot(s) left · pool ${dailyQuota.pendingPoolSize}). Review, then Confirm Send.`
+    )
   }
 
   const onDelete = async (t: FundraisingOutreachTarget) => {
@@ -240,18 +363,132 @@ function AgentContent() {
       />
       <FundraisingAdminShell
         title="Fundraising Agent"
-        subtitle="Register outreach targets and send personalised B2B emails (v1: manual list, max 10 per send — not auto-scrape / daily blast)."
+        subtitle="Import targets, build today’s Sydney queue (≤10), then Confirm Send — no auto-scrape / unsupervised blast."
         current="/admin/fundraising/agent"
       >
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <div className="flex items-start gap-2">
           <Bot className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            Targets are added here (or later licensed imports). Emails use a Spam Act–oriented template with apply
-            tracking (<code className="text-xs bg-white/80 px-1 rounded">ref=ai_agent&amp;target_id=…</code>) and a
-            unique unsubscribe link. Opt-outs become <strong>OPTED_OUT</strong> and are never re-sent. Requires{' '}
-            <strong>fundraising:write</strong> to save or send.
+            Supply targets via CSV/paste or single add, then use <strong>Build today’s queue</strong> +{' '}
+            <strong>Confirm Send</strong> (Sydney day cap 10). Rows without email are skipped on import.
+            Opt-outs become <strong>OPTED_OUT</strong> and are never re-sent. Requires{' '}
+            <strong>fundraising:write</strong> to save, import, or send.
           </div>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Upload className="h-4 w-4" /> Import targets (CSV / paste)
+        </h2>
+        <p className="text-xs text-gray-600">
+          Header row recommended:{' '}
+          <code className="rounded bg-gray-100 px-1">Organisation, Email, Contact, Type, State, Notes</code>
+          . Also accepts JSON arrays or{' '}
+          <code className="rounded bg-gray-100 px-1">Org | email | contact | type | state</code> lines.
+          No web scrape — paste licensed / manual lists only.
+        </p>
+        <label className="block text-xs font-medium text-gray-700">
+          Paste list
+          <textarea
+            className="mt-1 w-full min-h-[120px] rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
+            placeholder={'Organisation,Email,Contact,Type,State\nSunnybank Kinder,office@sunny.edu.au,Jane,kindergarten,QLD'}
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            disabled={importBusy || busy}
+          />
+        </label>
+        <label className="block text-xs font-medium text-gray-700">
+          Or choose CSV / text file
+          <input
+            type="file"
+            accept=".csv,.txt,.tsv,text/csv,text/plain,application/json"
+            className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-indigo-700"
+            disabled={importBusy || busy}
+            onChange={(e) => {
+              void onImportFile(e.target.files?.[0] || null)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={importBusy || busy || !importText.trim()}
+            onClick={() => void onImport()}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {importBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Import into queue
+          </button>
+          <button
+            type="button"
+            disabled={importBusy || busy || !importText.trim()}
+            onClick={() => setImportText('')}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Clear paste
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-indigo-700" /> Today’s outreach queue (Sydney)
+        </h2>
+        <p className="text-xs text-gray-700">
+          Semi-auto Step 2: build up to <strong>10 PENDING</strong> targets for today, review, then{' '}
+          <strong>Confirm Send</strong>. No cron / auto-blast. Cap resets on the Australia/Sydney calendar day.
+        </p>
+        <div className="flex flex-wrap gap-3 text-sm text-gray-800">
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Day: <strong>{dailyQuota?.dayKey || '—'}</strong>
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Sent today: <strong>{dailyQuota?.sentToday ?? '—'}</strong> / {dailyQuota?.dailyCap ?? 10}
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Remaining: <strong>{dailyQuota?.remaining ?? '—'}</strong>
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            PENDING pool: <strong>{dailyQuota?.pendingPoolSize ?? '—'}</strong>
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={
+              busy ||
+              loading ||
+              !dailyQuota ||
+              dailyQuota.remaining <= 0 ||
+              dailyQuota.pendingPoolSize <= 0
+            }
+            onClick={onBuildDailyQueue}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            title={
+              !dailyQuota
+                ? 'Loading daily queue…'
+                : dailyQuota.remaining <= 0
+                  ? 'Daily send cap reached for Sydney today'
+                  : dailyQuota.pendingPoolSize <= 0
+                    ? 'No PENDING targets with email — import or add targets first'
+                    : 'Select up to today’s remaining PENDING targets'
+            }
+          >
+            <ListChecks className="h-4 w-4" />
+            Build today’s queue
+          </button>
+          <button
+            type="button"
+            disabled={busy || selectedCount === 0}
+            onClick={() => void onSend()}
+            className="inline-flex items-center gap-2 rounded-md border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Confirm Send ({selectedCount})
+          </button>
         </div>
       </div>
 
@@ -358,10 +595,14 @@ function AgentContent() {
         </button>
         <button
           type="button"
-          onClick={() => setSelected(new Set(selectableIds.slice(0, 10)))}
+          onClick={() =>
+            setSelected(
+              new Set(selectableIds.slice(0, dailyQuota?.remaining ?? 10))
+            )
+          }
           className="text-sm text-indigo-600 hover:text-indigo-800"
         >
-          Select up to 10 sendable
+          Select up to {dailyQuota?.remaining ?? 10} sendable
         </button>
         <button
           type="button"
@@ -370,7 +611,7 @@ function AgentContent() {
           className="ml-auto inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-          Send email ({selectedCount})
+          Confirm Send ({selectedCount})
         </button>
       </div>
 

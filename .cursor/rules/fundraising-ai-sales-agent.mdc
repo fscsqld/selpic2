@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Fundraising AI Sales Agent — FINAL PLAN (standby)
 
-**Status:** **A1–A3 shipped** on `main` (capture + Agent UI + capped Resend send). Broader multi-sector vision remains in [`docs/selpic-unified-ai-agent-plan.md`](mdc:docs/selpic-unified-ai-agent-plan.md). Auto-scrape / daily mass mail is **not** in v1.
+**Status:** **A1–A3 shipped** on `main`. Branch `feature/fundraising-daily-outreach-queue`: **Step 1 CSV/paste import** + **Step 2 daily ≤10 queue + HITL Confirm Send**. Auto-scrape / unsupervised daily mass mail is **not** in v1.
 
 ## Goal
 
@@ -21,9 +21,30 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 
 ## Data flow
 
-**v1 (A1–A3):** Admin registers / imports `outreach_targets` → Resend send API (A3) → landing UTM/`ref`/`target_id` capture → Apply API (`payload.acquisition` + target `CONVERTED`).
+**v1 (A1–A3 + import + daily queue):** Admin registers / **CSV·paste imports** `outreach_targets` → **Build today’s queue** (Sydney ≤10) → **Confirm Send** → Resend → landing UTM/`ref`/`target_id` → Apply (`payload.acquisition` + `CONVERTED`).
 
 **Not v1:** Auto-scraping AU school/kindergarten directories from the open web + fully unsupervised daily mass mail. That is a later Wave (licensed lists + cron quota + privacy/opt-out). Until then, targets are **manual or semi-manual**.
+
+## Semi-auto acquisition track (current)
+
+| Step | Scope | DoD |
+|------|--------|-----|
+| **1 · Target supply** | CSV / paste / file import on `/admin/fundraising/agent` → `POST …/targets/import` | Cap 200 rows; require valid email; batch + DB email dedupe; **PENDING** update; skip CONTACTED/CONVERTED/FAILED/OPTED_OUT; audit `fundraising_agent_targets_imported`; **no scrape** |
+| **2 · Daily queue** | Sydney day ≤10 + HITL Confirm Send | `GET …/daily-queue`; pick oldest PENDING; enforce remaining in `POST …/send`; UI Build today’s queue + Confirm Send; **no cron** |
+| **3 · Optional L2** | Auto-send within quota | Only after Step 2 accepted |
+
+### Import helpers
+
+- Parser/plan: `lib/fundraising/outreachTargetImport.ts` (+ `.test.ts`)
+- API: `app/api/admin/fundraising/agent/targets/import/route.ts`
+- UI: Import card on Agent page
+
+### Daily queue helpers
+
+- Quota/pick: `lib/fundraising/outreachDailyQueue.ts` (+ `.test.ts`); Sydney day via `sydneyCalendarDateKey`
+- API: `app/api/admin/fundraising/agent/daily-queue/route.ts`
+- Send: `app/api/admin/fundraising/agent/send/route.ts` enforces daily remaining
+- UI: Today’s outreach queue card on Agent page
 
 ## Strict tech rules
 
@@ -35,17 +56,9 @@ AU kindergartens / schools / daycares → personalised B2B email → link `?ref=
 
 ## Git & deploy
 
-- Branch: **`feature/ai-fundraising-agent`** (protect live site).  
-- Deploy once when all steps done.  
+- Branch for daily queue work: **`feature/fundraising-daily-outreach-queue`**.  
+- Deploy only to Vercel project **`selpic2`**.  
 - After each Step: recommend a local git commit message (do not commit unless user asks).
-
-## Build order (3 Steps)
-
-| Step | Scope |
-|------|--------|
-| **1** | Supabase `outreach_targets` schema + landing capture + Apply API `payload.acquisition` (+ optional CONVERTED update when `target_id` present) |
-| **2** | Admin `/admin/fundraising/agent` — monitor / manage targets |
-| **3** | `/api/admin/agent/send` — Resend B2B outreach mail |
 
 ## Fit with current fundraising (verified)
 
@@ -57,24 +70,20 @@ Already exists and must stay intact:
 - Admin: partners, settings, report, payout, documents  
 - Lookup OTP portal, settlements, D-docs, sample kit rules  
 
-**Gaps this plan fills:** no `outreach_targets` table yet; no acquisition/UTM on partner payload; no agent admin or send API.
+## Extra items (learned add-ons)
 
-## Extra items to include when building (learned add-ons)
-
-Not blockers for Step 1, but plan for them so the agent sector stays consistent:
-
-1. **Admin nav** — add “Agent” link in `components/admin/FundraisingAdminNav.tsx`.  
-2. **Idempotency** — same `target_id` re-apply: update acquisition, don’t break existing pending partner; avoid duplicate spam converts.  
-3. **Auth on send API** — reuse admin session / same guards as `app/api/admin/fundraising/*`.  
-4. **Resend rate limits / batching** — Step 3: queue or throttle; log send status on `outreach_targets` (`PENDING` → `CONTACTED` → `CONVERTED` / `FAILED`).  
-5. **Privacy / unsubscribe** — AU email outreach: unique unsubscribe link + `OPTED_OUT`; reply “unsubscribe” webhook optional. Don’t email opted-out or terminated partners.  
-6. **Outreach address line** — cold outreach footer uses **locality only** (no street number) via `fundraisingOutreachSenderLocality()` so mail clients are less likely to open Maps/Street View of the residential facade. Full `COMPANY_CONTACT.address` stays for invoices/legal. **Restore street number in outreach only when the user asks** (e.g. after Google listing photos are updated).  
+1. **Admin nav** — “Agent” link in `FundraisingAdminNav`.  
+2. **Idempotency** — same `target_id` re-apply: update acquisition; don’t spam-convert.  
+3. **Auth** — same admin session guards as `app/api/admin/fundraising/*`.  
+4. **Resend rate limits** — throttle; status `PENDING` → `CONTACTED` → `CONVERTED` / `FAILED`.  
+5. **Privacy / unsubscribe** — unique unsubscribe + `OPTED_OUT`; never re-mail.  
+6. **Outreach address line** — locality only via `fundraisingOutreachSenderLocality()`.  
 7. **Do not** change checkout/promo engines or accounting-sandbox; don’t auto-dispatch sample kits.  
-8. **Activity log** — prefer `logAdminActivity` for agent sends / target status changes (super-admin audit).  
-9. **SQL** — add `docs/fundraising-outreach-targets.sql` (and/or migration) alongside partners schema docs.
+8. **Activity log** — `logAdminActivity` for saves / **import** / sends.  
+9. **SQL** — `docs/fundraising-outreach-targets.sql`.
 
-## On 「개발 시작하자」
+## On 「개발 시작하자」 / 「1번부터」 / recommended track
 
-1. Create/use branch `feature/ai-fundraising-agent` if missing.  
-2. Implement **Step 1** only first (schema + landing Suspense capture + apply acquisition + optional CONVERTED).  
-3. Recommend commit message; wait for next step unless user says continue.
+1. Use branch `feature/fundraising-daily-outreach-queue`.  
+2. Step 1 import + Step 2 daily queue are implemented on this branch.  
+3. Recommend commit; wait for Step 3 (optional cron auto-send) or licensed list source unless user says continue.

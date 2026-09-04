@@ -29,6 +29,7 @@ export const DASHBOARD_IMPORTANT_ACTIONS = [
   'fundraising_settlement_paid',
   'fundraising_document_sent',
   'fundraising_maintenance_run',
+  'fundraising_agent_targets_imported',
   'fundraising_agent_outreach_sent',
   'agent_inbound_draft_sent',
   'agent_community_draft_published',
@@ -124,6 +125,8 @@ export function formatImportantActivityTitle(log: ActivityLog): string {
       return 'Fundraising document emailed'
     case 'fundraising_maintenance_run':
       return 'Fundraising maintenance run'
+    case 'fundraising_agent_targets_imported':
+      return 'Fundraising agent targets imported'
     case 'fundraising_agent_outreach_sent':
       return 'Fundraising agent outreach sent'
     case 'agent_inbound_draft_sent':
@@ -193,6 +196,7 @@ export function importantActivityTone(action: ActivityLog['action']): DashboardA
     case 'fundraising_settings_updated':
     case 'fundraising_settlement_paid':
     case 'fundraising_maintenance_run':
+    case 'fundraising_agent_targets_imported':
     case 'fundraising_agent_outreach_sent':
     case 'agent_inbound_draft_sent':
       return 'warning'

@@ -4,6 +4,7 @@ import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import {
   ensureFundraisingOutreachUnsubscribeToken,
   getFundraisingOutreachTargetById,
+  listFundraisingOutreachTargetsFromDb,
   upsertFundraisingOutreachTarget,
 } from '@/lib/fundraising/persistence'
 import {
@@ -12,12 +13,17 @@ import {
   buildFundraisingOutreachUnsubscribeApiUrl,
   buildFundraisingOutreachUnsubscribeUrl,
 } from '@/lib/fundraising/outreachEmail'
+import {
+  assertBatchFitsDailyQuota,
+  buildOutreachDailyQuota,
+  OUTREACH_DAILY_SEND_CAP,
+} from '@/lib/fundraising/outreachDailyQueue'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
 import type { FundraisingOutreachTarget } from '@/lib/fundraising/types'
 
-/** Hard cap per request — prevents accidental mass blast (daily cron is a later wave). */
-const MAX_SEND_PER_REQUEST = 10
+/** Hard cap per request — also the Sydney daily cap (Step 2). */
+const MAX_SEND_PER_REQUEST = OUTREACH_DAILY_SEND_CAP
 
 type SendBody = {
   targetIds?: string[]
@@ -53,6 +59,26 @@ export async function POST(req: Request) {
       )
     }
 
+    const existingForQuota = await listFundraisingOutreachTargetsFromDb({ limit: 2000 })
+    const quota = buildOutreachDailyQuota(existingForQuota)
+    const fit = assertBatchFitsDailyQuota({
+      batchSize: ids.length,
+      remaining: quota.remaining,
+      dailyCap: quota.dailyCap,
+    })
+    if (!fit.ok) {
+      return NextResponse.json(
+        {
+          error: fit.error,
+          dayKey: quota.dayKey,
+          sentToday: quota.sentToday,
+          remaining: quota.remaining,
+          dailyCap: quota.dailyCap,
+        },
+        { status: 400 }
+      )
+    }
+
     const results: Array<{
       id: string
       ok: boolean
@@ -61,7 +87,20 @@ export async function POST(req: Request) {
       status?: string
     }> = []
 
+    let sentThisRequest = 0
+
     for (const id of ids) {
+      // Re-check Sydney day remaining (multi-admin / mid-batch).
+      if (sentThisRequest >= quota.remaining) {
+        results.push({
+          id,
+          ok: true,
+          skipped: true,
+          reason: 'Daily outreach cap reached',
+        })
+        continue
+      }
+
       let target = await getFundraisingOutreachTargetById(id)
       if (!target) {
         results.push({ id, ok: false, reason: 'Target not found' })
@@ -138,15 +177,19 @@ export async function POST(req: Request) {
         payload: {
           ...(target.payload || {}),
           lastTemplateSubject: rendered.subject,
+          dailyQueueDayKey: quota.dayKey,
         },
       }
       await upsertFundraisingOutreachTarget(contacted)
       results.push({ id, ok: true, status: 'CONTACTED' })
+      sentThisRequest++
     }
 
     const sent = results.filter((r) => r.ok && !r.skipped).length
     const failed = results.filter((r) => !r.ok).length
     const skipped = results.filter((r) => r.skipped).length
+    const quotaAfter = buildOutreachDailyQuota(existingForQuota)
+    const sentTodayAfter = quotaAfter.sentToday + sent
 
     return NextResponse.json({
       ok: failed === 0,
@@ -154,6 +197,10 @@ export async function POST(req: Request) {
       failed,
       skipped,
       maxPerRequest: MAX_SEND_PER_REQUEST,
+      dayKey: quota.dayKey,
+      sentToday: sentTodayAfter,
+      remaining: Math.max(0, quota.dailyCap - sentTodayAfter),
+      dailyCap: quota.dailyCap,
       results,
     })
   } catch (e) {
