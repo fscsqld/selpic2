@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server'
 
-import {
-  markFundraisingOutreachTargetOptedOut,
-} from '@/lib/fundraising/persistence'
-import { messageLooksLikeUnsubscribeRequest } from '@/lib/fundraising/outreachEmail'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
+import {
+  ingestFundraisingOutreachReply,
+} from '@/lib/fundraising/outreachReply'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Resend inbound (or compatible) webhook: if a reply contains "unsubscribe",
- * mark matching outreach target OPTED_OUT.
+ * Resend inbound (or compatible) webhook for Fundraising outreach replies.
+ * - unsubscribe / wrong person → OPTED_OUT (+ reply log)
+ * - interested / question / other → Needs-reply queue
  *
  * Configure Resend inbound → POST this URL.
- * Optional shared secret: header `x-selpic-webhook-secret` === RESEND_INBOUND_WEBHOOK_SECRET
- * (or Authorization: Bearer …).
- *
- * This is best-effort automation — the List-Unsubscribe link remains the primary path.
+ * Optional: header `x-selpic-webhook-secret` === RESEND_INBOUND_WEBHOOK_SECRET
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) {
@@ -39,50 +36,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     }
 
+    const data = (body.data as Record<string, unknown> | undefined) || undefined
+    const email = (body.email as Record<string, unknown> | undefined) || undefined
+
     const from =
       pickEmail(body.from) ||
-      pickEmail((body.data as Record<string, unknown> | undefined)?.from) ||
-      pickEmail((body.email as Record<string, unknown> | undefined)?.from)
+      pickEmail(data?.from) ||
+      pickEmail(email?.from)
 
-    const subject = String(
-      body.subject ||
-        (body.data as Record<string, unknown> | undefined)?.subject ||
-        (body.email as Record<string, unknown> | undefined)?.subject ||
-        ''
-    )
+    const subject = String(body.subject || data?.subject || email?.subject || '')
     const text = String(
-      body.text ||
-        body.body ||
-        (body.data as Record<string, unknown> | undefined)?.text ||
-        (body.email as Record<string, unknown> | undefined)?.text ||
-        ''
+      body.text || body.body || data?.text || email?.text || data?.body || ''
     )
+    const messageId = String(
+      body.message_id ||
+        body.messageId ||
+        data?.email_id ||
+        data?.message_id ||
+        data?.id ||
+        email?.id ||
+        body.id ||
+        ''
+    ).trim()
 
-    if (!from) {
-      return NextResponse.json({ ok: true, skipped: true, reason: 'No from address' })
-    }
-    if (!messageLooksLikeUnsubscribeRequest(subject, text)) {
-      return NextResponse.json({ ok: true, skipped: true, reason: 'Not an unsubscribe reply' })
-    }
-
-    const result = await markFundraisingOutreachTargetOptedOut({
-      contactEmail: from,
-      source: 'reply',
+    const result = await ingestFundraisingOutreachReply({
+      fromEmail: from,
+      subject,
+      text,
+      messageId: messageId || undefined,
     })
 
-    if (!result.ok) {
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: result.error,
-      })
-    }
-
     return NextResponse.json({
-      ok: true,
-      optedOut: true,
-      already: Boolean(result.already),
-      targetId: result.target.id,
+      ok: result.ok,
+      skipped: result.skipped,
+      reason: result.reason,
+      optedOut: result.optedOut,
+      targetId: result.targetId,
+      replyId: result.reply?.id,
+      intent: result.reply?.intent,
+      status: result.reply?.status,
     })
   } catch (e) {
     return NextResponse.json(

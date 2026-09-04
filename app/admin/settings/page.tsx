@@ -4940,6 +4940,7 @@ function ActivityLogView() {
     fundraising_agent_collect_settings: 'bg-emerald-100 text-emerald-800',
     fundraising_agent_collect_run: 'bg-emerald-100 text-emerald-800',
     fundraising_agent_feed_previewed: 'bg-teal-100 text-teal-800',
+    fundraising_agent_reply_handled: 'bg-indigo-100 text-indigo-800',
     agent_inbound_draft_sent: 'bg-indigo-100 text-indigo-800',
     agent_community_draft_published: 'bg-violet-100 text-violet-800',
   }
@@ -5027,6 +5028,7 @@ function ActivityLogView() {
             <option value="fundraising_agent_collect_settings">Fundraising Agent Collect Settings</option>
             <option value="fundraising_agent_collect_run">Fundraising Agent Collect Run</option>
             <option value="fundraising_agent_feed_previewed">Fundraising Agent Feed Preview</option>
+            <option value="fundraising_agent_reply_handled">Fundraising Agent Reply Handled</option>
             <option value="agent_inbound_draft_sent">Agent Inbound Draft Send</option>
             <option value="agent_community_draft_published">Agent Community Draft Publish</option>
           </select>

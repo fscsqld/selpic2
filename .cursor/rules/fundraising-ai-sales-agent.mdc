@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Fundraising AI Sales Agent — FINAL PLAN (standby)
 
-**Status:** Core pipeline shipped (import · daily ≤10 · licensed feed auto-collect · optional auto-send). **Vendor go-live ready:** Test feed dry-run, sample CSV/JSON, edit/retry targets, provenance, audit. See `docs/fundraising-outreach-licensed-list-golive.md`. Open-web scrape is **not** in scope.
+**Status:** Core pipeline shipped + **reply/conversion loop v1** (Needs reply queue, funnel KPIs, Partners Agent badge). Licensed feed go-live ready. See `docs/fundraising-outreach-licensed-list-golive.md` + `docs/fundraising-outreach-replies.sql`. Open-web scrape is **not** in scope.
 
 ## Goal
 

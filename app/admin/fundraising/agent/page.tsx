@@ -25,7 +25,12 @@ import {
   ListChecks,
   FlaskConical,
   Download,
+  MessageSquare,
 } from 'lucide-react'
+import {
+  OUTREACH_REPLY_INTENT_LABELS,
+  type OutreachReplyIntent,
+} from '@/lib/fundraising/outreachReplyClassify'
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -68,6 +73,30 @@ type CollectPreviewState = {
     action: 'insert' | 'update' | 'skip'
     skipReason?: string
   }>
+}
+
+type FunnelState = {
+  dayKey: string
+  pending: number
+  contacted: number
+  converted: number
+  optedOut: number
+  failed: number
+  openReplies: number
+  sentToday: number
+}
+
+type ReplyRow = {
+  id: string
+  fromEmail: string
+  targetId?: string
+  organizationName?: string
+  subject: string
+  excerpt: string
+  intent: OutreachReplyIntent
+  status: 'open' | 'closed'
+  createdAt: string
+  draft?: { subject: string; text: string }
 }
 
 type CollectState = {
@@ -122,6 +151,12 @@ function AgentContent() {
   const [collectDailyInsertCap, setCollectDailyInsertCap] = useState(50)
   const [clearAuthOnSave, setClearAuthOnSave] = useState(false)
   const [collectPreview, setCollectPreview] = useState<CollectPreviewState | null>(null)
+  const [funnel, setFunnel] = useState<FunnelState | null>(null)
+  const [openReplies, setOpenReplies] = useState<ReplyRow[]>([])
+  const [repliesBusy, setRepliesBusy] = useState(false)
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, { subject: string; text: string }>>(
+    {}
+  )
 
   const loadDailyQueue = useCallback(async () => {
     try {
@@ -191,6 +226,38 @@ function AgentContent() {
     }
   }, [])
 
+  const loadReplies = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/fundraising/agent/replies?status=open&funnel=1', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Failed to load replies')
+      const rows = Array.isArray(json.replies) ? (json.replies as ReplyRow[]) : []
+      setOpenReplies(rows)
+      const drafts: Record<string, { subject: string; text: string }> = {}
+      for (const r of rows) {
+        if (r.draft) drafts[r.id] = { subject: r.draft.subject, text: r.draft.text }
+      }
+      setReplyDrafts(drafts)
+      if (json.funnel) {
+        setFunnel({
+          dayKey: String(json.funnel.dayKey || ''),
+          pending: Number(json.funnel.pending) || 0,
+          contacted: Number(json.funnel.contacted) || 0,
+          converted: Number(json.funnel.converted) || 0,
+          optedOut: Number(json.funnel.optedOut) || 0,
+          failed: Number(json.funnel.failed) || 0,
+          openReplies: Number(json.funnel.openReplies) || 0,
+          sentToday: Number(json.funnel.sentToday) || 0,
+        })
+      }
+    } catch {
+      setOpenReplies([])
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -203,14 +270,14 @@ function AgentContent() {
       if (!res.ok) throw new Error(json?.error || 'Failed to load targets')
       setTargets(Array.isArray(json.targets) ? json.targets : [])
       if (json.warning) setMessage(String(json.warning))
-      await Promise.all([loadDailyQueue(), loadAutoSend(), loadCollect()])
+      await Promise.all([loadDailyQueue(), loadAutoSend(), loadCollect(), loadReplies()])
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load targets')
       setTargets([])
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, loadDailyQueue, loadAutoSend, loadCollect])
+  }, [statusFilter, loadDailyQueue, loadAutoSend, loadCollect, loadReplies])
 
   useEffect(() => {
     void load()
@@ -675,6 +742,54 @@ function AgentContent() {
     }
   }
 
+  const onReplyAction = async (
+    reply: ReplyRow,
+    action: 'handle' | 'opt_out' | 'send_draft'
+  ) => {
+    setRepliesBusy(true)
+    setMessage('')
+    try {
+      const draft = replyDrafts[reply.id]
+      const res = await fetch('/api/admin/fundraising/agent/replies', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: reply.id,
+          action,
+          subject: draft?.subject,
+          text: draft?.text,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Reply action failed')
+      logAdminActivity({
+        action: 'fundraising_agent_reply_handled',
+        target: reply.id,
+        field: action,
+        newValue: {
+          intent: reply.intent,
+          fromEmail: reply.fromEmail,
+          sent: Boolean(json.sent),
+        },
+        description: `Fundraising agent reply ${action} · ${reply.fromEmail} · ${reply.intent}`,
+      })
+      setMessage(
+        action === 'send_draft'
+          ? `Follow-up sent to ${reply.fromEmail}`
+          : action === 'opt_out'
+            ? `Marked handled + OPTED_OUT · ${reply.fromEmail}`
+            : `Reply marked handled · ${reply.fromEmail}`
+      )
+      await loadReplies()
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Reply action failed')
+    } finally {
+      setRepliesBusy(false)
+    }
+  }
+
   const onTestFeed = async () => {
     if (!collectFeedUrl.trim()) {
       setMessage('Enter a HTTPS feed URL before Test feed.')
@@ -790,11 +905,146 @@ function AgentContent() {
           <Bot className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             Goal path: <strong>auto-collect</strong> from a licensed HTTPS list feed into PENDING, then send up to{' '}
-            <strong>10/day</strong> (Sydney) via Confirm Send or optional auto-send. ACARA/gov school lists do{' '}
+            <strong>10/day</strong> (Sydney) via Confirm Send or optional auto-send. Replies land in{' '}
+            <strong>Needs reply</strong> below (not CS inbound). ACARA/gov school lists do{' '}
             <strong>not</strong> allow marketing contact use — use a list you are licensed to email. Manual CSV remains
             a backup. Requires <strong>fundraising:write</strong>.
           </div>
         </div>
+      </div>
+
+      {funnel ? (
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+          {[
+            { label: 'Pending', value: funnel.pending },
+            { label: 'Contacted', value: funnel.contacted },
+            { label: 'Converted', value: funnel.converted },
+            { label: 'Opted out', value: funnel.optedOut },
+            { label: 'Failed', value: funnel.failed },
+            { label: 'Open replies', value: funnel.openReplies },
+            { label: 'Sent today', value: funnel.sentToday },
+            { label: 'Day', value: funnel.dayKey },
+          ].map((c) => (
+            <div
+              key={c.label}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm"
+            >
+              <div className="text-[10px] uppercase tracking-wide text-gray-500">{c.label}</div>
+              <div className="text-sm font-semibold text-gray-900 tabular-nums">{c.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50/50 p-4 shadow-sm space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-sky-700" /> Needs reply ({openReplies.length})
+        </h2>
+        <p className="text-xs text-gray-700">
+          Inbound replies to outreach mail (interested / question / other). Unsubscribe and wrong-person are handled
+          automatically. Separate from Customer care at <code className="rounded bg-white px-1">/admin/agent/inbound</code>
+          . Run <code className="rounded bg-white px-1">docs/fundraising-outreach-replies.sql</code> once in Supabase
+          for durable storage.
+        </p>
+        {openReplies.length === 0 ? (
+          <p className="text-sm text-gray-600">No open replies.</p>
+        ) : (
+          <div className="space-y-4">
+            {openReplies.map((r) => (
+              <div key={r.id} className="rounded-lg border border-sky-100 bg-white p-3 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {r.organizationName || 'Unknown org'} · {r.fromEmail}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {OUTREACH_REPLY_INTENT_LABELS[r.intent] || r.intent}
+                      {r.targetId ? ` · ${r.targetId}` : ' · unmatched email'}
+                      {' · '}
+                      {r.createdAt ? new Date(r.createdAt).toLocaleString() : '—'}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-900">
+                    {r.intent}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap border-l-2 border-sky-200 pl-2">
+                  {r.subject ? `${r.subject}\n` : ''}
+                  {r.excerpt || '(empty body)'}
+                </p>
+                <label className="block text-xs font-medium text-gray-700">
+                  Follow-up subject
+                  <input
+                    className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                    value={replyDrafts[r.id]?.subject || ''}
+                    disabled={repliesBusy || busy}
+                    onChange={(e) =>
+                      setReplyDrafts((prev) => ({
+                        ...prev,
+                        [r.id]: {
+                          subject: e.target.value,
+                          text: prev[r.id]?.text || '',
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="block text-xs font-medium text-gray-700">
+                  Follow-up body
+                  <textarea
+                    className="mt-1 w-full min-h-[90px] rounded-md border border-gray-300 px-2 py-1.5 font-mono text-xs"
+                    value={replyDrafts[r.id]?.text || ''}
+                    disabled={repliesBusy || busy}
+                    onChange={(e) =>
+                      setReplyDrafts((prev) => ({
+                        ...prev,
+                        [r.id]: {
+                          subject: prev[r.id]?.subject || '',
+                          text: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={repliesBusy || busy}
+                    onClick={() => {
+                      if (window.confirm(`Send follow-up to ${r.fromEmail}?`)) {
+                        void onReplyAction(r, 'send_draft')
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    {repliesBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                    Send follow-up
+                  </button>
+                  <button
+                    type="button"
+                    disabled={repliesBusy || busy}
+                    onClick={() => void onReplyAction(r, 'handle')}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Mark handled
+                  </button>
+                  <button
+                    type="button"
+                    disabled={repliesBusy || busy}
+                    onClick={() => {
+                      if (window.confirm(`Opt out ${r.fromEmail} and close this reply?`)) {
+                        void onReplyAction(r, 'opt_out')
+                      }
+                    }}
+                    className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    Opt out
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm space-y-3">

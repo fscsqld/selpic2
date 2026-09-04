@@ -1356,6 +1356,19 @@ function PartnersContent() {
                 >
                   <div className="font-medium text-gray-900 flex flex-wrap items-center gap-2">
                     <span>{p.organizationName}</span>
+                    {p.acquisition?.ref === 'ai_agent' || p.acquisition?.targetId ? (
+                      <span
+                        className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900"
+                        title={
+                          p.acquisition?.targetId
+                            ? `Agent target ${p.acquisition.targetId}`
+                            : 'Fundraising agent acquisition'
+                        }
+                      >
+                        Agent
+                        {p.acquisition?.targetId ? ` · ${p.acquisition.targetId}` : ''}
+                      </span>
+                    ) : null}
                     {(openChangeRequestCountByPartner.get(p.id) || 0) > 0 && (
                       <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-900">
                         {openChangeRequestCountByPartner.get(p.id)} open request

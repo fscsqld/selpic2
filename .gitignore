@@ -41,3 +41,4 @@ pnpm-debug.log*
 
 # Agent community draft queue (local HITL pending drafts)
 data/agent/community-draft-queue.json
+data/agent/fundraising-outreach-replies.json
