@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { FundraisingAdminShell } from '@/components/admin/FundraisingAdminNav'
@@ -124,6 +124,9 @@ function AgentContent() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  /** Confirm Send lives mid-page; keep tone so success is not lost in a green/red-blind strip far below. */
+  const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info')
+  const messageRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [form, setForm] = useState({
     organizationName: '',
@@ -269,10 +272,14 @@ function AgentContent() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Failed to load targets')
       setTargets(Array.isArray(json.targets) ? json.targets : [])
-      if (json.warning) setMessage(String(json.warning))
+      // Preserve a just-set Confirm Send success; soft warnings must not wipe it.
+      if (json.warning) {
+        setMessage((prev) => prev || String(json.warning))
+      }
       await Promise.all([loadDailyQueue(), loadAutoSend(), loadCollect(), loadReplies()])
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load targets')
+      setMessageTone('error')
       setTargets([])
     } finally {
       setLoading(false)
@@ -282,6 +289,11 @@ function AgentContent() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!message) return
+    messageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [message])
 
   const selectedCount = selected.size
   const selectableIds = useMemo(
@@ -494,15 +506,18 @@ function AgentContent() {
   const onSend = async () => {
     const ids = Array.from(selected)
     if (ids.length === 0) {
+      setMessageTone('error')
       setMessage('Select at least one target to email.')
       return
     }
     if (ids.length > 10) {
+      setMessageTone('error')
       setMessage('Select at most 10 targets per send (v1 safety cap).')
       return
     }
     const remaining = dailyQuota?.remaining ?? 10
     if (ids.length > remaining) {
+      setMessageTone('error')
       setMessage(
         `Only ${remaining} send slot(s) left today (Sydney day ${dailyQuota?.dayKey || '—'}). Deselect ${ids.length - remaining}.`
       )
@@ -541,12 +556,15 @@ function AgentContent() {
         },
         description: `Fundraising agent Confirm Send · sent ${json.sent}, failed ${json.failed}, skipped ${json.skipped} · day ${json.dayKey || ''}`,
       })
-      setMessage(
-        `Confirm Send finished · sent ${json.sent ?? 0}, failed ${json.failed ?? 0}, skipped ${json.skipped ?? 0} · today ${json.sentToday ?? '—'}/${json.dailyCap ?? 10} (Sydney)`
-      )
+      const sent = Number(json.sent ?? 0)
+      const failed = Number(json.failed ?? 0)
+      const summary = `Confirm Send finished · sent ${sent}, failed ${failed}, skipped ${json.skipped ?? 0} · today ${json.sentToday ?? '—'}/${json.dailyCap ?? 10} (Sydney)`
+      setMessageTone(failed > 0 && sent === 0 ? 'error' : 'success')
+      setMessage(summary)
       setSelected(new Set())
       await load()
     } catch (err) {
+      setMessageTone('error')
       setMessage(err instanceof Error ? err.message : 'Send failed')
     } finally {
       setBusy(false)
@@ -912,6 +930,35 @@ function AgentContent() {
           </div>
         </div>
       </div>
+
+      {message ? (
+        <div
+          ref={messageRef}
+          role="status"
+          className={`sticky top-2 z-20 mb-4 flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-sm ${
+            messageTone === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+              : messageTone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-950'
+                : 'border-sky-200 bg-sky-50 text-sky-950'
+          }`}
+        >
+          <p className="min-w-0 flex-1 break-words leading-snug">{message}</p>
+          <button
+            type="button"
+            onClick={() => setMessage('')}
+            className={`shrink-0 rounded-md border bg-white px-2.5 py-1 text-xs font-semibold hover:bg-white/80 ${
+              messageTone === 'success'
+                ? 'border-emerald-300 text-emerald-900'
+                : messageTone === 'error'
+                  ? 'border-red-300 text-red-900'
+                  : 'border-sky-300 text-sky-900'
+            }`}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {funnel ? (
         <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -1407,6 +1454,17 @@ function AgentContent() {
             Run auto-send now
           </button>
         </div>
+        {message && (messageTone === 'success' || message.startsWith('Confirm Send')) ? (
+          <p
+            className={`text-sm font-medium rounded-md border px-3 py-2 ${
+              messageTone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-900'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+            }`}
+          >
+            {message}
+          </p>
+        ) : null}
       </div>
 
       <form onSubmit={onCreate} className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
@@ -1555,22 +1613,6 @@ function AgentContent() {
           Confirm Send ({selectedCount})
         </button>
       </div>
-
-      {message ? (
-        <div
-          role="status"
-          className="mb-3 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950"
-        >
-          <p className="min-w-0 flex-1 break-words leading-snug">{message}</p>
-          <button
-            type="button"
-            onClick={() => setMessage('')}
-            className="shrink-0 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm mb-16">
         <table className="min-w-full text-sm">
