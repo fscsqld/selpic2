@@ -27,6 +27,7 @@ import {
 } from '@/lib/fundraising/outreachReplyPersistence'
 import { sydneyCalendarDateKey, isInstantOnSydneyCalendarDay } from '@/lib/fundraising/auFinancialQuarter'
 import { buildOutreachFollowUpDraft } from '@/lib/fundraising/outreachReplyDraft'
+import { notifyAdminsOfFundraisingOutreachReply } from '@/lib/server/adminInboundNotify'
 
 export type { OutreachReplyRecord, OutreachReplyQueueStatus, OutreachReplyIntent }
 export { OUTREACH_REPLY_INTENT_LABELS, outreachReplyNeedsAttention, buildOutreachFollowUpDraft }
@@ -211,6 +212,20 @@ export async function ingestFundraisingOutreachReply(opts: {
       updatedAt: now,
     }
     await upsertFundraisingOutreachTarget(next)
+  }
+
+  // Same inbound email path as contact/bespoke/fundraising applications — open queue only.
+  if (status === 'open') {
+    void notifyAdminsOfFundraisingOutreachReply({
+      id: saved.reply.id,
+      fromEmail: saved.reply.fromEmail,
+      intentLabel: OUTREACH_REPLY_INTENT_LABELS[saved.reply.intent] || saved.reply.intent,
+      subject: saved.reply.subject,
+      organizationName: saved.reply.organizationName,
+      excerpt: saved.reply.excerpt,
+    }).catch(() => {
+      /* non-blocking */
+    })
   }
 
   return {

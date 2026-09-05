@@ -3,6 +3,8 @@ import {
   countBespokeStickerRequestsByStatus,
   readBespokeStickerRequests,
 } from '@/lib/server/bespokeStickerRequests'
+import { summarizeOpenOutreachReplies } from '@/lib/fundraising/outreachReplyPersistence'
+import { OUTREACH_REPLY_INTENT_LABELS } from '@/lib/fundraising/outreachReplyClassify'
 import type { OrderRecord } from '@/lib/store'
 
 export type InboundSummaryKey =
@@ -12,6 +14,8 @@ export type InboundSummaryKey =
   | 'community'
   | 'orders'
   | 'fundraising'
+  /** Fundraising Agent Needs-reply queue (Resend outreach replies) — not Partner Registry. */
+  | 'fundraising_outreach'
 
 export type InboundSummaryItem = {
   key: InboundSummaryKey
@@ -239,6 +243,23 @@ export async function fetchAdminInboundSummary(): Promise<AdminInboundSummary> {
     } catch {
       /* non-fatal — table may not exist until migration is applied */
     }
+  }
+
+  // Outreach email replies (Supabase or file fallback) — same badge/sound path as other sectors.
+  try {
+    const { count, latest } = await summarizeOpenOutreachReplies()
+    items.push({
+      key: 'fundraising_outreach',
+      label: 'Fundraising outreach replies',
+      count,
+      href: '/admin/fundraising/agent',
+      latestTitle: latest?.organizationName || latest?.subject || latest?.fromEmail,
+      latestSubtitle: latest
+        ? `${OUTREACH_REPLY_INTENT_LABELS[latest.intent] || latest.intent} · ${latest.fromEmail}`
+        : undefined,
+    })
+  } catch {
+    /* non-fatal */
   }
 
   const totalCount = items.reduce((sum, item) => sum + item.count, 0)

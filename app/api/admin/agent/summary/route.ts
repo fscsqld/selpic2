@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { listFundraisingOutreachTargetsFromDb } from '@/lib/fundraising/persistence'
+import { summarizeOpenOutreachReplies } from '@/lib/fundraising/outreachReplyPersistence'
 import { isSupabaseConfigured, getSupabaseAdmin } from '@/lib/supabase/admin'
 import type { FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { AGENT_SECTORS } from '@/lib/agent/sectors'
@@ -109,12 +110,23 @@ export async function GET() {
   }
 
   if (!isSupabaseConfigured()) {
+    let openReplies = 0
+    try {
+      openReplies = (await summarizeOpenOutreachReplies()).count
+    } catch {
+      /* ignore */
+    }
     return NextResponse.json({
       ok: true,
       sectors,
       inbound,
       performance,
-      fundraising: { available: false, counts: emptyCounts(), warning: 'Supabase not configured' },
+      fundraising: {
+        available: false,
+        counts: emptyCounts(),
+        openReplies,
+        warning: 'Supabase not configured',
+      },
     })
   }
 
@@ -127,6 +139,12 @@ export async function GET() {
         counts[t.status as FundraisingOutreachTargetStatus] += 1
       }
     }
+    let openReplies = 0
+    try {
+      openReplies = (await summarizeOpenOutreachReplies()).count
+    } catch {
+      /* ignore */
+    }
 
     return NextResponse.json({
       ok: true,
@@ -136,6 +154,7 @@ export async function GET() {
       fundraising: {
         available: true,
         counts,
+        openReplies,
         workspaceHref: '/admin/fundraising/agent',
       },
     })
@@ -149,6 +168,7 @@ export async function GET() {
         fundraising: {
           available: false,
           counts: emptyCounts(),
+          openReplies: 0,
           warning: e instanceof Error ? e.message : 'Failed to load outreach stats',
         },
       },

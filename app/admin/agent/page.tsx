@@ -31,6 +31,7 @@ type SummaryResponse = {
       OPTED_OUT: number
       TOTAL: number
     }
+    openReplies?: number
     workspaceHref?: string
     warning?: string
   }
@@ -116,6 +117,7 @@ function AgentHubContent() {
     sectors.find((s) => s.id === 'performance') || AGENT_SECTORS[2]
   )
   const performanceCount = summary?.performance?.opportunityCount ?? 0
+  const openOutreachReplies = summary?.fundraising?.openReplies ?? 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,6 +147,22 @@ function AgentHubContent() {
         </button>
         {message ? <span className="text-sm text-amber-800">{message}</span> : null}
       </div>
+
+      {openOutreachReplies > 0 && showFundraising ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">Fundraising outreach replies need attention</p>
+          <p className="mt-1">
+            {openOutreachReplies} open reply{openOutreachReplies === 1 ? '' : 's'} in Needs reply
+            (school/centre responses to Agent email).
+          </p>
+          <Link
+            href="/admin/fundraising/agent"
+            className="mt-2 inline-flex items-center gap-1.5 font-medium text-amber-900 hover:text-amber-950"
+          >
+            Open Fundraising Agent <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      ) : null}
 
       {inboundAttention > 0 && showInbound ? (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

@@ -192,6 +192,42 @@ export async function listOutreachReplies(opts?: {
     .slice(0, limit)
 }
 
+/** Open Needs-reply count for dashboard inbound badges (exact when Supabase is up). */
+export async function summarizeOpenOutreachReplies(): Promise<{
+  count: number
+  latest?: OutreachReplyRecord
+}> {
+  if (isSupabaseConfigured() && !supabaseTableMissing) {
+    try {
+      const admin = getSupabaseAdmin()
+      const { count, error } = await admin
+        .from('fundraising_outreach_replies')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open')
+      if (isMissingTableError(error)) {
+        supabaseTableMissing = true
+      } else if (!error) {
+        const { data: latestRow } = await admin
+          .from('fundraising_outreach_replies')
+          .select('*')
+          .eq('status', 'open')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        return {
+          count: count ?? 0,
+          latest: latestRow ? mapRow(latestRow as Record<string, unknown>) : undefined,
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const open = await listOutreachReplies({ status: 'open', limit: 200 })
+  return { count: open.length, latest: open[0] }
+}
+
 export async function insertOutreachReply(
   reply: OutreachReplyRecord
 ): Promise<{ ok: true; reply: OutreachReplyRecord } | { ok: false; error: string }> {

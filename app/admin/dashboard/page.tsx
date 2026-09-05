@@ -118,8 +118,9 @@ export default function AdminDashboard() {
   } = useStore()
   const { users } = useUserAuth()
   const inboundSummary = useAdminInboundStore((s) => s.summary)
-  const inboundCount = (key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders' | 'fundraising') =>
-    inboundSummary.items.find((i) => i.key === key)?.count ?? 0
+  const inboundCount = (
+    key: 'contact' | 'bespoke' | 'newsletter' | 'community' | 'orders' | 'fundraising' | 'fundraising_outreach'
+  ) => inboundSummary.items.find((i) => i.key === key)?.count ?? 0
   const { notifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useSalesGoals()
   const router = useRouter()
   const { t } = useTranslation()
@@ -544,10 +545,17 @@ export default function AdminDashboard() {
     {
       title: 'AI Agent',
       description:
-        'Governed agent hub — Fundraising outreach and Customer care drafts are live; more sectors coming later',
+        inboundCount('fundraising_outreach') > 0
+          ? `${inboundCount('fundraising_outreach')} outreach reply${
+              inboundCount('fundraising_outreach') === 1 ? '' : 's'
+            } need attention — open Fundraising Agent → Needs reply`
+          : 'Governed agent hub — Fundraising outreach and Customer care drafts are live; more sectors coming later',
       icon: Bot,
-      href: '/admin/agent',
+      href:
+        inboundCount('fundraising_outreach') > 0 ? '/admin/fundraising/agent' : '/admin/agent',
       color: 'bg-indigo-600',
+      badge:
+        inboundCount('fundraising_outreach') > 0 ? inboundCount('fundraising_outreach') : undefined,
       /** Phase B4: agent:read (legacy aliases still honour fundraising/messages/bespoke read). */
       requiredPermission: 'agent:read',
     },

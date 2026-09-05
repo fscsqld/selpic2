@@ -190,6 +190,37 @@ export async function notifyAdminsOfCommunityComment(input: {
   })
 }
 
+/** Open Needs-reply items from Fundraising Agent outreach (Resend Receiving). */
+export async function notifyAdminsOfFundraisingOutreachReply(input: {
+  id: string
+  fromEmail: string
+  intentLabel: string
+  subject: string
+  organizationName?: string
+  excerpt?: string
+}): Promise<{ ok: boolean; logMessage?: string }> {
+  return sendAdminInboundEmail({
+    subjectPrefix: `[SELPIC Fundraising] Outreach reply — ${input.organizationName || input.fromEmail}`.slice(
+      0,
+      120
+    ),
+    headline: 'Fundraising outreach reply needs attention',
+    intro:
+      'A school or centre replied to an Agent outreach email. Open Fundraising Agent → Needs reply to draft a follow-up.',
+    rows: [
+      { label: 'From', value: input.fromEmail },
+      { label: 'Organisation', value: input.organizationName || '(unmatched target)' },
+      { label: 'Intent', value: input.intentLabel },
+      { label: 'Subject', value: input.subject || '(none)' },
+      { label: 'Reply ID', value: input.id },
+    ],
+    bodyText: input.excerpt ? `Excerpt:\n${input.excerpt}` : undefined,
+    adminPath: '/admin/fundraising/agent',
+    replyTo: input.fromEmail,
+    footerNote: 'Partner applications stay under Fundraising Partners — this queue is outreach email only.',
+  })
+}
+
 export async function notifyAdminsOfFundraisingApplication(input: {
   id: string
   organizationName: string
