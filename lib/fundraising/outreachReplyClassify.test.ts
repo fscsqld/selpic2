@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyOutreachReplyIntent,
   extractNewReplyText,
+  formatOutreachReplyAdminExcerpt,
   outreachReplyNeedsAttention,
 } from './outreachReplyClassify'
 import { buildOutreachFollowUpDraft } from './outreachReplyDraft'
@@ -22,6 +23,57 @@ describe('extractNewReplyText', () => {
     const extracted = extractNewReplyText(raw)
     expect(extracted.toLowerCase()).toContain('would like to apply')
     expect(extracted.toLowerCase()).not.toContain('unsubscribe')
+  })
+
+  it('keeps only customer text from production-like Gmail KO thread', () => {
+    const raw = [
+      'i would like to apply',
+      '',
+      'thanks.',
+      '',
+      '2026년 9월 5일 (토) 오후 12:29, SELPIC <info@selpic.com.au>님이 작성:',
+      '',
+      '> SELPIC Community Fundraising',
+      '>',
+      '> Hello JIMMY,',
+      '>',
+      '> About the programme',
+      '>    - No partnership fee charged by SELPIC to join',
+    ].join('\n')
+    const extracted = extractNewReplyText(raw)
+    expect(extracted).toBe('i would like to apply\n\nthanks.')
+    expect(extracted).not.toMatch(/programme|partnership fee|SELPIC Community/i)
+  })
+})
+
+describe('formatOutreachReplyAdminExcerpt', () => {
+  it('does not surface quoted outreach body to admins', () => {
+    const raw = [
+      'i would like to apply',
+      '',
+      'thanks.',
+      '',
+      '2026년 9월 5일 (토) 오후 12:29, SELPIC <info@selpic.com.au>님이 작성:',
+      '',
+      '> SELPIC Community Fundraising',
+      '> Hello JIMMY,',
+    ].join('\n')
+    const excerpt = formatOutreachReplyAdminExcerpt(raw)
+    expect(excerpt).toBe('i would like to apply\n\nthanks.')
+    expect(excerpt).not.toContain('Hello JIMMY')
+  })
+
+  it('flags quote-only bodies instead of dumping the thread', () => {
+    const raw = [
+      '2026년 9월 5일 (토) 오후 12:29, SELPIC <info@selpic.com.au>님이 작성:',
+      '',
+      '> Hello only',
+      '> About the programme',
+    ].join('\n')
+    const excerpt = formatOutreachReplyAdminExcerpt(raw)
+    expect(excerpt).toBe('(Quoted thread only — no new customer text detected)')
+    expect(excerpt).not.toContain('Hello only')
+    expect(excerpt).not.toContain('programme')
   })
 })
 

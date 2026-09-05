@@ -30,18 +30,27 @@ export function outreachReplyNeedsAttention(intent: OutreachReplyIntent): boolea
 
 /**
  * Keep only the newly typed reply — strip Gmail/Outlook quoted originals.
- * Otherwise our own footer ("reply with the single word unsubscribe") false-triggers opt-out.
+ * Otherwise our own footer ("reply with the single word unsubscribe") false-triggers opt-out,
+ * and Needs reply would dump the full SELPIC outreach letter to admins.
+ *
+ * Cousins: Gmail KO/EN headers, Outlook From/Sent, > quote lines, already-stored dirty excerpts,
+ * empty new-body (quote-only), admin notify email excerpt, dashboard latestSubtitle.
  */
 export function extractNewReplyText(raw: string): string {
   let text = String(raw || '').replace(/\r\n/g, '\n')
   if (!text.trim()) return ''
 
   const cuts = [
-    /\nOn .+ wrote:\s*\n/i,
+    /\nOn .{8,240} wrote:\s*\n/i,
+    /\nOn .{8,240} wrote:\s*$/im,
     /\nFrom:\s.+\nSent:\s/i,
     /\n-----Original Message-----\s*\n/i,
     /\n________________________________\s*\n/,
+    /\n-+ ?Original Message ?-+\s*\n/i,
+    /\nBegin forwarded message:\s*\n/i,
     /\n.+님이 작성:\s*\n/,
+    /\n.+님이 작성:\s*$/m,
+    /\n\d{4}년\s*\d{1,2}월\s*\d{1,2}일[^\n]*님이 작성:/,
     /\n\d{4}년\s*\d{1,2}월\s*\d{1,2}일.+\n>/,
   ]
   for (const re of cuts) {
@@ -52,8 +61,33 @@ export function extractNewReplyText(raw: string): string {
     }
   }
 
-  const lines = text.split('\n').filter((line) => !/^\s*>/.test(line))
+  const lines = text.split('\n').filter((line) => {
+    const t = line.trim()
+    if (/^>/.test(t)) return false
+    // Drop leftover Gmail quote markers without leading >
+    if (/^님이 작성:/.test(t)) return false
+    return true
+  })
   return lines.join('\n').trim()
+}
+
+/**
+ * Admin-facing body for Needs reply / notify / inbound summary.
+ * Never surface the quoted SELPIC outreach thread.
+ */
+export function formatOutreachReplyAdminExcerpt(raw: string, maxLen = 800): string {
+  const cleaned = extractNewReplyText(raw).trim()
+  const headerOnly =
+    !cleaned ||
+    /^On .{8,240} wrote:?$/i.test(cleaned) ||
+    /님이 작성:?\s*$/.test(cleaned) ||
+    /^\d{4}년[\s\S]*님이 작성:?\s*$/.test(cleaned)
+  if (headerOnly) {
+    return '(Quoted thread only — no new customer text detected)'
+  }
+  const limit = Math.max(40, Math.min(2000, maxLen))
+  if (cleaned.length <= limit) return cleaned
+  return `${cleaned.slice(0, limit - 1)}…`
 }
 
 /**

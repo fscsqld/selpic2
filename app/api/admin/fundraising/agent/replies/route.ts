@@ -14,6 +14,7 @@ import {
 } from '@/lib/fundraising/outreachReplyPersistence'
 import {
   OUTREACH_REPLY_INTENTS,
+  formatOutreachReplyAdminExcerpt,
   type OutreachReplyIntent,
 } from '@/lib/fundraising/outreachReplyClassify'
 import { markFundraisingOutreachTargetOptedOut } from '@/lib/fundraising/persistence'
@@ -39,6 +40,8 @@ export async function GET(req: Request) {
 
     const withDrafts = replies.map((r) => ({
       ...r,
+      // Re-clean legacy rows that stored the full Gmail quote in excerpt.
+      excerpt: formatOutreachReplyAdminExcerpt(r.excerpt || ''),
       draft: buildOutreachFollowUpDraft(r),
     }))
 

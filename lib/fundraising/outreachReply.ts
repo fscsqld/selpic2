@@ -13,6 +13,7 @@ import {
 import type { FundraisingOutreachTarget } from '@/lib/fundraising/types'
 import {
   classifyOutreachReplyIntent,
+  formatOutreachReplyAdminExcerpt,
   outreachReplyNeedsAttention,
   type OutreachReplyIntent,
   OUTREACH_REPLY_INTENT_LABELS,
@@ -30,7 +31,7 @@ import { buildOutreachFollowUpDraft } from '@/lib/fundraising/outreachReplyDraft
 import { notifyAdminsOfFundraisingOutreachReply } from '@/lib/server/adminInboundNotify'
 
 export type { OutreachReplyRecord, OutreachReplyQueueStatus, OutreachReplyIntent }
-export { OUTREACH_REPLY_INTENT_LABELS, outreachReplyNeedsAttention, buildOutreachFollowUpDraft }
+export { OUTREACH_REPLY_INTENT_LABELS, outreachReplyNeedsAttention, buildOutreachFollowUpDraft, formatOutreachReplyAdminExcerpt }
 
 export type OutreachReplyIngestResult = {
   ok: boolean
@@ -124,7 +125,7 @@ export async function ingestFundraisingOutreachReply(opts: {
       targetId: opt.ok ? opt.target.id : target?.id,
       organizationName: opt.ok ? opt.target.organizationName : target?.organizationName,
       subject: truncate(subject, 300),
-      excerpt: truncate(text, 800),
+      excerpt: formatOutreachReplyAdminExcerpt(text, 800),
       intent: 'unsubscribe',
       status: 'closed',
       messageId,
@@ -184,7 +185,7 @@ export async function ingestFundraisingOutreachReply(opts: {
     targetId: target?.id,
     organizationName: target?.organizationName,
     subject: truncate(subject, 300),
-    excerpt: truncate(text, 800),
+    excerpt: formatOutreachReplyAdminExcerpt(text, 800),
     intent,
     status,
     messageId,

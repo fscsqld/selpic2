@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import {
   OUTREACH_REPLY_INTENT_LABELS,
+  formatOutreachReplyAdminExcerpt,
   type OutreachReplyIntent,
 } from '@/lib/fundraising/outreachReplyClassify'
 
@@ -1010,14 +1011,18 @@ function AgentContent() {
                       {' · '}
                       {r.createdAt ? new Date(r.createdAt).toLocaleString() : '—'}
                     </div>
+                    {r.subject ? (
+                      <div className="text-xs text-gray-600 mt-0.5 truncate" title={r.subject}>
+                        {r.subject}
+                      </div>
+                    ) : null}
                   </div>
-                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-900">
-                    {r.intent}
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
+                    {OUTREACH_REPLY_INTENT_LABELS[r.intent] || r.intent}
                   </span>
                 </div>
-                <p className="text-xs text-gray-700 whitespace-pre-wrap border-l-2 border-sky-200 pl-2">
-                  {r.subject ? `${r.subject}\n` : ''}
-                  {r.excerpt || '(empty body)'}
+                <p className="text-sm text-gray-800 whitespace-pre-wrap border-l-2 border-sky-200 pl-2">
+                  {formatOutreachReplyAdminExcerpt(r.excerpt || '') || '(empty body)'}
                 </p>
                 <label className="block text-xs font-medium text-gray-700">
                   Follow-up subject
