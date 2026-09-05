@@ -23,6 +23,7 @@ import {
   pickOutreachDailyQueue,
 } from '@/lib/fundraising/outreachDailyQueue'
 import { sendEmailViaResendServer } from '@/lib/email/resendServer'
+import { fundraisingOutreachReplyTo } from '@/lib/fundraising/resendReceivedEmail'
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
 import type { FundraisingOutreachTarget } from '@/lib/fundraising/types'
 import { DEFAULT_FUNDRAISING_SETTINGS } from '@/lib/fundraising/types'
@@ -159,7 +160,7 @@ export async function sendFundraisingOutreachBatch(
       html: rendered.html,
       text: rendered.text,
       headers: rendered.headers,
-      replyTo: process.env.RESEND_FROM_EMAIL || 'info@selpic.com.au',
+      replyTo: fundraisingOutreachReplyTo(),
       skipBranding: true,
       skipTracking: true,
     })

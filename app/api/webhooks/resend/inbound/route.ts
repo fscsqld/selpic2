@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server'
 
 import { isSupabaseConfigured } from '@/lib/supabase/admin'
+import { ingestFundraisingOutreachReply } from '@/lib/fundraising/outreachReply'
 import {
-  ingestFundraisingOutreachReply,
-} from '@/lib/fundraising/outreachReply'
+  fetchResendReceivedEmail,
+  textFromResendReceivedEmail,
+} from '@/lib/fundraising/resendReceivedEmail'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Resend inbound (or compatible) webhook for Fundraising outreach replies.
- * - unsubscribe / wrong person → OPTED_OUT (+ reply log)
- * - interested / question / other → Needs-reply queue
+ * Resend inbound webhook for Fundraising outreach replies.
  *
- * Configure Resend inbound → POST this URL.
- * Optional: header `x-selpic-webhook-secret` === RESEND_INBOUND_WEBHOOK_SECRET
+ * Official Resend `email.received` payloads are metadata-only — we fetch body via
+ * GET /emails/receiving/{email_id}. Legacy/simple JSON with text/body still works.
+ *
+ * Optional: RESEND_INBOUND_WEBHOOK_SECRET via x-selpic-webhook-secret or Bearer.
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) {
@@ -37,27 +39,60 @@ export async function POST(req: Request) {
     }
 
     const data = (body.data as Record<string, unknown> | undefined) || undefined
-    const email = (body.email as Record<string, unknown> | undefined) || undefined
+    const emailObj = (body.email as Record<string, unknown> | undefined) || undefined
+    const eventType = String(body.type || '').trim()
 
-    const from =
-      pickEmail(body.from) ||
-      pickEmail(data?.from) ||
-      pickEmail(email?.from)
-
-    const subject = String(body.subject || data?.subject || email?.subject || '')
-    const text = String(
-      body.text || body.body || data?.text || email?.text || data?.body || ''
+    let from =
+      pickEmail(body.from) || pickEmail(data?.from) || pickEmail(emailObj?.from)
+    let subject = String(body.subject || data?.subject || emailObj?.subject || '')
+    let text = String(
+      body.text || body.body || data?.text || emailObj?.text || data?.body || ''
     )
-    const messageId = String(
+    const emailId = String(
+      data?.email_id || body.email_id || emailObj?.id || data?.id || ''
+    ).trim()
+    let messageId = String(
       body.message_id ||
         body.messageId ||
-        data?.email_id ||
         data?.message_id ||
-        data?.id ||
-        email?.id ||
+        emailObj?.message_id ||
+        emailId ||
         body.id ||
         ''
     ).trim()
+
+    // Official Resend receiving webhook: fetch full content when text missing
+    const looksLikeResendReceived =
+      eventType === 'email.received' || (Boolean(emailId) && !text.trim())
+    let fetchedBody = false
+    if (looksLikeResendReceived && emailId) {
+      const fetched = await fetchResendReceivedEmail(emailId)
+      if (fetched.ok) {
+        fetchedBody = true
+        if (!from) from = pickEmail(fetched.email.from)
+        if (!subject) subject = String(fetched.email.subject || '')
+        text = textFromResendReceivedEmail(fetched.email) || text
+        if (fetched.email.message_id) {
+          messageId = String(fetched.email.message_id)
+        } else if (!messageId) {
+          messageId = emailId
+        }
+      } else {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: fetched.error,
+            emailId,
+            hint: 'Webhook metadata received but body fetch failed. Check RESEND_API_KEY and Receiving access.',
+          },
+          { status: 502 }
+        )
+      }
+    }
+
+    if (!from) {
+      return NextResponse.json({ ok: true, skipped: true, reason: 'No from address' })
+    }
 
     const result = await ingestFundraisingOutreachReply({
       fromEmail: from,
@@ -75,6 +110,8 @@ export async function POST(req: Request) {
       replyId: result.reply?.id,
       intent: result.reply?.intent,
       status: result.reply?.status,
+      fetchedBody,
+      emailId: emailId || undefined,
     })
   } catch (e) {
     return NextResponse.json(
