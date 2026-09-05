@@ -6,8 +6,10 @@ import {
   fetchResendReceivedEmail,
   textFromResendReceivedEmail,
 } from '@/lib/fundraising/resendReceivedEmail'
+import { verifyResendInboundWebhookRequest } from '@/lib/fundraising/verifyResendInboundWebhook'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 /**
  * Resend inbound webhook for Fundraising outreach replies.
@@ -15,29 +17,22 @@ export const dynamic = 'force-dynamic'
  * Official Resend `email.received` payloads are metadata-only — we fetch body via
  * GET /emails/receiving/{email_id}. Legacy/simple JSON with text/body still works.
  *
- * Optional: RESEND_INBOUND_WEBHOOK_SECRET via x-selpic-webhook-secret or Bearer.
+ * Auth (prefer Svix): RESEND_WEBHOOK_SECRET + svix-* headers (Resend Dashboard signing secret).
+ * Legacy only when Svix secret unset: RESEND_INBOUND_WEBHOOK_SECRET via x-selpic-webhook-secret / Bearer
+ * (Fundraising-only; not related to SELPIC-X).
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 })
   }
 
-  const expected = process.env.RESEND_INBOUND_WEBHOOK_SECRET?.trim()
-  if (expected) {
-    const headerSecret = req.headers.get('x-selpic-webhook-secret')?.trim()
-    const auth = req.headers.get('authorization')?.trim() || ''
-    const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
-    if (headerSecret !== expected && bearer !== expected) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const verified = await verifyResendInboundWebhookRequest(req)
+  if (!verified.ok) {
+    return NextResponse.json({ error: verified.error }, { status: verified.status })
   }
 
   try {
-    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
-    if (!body) {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-    }
-
+    const body = verified.body
     const data = (body.data as Record<string, unknown> | undefined) || undefined
     const emailObj = (body.email as Record<string, unknown> | undefined) || undefined
     const eventType = String(body.type || '').trim()
