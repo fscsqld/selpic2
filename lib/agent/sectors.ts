@@ -75,7 +75,7 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     requiredPermission: 'analytics:read',
     requiredAnyPermissions: ['analytics:read', 'agent:read'],
     autonomyNote:
-      'Wave 4 v2 — suggestions only; no auto Mark Paid, price changes, or auto-publish. No separate CRO sector.',
+      'Wave 4 v3 — suggestions with next steps + sample items; no auto Mark Paid, price changes, or auto-publish. No separate CRO sector.',
   },
   {
     id: 'community',

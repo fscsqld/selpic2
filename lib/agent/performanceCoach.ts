@@ -71,6 +71,10 @@ export async function loadPerformanceCoachInputs(): Promise<PerformanceCoachInpu
   try {
     const pending = await listPendingCommunityDrafts()
     inputs.communityPendingDrafts = pending.length
+    inputs.communityDraftTitles = pending
+      .map((d) => (d.title || '').trim())
+      .filter(Boolean)
+      .slice(0, 5)
   } catch {
     /* non-fatal */
   }
@@ -83,7 +87,15 @@ export async function loadPerformanceCoachInputs(): Promise<PerformanceCoachInpu
   }
 
   try {
-    inputs.fundraisingOpenReplies = (await summarizeOpenOutreachReplies()).count
+    const open = await summarizeOpenOutreachReplies()
+    inputs.fundraisingOpenReplies = open.count
+    if (open.latest) {
+      const label =
+        (open.latest.subject || '').trim() ||
+        (open.latest.fromEmail || '').trim() ||
+        (open.latest.id || '').trim()
+      if (label) inputs.fundraisingOpenReplySamples = [label]
+    }
   } catch {
     /* non-fatal */
   }

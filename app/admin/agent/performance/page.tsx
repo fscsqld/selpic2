@@ -46,6 +46,37 @@ function OpportunityCard({ card }: { card: PerformanceOpportunity }) {
           {card.metric ? (
             <p className="mt-2 text-xs font-medium opacity-80">{card.metric}</p>
           ) : null}
+
+          {card.items && card.items.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                Items to review
+              </p>
+              <ul className="mt-1.5 space-y-1 text-sm opacity-90">
+                {card.items.map((item) => (
+                  <li key={item.label} className="flex flex-wrap gap-x-2">
+                    <span>· {item.label}</span>
+                    {item.detail ? (
+                      <span className="text-xs opacity-70">({item.detail})</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {card.nextSteps && card.nextSteps.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                Next steps
+              </p>
+              <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-sm opacity-90">
+                {card.nextSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </div>
         <Link
           href={card.href}
@@ -186,9 +217,9 @@ function PerformanceCoachWorkspace() {
           </ul>
         )}
 
-        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v2">
-          Performance coach v2 — site-upgrade queue reuses existing tools (no separate CRO sector).
-          On-demand refresh only.
+        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v3">
+          Performance coach v3 — cards include next steps and sample items. Site-upgrade queue reuses
+          existing tools (no separate CRO sector). On-demand refresh only.
         </p>
       </div>
     </div>

@@ -144,14 +144,55 @@ describe('buildPerformanceOpportunities', () => {
     expect(card?.title).toContain('3')
   })
 
-  it('surfaces community pending drafts', () => {
+  it('surfaces community pending drafts with titles and next steps', () => {
     const cards = buildPerformanceOpportunities({
       ...emptyInputs,
       communityPendingDrafts: 2,
+      communityDraftTitles: ['Artwork tips', 'Market S drop'],
     })
     const card = cards.find((c) => c.id === 'community_drafts_pending')
     expect(card?.href).toBe('/admin/agent/community')
     expect(card?.kind).toBe('site_upgrade')
+    expect(card?.items?.map((i) => i.label)).toEqual(['Artwork tips', 'Market S drop'])
+    expect(card?.nextSteps?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('attaches next steps on ops bank-transfer card', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      bankPendingCount: 1,
+      bankPendingTotalAud: 40,
+    })
+    const card = cards.find((c) => c.id === 'bank_transfer_pending')
+    expect(card?.nextSteps?.[0]).toMatch(/bank-transfer/i)
+    expect(card?.nextSteps?.some((s) => /never auto/i.test(s))).toBe(true)
+  })
+
+  it('lists thin product sample names as items', () => {
+    const thin = summarizeThinProductCopy([
+      {
+        name: 'Stub A',
+        description: 'x',
+        detailDescription: '',
+        inStock: true,
+        hasDetailPage: true,
+      },
+      {
+        name: 'Stub B',
+        description: 'y',
+        detailDescription: '',
+        inStock: true,
+        hasDetailPage: true,
+      },
+    ])
+    expect(thin.sampleNames).toEqual(['Stub A', 'Stub B'])
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      thinProductCopy: thin,
+    })
+    const card = cards.find((c) => c.id === 'thin_product_copy')
+    expect(card?.items?.map((i) => i.label)).toEqual(['Stub A', 'Stub B'])
+    expect(card?.nextSteps?.[1]).toMatch(/Generate template|Polish/i)
   })
 
   it('surfaces fundraising open replies without inventing a new sector href', () => {

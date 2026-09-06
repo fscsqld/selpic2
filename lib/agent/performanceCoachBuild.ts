@@ -1,6 +1,10 @@
 /**
  * Pure Performance coach card builder (no server I/O).
  * Loaders live in performanceCoach.ts.
+ *
+ * Cousins: empty catalogs, OOS SKUs, short card + rich PDP (not thin),
+ * community queue file-only on serverless (items empty on prod until enqueued),
+ * never invent prices in nextSteps, no auto Mark Paid / auto-publish.
  */
 
 export type PerformanceOpportunitySeverity = 'high' | 'medium' | 'low'
@@ -26,6 +30,12 @@ export type PerformanceOpportunityDomain =
   | 'inbound'
   | 'community'
 
+/** Sample row for the card checklist (labels only — no auto actions). */
+export type PerformanceOpportunityItem = {
+  label: string
+  detail?: string
+}
+
 export type PerformanceOpportunity = {
   id: PerformanceOpportunityId
   severity: PerformanceOpportunitySeverity
@@ -36,6 +46,10 @@ export type PerformanceOpportunity = {
   href: string
   actionLabel: string
   domain: PerformanceOpportunityDomain
+  /** Ordered HITL steps — human still decides every consequential action. */
+  nextSteps?: string[]
+  /** Up to a few concrete items (product names, draft titles, orgs). */
+  items?: PerformanceOpportunityItem[]
 }
 
 export type PerformanceCoachInputs = {
@@ -46,18 +60,21 @@ export type PerformanceCoachInputs = {
   trafficPrior7: { pageviews: number; uniqueVisitors: number; orders: number }
   revenueThisWeekAud: number
   revenuePriorWeekAud: number
-  thinProductCopy: { count: number; sampleName?: string }
+  thinProductCopy: { count: number; sampleName?: string; sampleNames?: string[] }
   newInboundMessages: number
   newBespokeRequests: number
   communityPendingDrafts: number
+  /** Pending community draft titles (sample). */
+  communityDraftTitles?: string[]
   fundraisingOpenReplies: number
+  /** Optional latest open-reply subjects/snippets. */
+  fundraisingOpenReplySamples?: string[]
 }
 
 const STALE_PENDING_DAYS = 7
-/** Card/listing blurb — SELPIC often keeps this intentionally short. */
 const SHORT_DESC_MIN = 40
-/** Minimum usable PDP body in either description or detailDescription. */
 const DETAIL_DESC_MIN = 160
+const MAX_ITEMS = 5
 
 type ThinCopyProductLike = {
   name?: string
@@ -69,8 +86,7 @@ type ThinCopyProductLike = {
 
 /**
  * True when storefront copy looks too thin for a live listing (OOS skipped).
- * Cousin learned 2026-09: many SKUs keep `description` ~30 chars for cards while
- * `detailDescription` holds the full PDP — flagging short listing alone was a false positive.
+ * Cousin: short card blurb + rich detailDescription is NOT thin.
  */
 export function isThinProductCopy(p: ThinCopyProductLike): boolean {
   if (p.inStock === false) return false
@@ -81,7 +97,6 @@ export function isThinProductCopy(p: ThinCopyProductLike): boolean {
   if (p.hasDetailPage === true) {
     return best < DETAIL_DESC_MIN
   }
-  // Listing-only SKUs: need a usable short blurb (detail optional).
   return short.length < SHORT_DESC_MIN && detail.length < DETAIL_DESC_MIN
 }
 
@@ -89,10 +104,21 @@ export function summarizeThinProductCopy(
   products: ThinCopyProductLike[]
 ): PerformanceCoachInputs['thinProductCopy'] {
   const thin = products.filter(isThinProductCopy)
+  const sampleNames = thin
+    .map((p) => (p.name || '').trim())
+    .filter(Boolean)
+    .slice(0, MAX_ITEMS)
   return {
     count: thin.length,
-    sampleName: thin[0]?.name?.trim() || undefined,
+    sampleName: sampleNames[0],
+    sampleNames,
   }
+}
+
+function itemListFromLabels(labels: string[] | undefined): PerformanceOpportunityItem[] | undefined {
+  const cleaned = (labels || []).map((l) => l.trim()).filter(Boolean).slice(0, MAX_ITEMS)
+  if (!cleaned.length) return undefined
+  return cleaned.map((label) => ({ label }))
 }
 
 export function emptyPerformanceCoachInputs(): PerformanceCoachInputs {
@@ -108,7 +134,9 @@ export function emptyPerformanceCoachInputs(): PerformanceCoachInputs {
     newInboundMessages: 0,
     newBespokeRequests: 0,
     communityPendingDrafts: 0,
+    communityDraftTitles: [],
     fundraisingOpenReplies: 0,
+    fundraisingOpenReplySamples: [],
   }
 }
 
@@ -124,6 +152,10 @@ export function buildPerformanceOpportunities(
     const n = input.stalePendingApps.length
     const oldest = Math.max(...input.stalePendingApps.map((a) => a.daysPending))
     const sample = input.stalePendingApps[0]?.organizationName
+    const items = input.stalePendingApps.slice(0, MAX_ITEMS).map((a) => ({
+      label: a.organizationName,
+      detail: `${a.daysPending} days pending`,
+    }))
     cards.push({
       id: 'fundraising_stale_pending',
       severity: oldest >= 14 ? 'high' : 'medium',
@@ -136,6 +168,12 @@ export function buildPerformanceOpportunities(
       href: '/admin/fundraising/partners?status=pending',
       actionLabel: 'Review pending partners',
       domain: 'fundraising',
+      items,
+      nextSteps: [
+        'Open pending partners and review the oldest applications first.',
+        'Approve, request missing info, or decline — do not leave them idle.',
+        'After a decision, confirm the partner sees the correct status in Fundraising admin.',
+      ],
     })
   }
 
@@ -154,6 +192,11 @@ export function buildPerformanceOpportunities(
       href: '/admin/orders?payment=bank&status=pending',
       actionLabel: 'Open orders',
       domain: 'orders',
+      nextSteps: [
+        'Open bank-transfer orders filtered to pending payment.',
+        'Match each order against your bank statement (amount + reference).',
+        'Only then Mark Paid manually — never auto-approve from this card.',
+      ],
     })
   }
 
@@ -184,6 +227,11 @@ export function buildPerformanceOpportunities(
       href: '/admin/traffic',
       actionLabel: 'Open traffic dashboard',
       domain: 'traffic',
+      nextSteps: [
+        'Open Traffic and confirm which landing paths rose (stickers, hot-goods, home).',
+        'Spot-check 1–2 PDPs for clear copy and images — use Product Generate/Polish if thin (Apply → Save).',
+        'Optional: draft a CMS or Newsletter promo — human Approve/Send only. Do not auto-change prices.',
+      ],
     })
   }
 
@@ -204,12 +252,23 @@ export function buildPerformanceOpportunities(
       href: '/admin/sales-overview',
       actionLabel: 'Open sales overview',
       domain: 'sales',
+      nextSteps: [
+        'Open Sales Overview and compare this week vs last by category/SKU.',
+        'Check for cancelled orders or unusual refunds before changing merchandising.',
+        'Any price or promo change stays human-approved in Products / Promo codes — not from this card.',
+      ],
     })
   }
 
   if (input.thinProductCopy.count > 0) {
     const n = input.thinProductCopy.count
     const sample = input.thinProductCopy.sampleName
+    const names =
+      input.thinProductCopy.sampleNames?.length
+        ? input.thinProductCopy.sampleNames
+        : sample
+          ? [sample]
+          : []
     cards.push({
       id: 'thin_product_copy',
       severity: n >= 8 ? 'high' : 'medium',
@@ -218,15 +277,34 @@ export function buildPerformanceOpportunities(
       summary: sample
         ? `Includes “${sample}”. Use Generate template / Polish on product forms — human Apply → Save. No auto-publish.`
         : 'Use Generate template / Polish on product forms — human Apply → Save. No auto-publish.',
-      metric: 'Short listing or PDP detail below length thresholds',
+      metric: 'Best of listing/PDP body below length thresholds',
       href: '/admin/products',
       actionLabel: 'Open products',
       domain: 'products',
+      items: itemListFromLabels(names),
+      nextSteps: [
+        'Open Products and find the listed SKUs (start with the sample names).',
+        'On each product form: Generate template or Polish with AI for short and/or detail description.',
+        'Apply → review → Save. Do not invent prices, stock, or ship dates in published copy.',
+      ],
     })
   }
 
   const inboundTotal = input.newInboundMessages + input.newBespokeRequests
   if (inboundTotal > 0) {
+    const inboundItems: PerformanceOpportunityItem[] = []
+    if (input.newInboundMessages > 0) {
+      inboundItems.push({
+        label: `${input.newInboundMessages} new contact message${input.newInboundMessages === 1 ? '' : 's'}`,
+        detail: 'Status = new',
+      })
+    }
+    if (input.newBespokeRequests > 0) {
+      inboundItems.push({
+        label: `${input.newBespokeRequests} new bespoke request${input.newBespokeRequests === 1 ? '' : 's'}`,
+        detail: 'Status = new',
+      })
+    }
     cards.push({
       id: 'inbound_queue_backlog',
       severity: inboundTotal >= 5 ? 'high' : 'medium',
@@ -238,6 +316,12 @@ export function buildPerformanceOpportunities(
       href: '/admin/agent/inbound',
       actionLabel: 'Open inbound workspace',
       domain: 'inbound',
+      items: inboundItems,
+      nextSteps: [
+        'Open Inbound and select the oldest new message or bespoke request.',
+        'Generate template (optional Polish with AI), edit the draft, then Send with messages/bespoke write permission.',
+        'Never auto-reply from Performance — each send stays human-approved.',
+      ],
     })
   }
 
@@ -254,6 +338,12 @@ export function buildPerformanceOpportunities(
       href: '/admin/agent/community',
       actionLabel: 'Open community queue',
       domain: 'community',
+      items: itemListFromLabels(input.communityDraftTitles),
+      nextSteps: [
+        'Open the Community agent queue and review each pending draft title below.',
+        'Edit or Polish if needed, then Approve & publish with community:write.',
+        'Do not edit homepage Hero from this flow. On Vercel, re-enqueue if the file queue looks empty after redeploy.',
+      ],
     })
   }
 
@@ -270,6 +360,12 @@ export function buildPerformanceOpportunities(
       href: '/admin/fundraising/agent',
       actionLabel: 'Open fundraising agent',
       domain: 'fundraising',
+      items: itemListFromLabels(input.fundraisingOpenReplySamples),
+      nextSteps: [
+        'Open Fundraising Agent → Needs reply.',
+        'Draft (template or Polish), edit, then Send with fundraising:write.',
+        'Mark handled / OPTED_OUT as appropriate — never mix with newsletter subscriber lists.',
+      ],
     })
   }
 
