@@ -342,7 +342,7 @@ export function buildPerformanceOpportunities(
       nextSteps: [
         'Open the Community agent queue and review each pending draft title below.',
         'Edit or Polish if needed, then Approve & publish with community:write.',
-        'Do not edit homepage Hero from this flow. On Vercel, re-enqueue if the file queue looks empty after redeploy.',
+        'Do not edit homepage Hero from this flow. Queue is shared via Supabase site_configs across deploys.',
       ],
     })
   }

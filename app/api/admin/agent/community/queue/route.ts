@@ -40,7 +40,7 @@ export async function GET() {
     items,
     calendarWindow: describeAuEditorialWindow(),
     autonomyNote:
-      'Queue holds drafts only. Approve & publish still requires community:write. Nothing auto-publishes.',
+      'Queue is stored in Supabase site_configs (shared). Drafts only — Approve & publish still requires community:write. Nothing auto-publishes.',
   })
 }
 

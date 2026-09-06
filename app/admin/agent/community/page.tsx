@@ -901,7 +901,7 @@ function CommunityDraftWorkspace() {
         )}
 
         <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="community-wave5-queue-v1">
-          Community drafts queue v1 — file-backed pending drafts; cron auto-publish later.
+          Community drafts queue v2 — shared via Supabase site_configs; HITL Approve only (no auto-publish).
         </p>
       </div>
     </div>

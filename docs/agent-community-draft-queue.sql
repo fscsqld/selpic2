@@ -1,0 +1,18 @@
+-- Community agent draft queue — uses existing public.site_configs (no new table).
+--
+-- config_key: agent_community_draft_queue
+-- value JSON: { "updatedAt": "<iso>", "items": [ /* QueuedCommunityDraft rows */ ] }
+--
+-- Prerequisites: site_configs already exists (CMS / catalog).
+-- Admin APIs upsert via SUPABASE_SERVICE_ROLE_KEY.
+--
+-- One-time migrate: open /admin/agent/community on a machine that still has
+-- data/agent/community-draft-queue.json while the remote row is empty — first
+-- read uploads local drafts to Supabase.
+--
+-- HITL only — queue drafts never auto-publish to community_posts or Hero.
+
+-- After first enqueue / migrate, verify:
+-- select config_key, updated_at
+-- from public.site_configs
+-- where config_key = 'agent_community_draft_queue';

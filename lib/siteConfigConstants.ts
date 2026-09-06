@@ -4,6 +4,11 @@ export const STOREFRONT_CMS_CONFIG_KEY = 'storefront_cms'
 export const STOREFRONT_CATALOG_CONFIG_KEY = 'storefront_catalog'
 /** Single-row key for shared storefront media metadata snapshot. */
 export const STOREFRONT_MEDIA_CONFIG_KEY = 'storefront_media'
+/**
+ * Single-row key for Community agent HITL draft queue (Wave 5).
+ * Shared across local + Vercel via Supabase — not the gitignored JSON file alone.
+ */
+export const AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY = 'agent_community_draft_queue'
 
 /**
  * sessionStorage: last `NEXT_PUBLIC_DEPLOY_VERSION` for which we merged remote CMS.

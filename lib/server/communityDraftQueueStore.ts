@@ -1,57 +1,144 @@
 /**
- * File-backed pending draft queue for Wave 5 Community agent.
- * Path: data/agent/community-draft-queue.json
- * Serverless note: local to the instance; fine for HITL ops on one primary deploy.
+ * Community agent HITL draft queue store.
+ * Primary: Supabase `site_configs` key agent_community_draft_queue (shared across deploys).
+ * Fallback: data/agent/community-draft-queue.json (local/dev when Supabase off).
  * No auto-publish — Approve still goes through community posts API.
+ *
+ * Cousins: empty remote + local file migrate-once, remote wins when both set,
+ * Sources footer strip, missing site_configs, multi-admin devices, serverless ephemeral disk.
  */
 
 import path from 'path'
 import fs from 'fs/promises'
 
 import type { QueuedCommunityDraft } from '@/lib/agent/communityDraftQueue'
-import { stripCommunitySourcesFooter } from '@/lib/agent/communityDraft'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY } from '@/lib/siteConfigConstants'
+import {
+  mergeQueueReadPreference,
+  parseCommunityDraftQueueValue,
+  sanitizeQueuedDraft,
+  type CommunityDraftQueueSnapshot,
+} from '@/lib/agent/communityDraftQueueNormalize'
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'agent')
 const DATA_FILE = path.join(DATA_DIR, 'community-draft-queue.json')
 
-function sanitizeQueuedDraft(row: QueuedCommunityDraft): QueuedCommunityDraft {
-  const content = stripCommunitySourcesFooter(row.content)
-  if (content === row.content) return row
-  return { ...row, content }
-}
 async function ensureDir(): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true })
 }
 
-export async function readCommunityDraftQueue(): Promise<QueuedCommunityDraft[]> {
+async function readLocalFileQueue(): Promise<QueuedCommunityDraft[]> {
   try {
     const raw = await fs.readFile(DATA_FILE, 'utf-8')
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    const items = parsed.filter(
-      (row): row is QueuedCommunityDraft =>
-        !!row &&
-        typeof row === 'object' &&
-        typeof (row as QueuedCommunityDraft).id === 'string' &&
-        typeof (row as QueuedCommunityDraft).title === 'string' &&
-        typeof (row as QueuedCommunityDraft).content === 'string'
-    )
-    const sanitized = items.map(sanitizeQueuedDraft)
-    // Persist strip once so old Sources footers do not reappear after refresh.
-    if (sanitized.some((row, i) => row.content !== items[i].content)) {
-      await writeCommunityDraftQueue(sanitized)
-    }
-    return sanitized
+    return parseCommunityDraftQueueValue(JSON.parse(raw)).items
   } catch {
     return []
   }
 }
 
+async function writeLocalFileQueue(items: QueuedCommunityDraft[]): Promise<void> {
+  await ensureDir()
+  const snapshot: CommunityDraftQueueSnapshot = {
+    updatedAt: new Date().toISOString(),
+    items,
+  }
+  await fs.writeFile(DATA_FILE, JSON.stringify(snapshot, null, 2), 'utf-8')
+}
+
+async function readRemoteQueue(): Promise<QueuedCommunityDraft[] | null> {
+  if (!isSupabaseConfigured()) return null
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('site_configs')
+      .select('value')
+      .eq('config_key', AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY)
+      .maybeSingle()
+    if (error) return null
+    if (!data) return []
+    return parseCommunityDraftQueueValue(data.value).items
+  } catch {
+    return null
+  }
+}
+
+async function writeRemoteQueue(items: QueuedCommunityDraft[]): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false
+  try {
+    const admin = getSupabaseAdmin()
+    const now = new Date().toISOString()
+    const { error } = await admin.from('site_configs').upsert(
+      {
+        config_key: AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY,
+        value: {
+          updatedAt: now,
+          items,
+        },
+        updated_at: now,
+      },
+      { onConflict: 'config_key' }
+    )
+    return !error
+  } catch {
+    return false
+  }
+}
+
+async function persistQueue(items: QueuedCommunityDraft[]): Promise<void> {
+  const cleaned = items.map(sanitizeQueuedDraft)
+  const remoteOk = await writeRemoteQueue(cleaned)
+  // Keep a local mirror for offline/dev; ignore write failures on read-only FS (Vercel).
+  try {
+    await writeLocalFileQueue(cleaned)
+  } catch {
+    if (!remoteOk) {
+      throw new Error('Failed to persist community draft queue (remote and local)')
+    }
+  }
+  if (!remoteOk && !isSupabaseConfigured()) {
+    // File-only mode already wrote above (or threw).
+    return
+  }
+}
+
+export async function readCommunityDraftQueue(): Promise<QueuedCommunityDraft[]> {
+  const remote = await readRemoteQueue()
+  const local = await readLocalFileQueue()
+
+  if (remote === null) {
+    // Supabase unavailable — file fallback only.
+    const sanitized = local.map(sanitizeQueuedDraft)
+    if (sanitized.some((row, i) => row.content !== local[i]?.content)) {
+      try {
+        await writeLocalFileQueue(sanitized)
+      } catch {
+        /* ignore */
+      }
+    }
+    return sanitized
+  }
+
+  const { items, migrateLocalToRemote } = mergeQueueReadPreference(remote, local)
+  if (migrateLocalToRemote) {
+    await persistQueue(items)
+    return items
+  }
+
+  // Strip Sources footers and persist if changed (shared SSOT).
+  const before = items.map((i) => i.content).join('\0')
+  const sanitized = items.map(sanitizeQueuedDraft)
+  const after = sanitized.map((i) => i.content).join('\0')
+  if (before !== after) {
+    await persistQueue(sanitized)
+  }
+  return sanitized
+}
+
 export async function writeCommunityDraftQueue(
   items: QueuedCommunityDraft[]
 ): Promise<void> {
-  await ensureDir()
-  await fs.writeFile(DATA_FILE, JSON.stringify(items, null, 2), 'utf-8')
+  await persistQueue(items)
 }
 
 export async function listPendingCommunityDrafts(): Promise<QueuedCommunityDraft[]> {
