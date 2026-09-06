@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { useStore, type CustomizationOption } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, X, CheckCircle, AlertCircle } from 'lucide-react'
 import ProductImageUpload from '@/components/ProductImageUpload'
+import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 
 interface CategoryProductManagerProps {
   categoryName: string
@@ -62,7 +65,9 @@ export default function CategoryProductManager({
   specialFields = {}
 }: CategoryProductManagerProps) {
   const { products, addProduct, updateProduct, deleteProduct, adjustProductStock } = useStore()
-  
+  const { adminUser } = useAdminAuth()
+  const canWriteProducts = adminHasPermission(adminUser, 'products:write')
+
   // 해당 카테고리 상품만 필터링
   const categoryProducts = products.filter(product => product.category === categoryValue)
   
@@ -892,10 +897,20 @@ export default function CategoryProductManager({
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder={`Enter detailed description of the ${categoryName}`}
                   />
+                  <ProductDescriptionAiAssist
+                    field="description"
+                    productName={formData.name}
+                    category={formData.category || categoryValue}
+                    currentText={formData.description}
+                    disabled={!canWriteProducts}
+                    onApply={(text) =>
+                      setFormData((prev) => ({ ...prev, description: text }))
+                    }
+                  />
                 </div>
               </div>
 
-              {/* 상세 페이지 전용 상세 설명 */}
+              {/* Detail description */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Detail page description (shown on the product detail page only)
@@ -907,6 +922,16 @@ export default function CategoryProductManager({
                   rows={8}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder={`Enter a detailed ${categoryName} description for customers on the product page.\nExample: features, how to use, care notes, shipping info.`}
+                />
+                <ProductDescriptionAiAssist
+                  field="detailDescription"
+                  productName={formData.name}
+                  category={formData.category || categoryValue}
+                  currentText={formData.detailDescription || ''}
+                  disabled={!canWriteProducts}
+                  onApply={(text) =>
+                    setFormData((prev) => ({ ...prev, detailDescription: text }))
+                  }
                 />
                 <p className="mt-2 text-xs text-gray-500">
                   * This text appears on the detail page only. The listing page uses the short description above.

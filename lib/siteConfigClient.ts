@@ -14,7 +14,16 @@ function siteConfigSupabase() {
   return createSupabaseBrowserClientNoStore()
 }
 
+/**
+ * Browser CMS reads must stay same-origin (relative URL).
+ * Cousin: NEXT_PUBLIC_BASE_URL pinned to an old LAN IP (e.g. 192.168.1.104)
+ * while the PC is on another address → net::ERR_CONNECTION_TIMED_OUT on
+ * /api/site-config/public even though localhost works.
+ */
 function resolvePublicSiteConfigUrl(): string {
+  if (typeof window !== 'undefined') {
+    return '/api/site-config/public'
+  }
   const base = (process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
   if (base) {
     return `${base}/api/site-config/public`
@@ -277,7 +286,11 @@ export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | 
         }
       }
     } catch (e) {
-      console.warn('[siteConfig] public route fetch error', e)
+      // Abort = timeout or React Strict Mode / navigation cancelled a prior fetch — not a real outage.
+      const name = e && typeof e === 'object' && 'name' in e ? String((e as { name?: string }).name) : ''
+      if (name !== 'AbortError') {
+        console.warn('[siteConfig] public route fetch error', e)
+      }
     }
   }
 

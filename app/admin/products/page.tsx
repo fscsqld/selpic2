@@ -23,6 +23,7 @@ import {
 import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/lib/mixedLabelsPricing'
 import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
 import StickerPackOptionsEditor from '@/components/admin/StickerPackOptionsEditor'
+import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 import {
   buildSuggestedStickerPacks,
@@ -2473,6 +2474,16 @@ function AdminProductsPageContent() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder={t('admin.products.descriptionPlaceholder')}
                   />
+                  <ProductDescriptionAiAssist
+                    field="description"
+                    productName={formData.name}
+                    category={formData.category}
+                    currentText={formData.description}
+                    disabled={!canWriteProducts}
+                    onApply={(text) =>
+                      setFormData((prev) => ({ ...prev, description: text }))
+                    }
+                  />
                 </div>
 
                 {/* 커스터마이징 옵션 관리 */}
@@ -2718,6 +2729,16 @@ function AdminProductsPageContent() {
                   rows={8}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   placeholder={t('admin.products.detailDescriptionPlaceholder')}
+                />
+                <ProductDescriptionAiAssist
+                  field="detailDescription"
+                  productName={formData.name}
+                  category={formData.category}
+                  currentText={formData.detailDescription || ''}
+                  disabled={!canWriteProducts}
+                  onApply={(text) =>
+                    setFormData((prev) => ({ ...prev, detailDescription: text }))
+                  }
                 />
                 <p className="mt-2 text-xs text-gray-500">
                   {t('admin.products.detailDescriptionNote')}

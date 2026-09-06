@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Plus, Edit, Trash2, Eye, X, CheckCircle, AlertCircle } from 'lucide-react'
 import ProductImageUpload from '@/components/ProductImageUpload'
+import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
+import { useAdminAuth } from '@/lib/adminAuth'
+import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useTranslation } from '@/lib/useTranslation'
 
 interface PhoneCaseFormData {
@@ -39,6 +42,8 @@ interface PhoneCaseFormData {
 
 export default function PhoneCaseManager() {
   const { products, addProduct, updateProduct, deleteProduct, adjustProductStock, refreshProducts } = useStore()
+  const { adminUser } = useAdminAuth()
+  const canWriteProducts = adminHasPermission(adminUser, 'products:write')
   const { t } = useTranslation()
   
   // 폰케이스 상품만 필터링
@@ -889,6 +894,16 @@ export default function PhoneCaseManager() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder="Enter detailed description of the phone case"
                   />
+                  <ProductDescriptionAiAssist
+                    field="description"
+                    productName={formData.name}
+                    category={formData.category || 'PhoneCases'}
+                    currentText={formData.description}
+                    disabled={!canWriteProducts}
+                    onApply={(text) =>
+                      setFormData((prev) => ({ ...prev, description: text }))
+                    }
+                  />
                 </div>
               </div>
 
@@ -904,6 +919,16 @@ export default function PhoneCaseManager() {
                   rows={8}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   placeholder="Enter a detailed product description for customers on the product page.&#10;Example: features, how to use, care notes, shipping info."
+                />
+                <ProductDescriptionAiAssist
+                  field="detailDescription"
+                  productName={formData.name}
+                  category={formData.category || 'PhoneCases'}
+                  currentText={formData.detailDescription || ''}
+                  disabled={!canWriteProducts}
+                  onApply={(text) =>
+                    setFormData((prev) => ({ ...prev, detailDescription: text }))
+                  }
                 />
                 <p className="mt-2 text-xs text-gray-500">
                   * This text appears on the detail page only. The listing page uses the short description above.
