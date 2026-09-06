@@ -69,7 +69,9 @@ function InboundDraftWorkspace() {
   const [draftBody, setDraftBody] = useState('')
   const [intentHint, setIntentHint] = useState('')
   const [draftSource, setDraftSource] = useState<'template' | 'llm' | ''>('')
-  const [drafting, setDrafting] = useState(false)
+  /** Which draft action is in flight — shared boolean made both buttons look clicked. */
+  const [draftBusy, setDraftBusy] = useState<null | 'template' | 'llm'>(null)
+  const drafting = draftBusy !== null
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -230,7 +232,8 @@ function InboundDraftWorkspace() {
 
   const generateDraft = async (opts?: { intentHint?: string; useLlm?: boolean }) => {
     if (!selected) return
-    setDrafting(true)
+    const mode: 'template' | 'llm' = opts?.useLlm === true ? 'llm' : 'template'
+    setDraftBusy(mode)
     setMessage('')
     try {
       const res = await fetch('/api/admin/agent/inbound/draft', {
@@ -264,7 +267,7 @@ function InboundDraftWorkspace() {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Draft failed')
     } finally {
-      setDrafting(false)
+      setDraftBusy(null)
     }
   }
 
@@ -607,9 +610,10 @@ function InboundDraftWorkspace() {
                     type="button"
                     onClick={() => void generateDraft()}
                     disabled={drafting}
+                    aria-busy={draftBusy === 'template'}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
                   >
-                    {drafting ? (
+                    {draftBusy === 'template' ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <Sparkles className="h-3.5 w-3.5" />
@@ -626,10 +630,11 @@ function InboundDraftWorkspace() {
                       })
                     }
                     disabled={drafting}
+                    aria-busy={draftBusy === 'llm'}
                     title="Calls OpenAI once to refine this draft. Uses your OPENAI_API_KEY."
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    {drafting ? (
+                    {draftBusy === 'llm' ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <Sparkles className="h-3.5 w-3.5" />
