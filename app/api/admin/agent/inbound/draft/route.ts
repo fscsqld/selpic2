@@ -6,7 +6,9 @@ import {
 } from '@/lib/supabase/requireAdminPermission'
 import {
   buildInboundReplyDraft,
+  isInboundMessageIntentHint,
   type InboundDraftChannel,
+  type InboundIntentHint,
 } from '@/lib/agent/inboundDraft'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +21,8 @@ type DraftBody = {
   bodyExcerpt?: string
   requestId?: string
   bespokePayload?: Record<string, unknown>
+  /** Admin reclassify — message channel only. */
+  intentHint?: string
 }
 
 /**
@@ -42,6 +46,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'channel must be message or bespoke' }, { status: 400 })
   }
 
+  const overrideRaw = body.intentHint ? String(body.intentHint).trim() : ''
+  const intentOverride =
+    channel === 'message' && overrideRaw && isInboundMessageIntentHint(overrideRaw)
+      ? (overrideRaw as InboundIntentHint)
+      : undefined
+
   const draft = buildInboundReplyDraft({
     channel,
     customerName: String(body.customerName || ''),
@@ -51,6 +61,7 @@ export async function POST(req: Request) {
     requestId: body.requestId ? String(body.requestId) : undefined,
     bespokePayload:
       body.bespokePayload && typeof body.bespokePayload === 'object' ? body.bespokePayload : undefined,
+    intentOverride,
   })
 
   return NextResponse.json({ ok: true, draft })

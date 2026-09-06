@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildInboundReplyDraft,
   classifyIntent,
+  extractOrderRefHint,
   formatInboundIntentLabel,
+  isInboundMessageIntentHint,
 } from './inboundDraft'
 
 describe('buildInboundReplyDraft', () => {
@@ -66,15 +68,11 @@ describe('buildInboundReplyDraft', () => {
   })
 
   it('keeps payment_dispute ahead of sticker language (compliance cousin)', () => {
-    expect(
-      classifyIntent('Refund for custom stickers I ordered')
-    ).toBe('payment_dispute')
+    expect(classifyIntent('Refund for custom stickers I ordered')).toBe('payment_dispute')
   })
 
   it('keeps shipping ahead of sticker language when tracking is the ask', () => {
-    expect(classifyIntent('Where is my sticker order? Still waiting on tracking')).toBe(
-      'shipping'
-    )
+    expect(classifyIntent('Where is my sticker order? Still waiting on tracking')).toBe('shipping')
   })
 
   it('treats school-bag labels as product, not fundraising (bare school cousin)', () => {
@@ -93,8 +91,44 @@ describe('buildInboundReplyDraft', () => {
     )
   })
 
+  it('classifies address change, promo, and stock cousins', () => {
+    expect(classifyIntent('Please change the delivery address for my parcel')).toBe('address_change')
+    expect(classifyIntent('Still waiting on delivery')).toBe('shipping')
+    expect(classifyIntent('My promo code is not working at checkout')).toBe('promo_code')
+    expect(classifyIntent('Is the blue bottle sticker out of stock?')).toBe('stock_availability')
+  })
+
+  it('honours admin intentOverride when regenerating', () => {
+    const draft = buildInboundReplyDraft({
+      channel: 'message',
+      customerName: 'Lee',
+      customerEmail: 'lee@example.com',
+      subject: 'Hello',
+      bodyExcerpt: 'Just checking in',
+      intentOverride: 'fundraising',
+    })
+    expect(draft.intentHint).toBe('fundraising')
+    expect(draft.body).toMatch(/fundraising/i)
+  })
+
+  it('mentions extracted order refs in closings', () => {
+    expect(extractOrderRefHint('Tracking for order #ORD-9988 please')).toBe('ORD-9988')
+    const draft = buildInboundReplyDraft({
+      channel: 'message',
+      customerName: 'Kim',
+      customerEmail: 'k@example.com',
+      subject: 'Shipping',
+      bodyExcerpt: 'Where is order ORD-5512?',
+    })
+    expect(draft.intentHint).toBe('shipping')
+    expect(draft.body).toContain('ORD-5512')
+  })
+
   it('labels intents in English for admin UI', () => {
     expect(formatInboundIntentLabel('bespoke_product')).toBe('Custom print / stickers')
+    expect(formatInboundIntentLabel('promo_code')).toBe('Promo / discount code')
     expect(formatInboundIntentLabel('unknown_future')).toBe('unknown future')
+    expect(isInboundMessageIntentHint('shipping')).toBe(true)
+    expect(isInboundMessageIntentHint('bespoke_request')).toBe(false)
   })
 })

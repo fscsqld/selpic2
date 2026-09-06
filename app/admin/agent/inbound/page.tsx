@@ -8,7 +8,7 @@ import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { parseAgentInboundPreselect } from '@/lib/agent/inboundLinks'
-import { formatInboundIntentLabel } from '@/lib/agent/inboundDraft'
+import { formatInboundIntentLabel, INBOUND_MESSAGE_INTENT_OPTIONS } from '@/lib/agent/inboundDraft'
 import {
   bespokeRecordToQueueItem,
   contactMessageToQueueItem,
@@ -226,7 +226,7 @@ function InboundDraftWorkspace() {
     void load()
   }, [load])
 
-  const generateDraft = async () => {
+  const generateDraft = async (opts?: { intentHint?: string }) => {
     if (!selected) return
     setDrafting(true)
     setMessage('')
@@ -243,6 +243,10 @@ function InboundDraftWorkspace() {
           bodyExcerpt: selected.excerpt,
           requestId: selected.channel === 'bespoke' ? selected.id : undefined,
           bespokePayload: selected.channel === 'bespoke' ? selected.bespokePayload : undefined,
+          // Only pass override when admin reclassifies via dropdown — not prior state
+          // (avoids locking the next queue item to the previous intent).
+          intentHint:
+            selected.channel === 'message' && opts?.intentHint ? opts.intentHint : undefined,
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -524,7 +528,31 @@ function InboundDraftWorkspace() {
                   <div className="text-sm text-gray-900">
                     {selected.customerName} &lt;{selected.customerEmail || 'no email'}&gt;
                   </div>
-                  {intentHint ? (
+                  {selected.channel === 'message' ? (
+                    <label className="mt-2 block max-w-md">
+                      <span className="text-xs font-medium text-gray-700">Intent (reclassify & regenerate)</span>
+                      <select
+                        value={intentHint || 'general'}
+                        disabled={drafting}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          setIntentHint(next)
+                          void generateDraft({ intentHint: next })
+                        }}
+                        className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                      >
+                        {INBOUND_MESSAGE_INTENT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1 block text-[11px] text-gray-500">
+                        Changing intent rebuilds the template draft. Edit the body before Send — nothing sends
+                        automatically.
+                      </span>
+                    </label>
+                  ) : intentHint ? (
                     <div className="mt-1 text-xs text-gray-500">
                       Intent hint:{' '}
                       <span className="font-medium text-gray-700">
