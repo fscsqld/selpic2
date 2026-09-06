@@ -167,6 +167,8 @@ Do not regress: Messages/Bespoke **Draft with Agent** must always load that row�
 - Failures / invented order refs → silent template fallback. Response includes `draft.source`: `template` | `llm`.
 - Still **HITL only** — no auto-send.
 
+**Learned (ops, 2026-09):** Micro-edits (comma after "for example", "any artwork") belong in **templates**, not OpenAI. Use Polish with AI only when the customer message is messy, multi-intent, tone-sensitive, or the template clearly underserves the reply. Same cost rule for future Community / Fundraising LLM: template-first, button opt-in, never homepage Hero auto-rewrite.
+
 ---
 
 ## Safe extension checklist (next dev session)

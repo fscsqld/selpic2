@@ -193,7 +193,8 @@ function closingForIntent(intentHint: InboundIntentHint, orderRef?: string): str
         .filter(Boolean)
         .join(' ')
     case 'bespoke_product':
-      return 'Please reply with size (mm), quantity, and artwork or a photo of the surface (for example a billy kart, laptop, or bottle) if you have them.'
+      // Absorb micro-polish in template (comma / "any artwork") — do not spend OpenAI on this.
+      return 'Please reply with the size (mm), quantity, and any artwork or a photo of the surface (for example, a billy kart, laptop, or bottle) if you have them.'
     case 'shipping':
       return [
         orderLine ||

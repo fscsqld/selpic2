@@ -91,6 +91,7 @@ function buildSystemPrompt(): string {
     '- Do not promise a refund, replacement, or free product unless the template already does.',
     '- For payment/billing intents: never ask for full card numbers; keep careful wording.',
     '- You may tighten wording and ask one clear clarifying question when helpful.',
+    '- Prefer substantive help (tone, clarity, multi-issue replies). Do not waste tokens on tiny grammar-only tweaks the template already covers.',
     '- Do not include markdown fences or commentary outside the JSON.',
   ].join('\n')
 }

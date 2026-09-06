@@ -65,6 +65,8 @@ describe('buildInboundReplyDraft', () => {
     expect(draft.intentHint).toBe('bespoke_product')
     expect(draft.body).toContain('custom stickers or labels')
     expect(draft.body).toMatch(/size \(mm\)/i)
+    expect(draft.body).toContain('any artwork')
+    expect(draft.body).toContain('for example, a billy kart')
   })
 
   it('keeps payment_dispute ahead of sticker language (compliance cousin)', () => {
