@@ -1,15 +1,62 @@
 import { describe, expect, it } from 'vitest'
-import { buildPerformanceOpportunities, type PerformanceCoachInputs } from './performanceCoach'
+import {
+  buildPerformanceOpportunities,
+  emptyPerformanceCoachInputs,
+  isThinProductCopy,
+  summarizeThinProductCopy,
+} from './performanceCoachBuild'
 
-const emptyInputs: PerformanceCoachInputs = {
-  stalePendingApps: [],
-  bankPendingCount: 0,
-  bankPendingTotalAud: 0,
-  trafficRecent7: { pageviews: 0, uniqueVisitors: 0, orders: 0 },
-  trafficPrior7: { pageviews: 0, uniqueVisitors: 0, orders: 0 },
-  revenueThisWeekAud: 0,
-  revenuePriorWeekAud: 0,
-}
+const emptyInputs = emptyPerformanceCoachInputs()
+
+describe('isThinProductCopy', () => {
+  it('skips out-of-stock products', () => {
+    expect(
+      isThinProductCopy({
+        inStock: false,
+        description: '',
+        hasDetailPage: true,
+      })
+    ).toBe(false)
+  })
+
+  it('flags short listing copy when there is no solid PDP body', () => {
+    expect(isThinProductCopy({ description: 'Short', inStock: true })).toBe(true)
+  })
+
+  it('does not flag a short card blurb when detailDescription is solid', () => {
+    expect(
+      isThinProductCopy({
+        inStock: true,
+        hasDetailPage: true,
+        description: 'Cute animal name labels.',
+        detailDescription: `${'Waterproof PET name labels for school bags and bottles. '.repeat(4)}`,
+      })
+    ).toBe(false)
+  })
+
+  it('flags hasDetailPage products when both short and detail are thin', () => {
+    expect(
+      isThinProductCopy({
+        inStock: true,
+        hasDetailPage: true,
+        description: 'A reasonably long short description for the listing card area.',
+        detailDescription: 'Too short detail',
+      })
+    ).toBe(true)
+  })
+
+  it('accepts solid listing without detail page', () => {
+    expect(
+      isThinProductCopy({
+        inStock: true,
+        hasDetailPage: false,
+        description:
+          'Clear durable personalisation for bags, bottles, and lunchboxes — made for Australian families.',
+        detailDescription: '',
+      })
+    ).toBe(false)
+  })
+})
 
 describe('buildPerformanceOpportunities', () => {
   it('returns empty when no signals fire', () => {
@@ -32,6 +79,7 @@ describe('buildPerformanceOpportunities', () => {
     })
     const card = cards.find((c) => c.id === 'bank_transfer_pending')
     expect(card?.metric).toContain('120.50')
+    expect(card?.kind).toBe('ops')
   })
 
   it('surfaces traffic up with flat conversion', () => {
@@ -50,5 +98,79 @@ describe('buildPerformanceOpportunities', () => {
       revenuePriorWeekAud: 600,
     })
     expect(cards.some((c) => c.id === 'revenue_week_down')).toBe(true)
+  })
+
+  it('surfaces thin product copy with products deep-link', () => {
+    const thin = summarizeThinProductCopy([
+      {
+        name: 'Stub SKU',
+        description: 'x',
+        detailDescription: '',
+        inStock: true,
+        hasDetailPage: true,
+      },
+    ])
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      thinProductCopy: thin,
+    })
+    const card = cards.find((c) => c.id === 'thin_product_copy')
+    expect(card?.kind).toBe('site_upgrade')
+    expect(card?.href).toBe('/admin/products')
+    expect(card?.summary).toContain('Stub SKU')
+  })
+
+  it('does not count short card + rich detail as thin product copy', () => {
+    const thin = summarizeThinProductCopy([
+      {
+        name: 'Cute Animal Friends Name label',
+        description: 'Cute animal name labels.',
+        detailDescription: `${'Full PDP body for school bags and bottles. '.repeat(6)}`,
+        inStock: true,
+        hasDetailPage: true,
+      },
+    ])
+    expect(thin.count).toBe(0)
+  })
+
+  it('surfaces inbound backlog combining messages and bespoke', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      newInboundMessages: 2,
+      newBespokeRequests: 1,
+    })
+    const card = cards.find((c) => c.id === 'inbound_queue_backlog')
+    expect(card?.href).toBe('/admin/agent/inbound')
+    expect(card?.title).toContain('3')
+  })
+
+  it('surfaces community pending drafts', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      communityPendingDrafts: 2,
+    })
+    const card = cards.find((c) => c.id === 'community_drafts_pending')
+    expect(card?.href).toBe('/admin/agent/community')
+    expect(card?.kind).toBe('site_upgrade')
+  })
+
+  it('surfaces fundraising open replies without inventing a new sector href', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      fundraisingOpenReplies: 1,
+    })
+    const card = cards.find((c) => c.id === 'fundraising_open_replies')
+    expect(card?.href).toBe('/admin/fundraising/agent')
+  })
+
+  it('ranks ops ahead of site_upgrade at the same severity', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      bankPendingCount: 1,
+      bankPendingTotalAud: 10,
+      communityPendingDrafts: 1,
+    })
+    expect(cards[0]?.kind).toBe('ops')
+    expect(cards.some((c) => c.kind === 'site_upgrade')).toBe(true)
   })
 })

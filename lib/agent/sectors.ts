@@ -68,12 +68,14 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
   {
     id: 'performance',
     label: 'Performance coach',
-    description: 'Opportunity cards from Sales, Traffic, and Fundraising Impact.',
+    description:
+      'Ops + site-upgrade opportunity cards (deep-links to Products, Inbound, Community, Fundraising).',
     status: 'live',
     href: '/admin/agent/performance',
     requiredPermission: 'analytics:read',
     requiredAnyPermissions: ['analytics:read', 'agent:read'],
-    autonomyNote: 'Wave 4 — suggestions only; no auto Mark Paid or price changes.',
+    autonomyNote:
+      'Wave 4 v2 — suggestions only; no auto Mark Paid, price changes, or auto-publish. No separate CRO sector.',
   },
   {
     id: 'community',

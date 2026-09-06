@@ -22,7 +22,7 @@ export async function GET() {
       generatedAt: new Date().toISOString(),
       opportunities,
       autonomyNote:
-        'Suggestions only — no auto Mark Paid, price changes, or outbound sends. Human decides every action.',
+        'Suggestions only — no auto Mark Paid, price changes, auto-publish, or outbound sends. Site-upgrade cards deep-link into existing tools; human decides every action.',
     })
   } catch (e) {
     return NextResponse.json(
