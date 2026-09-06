@@ -51,7 +51,8 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     status: 'live',
     href: '/admin/fundraising/agent',
     requiredPermission: 'fundraising:read',
-    autonomyNote: 'Send requires fundraising:write. Max 10 emails per send. No auto-scrape / daily blast.',
+    autonomyNote:
+      'Send requires fundraising:write. Max 10 emails per send. Needs reply: template + optional Polish with AI (HITL). No auto-scrape / daily blast.',
   },
   {
     id: 'inbound',

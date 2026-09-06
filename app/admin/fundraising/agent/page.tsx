@@ -20,6 +20,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
   Upload,
   ListChecks,
@@ -32,6 +33,7 @@ import {
   formatOutreachReplyAdminExcerpt,
   type OutreachReplyIntent,
 } from '@/lib/fundraising/outreachReplyClassify'
+
 
 const STATUS_FILTERS: Array<'' | FundraisingOutreachTargetStatus> = [
   '',
@@ -100,6 +102,7 @@ type ReplyRow = {
   draft?: { subject: string; text: string }
 }
 
+
 type CollectState = {
   enabled: boolean
   feedUrl: string
@@ -161,6 +164,13 @@ function AgentContent() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, { subject: string; text: string }>>(
     {}
   )
+  const [replyDraftBusy, setReplyDraftBusy] = useState<null | {
+    id: string
+    mode: 'template' | 'llm'
+  }>(null)
+  const [replyDraftSource, setReplyDraftSource] = useState<
+    Record<string, 'template' | 'llm'>
+  >({})
 
   const loadDailyQueue = useCallback(async () => {
     try {
@@ -241,10 +251,15 @@ function AgentContent() {
       const rows = Array.isArray(json.replies) ? (json.replies as ReplyRow[]) : []
       setOpenReplies(rows)
       const drafts: Record<string, { subject: string; text: string }> = {}
+      const sources: Record<string, 'template' | 'llm'> = {}
       for (const r of rows) {
-        if (r.draft) drafts[r.id] = { subject: r.draft.subject, text: r.draft.text }
+        if (r.draft) {
+          drafts[r.id] = { subject: r.draft.subject, text: r.draft.text }
+          sources[r.id] = 'template'
+        }
       }
       setReplyDrafts(drafts)
+      setReplyDraftSource(sources)
       if (json.funnel) {
         setFunnel({
           dayKey: String(json.funnel.dayKey || ''),
@@ -761,6 +776,56 @@ function AgentContent() {
     }
   }
 
+  const generateReplyDraft = async (
+    reply: ReplyRow,
+    opts?: { useLlm?: boolean }
+  ) => {
+    const mode: 'template' | 'llm' = opts?.useLlm === true ? 'llm' : 'template'
+    setReplyDraftBusy({ id: reply.id, mode })
+    setMessage('')
+    try {
+      const existing = replyDrafts[reply.id]
+      const res = await fetch('/api/admin/fundraising/agent/replies/draft', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: reply.subject,
+          organizationName: reply.organizationName,
+          targetId: reply.targetId,
+          intent: reply.intent,
+          excerpt: reply.excerpt,
+          existingSubject: opts?.useLlm ? existing?.subject : undefined,
+          existingText: opts?.useLlm ? existing?.text : undefined,
+          useLlm: opts?.useLlm === true,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        draft?: { subject: string; text: string; source?: string }
+        error?: string
+      } | null
+      if (!res.ok || !json?.draft) throw new Error(json?.error || 'Draft failed')
+      setReplyDrafts((prev) => ({
+        ...prev,
+        [reply.id]: { subject: json.draft!.subject, text: json.draft!.text },
+      }))
+      setReplyDraftSource((prev) => ({
+        ...prev,
+        [reply.id]: json.draft!.source === 'llm' ? 'llm' : 'template',
+      }))
+      if (opts?.useLlm && json.draft.source !== 'llm') {
+        setMessage(
+          'Template kept (AI unavailable or blocked) — review and edit before Send.'
+        )
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Draft failed')
+    } finally {
+      setReplyDraftBusy(null)
+    }
+  }
+
   const onReplyAction = async (
     reply: ReplyRow,
     action: 'handle' | 'opt_out' | 'send_draft'
@@ -989,10 +1054,9 @@ function AgentContent() {
           <MessageSquare className="h-4 w-4 text-sky-700" /> Needs reply ({openReplies.length})
         </h2>
         <p className="text-xs text-gray-700">
-          Inbound replies to outreach mail (interested / question / other). Unsubscribe and wrong-person are handled
-          automatically. Separate from Customer care at <code className="rounded bg-white px-1">/admin/agent/inbound</code>
-          . Run <code className="rounded bg-white px-1">docs/fundraising-outreach-replies.sql</code> once in Supabase
-          for durable storage.
+          Outreach email replies that need a human follow-up. Not customer care (
+          <code className="rounded bg-white px-1">/admin/agent/inbound</code>
+          ).
         </p>
         {openReplies.length === 0 ? (
           <p className="text-sm text-gray-600">No open replies.</p>
@@ -1029,7 +1093,7 @@ function AgentContent() {
                   <input
                     className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                     value={replyDrafts[r.id]?.subject || ''}
-                    disabled={repliesBusy || busy}
+                    disabled={repliesBusy || busy || replyDraftBusy?.id === r.id}
                     onChange={(e) =>
                       setReplyDrafts((prev) => ({
                         ...prev,
@@ -1046,7 +1110,7 @@ function AgentContent() {
                   <textarea
                     className="mt-1 w-full min-h-[90px] rounded-md border border-gray-300 px-2 py-1.5 font-mono text-xs"
                     value={replyDrafts[r.id]?.text || ''}
-                    disabled={repliesBusy || busy}
+                    disabled={repliesBusy || busy || replyDraftBusy?.id === r.id}
                     onChange={(e) =>
                       setReplyDrafts((prev) => ({
                         ...prev,
@@ -1058,10 +1122,48 @@ function AgentContent() {
                     }
                   />
                 </label>
+                {replyDraftSource[r.id] ? (
+                  <p className="text-[11px] text-gray-500">
+                    Draft source:{' '}
+                    <span className="font-medium text-gray-700">
+                      {replyDraftSource[r.id] === 'llm'
+                        ? 'AI polish (review before Send)'
+                        : 'Template (no OpenAI charge)'}
+                    </span>
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={repliesBusy || busy}
+                    disabled={repliesBusy || busy || replyDraftBusy !== null}
+                    title="Rebuild the free template (no OpenAI)."
+                    onClick={() => void generateReplyDraft(r, { useLlm: false })}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {replyDraftBusy?.id === r.id && replyDraftBusy.mode === 'template' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Regenerate template
+                  </button>
+                  <button
+                    type="button"
+                    disabled={repliesBusy || busy || replyDraftBusy !== null}
+                    title="Calls OpenAI once to refine the follow-up. Uses OPENAI_API_KEY."
+                    onClick={() => void generateReplyDraft(r, { useLlm: true })}
+                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    {replyDraftBusy?.id === r.id && replyDraftBusy.mode === 'llm' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    Polish with AI
+                  </button>
+                  <button
+                    type="button"
+                    disabled={repliesBusy || busy || replyDraftBusy !== null}
                     onClick={() => {
                       if (window.confirm(`Send follow-up to ${r.fromEmail}?`)) {
                         void onReplyAction(r, 'send_draft')
@@ -1074,7 +1176,7 @@ function AgentContent() {
                   </button>
                   <button
                     type="button"
-                    disabled={repliesBusy || busy}
+                    disabled={repliesBusy || busy || replyDraftBusy !== null}
                     onClick={() => void onReplyAction(r, 'handle')}
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -1082,7 +1184,7 @@ function AgentContent() {
                   </button>
                   <button
                     type="button"
-                    disabled={repliesBusy || busy}
+                    disabled={repliesBusy || busy || replyDraftBusy !== null}
                     onClick={() => {
                       if (window.confirm(`Opt out ${r.fromEmail} and close this reply?`)) {
                         void onReplyAction(r, 'opt_out')
