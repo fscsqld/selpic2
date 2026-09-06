@@ -5,8 +5,8 @@ import {
 } from '@/lib/adminPermissionCheck'
 
 /**
- * SELPIC Agent Core — sector registry (Wave 2–5).
- * Fundraising, inbound (CS drafts), performance, and community drafts are live.
+ * SELPIC Agent Core — sector registry (Wave 2–5 + Newsletter assist).
+ * Fundraising, inbound, performance, community, and newsletter drafts are live.
  *
  * =============================================================================
  * AGENT_HUB_PERMISSION_NOTE (do not delete)
@@ -91,13 +91,16 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
   {
     id: 'newsletter',
     label: 'Newsletter assist',
-    description: 'Suggest campaign subjects/bodies; separate from school outreach lists.',
-    status: 'coming_soon',
+    description:
+      'Suggest campaign subjects/bodies for subscriber sends; Apply → Newsletter admin (human Send).',
+    status: 'live',
+    href: '/admin/agent/newsletter',
     requiredPermission: 'newsletter:read',
-    autonomyNote: 'Later — do not mix with fundraising outreach_targets. Not part of Community Phase 1.',
+    requiredAnyPermissions: ['newsletter:read', 'agent:read'],
+    autonomyNote:
+      'HITL drafts only — never auto-send. Subscriber list only; do not mix with fundraising outreach_targets.',
   },
 ]
-
 export function liveAgentSectors(): AgentSectorDef[] {
   return AGENT_SECTORS.filter((s) => s.status === 'live')
 }

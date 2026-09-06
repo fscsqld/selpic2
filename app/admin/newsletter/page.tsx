@@ -36,6 +36,7 @@ import { useAdminAuth } from '@/lib/adminAuth'
 import { useStore, NewsletterSubscriber, NewsletterCampaign, NewsletterTemplate } from '@/lib/store'
 import AdminRoute from '@/components/AdminRoute'
 import { useTranslation } from '@/lib/useTranslation'
+import { consumeNewsletterAgentDraftFromSession } from '@/lib/agent/newsletterAgentDraftBridge'
 
 export default function NewsletterManagementPage() {
   const router = useRouter()
@@ -129,6 +130,23 @@ export default function NewsletterManagementPage() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, showActiveOnly, sortDesc, pageSize])
+
+  // Agent Newsletter assist → compose modal (HITL; never auto-send).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('from') !== 'agent') return
+    const draft = consumeNewsletterAgentDraftFromSession()
+    if (!draft) return
+    setEmailData({
+      subject: draft.subject,
+      message: draft.message,
+      type: draft.type,
+    })
+    setIsEmailModalOpen(true)
+    setMessage('Loaded draft from Newsletter assist — review recipients before Send.')
+    router.replace('/admin/newsletter')
+  }, [router])
 
   useEffect(() => {
     // 현재 페이지가 범위를 벗어나면 조정
