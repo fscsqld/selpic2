@@ -8,8 +8,10 @@ import {
   buildInboundReplyDraft,
   isInboundMessageIntentHint,
   type InboundDraftChannel,
+  type InboundDraftInput,
   type InboundIntentHint,
 } from '@/lib/agent/inboundDraft'
+import { polishInboundReplyDraftWithLlm } from '@/lib/agent/inboundDraftLlm'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,11 +25,14 @@ type DraftBody = {
   bespokePayload?: Record<string, unknown>
   /** Admin reclassify — message channel only. */
   intentHint?: string
+  /** Opt-in AI polish — default false so browsing the queue stays free. */
+  useLlm?: boolean
 }
 
 /**
- * POST — generate a HITL reply draft (template, not LLM).
- * messages:read or bespoke:read required; send still happens client-side via emailService.
+ * POST — generate a HITL reply draft (template by default).
+ * Set useLlm:true to polish with OpenAI when OPENAI_API_KEY is set.
+ * Send still happens client-side via emailService — never auto-sends.
  */
 export async function POST(req: Request) {
   const gate = await requireAdminAnyPermission(['messages:read', 'bespoke:read', 'agent:read'])
@@ -52,7 +57,7 @@ export async function POST(req: Request) {
       ? (overrideRaw as InboundIntentHint)
       : undefined
 
-  const draft = buildInboundReplyDraft({
+  const input: InboundDraftInput = {
     channel,
     customerName: String(body.customerName || ''),
     customerEmail: String(body.customerEmail || ''),
@@ -62,7 +67,11 @@ export async function POST(req: Request) {
     bespokePayload:
       body.bespokePayload && typeof body.bespokePayload === 'object' ? body.bespokePayload : undefined,
     intentOverride,
-  })
+  }
+
+  const template = buildInboundReplyDraft(input)
+  const useLlm = body.useLlm === true
+  const draft = await polishInboundReplyDraftWithLlm({ template, input, useLlm })
 
   return NextResponse.json({ ok: true, draft })
 }

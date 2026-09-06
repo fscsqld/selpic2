@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { getLastSiteConfigWriteStatus } from '@/lib/siteConfigClient'
+import { ADMIN_FLOATING_CHROME } from '@/lib/adminFloatingChrome'
 
 type Status =
   | { kind: 'idle' }
@@ -34,8 +35,7 @@ export default function SiteConfigWriteStatusBadge() {
   if (!showBadge) return null
   if (status.kind === 'idle') return null
 
-  const base =
-    'fixed bottom-3 right-3 z-[9999] max-w-[85vw] rounded-full px-3 py-1 text-xs font-medium shadow border'
+  const base = `${ADMIN_FLOATING_CHROME.siteConfigBadgeClass} rounded-full px-3 py-1 text-xs font-medium shadow border`
 
   if (status.kind === 'saving') {
     return (

@@ -1,6 +1,7 @@
 /**
  * Wave 3 — template first-line reply drafts for Messages / Bespoke (HITL).
- * No LLM; grounded in the inbound payload the admin already sees.
+ * Optional LLM polish lives in inboundDraftLlm.ts (template fallback).
+ * Grounded in the inbound payload the admin already sees.
  * Cousins: school-bag labels ≠ fundraising; payment/shipping beat product words;
  * promo/stock/address intents; admin intentOverride regenerates without reclassifying.
  */

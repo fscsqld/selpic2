@@ -8,6 +8,7 @@ import { useAdminSession } from '@/lib/adminSession'
 import { resolveAdminBrowserSession } from '@/lib/supabase/resolveAdminBrowserSession'
 import AdminInboundSync from '@/components/AdminInboundSync'
 import AdminInboundSoundAlert from '@/components/AdminInboundSoundAlert'
+import { ADMIN_FLOATING_CHROME } from '@/lib/adminFloatingChrome'
 import AdminOrderSoundListener from '@/components/AdminOrderSoundListener'
 
 interface AdminRouteProps {
@@ -278,7 +279,8 @@ export default function AdminRoute({
       <AdminInboundSync />
       <AdminOrderSoundListener />
       <AdminInboundSoundAlert />
-      {children}
+      {/* Reserve scroll space so last dashboard/activity rows clear the sound FAB. */}
+      <div className={ADMIN_FLOATING_CHROME.contentPadClass}>{children}</div>
     </>
   )
 } 

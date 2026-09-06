@@ -73,7 +73,8 @@ Inbound workspace                     app/admin/agent/inbound/page.tsx
   ├─ deep-link miss → single fetch    GET contact-messages/[id], bespoke/[id]
   ├─ map rows                         lib/agent/inboundQueue.ts
   ├─ POST draft                       /api/admin/agent/inbound/draft
-  │     └─ buildInboundReplyDraft()   lib/agent/inboundDraft.ts  (template, NO LLM)
+  │     └─ buildInboundReplyDraft() + polishInboundReplyDraftWithLlm()
+  │           template always; LLM only if OPENAI_API_KEY and not AGENT_INBOUND_DRAFT_LLM=0
   └─ Send (human)                     emailService.sendResponse
         └─ sendAdminComposeEmailAction  app/actions/emails.ts
               ├─ gate: messages:write | bespoke:write
@@ -153,18 +154,25 @@ Do not regress: Messages/Bespoke **Draft with Agent** must always load that row�
 
 ## What is NOT implemented (future waves)
 
-- **LLM** grounding / OpenAI call — add adapter **behind** `buildInboundReplyDraft` or parallel `buildInboundReplyDraftLlm()`; keep template fallback.
 - **Auto-send** on new inbound — forbidden without new permission + audit design.
 - **Storefront chat widget** — separate project; still HITL if added.
 - **`agent:run`** — catalog only; not wired to inbound.
 - **agent_runs** SQL / shared run history (Phase B2).
+
+### LLM draft polish (optional, shipped adapter)
+
+- `lib/agent/inboundDraftLlm.ts` polishes template drafts only when the admin sends `useLlm:true` ("Polish with AI") and `OPENAI_API_KEY` is set.
+- Queue select / intent change / Regenerate template → template only (no OpenAI charge).
+- Kill switch: `AGENT_INBOUND_DRAFT_LLM=0`. Model: `AGENT_INBOUND_DRAFT_MODEL` (default `gpt-4o-mini`).
+- Failures / invented order refs → silent template fallback. Response includes `draft.source`: `template` | `llm`.
+- Still **HITL only** — no auto-send.
 
 ---
 
 ## Safe extension checklist (next dev session)
 
 1. Read this rule + `docs/selpic-unified-ai-agent-plan.md` Wave 3–4.
-2. Print/sticker Contact templates + classifier priority are **shipped** (see tests). Next optional: LLM behind `buildInboundReplyDraft` with template fallback — not required to close Wave 3.
+2. Print/sticker Contact templates + classifier + intent reclassify are **shipped**. Optional LLM polish: set storefront `OPENAI_API_KEY` (template fallback if unset).
 3. Any new send path → `messages:write` / `bespoke:write` + `logAdminActivity`.
 4. Deep-link + replied status → add test in `lib/agent/inboundQueue.test.ts`.
 5. Do not remove Edit step or shorten excerpt below what admin needs to verify customer text.
@@ -174,7 +182,8 @@ Do not regress: Messages/Bespoke **Draft with Agent** must always load that row�
 
 ## Tests to keep green
 
-- `lib/agent/inboundDraft.test.ts` — shipping, bespoke, payment_dispute
+- `lib/agent/inboundDraft.test.ts` — shipping, bespoke, payment_dispute, intent cousins
+- `lib/agent/inboundDraftLlm.test.ts` — enable flag, parse, invent-ref fallback, mock API polish
 - `lib/agent/inboundLinks.test.ts` — href + preselect parse
 - `lib/agent/inboundQueue.test.ts` — deep-link includes replied id; Needs attention vs Recently handled status splits
 

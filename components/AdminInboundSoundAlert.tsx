@@ -9,9 +9,11 @@ import {
   setAdminInboundSoundEnabled,
   unlockAdminInboundAudio,
 } from '@/lib/adminInboundSound'
+import { ADMIN_FLOATING_CHROME } from '@/lib/adminFloatingChrome'
 
 /**
  * Plays a chime when unified inbound count increases. Shows enable/disable control on all admin pages.
+ * Position + AdminRoute content pad must stay paired (see ADMIN_FLOATING_CHROME).
  */
 export default function AdminInboundSoundAlert() {
   const [soundOn, setSoundOn] = useState(false)
@@ -63,7 +65,9 @@ export default function AdminInboundSoundAlert() {
   }, [])
 
   return (
-    <div className="fixed bottom-4 left-4 z-[60] flex flex-col items-start gap-2 pointer-events-none">
+    <div
+      className={`${ADMIN_FLOATING_CHROME.soundFabClass} flex flex-col items-start gap-2 pointer-events-none`}
+    >
       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 shadow-lg backdrop-blur-sm px-1 py-1">
         {soundOn ? (
           <>

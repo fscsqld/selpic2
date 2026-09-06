@@ -32,6 +32,7 @@ type DraftPayload = {
   subject: string
   body: string
   intentHint: string
+  source?: 'template' | 'llm'
 }
 
 const RECENT_QUEUE_LIMIT = 40
@@ -67,6 +68,7 @@ function InboundDraftWorkspace() {
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [intentHint, setIntentHint] = useState('')
+  const [draftSource, setDraftSource] = useState<'template' | 'llm' | ''>('')
   const [drafting, setDrafting] = useState(false)
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
@@ -226,7 +228,7 @@ function InboundDraftWorkspace() {
     void load()
   }, [load])
 
-  const generateDraft = async (opts?: { intentHint?: string }) => {
+  const generateDraft = async (opts?: { intentHint?: string; useLlm?: boolean }) => {
     if (!selected) return
     setDrafting(true)
     setMessage('')
@@ -243,10 +245,11 @@ function InboundDraftWorkspace() {
           bodyExcerpt: selected.excerpt,
           requestId: selected.channel === 'bespoke' ? selected.id : undefined,
           bespokePayload: selected.channel === 'bespoke' ? selected.bespokePayload : undefined,
-          // Only pass override when admin reclassifies via dropdown — not prior state
-          // (avoids locking the next queue item to the previous intent).
+          // Override only when admin reclassifies or when polishing with current intent.
           intentHint:
             selected.channel === 'message' && opts?.intentHint ? opts.intentHint : undefined,
+          // Cost: OpenAI only when admin clicks Polish with AI.
+          useLlm: opts?.useLlm === true,
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -257,6 +260,7 @@ function InboundDraftWorkspace() {
       setDraftSubject(json.draft.subject)
       setDraftBody(json.draft.body)
       setIntentHint(json.draft.intentHint)
+      setDraftSource(json.draft.source === 'llm' ? 'llm' : 'template')
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Draft failed')
     } finally {
@@ -269,6 +273,7 @@ function InboundDraftWorkspace() {
       setDraftSubject('')
       setDraftBody('')
       setIntentHint('')
+      setDraftSource('')
       return
     }
     void generateDraft()
@@ -548,8 +553,9 @@ function InboundDraftWorkspace() {
                         ))}
                       </select>
                       <span className="mt-1 block text-[11px] text-gray-500">
-                        Changing intent rebuilds the template draft. Edit the body before Send — nothing sends
-                        automatically.
+                        Changing intent rebuilds the free template draft. Use{' '}
+                        <span className="font-medium">Polish with AI</span> only when you want OpenAI
+                        to refine wording — nothing sends automatically.
                       </span>
                     </label>
                   ) : intentHint ? (
@@ -559,6 +565,16 @@ function InboundDraftWorkspace() {
                         {formatInboundIntentLabel(intentHint)}
                       </span>
                     </div>
+                  ) : null}
+                  {draftSource ? (
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      Draft source:{' '}
+                      <span className="font-medium text-gray-700">
+                        {draftSource === 'llm'
+                          ? 'AI polish (review before Send)'
+                          : 'Template (no OpenAI charge)'}
+                      </span>
+                    </p>
                   ) : null}
                 </div>
 
@@ -598,7 +614,27 @@ function InboundDraftWorkspace() {
                     ) : (
                       <Sparkles className="h-3.5 w-3.5" />
                     )}
-                    Regenerate draft
+                    Regenerate template
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void generateDraft({
+                        useLlm: true,
+                        intentHint:
+                          selected.channel === 'message' ? intentHint || undefined : undefined,
+                      })
+                    }
+                    disabled={drafting}
+                    title="Calls OpenAI once to refine this draft. Uses your OPENAI_API_KEY."
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    {drafting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    Polish with AI
                   </button>
                   <Link
                     href={
