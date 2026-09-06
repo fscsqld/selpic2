@@ -32,6 +32,7 @@ type DraftState = {
   category: CanonicalPostCategory
   sources: string[]
   autonomyNote: string
+  source?: 'template' | 'llm'
 }
 
 type WorkspaceTab = 'queue' | 'compose'
@@ -61,8 +62,11 @@ function CommunityDraftWorkspace() {
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null)
   const [loadingTopics, setLoadingTopics] = useState(true)
   const [loadingQueue, setLoadingQueue] = useState(true)
-  const [drafting, setDrafting] = useState(false)
+  const [draftSource, setDraftSource] = useState<'template' | 'llm' | ''>('')
+  const [draftBusy, setDraftBusy] = useState<null | 'template' | 'llm'>(null)
+  const drafting = draftBusy !== null
   const [queueBusy, setQueueBusy] = useState(false)
+  const [queuePolishBusy, setQueuePolishBusy] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [message, setMessage] = useState('')
   const [includeMarketS, setIncludeMarketS] = useState(false)
@@ -136,8 +140,9 @@ function CommunityDraftWorkspace() {
     void loadQueue()
   }, [loadTopics, loadQueue])
 
-  const generateDraft = async () => {
-    setDrafting(true)
+  const generateDraft = async (opts?: { useLlm?: boolean }) => {
+    const mode: 'template' | 'llm' = opts?.useLlm === true ? 'llm' : 'template'
+    setDraftBusy(mode)
     setMessage('')
     try {
       const res = await fetch('/api/admin/agent/community/draft', {
@@ -148,11 +153,12 @@ function CommunityDraftWorkspace() {
           topicId,
           sourceNotes: sourceNotes.trim() || undefined,
           customBrief: topicId === 'custom_brief' ? customBrief : undefined,
+          useLlm: opts?.useLlm === true,
         }),
       })
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean
-        draft?: DraftState
+        draft?: DraftState & { source?: 'template' | 'llm' }
         error?: string
       } | null
       if (!res.ok || !json?.draft) throw new Error(json?.error || 'Draft failed')
@@ -162,10 +168,51 @@ function CommunityDraftWorkspace() {
           ? (json.draft.category as CanonicalPostCategory)
           : 'News',
       })
+      setDraftSource(json.draft.source === 'llm' ? 'llm' : 'template')
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Draft failed')
     } finally {
-      setDrafting(false)
+      setDraftBusy(null)
+    }
+  }
+
+  const polishQueuedDraft = async () => {
+    if (!selectedQueued) return
+    setQueuePolishBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/agent/community/draft', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicId: selectedQueued.topicId,
+          useLlm: true,
+          existingTitle: selectedQueued.title,
+          existingContent: selectedQueued.content,
+          existingCategory: selectedQueued.category,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        draft?: { title: string; content: string; category: string; source?: string }
+        error?: string
+      } | null
+      if (!res.ok || !json?.draft) throw new Error(json?.error || 'Polish failed')
+      updateSelectedQueued({
+        title: json.draft.title,
+        content: json.draft.content,
+        category: json.draft.category,
+      })
+      setMessage(
+        json.draft.source === 'llm'
+          ? 'AI polish applied to queued draft — Save edits, then Approve & publish.'
+          : 'Template kept (AI unavailable or blocked) — review and Save edits if needed.'
+      )
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Polish failed')
+    } finally {
+      setQueuePolishBusy(false)
     }
   }
 
@@ -417,7 +464,8 @@ function CommunityDraftWorkspace() {
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Wave 5 — Queue holds calendar drafts for Approve; Compose is on-demand. Nothing auto-publishes.
+          Wave 5 — Queue holds calendar drafts for Approve; Compose is on-demand. Template is free;
+          Polish with AI is opt-in. Nothing auto-publishes.
           Homepage Hero stays out of scope.
         </p>
 
@@ -590,10 +638,25 @@ function CommunityDraftWorkspace() {
                       <button
                         type="button"
                         onClick={() => void saveQueuedEdits()}
-                        disabled={queueBusy}
+                        disabled={queueBusy || queuePolishBusy}
                         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
                       >
                         Save edits
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void polishQueuedDraft()}
+                        disabled={queueBusy || queuePolishBusy || publishing}
+                        aria-busy={queuePolishBusy}
+                        title="Calls OpenAI once to refine this queued draft."
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+                      >
+                        {queuePolishBusy ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        )}
+                        Polish with AI
                       </button>
                       <button
                         type="button"
@@ -606,7 +669,7 @@ function CommunityDraftWorkspace() {
                             queueId: selectedQueued.id,
                           })
                         }
-                        disabled={publishing || !canPublish}
+                        disabled={publishing || !canPublish || queuePolishBusy}
                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                       >
                         {publishing ? (
@@ -719,16 +782,42 @@ function CommunityDraftWorkspace() {
                   type="button"
                   onClick={() => void generateDraft()}
                   disabled={drafting || loadingTopics}
+                  aria-busy={draftBusy === 'template'}
                   className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
                 >
-                  {drafting ? (
+                  {draftBusy === 'template' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-                  Generate draft
+                  Generate template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void generateDraft({ useLlm: true })}
+                  disabled={drafting || loadingTopics}
+                  aria-busy={draftBusy === 'llm'}
+                  title="Calls OpenAI once to refine the template. Uses OPENAI_API_KEY."
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+                >
+                  {draftBusy === 'llm' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Polish with AI
                 </button>
               </div>
+              {draftSource ? (
+                <p className="text-[11px] text-gray-500">
+                  Draft source:{' '}
+                  <span className="font-medium text-gray-700">
+                    {draftSource === 'llm'
+                      ? 'AI polish (review before Approve)'
+                      : 'Template (no OpenAI charge)'}
+                  </span>
+                </p>
+              ) : null}
             </div>
 
             {draft ? (

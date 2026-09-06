@@ -3,6 +3,7 @@ import {
   buildCommunityPostDraft,
   listCommunityDraftTopics,
   resolveCommunityDraftTopic,
+  stripCommunitySourcesFooter,
 } from './communityDraft'
 
 describe('buildCommunityPostDraft', () => {
@@ -19,12 +20,13 @@ describe('buildCommunityPostDraft', () => {
     expect(draft.title.toLowerCase()).toMatch(/care|school/)
     expect(draft.content.toLowerCase()).toMatch(/daycare/)
     expect(draft.content.toLowerCase()).toMatch(/kinder/)
-    expect(draft.content).toContain('Sources:')
+    expect(draft.content).not.toMatch(/Sources:/)
+    expect(draft.sources.length).toBeGreaterThan(0)
     expect(draft.autonomyNote).toMatch(/draft only/i)
     expect(draft.content).not.toMatch(/homepage hero/i)
   })
 
-  it('prefers admin-pasted source notes over defaults', () => {
+  it('keeps admin-pasted source notes in metadata only (not in publishable body)', () => {
     const draft = buildCommunityPostDraft({
       topicId: 'name_label_care',
       sourceNotes: 'https://example.edu.au/care\nInternal QA note',
@@ -33,7 +35,16 @@ describe('buildCommunityPostDraft', () => {
       'https://example.edu.au/care',
       'Internal QA note',
     ])
-    expect(draft.content).toContain('https://example.edu.au/care')
+    expect(draft.content).not.toContain('https://example.edu.au/care')
+    expect(draft.content).not.toMatch(/Sources:/)
+  })
+
+  it('Market S keeps /hot-goods CTA without a Sources footer block', () => {
+    const draft = buildCommunityPostDraft({ topicId: 'market_s_event' })
+    expect(draft.content).toContain('https://www.selpic.com.au/hot-goods')
+    expect(draft.content).not.toMatch(/Sources:/)
+    expect(draft.content).not.toMatch(/Admin-verified event dates/)
+    expect(draft.sources.some((s) => /hot-goods/i.test(s))).toBe(true)
   })
 
   it('blocks medical/legal/political custom briefs (cousin of unsafe publish)', () => {
@@ -61,5 +72,49 @@ describe('buildCommunityPostDraft', () => {
     expect(draft.content.toLowerCase()).toMatch(/market s/)
     expect(draft.content).toMatch(/Do not invent discounts/i)
     expect(draft.content.toLowerCase()).not.toMatch(/back to care/)
+  })
+
+  it('bakes seasonal polish into the free template (no OpenAI needed)', () => {
+    const draft = buildCommunityPostDraft({ topicId: 'seasonal_print_idea' })
+    expect(draft.content).toContain('early-learning cubbies')
+    expect(draft.content).toContain("arm's length")
+    expect(draft.content).toContain('custom sticker flow')
+    expect(draft.content).toMatch(/Share kindly/)
+    expect(draft.content).not.toMatch(/Sources:/)
+    expect(draft.content).not.toContain('merchandising notes')
+    expect(draft.sources).toContain('SELPIC seasonal merchandising notes (internal)')
+  })
+
+  it('strips Sources footers from legacy queued bodies (cousin of persisted queue)', () => {
+    const dirty = [
+      'Seasonal colours and short phrases make everyday items feel fresh.',
+      '',
+      'Share kindly — this board is for helpful, respectful conversation.',
+      '',
+      '---',
+      'Sources:',
+      '• SELPIC seasonal merchandising notes (internal)',
+    ].join('\n')
+    expect(stripCommunitySourcesFooter(dirty)).toBe(
+      [
+        'Seasonal colours and short phrases make everyday items feel fresh.',
+        '',
+        'Share kindly — this board is for helpful, respectful conversation.',
+      ].join('\n')
+    )
+    expect(
+      stripCommunitySourcesFooter('Tip body.\n\n---\nReferences:\n- Internal note')
+    ).toBe('Tip body.')
+    expect(
+      stripCommunitySourcesFooter(
+        'Tip body.\n\nSources: Add admin-verified links or notes before publishing.'
+      )
+    ).toBe('Tip body.')
+    // Keep in-body Market S CTA — not a Sources footer.
+    expect(
+      stripCommunitySourcesFooter(
+        'Browse: https://www.selpic.com.au/hot-goods\n\nKeep it respectful.'
+      )
+    ).toContain('hot-goods')
   })
 })

@@ -83,7 +83,7 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     requiredPermission: 'community:read',
     requiredAnyPermissions: ['community:read', 'agent:read'],
     autonomyNote:
-      'Wave 5 — template drafts only. Publish needs community:write. Never auto-edit homepage Hero.',
+      'Wave 5 — template drafts + optional Polish with AI (HITL). Publish needs community:write. Never auto-edit homepage Hero.',
   },
   {
     id: 'newsletter',
@@ -91,7 +91,7 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     description: 'Suggest campaign subjects/bodies; separate from school outreach lists.',
     status: 'coming_soon',
     requiredPermission: 'newsletter:read',
-    autonomyNote: 'Later — do not mix with fundraising outreach_targets.',
+    autonomyNote: 'Later — do not mix with fundraising outreach_targets. Not part of Community Phase 1.',
   },
 ]
 

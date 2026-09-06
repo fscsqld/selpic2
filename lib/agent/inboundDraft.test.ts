@@ -126,6 +126,19 @@ describe('buildInboundReplyDraft', () => {
     expect(draft.body).toContain('ORD-5512')
   })
 
+  it('omits site URL from sign-off (footer already has company contact)', () => {
+    const draft = buildInboundReplyDraft({
+      channel: 'message',
+      customerName: 'Alex',
+      customerEmail: 'alex@example.com',
+      subject: 'Hello',
+      bodyExcerpt: 'Just checking in',
+    })
+    expect(draft.body).toContain('Selpic Customer Care')
+    expect(draft.body).not.toMatch(/https?:\/\/(www\.)?selpic\.com\.au/i)
+    expect(draft.body).not.toMatch(/info@selpic\.com\.au/i)
+  })
+
   it('labels intents in English for admin UI', () => {
     expect(formatInboundIntentLabel('bespoke_product')).toBe('Custom print / stickers')
     expect(formatInboundIntentLabel('promo_code')).toBe('Promo / discount code')

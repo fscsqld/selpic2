@@ -4,6 +4,7 @@
  * Grounded in the inbound payload the admin already sees.
  * Cousins: school-bag labels ≠ fundraising; payment/shipping beat product words;
  * promo/stock/address intents; admin intentOverride regenerates without reclassifying.
+ * Sign-off is name only — site URL / info@ live in the shared email footer (do not duplicate).
  */
 
 import { bespokeInboundSubject, formatBespokeStickerPayloadSummary } from './bespokeRequestSummary'
@@ -252,7 +253,6 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
       '',
       'Kind regards,',
       'Selpic Customer Care',
-      'https://selpic.com.au',
     ]
       .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
       .join('\n')
@@ -282,7 +282,6 @@ export function buildInboundReplyDraft(input: InboundDraftInput): InboundDraftRe
     '',
     'Kind regards,',
     'Selpic Customer Care',
-    'https://selpic.com.au',
   ]
     .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
     .join('\n')

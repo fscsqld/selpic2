@@ -1,6 +1,7 @@
 /**
  * Wave 5 — template community / SELPIC N post drafts (HITL).
- * No LLM, no scrape, no auto-publish. Admin Approve → existing community posts API.
+ * Optional LLM polish: communityDraftLlm.ts (useLlm opt-in). No scrape, no auto-publish.
+ * Admin Approve → existing community posts API.
  *
  * Product vision (learned): SELPIC N is an AU parent/carer board — schools, kindergarten/kinder,
  * daycare/early learning, and families. Agent eventually suggests calendar-hot topics and can
@@ -160,15 +161,34 @@ function parseSources(sourceNotes: string | undefined, defaults: string[]): stri
   return defaults.slice(0, 8)
 }
 
-function sourcesFooter(sources: string[]): string {
-  if (!sources.length) {
-    return [
-      '',
-      '---',
-      'Sources: Add admin-verified links or notes before publishing.',
-    ].join('\n')
+/**
+ * Remove publish-body "Sources" / citations footers.
+ * Invariant: board body must never include admin metadata citations.
+ * Cousins: queued drafts from before this rule, LLM re-appending sources,
+ * "References:" / "Citations:", empty "Sources: Add admin-verified…" prompts,
+ * trailing `---` only, bullet variants (• / - / *).
+ */
+export function stripCommunitySourcesFooter(content: string): string {
+  const raw = String(content || '')
+  if (!raw) return ''
+
+  // Split on a Sources/References/Citations heading (with optional --- above).
+  // Heading may be followed by newline OR same-line text ("Sources: Add admin…").
+  const splitRe =
+    /(?:\r?\n|^)\s*(?:---\s*(?:\r?\n)+\s*)?(?:Sources|References|Citations)\s*:/i
+  const parts = raw.split(splitRe)
+  if (parts.length === 1) {
+    // No heading — still drop a trailing lone --- used as a footer rule.
+    return raw.replace(/(?:\r?\n)+\s*---\s*$/u, '').trimEnd()
   }
-  return ['', '---', 'Sources:', ...sources.map((s) => `• ${s}`)].join('\n')
+  return parts[0].replace(/(?:\r?\n)+\s*---\s*$/u, '').trimEnd()
+}
+
+function finalizeCommunityDraft(draft: CommunityDraftResult): CommunityDraftResult {
+  return {
+    ...draft,
+    content: stripCommunitySourcesFooter(draft.content),
+  }
 }
 
 function normalizeCategory(raw: string | undefined): CanonicalPostCategory {
@@ -180,6 +200,10 @@ function normalizeCategory(raw: string | undefined): CanonicalPostCategory {
 
 /** Build editable English title + body for admin Approve → publish. */
 export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDraftResult {
+  return finalizeCommunityDraft(buildCommunityPostDraftInner(input))
+}
+
+function buildCommunityPostDraftInner(input: CommunityDraftInput): CommunityDraftResult {
   const topic =
     resolveCommunityDraftTopic(String(input.topicId || '')) ||
     resolveCommunityDraftTopic('custom_brief')!
@@ -194,7 +218,6 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
         '',
         'SELPIC N drafts stay on school, kindergarten/kinder, daycare, and family print topics.',
         'Edit the brief and generate again, or write the post manually on the Community admin page.',
-        sourcesFooter(parseSources(input.sourceNotes, [])),
       ].join('\n'),
       category: 'Daily',
       sources: parseSources(input.sourceNotes, []),
@@ -215,12 +238,11 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           '',
           'Clear labels on bags, drink bottles, lunchboxes, hats, and cubby gear help lost items find their way home, whether that is a classroom hook or a daycare locker.',
           '',
-          'If you are refreshing labels this season, choose a durable finish that matches how the item is washed or wiped. Soft bottles and textured lunchboxes need a clean, dry spot and firm pressure at the edges.',
+          'Choose a durable finish that matches how the item is washed or wiped. Soft bottles and textured lunchboxes need a clean, dry spot and firm pressure at the edges.',
           '',
           'SELPIC prints name labels and custom stickers for Australian families, schools, and early-learning communities.',
           '',
           'What works best in your house or centre — iron-on, waterproof, or a mix? Share a tip below so other parents and carers can learn too.',
-          sourcesFooter(sources),
         ].join('\n'),
         category,
         sources,
@@ -239,14 +261,14 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           '',
           'If a label peels early, check whether the surface was wet or textured — a flat, clean spot works best on school bags and soft silicone bottles.',
           '',
-          'Have a care tip that survived a term of daycare or school washes? Drop it in the comments.',
-          sourcesFooter(sources),
+          'Have a care tip that survived a term of daycare or school washes? Drop it in the comments — keep it kind and practical.',
         ].join('\n'),
         category,
         sources,
         autonomyNote: AUTONOMY_NOTE,
       }
     case 'seasonal_print_idea':
+      // Learned from ops AI polish (2026-09): free template matches polished board voice.
       return {
         topicId: topic.id,
         title: 'A simple seasonal sticker idea for family and centre gear',
@@ -255,12 +277,11 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           '',
           'Try one small motif — a leaf, star, or school/centre colour — next to a name or initials.',
           '',
-          'Keep text large enough to read at arm’s length, and leave a little clear edge around artwork.',
+          "Keep text large enough to read at arm's length, and leave a little clear edge around artwork.",
           '',
           'When you are ready, upload a clear image or pick a simple layout in our custom sticker flow.',
           '',
           'What seasonal idea is popular in your suburb this month? Share kindly — this board is for helpful, respectful conversation.',
-          sourcesFooter(sources),
         ].join('\n'),
         category,
         sources,
@@ -279,8 +300,7 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           '',
           'Our team can review bespoke requests and confirm size, quantity, and finish before print.',
           '',
-          'Questions about artwork for kinder or class gifts? Ask in the comments — keep feedback constructive.',
-          sourcesFooter(sources),
+          'Questions about artwork for kinder or class gifts? Ask in the comments — keep feedback constructive and respectful.',
         ].join('\n'),
         category,
         sources,
@@ -300,7 +320,6 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           'We reply with programme details — no obligation cold lists, and outreach always respects opt-out.',
           '',
           'Organisers: what has worked for a respectful, parent-friendly fundraiser in your community? Share experiences kindly.',
-          sourcesFooter(sources),
         ].join('\n'),
         category,
         sources,
@@ -320,7 +339,6 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           'Browse the current Market S selection on the official store: https://www.selpic.com.au/hot-goods',
           '',
           'Prices and stock can differ from third-party marketplaces. Community discussion is welcome — keep it respectful, and share real experience rather than hype.',
-          sourcesFooter(sources),
         ].join('\n'),
         category,
         sources,
@@ -336,10 +354,12 @@ export function buildCommunityPostDraft(input: CommunityDraftInput): CommunityDr
           brief,
           '',
           'Edit this draft for SELPIC N — clear, helpful AU English for parents, carers, schools, kinder, and daycare.',
+          '',
           'Invite polite discussion; avoid medical, legal, or political campaign claims.',
           '',
           'Add a short call to action only if it fits (for example visit /community, /fundraising, or /stickers/custom).',
-          sourcesFooter(sources),
+          '',
+          'What would help other families or centres this week? Share kindly on the board.',
         ].join('\n'),
         category: 'Daily',
         sources,

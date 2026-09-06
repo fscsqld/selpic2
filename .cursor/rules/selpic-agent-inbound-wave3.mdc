@@ -169,6 +169,8 @@ Do not regress: Messages/Bespoke **Draft with Agent** must always load that row�
 
 **Learned (ops, 2026-09):** Micro-edits (comma after "for example", "any artwork") belong in **templates**, not OpenAI. Use Polish with AI only when the customer message is messy, multi-intent, tone-sensitive, or the template clearly underserves the reply. Same cost rule for future Community / Fundraising LLM: template-first, button opt-in, never homepage Hero auto-rewrite.
 
+**Sign-off:** Inbound drafts end at `Kind regards` / `Selpic Customer Care` only. Do **not** append `https://selpic.com.au` or `info@` — Resend/shared transactional footer already carries site and contact ([selpic.com.au](https://selpic.com.au)). Cousin: keep **functional** CTAs (fundraising apply URL, Market S product link) when the link is the action, not branding.
+
 **UI cousin:** Adjacent draft buttons must not share one spinner flag — a shared `drafting` boolean made “Regenerate template” look like “Polish with AI” also ran. Busy state is per action (`template` | `llm`); truth remains `draft.source` and `useLlm` on the API.
 
 ---

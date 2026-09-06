@@ -28,9 +28,20 @@ Serverless note: JSON file is instance-local; fine for single-admin HITL. Supaba
 SELPIC N (`/community`) is the living AU community board: parents, carers, schools, **kindergarten/kinder**, **daycare / long day care / early learning**, and organisers share tips and polite opinions. The agent should:
 
 1. **Suggest** topics that match the Australian calendar (term starts, mid-year return, Mother’s/Father’s Day AU, end-of-year).
-2. **Draft** English posts (templates now; LLM later) with sources the admin can verify.
+2. **Draft** English posts (templates + optional **Polish with AI**) with sources the admin can verify.
 3. **Publish** only after human Approve (`community:write`) in v5.
 4. **Later (Wave 6+):** optional cron that auto-**drafts** on cadence; auto-**publish** only for pre-approved templates + audit — never homepage Hero.
+
+### LLM polish (Phase 1, 2026-09)
+
+- `lib/agent/communityDraftLlm.ts` + shared `lib/agent/agentOpenAiChat.ts`
+- Compose: **Generate template** (free) / **Polish with AI** (`useLlm:true`)
+- Queue: **Polish with AI** on the selected pending row (edits in memory → Save edits → Approve)
+- Kill switches: `AGENT_COMMUNITY_DRAFT_LLM=0` or global `AGENT_DRAFT_LLM=0`
+- Do not invent discounts; do not append bare homepage/info@; keep official CTAs already in template (`/hot-goods`, `/fundraising`)
+- Newsletter assist stays **out of** this phase (separate sector / coming_soon)
+
+**Learned (ops, 2026-09):** When Polish with AI only restates the template (e.g. seasonal cubbies / arm’s length / Share kindly), **bake that copy into `communityDraft.ts`** and skip OpenAI next time. Tiny/no-op polish still **bills tokens** — OpenAI charges for the request, not for “how different” the output looks. Use Polish only when the brief is messy, custom, or clearly underserved.
 
 Admin manual posts on `/admin/community` remain first-class.
 
@@ -60,7 +71,7 @@ Admin manual posts on `/admin/community` remain first-class.
 | **English copy** | Topics, drafts, admin + public UI English. |
 | **Homepage** | Never write to `app/page.tsx` Hero / SELPIC logo. Category card copy for SELPIC N may describe the board. |
 | **Accounting** | Never import `apps/accounting-sandbox/**`. |
-| **Sources** | Prefer admin-pasted URLs/notes. No ToS-violating scrape in v5. |
+| **Sources** | Admin-pasted URLs/notes stay in draft **metadata** only — never append a `Sources:` footer into the publishable body. Strip legacy footers on queue read / LLM polish. No ToS-violating scrape in v5. |
 | **Policy** | Block medical / legal / political campaign briefs in custom_brief path. |
 
 ## Surfaces
