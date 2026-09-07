@@ -736,6 +736,11 @@ export default function PhoneCaseManager() {
                     currentImage={formData.image}
                     onImageChange={(imageUrl) => setFormData(prev => ({ ...prev, image: imageUrl }))}
                   />
+                  <ProductImageryAiAssist
+                    productName={formData.name}
+                    category={formData.category}
+                    imageUrl={formData.image}
+                  />
                 </div>
 
                 {/* Rating and reviews */}
