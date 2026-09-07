@@ -11,7 +11,8 @@ import { buildPhotoBriefTemplate } from './productImageryVisionLlm'
 
 export const AGENT_PRODUCT_IMAGE_GEN_KILL = 'AGENT_PRODUCT_IMAGE_GEN'
 
-const DEFAULT_IMAGE_MODEL = 'gpt-image-1'
+/** Prefer gpt-image-2 (OpenAI current default). Override with AGENT_IMAGE_MODEL. */
+const DEFAULT_IMAGE_MODEL = 'gpt-image-2'
 const MAX_PROMPT = 2_500
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024
 

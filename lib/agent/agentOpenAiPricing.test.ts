@@ -27,6 +27,7 @@ describe('agentOpenAiPricing', () => {
   })
 
   it('uses flat image estimate', () => {
+    expect(estimateImageCostUsd('gpt-image-2')).toBe(AGENT_IMAGE_FLAT_USD)
     expect(estimateImageCostUsd('gpt-image-1')).toBe(AGENT_IMAGE_FLAT_USD)
   })
 
@@ -66,14 +67,14 @@ describe('agentRuns summarize', () => {
     const image = buildImageRunRecord({
       id: 'i1',
       action: 'product_image_generate',
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       adminLabel: 'a@test.com',
       createdAt: '2026-09-16T12:00:00.000Z',
     })
     const outside = buildImageRunRecord({
       id: 'i2',
       action: 'product_image_generate',
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       adminLabel: 'a@test.com',
       createdAt: '2026-08-01T12:00:00.000Z',
     })

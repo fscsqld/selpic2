@@ -22,8 +22,11 @@ const CHAT_PRICES: Record<string, { inPer1M: number; outPer1M: number }> = {
 
 const DEFAULT_CHAT = { inPer1M: 0.5, outPer1M: 2.0 }
 
-/** Flat estimate per Images API success (edit or generate). */
-export const AGENT_IMAGE_FLAT_USD = 0.04
+/**
+ * Flat estimate per Images API success (edit or generate).
+ * Ballpark for gpt-image-2 1024×1024 medium; low/high differ — not OpenAI Billing.
+ */
+export const AGENT_IMAGE_FLAT_USD = 0.05
 
 export function normalizeModelKey(model: string): string {
   return model.trim().toLowerCase() || 'gpt-4o-mini'
