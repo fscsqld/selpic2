@@ -75,9 +75,8 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     requiredPermission: 'analytics:read',
     requiredAnyPermissions: ['analytics:read', 'agent:read'],
     autonomyNote:
-      'Wave 4 v3 — suggestions with next steps + sample items; no auto Mark Paid, price changes, or auto-publish. No separate CRO sector.',
-  },
-  {
+      'Wave 4 v4 — collapsible cards, item deep-links, newsletter idle signal; no auto Mark Paid, price changes, or auto-publish.',
+  },  {
     id: 'community',
     label: 'SELPIC N / Community',
     description: 'Draft community news posts for admin Approve → publish.',

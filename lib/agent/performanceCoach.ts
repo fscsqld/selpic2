@@ -14,13 +14,15 @@ import {
   countBespokeStickerRequestsByStatus,
   readBespokeStickerRequests,
 } from '@/lib/server/bespokeStickerRequests'
-import { summarizeOpenOutreachReplies } from '@/lib/fundraising/outreachReplyPersistence'
+import { listOutreachReplies, summarizeOpenOutreachReplies } from '@/lib/fundraising/outreachReplyPersistence'
+import { buildAgentInboundDraftHref } from '@/lib/agent/inboundLinks'
 import {
   buildPerformanceOpportunities,
   emptyPerformanceCoachInputs,
   summarizeThinProductCopy,
   type PerformanceCoachInputs,
   type PerformanceOpportunity,
+  type PerformanceOpportunityItem,
 } from './performanceCoachBuild'
 
 export type {
@@ -71,31 +73,57 @@ export async function loadPerformanceCoachInputs(): Promise<PerformanceCoachInpu
   try {
     const pending = await listPendingCommunityDrafts()
     inputs.communityPendingDrafts = pending.length
-    inputs.communityDraftTitles = pending
-      .map((d) => (d.title || '').trim())
-      .filter(Boolean)
-      .slice(0, 5)
+    inputs.communityDraftItems = pending.slice(0, 5).map((d) => ({
+      id: d.id,
+      title: (d.title || '').trim() || d.id,
+    }))
+    inputs.communityDraftTitles = inputs.communityDraftItems.map((d) => d.title)
   } catch {
     /* non-fatal */
   }
 
   try {
     const bespoke = await readBespokeStickerRequests()
-    inputs.newBespokeRequests = countBespokeStickerRequestsByStatus(bespoke, 'new')
+    const newBespoke = bespoke.filter((r) => r.status === 'new')
+    inputs.newBespokeRequests =
+      countBespokeStickerRequestsByStatus(bespoke, 'new') || newBespoke.length
+    const bespokeSamples: PerformanceOpportunityItem[] = newBespoke.slice(0, 5).map((r) => {
+      const payload = r.payload || {}
+      const name = String(
+        (payload as { name?: string; customerName?: string }).name ||
+          (payload as { customerName?: string }).customerName ||
+          ''
+      ).trim()
+      const email = String(
+        (payload as { email?: string; customerEmail?: string }).email ||
+          (payload as { customerEmail?: string }).customerEmail ||
+          ''
+      ).trim()
+      return {
+        label: name || email || `Bespoke ${r.id.slice(0, 8)}`,
+        detail: email && name ? email : 'bespoke · new',
+        href: buildAgentInboundDraftHref('bespoke', r.id),
+      }
+    })
+    if (bespokeSamples.length) {
+      inputs.inboundSamples = [...(inputs.inboundSamples || []), ...bespokeSamples]
+    }
   } catch {
     /* non-fatal */
   }
 
   try {
-    const open = await summarizeOpenOutreachReplies()
-    inputs.fundraisingOpenReplies = open.count
-    if (open.latest) {
-      const label =
-        (open.latest.subject || '').trim() ||
-        (open.latest.fromEmail || '').trim() ||
-        (open.latest.id || '').trim()
-      if (label) inputs.fundraisingOpenReplySamples = [label]
-    }
+    const summary = await summarizeOpenOutreachReplies()
+    inputs.fundraisingOpenReplies = summary.count
+    const openRows = await listOutreachReplies({ status: 'open', limit: 5 })
+    inputs.fundraisingOpenReplyItems = openRows.map((r) => ({
+      subject: (r.subject || '').trim() || undefined,
+      fromEmail: (r.fromEmail || '').trim() || undefined,
+    }))
+    inputs.fundraisingOpenReplySamples = openRows
+      .map((r) => (r.subject || '').trim() || (r.fromEmail || '').trim())
+      .filter(Boolean)
+      .slice(0, 5)
   } catch {
     /* non-fatal */
   }
@@ -167,11 +195,57 @@ export async function loadPerformanceCoachInputs(): Promise<PerformanceCoachInpu
   }
 
   try {
-    const { count, error } = await admin
+    const { data: msgRows, error, count } = await admin
       .from('contact_messages')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact' })
       .eq('status', 'new')
-    if (!error) inputs.newInboundMessages = count ?? 0
+      .order('created_at', { ascending: false })
+      .limit(5)
+    if (!error) {
+      inputs.newInboundMessages = count ?? msgRows?.length ?? 0
+      const messageSamples: PerformanceOpportunityItem[] = (msgRows || []).map((row) => {
+        const r = row as Record<string, unknown>
+        const id = String(r.id || '')
+        const subject = String(r.subject || r.title || '').trim()
+        const name = String(r.name || r.customer_name || r.full_name || '').trim()
+        const email = String(r.email || r.customer_email || '').trim()
+        return {
+          label: subject || name || email || `Message ${id.slice(0, 8)}`,
+          detail: [name, email].filter(Boolean).join(' · ') || 'contact · new',
+          href: id ? buildAgentInboundDraftHref('message', id) : '/admin/agent/inbound',
+        }
+      })
+      inputs.inboundSamples = [...messageSamples, ...(inputs.inboundSamples || [])].slice(0, 5)
+    }
+  } catch {
+    /* non-fatal */
+  }
+
+  try {
+    const { count: subCount, error: subErr } = await admin
+      .from('newsletter_subscribers')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true)
+    if (!subErr) inputs.newsletterActiveSubscribers = subCount ?? 0
+
+    const { data: campRows, error: campErr } = await admin
+      .from('newsletter_campaigns')
+      .select('sent_at')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+    if (!campErr) {
+      const sentAt = campRows?.[0]?.sent_at
+      if (sentAt) {
+        const t = new Date(String(sentAt)).getTime()
+        if (Number.isFinite(t)) {
+          inputs.newsletterDaysSinceLastCampaign = Math.floor((Date.now() - t) / MS_DAY)
+        } else {
+          inputs.newsletterDaysSinceLastCampaign = null
+        }
+      } else {
+        inputs.newsletterDaysSinceLastCampaign = null
+      }
+    }
   } catch {
     /* non-fatal */
   }

@@ -5,7 +5,15 @@ import Link from 'next/link'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import type { PerformanceOpportunity } from '@/lib/agent/performanceCoach'
-import { ArrowLeft, ArrowRight, Loader2, RefreshCw, TrendingUp } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+} from 'lucide-react'
 
 type PerformanceResponse = {
   ok?: boolean
@@ -30,7 +38,18 @@ export default function AdminAgentPerformancePage() {
   )
 }
 
-function OpportunityCard({ card }: { card: PerformanceOpportunity }) {
+function OpportunityCard({
+  card,
+  expanded,
+  onToggle,
+}: {
+  card: PerformanceOpportunity
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const hasDetails =
+    (card.items && card.items.length > 0) || (card.nextSteps && card.nextSteps.length > 0)
+
   return (
     <li className={`rounded-xl border p-5 shadow-sm ${SEVERITY_STYLES[card.severity]}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -47,15 +66,38 @@ function OpportunityCard({ card }: { card: PerformanceOpportunity }) {
             <p className="mt-2 text-xs font-medium opacity-80">{card.metric}</p>
           ) : null}
 
-          {card.items && card.items.length > 0 ? (
+          {hasDetails ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide opacity-80 hover:opacity-100"
+              aria-expanded={expanded}
+            >
+              {expanded ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+              {expanded ? 'Hide details' : 'Show items & next steps'}
+            </button>
+          ) : null}
+
+          {expanded && card.items && card.items.length > 0 ? (
             <div className="mt-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
                 Items to review
               </p>
               <ul className="mt-1.5 space-y-1 text-sm opacity-90">
                 {card.items.map((item) => (
-                  <li key={item.label} className="flex flex-wrap gap-x-2">
-                    <span>· {item.label}</span>
+                  <li key={`${item.label}-${item.href || ''}`} className="flex flex-wrap gap-x-2">
+                    <span>· </span>
+                    {item.href ? (
+                      <Link href={item.href} className="underline underline-offset-2 hover:opacity-100">
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <span>{item.label}</span>
+                    )}
                     {item.detail ? (
                       <span className="text-xs opacity-70">({item.detail})</span>
                     ) : null}
@@ -65,7 +107,7 @@ function OpportunityCard({ card }: { card: PerformanceOpportunity }) {
             </div>
           ) : null}
 
-          {card.nextSteps && card.nextSteps.length > 0 ? (
+          {expanded && card.nextSteps && card.nextSteps.length > 0 ? (
             <div className="mt-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
                 Next steps
@@ -96,6 +138,7 @@ function PerformanceCoachWorkspace() {
   const [autonomyNote, setAutonomyNote] = useState('')
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState<FilterTab>('all')
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -131,6 +174,13 @@ function PerformanceCoachWorkspace() {
   const siteCount = opportunities.filter((c) => c.kind === 'site_upgrade').length
   const opsCount = opportunities.filter((c) => c.kind === 'ops').length
 
+  const expandAll = () => {
+    const next: Record<string, boolean> = {}
+    for (const c of filtered) next[c.id] = true
+    setExpandedIds(next)
+  }
+  const collapseAll = () => setExpandedIds({})
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminPageHeader
@@ -146,9 +196,8 @@ function PerformanceCoachWorkspace() {
         </Link>
 
         <p className="text-sm text-gray-600 mb-4">
-          Ranked opportunity cards from Sales, Traffic, Fundraising, plus a site-upgrade queue that
-          deep-links into Products, Inbound, Community, and Fundraising Agent. Suggestions only —
-          every consequential action stays human-approved.
+          Ranked opportunity cards with deep-links into Products, Inbound, Community, Fundraising,
+          and Newsletter assist. Suggestions only — every consequential action stays human-approved.
         </p>
 
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
@@ -167,6 +216,20 @@ function PerformanceCoachWorkspace() {
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={expandAll}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Expand all
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Collapse all
           </button>
           {message ? <span className="text-sm text-rose-700">{message}</span> : null}
         </div>
@@ -212,14 +275,21 @@ function PerformanceCoachWorkspace() {
         ) : (
           <ul className="space-y-4">
             {filtered.map((card) => (
-              <OpportunityCard key={card.id} card={card} />
+              <OpportunityCard
+                key={card.id}
+                card={card}
+                expanded={Boolean(expandedIds[card.id])}
+                onToggle={() =>
+                  setExpandedIds((prev) => ({ ...prev, [card.id]: !prev[card.id] }))
+                }
+              />
             ))}
           </ul>
         )}
 
-        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v3">
-          Performance coach v3 — cards include next steps and sample items. Site-upgrade queue reuses
-          existing tools (no separate CRO sector). On-demand refresh only.
+        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v4">
+          Performance coach v4 — collapsible details, item deep-links, newsletter idle signal. No
+          separate CRO sector.
         </p>
       </div>
     </div>

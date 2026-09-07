@@ -149,11 +149,15 @@ describe('buildPerformanceOpportunities', () => {
       ...emptyInputs,
       communityPendingDrafts: 2,
       communityDraftTitles: ['Artwork tips', 'Market S drop'],
+      communityDraftItems: [
+        { id: 'd1', title: 'Artwork tips' },
+        { id: 'd2', title: 'Market S drop' },
+      ],
     })
     const card = cards.find((c) => c.id === 'community_drafts_pending')
     expect(card?.href).toBe('/admin/agent/community')
     expect(card?.kind).toBe('site_upgrade')
-    expect(card?.items?.map((i) => i.label)).toEqual(['Artwork tips', 'Market S drop'])
+    expect(card?.items?.[0]?.href).toContain('draft=d1')
     expect(card?.nextSteps?.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -168,9 +172,10 @@ describe('buildPerformanceOpportunities', () => {
     expect(card?.nextSteps?.some((s) => /never auto/i.test(s))).toBe(true)
   })
 
-  it('lists thin product sample names as items', () => {
+  it('lists thin product sample names as items with product deep-links', () => {
     const thin = summarizeThinProductCopy([
       {
+        id: 'sku-a',
         name: 'Stub A',
         description: 'x',
         detailDescription: '',
@@ -178,6 +183,7 @@ describe('buildPerformanceOpportunities', () => {
         hasDetailPage: true,
       },
       {
+        id: 'sku-b',
         name: 'Stub B',
         description: 'y',
         detailDescription: '',
@@ -192,7 +198,60 @@ describe('buildPerformanceOpportunities', () => {
     })
     const card = cards.find((c) => c.id === 'thin_product_copy')
     expect(card?.items?.map((i) => i.label)).toEqual(['Stub A', 'Stub B'])
+    expect(card?.items?.[0]?.href).toContain('q=sku-a')
     expect(card?.nextSteps?.[1]).toMatch(/Generate template|Polish/i)
+  })
+
+  it('surfaces newsletter idle when subscribers exist and no recent send', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      newsletterActiveSubscribers: 12,
+      newsletterDaysSinceLastCampaign: 21,
+    })
+    const card = cards.find((c) => c.id === 'newsletter_idle')
+    expect(card?.href).toBe('/admin/agent/newsletter')
+    expect(card?.domain).toBe('newsletter')
+    expect(card?.kind).toBe('site_upgrade')
+  })
+
+  it('surfaces newsletter idle when never sent (null) with active subscribers', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      newsletterActiveSubscribers: 3,
+      newsletterDaysSinceLastCampaign: null,
+    })
+    expect(cards.some((c) => c.id === 'newsletter_idle')).toBe(true)
+  })
+
+  it('does not invent newsletter idle when campaign age is unknown', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      newsletterActiveSubscribers: 20,
+      newsletterDaysSinceLastCampaign: undefined,
+    })
+    expect(cards.some((c) => c.id === 'newsletter_idle')).toBe(false)
+  })
+
+  it('does not surface newsletter idle under the 14-day threshold', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      newsletterActiveSubscribers: 20,
+      newsletterDaysSinceLastCampaign: 7,
+    })
+    expect(cards.some((c) => c.id === 'newsletter_idle')).toBe(false)
+  })
+
+  it('includes fundraising reply subject and from in items', () => {
+    const cards = buildPerformanceOpportunities({
+      ...emptyInputs,
+      fundraisingOpenReplies: 2,
+      fundraisingOpenReplyItems: [
+        { subject: 'Re: partnership', fromEmail: 'school@example.edu.au' },
+      ],
+    })
+    const card = cards.find((c) => c.id === 'fundraising_open_replies')
+    expect(card?.items?.[0]?.label).toContain('partnership')
+    expect(card?.items?.[0]?.detail).toContain('school@example.edu.au')
   })
 
   it('surfaces fundraising open replies without inventing a new sector href', () => {

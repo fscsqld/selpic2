@@ -20,6 +20,7 @@ export type PerformanceOpportunityId =
   | 'inbound_queue_backlog'
   | 'community_drafts_pending'
   | 'fundraising_open_replies'
+  | 'newsletter_idle'
 
 export type PerformanceOpportunityDomain =
   | 'fundraising'
@@ -29,11 +30,13 @@ export type PerformanceOpportunityDomain =
   | 'products'
   | 'inbound'
   | 'community'
+  | 'newsletter'
 
-/** Sample row for the card checklist (labels only — no auto actions). */
+/** Sample row for the card checklist — optional deep-link (HITL only). */
 export type PerformanceOpportunityItem = {
   label: string
   detail?: string
+  href?: string
 }
 
 export type PerformanceOpportunity = {
@@ -60,23 +63,41 @@ export type PerformanceCoachInputs = {
   trafficPrior7: { pageviews: number; uniqueVisitors: number; orders: number }
   revenueThisWeekAud: number
   revenuePriorWeekAud: number
-  thinProductCopy: { count: number; sampleName?: string; sampleNames?: string[] }
+  thinProductCopy: {
+    count: number
+    sampleName?: string
+    sampleNames?: string[]
+    samples?: Array<{ id?: string; name: string }>
+  }
   newInboundMessages: number
   newBespokeRequests: number
+  /** Concrete inbound rows (subject/from + deep-link). */
+  inboundSamples?: PerformanceOpportunityItem[]
   communityPendingDrafts: number
-  /** Pending community draft titles (sample). */
   communityDraftTitles?: string[]
+  communityDraftItems?: Array<{ id: string; title: string }>
   fundraisingOpenReplies: number
-  /** Optional latest open-reply subjects/snippets. */
   fundraisingOpenReplySamples?: string[]
+  fundraisingOpenReplyItems?: Array<{ subject?: string; fromEmail?: string }>
+  /**
+   * Days since last newsletter campaign send.
+   * - number: known last send
+   * - null: query ok, never sent
+   * - undefined: unknown (do not surface newsletter_idle)
+   */
+  newsletterDaysSinceLastCampaign?: number | null
+  newsletterActiveSubscribers?: number
 }
 
 const STALE_PENDING_DAYS = 7
 const SHORT_DESC_MIN = 40
 const DETAIL_DESC_MIN = 160
 const MAX_ITEMS = 5
+/** Soft nudge when no subscriber campaign has been sent recently. */
+const NEWSLETTER_IDLE_DAYS = 14
 
 type ThinCopyProductLike = {
+  id?: string
   name?: string
   description?: string
   detailDescription?: string
@@ -104,14 +125,19 @@ export function summarizeThinProductCopy(
   products: ThinCopyProductLike[]
 ): PerformanceCoachInputs['thinProductCopy'] {
   const thin = products.filter(isThinProductCopy)
-  const sampleNames = thin
-    .map((p) => (p.name || '').trim())
-    .filter(Boolean)
+  const samples = thin
+    .map((p) => ({
+      id: typeof p.id === 'string' ? p.id.trim() : undefined,
+      name: (p.name || '').trim(),
+    }))
+    .filter((p) => p.name)
     .slice(0, MAX_ITEMS)
+  const sampleNames = samples.map((s) => s.name)
   return {
     count: thin.length,
     sampleName: sampleNames[0],
     sampleNames,
+    samples,
   }
 }
 
@@ -133,10 +159,15 @@ export function emptyPerformanceCoachInputs(): PerformanceCoachInputs {
     thinProductCopy: { count: 0 },
     newInboundMessages: 0,
     newBespokeRequests: 0,
+    inboundSamples: [],
     communityPendingDrafts: 0,
     communityDraftTitles: [],
+    communityDraftItems: [],
     fundraisingOpenReplies: 0,
     fundraisingOpenReplySamples: [],
+    fundraisingOpenReplyItems: [],
+    newsletterDaysSinceLastCampaign: undefined,
+    newsletterActiveSubscribers: 0,
   }
 }
 
@@ -263,7 +294,17 @@ export function buildPerformanceOpportunities(
   if (input.thinProductCopy.count > 0) {
     const n = input.thinProductCopy.count
     const sample = input.thinProductCopy.sampleName
-    const names =
+    const productItems: PerformanceOpportunityItem[] =
+      (input.thinProductCopy.samples || [])
+        .slice(0, MAX_ITEMS)
+        .map((s) => ({
+          label: s.name,
+          detail: s.id ? `id ${s.id}` : undefined,
+          href: s.id
+            ? `/admin/products?q=${encodeURIComponent(s.id)}`
+            : `/admin/products?q=${encodeURIComponent(s.name)}`,
+        }))
+    const fallbackNames =
       input.thinProductCopy.sampleNames?.length
         ? input.thinProductCopy.sampleNames
         : sample
@@ -281,10 +322,10 @@ export function buildPerformanceOpportunities(
       href: '/admin/products',
       actionLabel: 'Open products',
       domain: 'products',
-      items: itemListFromLabels(names),
+      items: productItems.length ? productItems : itemListFromLabels(fallbackNames),
       nextSteps: [
-        'Open Products and find the listed SKUs (start with the sample names).',
-        'On each product form: Generate template or Polish with AI for short and/or detail description.',
+        'Open a product via the item link (filters Products by id/name).',
+        'Generate template or Polish with AI for short and/or detail description.',
         'Apply → review → Save. Do not invent prices, stock, or ship dates in published copy.',
       ],
     })
@@ -292,19 +333,29 @@ export function buildPerformanceOpportunities(
 
   const inboundTotal = input.newInboundMessages + input.newBespokeRequests
   if (inboundTotal > 0) {
-    const inboundItems: PerformanceOpportunityItem[] = []
-    if (input.newInboundMessages > 0) {
-      inboundItems.push({
-        label: `${input.newInboundMessages} new contact message${input.newInboundMessages === 1 ? '' : 's'}`,
-        detail: 'Status = new',
-      })
-    }
-    if (input.newBespokeRequests > 0) {
-      inboundItems.push({
-        label: `${input.newBespokeRequests} new bespoke request${input.newBespokeRequests === 1 ? '' : 's'}`,
-        detail: 'Status = new',
-      })
-    }
+    const inboundItems: PerformanceOpportunityItem[] =
+      input.inboundSamples && input.inboundSamples.length > 0
+        ? input.inboundSamples.slice(0, MAX_ITEMS)
+        : [
+            ...(input.newInboundMessages > 0
+              ? [
+                  {
+                    label: `${input.newInboundMessages} new contact message${input.newInboundMessages === 1 ? '' : 's'}`,
+                    detail: 'Status = new',
+                    href: '/admin/agent/inbound',
+                  },
+                ]
+              : []),
+            ...(input.newBespokeRequests > 0
+              ? [
+                  {
+                    label: `${input.newBespokeRequests} new bespoke request${input.newBespokeRequests === 1 ? '' : 's'}`,
+                    detail: 'Status = new',
+                    href: '/admin/agent/inbound?channel=bespoke',
+                  },
+                ]
+              : []),
+          ]
     cards.push({
       id: 'inbound_queue_backlog',
       severity: inboundTotal >= 5 ? 'high' : 'medium',
@@ -318,7 +369,7 @@ export function buildPerformanceOpportunities(
       domain: 'inbound',
       items: inboundItems,
       nextSteps: [
-        'Open Inbound and select the oldest new message or bespoke request.',
+        'Open an item link (or Inbound workspace) for the oldest new message/bespoke.',
         'Generate template (optional Polish with AI), edit the draft, then Send with messages/bespoke write permission.',
         'Never auto-reply from Performance — each send stays human-approved.',
       ],
@@ -327,6 +378,13 @@ export function buildPerformanceOpportunities(
 
   if (input.communityPendingDrafts > 0) {
     const n = input.communityPendingDrafts
+    const communityItems: PerformanceOpportunityItem[] =
+      (input.communityDraftItems || [])
+        .slice(0, MAX_ITEMS)
+        .map((d) => ({
+          label: d.title,
+          href: `/admin/agent/community?draft=${encodeURIComponent(d.id)}`,
+        }))
     cards.push({
       id: 'community_drafts_pending',
       severity: n >= 5 ? 'high' : 'medium',
@@ -338,17 +396,31 @@ export function buildPerformanceOpportunities(
       href: '/admin/agent/community',
       actionLabel: 'Open community queue',
       domain: 'community',
-      items: itemListFromLabels(input.communityDraftTitles),
+      items: communityItems.length
+        ? communityItems
+        : itemListFromLabels(input.communityDraftTitles),
       nextSteps: [
-        'Open the Community agent queue and review each pending draft title below.',
+        'Open a draft link (or Community queue) and review the pending title.',
         'Edit or Polish if needed, then Approve & publish with community:write.',
-        'Do not edit homepage Hero from this flow. Queue is shared via Supabase site_configs across deploys.',
+        'Do not edit homepage Hero from this flow. Queue is shared via Supabase site_configs.',
       ],
     })
   }
 
   if (input.fundraisingOpenReplies > 0) {
     const n = input.fundraisingOpenReplies
+    const replyItems: PerformanceOpportunityItem[] =
+      (input.fundraisingOpenReplyItems || [])
+        .slice(0, MAX_ITEMS)
+        .map((r) => {
+          const subject = (r.subject || '').trim()
+          const from = (r.fromEmail || '').trim()
+          return {
+            label: subject || from || 'Open reply',
+            detail: subject && from ? from : undefined,
+            href: '/admin/fundraising/agent',
+          }
+        })
     cards.push({
       id: 'fundraising_open_replies',
       severity: n >= 5 ? 'high' : 'medium',
@@ -360,11 +432,55 @@ export function buildPerformanceOpportunities(
       href: '/admin/fundraising/agent',
       actionLabel: 'Open fundraising agent',
       domain: 'fundraising',
-      items: itemListFromLabels(input.fundraisingOpenReplySamples),
+      items: replyItems.length
+        ? replyItems
+        : itemListFromLabels(input.fundraisingOpenReplySamples),
       nextSteps: [
-        'Open Fundraising Agent → Needs reply.',
+        'Open Fundraising Agent → Needs reply (match subject / from below).',
         'Draft (template or Polish), edit, then Send with fundraising:write.',
         'Mark handled / OPTED_OUT as appropriate — never mix with newsletter subscriber lists.',
+      ],
+    })
+  }
+
+  const daysIdle = input.newsletterDaysSinceLastCampaign
+  const activeSubs = input.newsletterActiveSubscribers ?? 0
+  // Only when campaign history is known — never invent idle from a failed campaigns query.
+  if (
+    activeSubs > 0 &&
+    daysIdle !== undefined &&
+    (daysIdle === null || daysIdle >= NEWSLETTER_IDLE_DAYS)
+  ) {
+    cards.push({
+      id: 'newsletter_idle',
+      severity: daysIdle === null || daysIdle >= 30 ? 'medium' : 'low',
+      kind: 'site_upgrade',
+      title:
+        daysIdle === null
+          ? 'Newsletter subscribers have no recent campaign'
+          : `No newsletter campaign in ${daysIdle} days`,
+      summary:
+        'Draft a subscriber campaign in Newsletter assist — Apply → Newsletter admin → human Send. Never mix with fundraising outreach_targets.',
+      metric: `${activeSubs} active subscriber${activeSubs === 1 ? '' : 's'}`,
+      href: '/admin/agent/newsletter',
+      actionLabel: 'Open Newsletter assist',
+      domain: 'newsletter',
+      items: [
+        {
+          label: 'Generate template / Polish',
+          detail: 'HITL draft only',
+          href: '/admin/agent/newsletter',
+        },
+        {
+          label: 'Newsletter admin (Send)',
+          detail: 'Choose recipients',
+          href: '/admin/newsletter',
+        },
+      ],
+      nextSteps: [
+        'Open Newsletter assist and Generate template (optional Polish).',
+        'Apply to Newsletter admin, review subject/body, choose subscribers.',
+        'Send only with newsletter:write — never auto-send from Performance.',
       ],
     })
   }

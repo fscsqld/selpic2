@@ -145,6 +145,12 @@ function AdminProductsPageContent() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductFormData | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const q = new URLSearchParams(window.location.search).get('q')?.trim()
+    if (q) setSearchTerm(q)
+  }, [])
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'category'>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
@@ -253,10 +259,15 @@ function AdminProductsPageContent() {
   }, [])
 
   // 검색 및 필터링된 상품 목록
+  // Cousin: Performance deep-links use ?q=<productId> — must match id, not only name/description.
   const filteredProducts = products
     .filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      const term = searchTerm.trim().toLowerCase()
+      const matchesSearch =
+        !term ||
+        product.id.toLowerCase().includes(term) ||
+        product.name.toLowerCase().includes(term) ||
+        (product.description || '').toLowerCase().includes(term)
       const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory
       return matchesSearch && matchesCategory
     })

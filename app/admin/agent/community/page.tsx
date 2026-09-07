@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useAdminAuth } from '@/lib/adminAuth'
@@ -16,6 +17,8 @@ import type { CommunityCalendarSuggestion } from '@/lib/agent/auCommunityCalenda
 import type { QueuedCommunityDraft } from '@/lib/agent/communityDraftQueue'
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronRight,
   Loader2,
   RefreshCw,
   Send,
@@ -40,13 +43,22 @@ type WorkspaceTab = 'queue' | 'compose'
 export default function AdminAgentCommunityPage() {
   return (
     <AdminRoute requiredAnyPermissions={['community:read', 'agent:read']}>
-      <CommunityDraftWorkspace />
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading community drafts…
+          </div>
+        }
+      >
+        <CommunityDraftWorkspace />
+      </Suspense>
     </AdminRoute>
   )
 }
 
 function CommunityDraftWorkspace() {
   const { adminUser } = useAdminAuth()
+  const searchParams = useSearchParams()
   const canPublish = adminHasPermission(adminUser, 'community:write')
 
   const [tab, setTab] = useState<WorkspaceTab>('queue')
@@ -70,6 +82,9 @@ function CommunityDraftWorkspace() {
   const [publishing, setPublishing] = useState(false)
   const [message, setMessage] = useState('')
   const [includeMarketS, setIncludeMarketS] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
+  const [showWeekTools, setShowWeekTools] = useState(true)
+  const [editorExpanded, setEditorExpanded] = useState(true)
 
   const selectedQueued = queue.find((q) => q.id === selectedQueueId) || null
 
@@ -124,16 +139,22 @@ function CommunityDraftWorkspace() {
       const items = json.items || []
       setQueue(items)
       if (json.calendarWindow) setCalendarWindow(json.calendarWindow)
+      const draftParam = searchParams.get('draft')?.trim() || ''
       setSelectedQueueId((prev) => {
+        if (draftParam && items.some((i) => i.id === draftParam)) return draftParam
         if (prev && items.some((i) => i.id === prev)) return prev
         return items[0]?.id ?? null
       })
+      if (draftParam) {
+        setTab('queue')
+        setEditorExpanded(true)
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to load queue')
     } finally {
       setLoadingQueue(false)
     }
-  }, [])
+  }, [searchParams])
 
   useEffect(() => {
     void loadTopics()
@@ -496,16 +517,28 @@ function CommunityDraftWorkspace() {
           </button>
         </div>
 
-        <div className="mb-6 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
-          <p className="font-medium">No auto-publish</p>
-          <p className="mt-1 text-violet-900/90">
-            {visionNote ||
-              'Generate this week’s suggestions into the queue, edit, then Approve & publish one by one.'}
-          </p>
-          {calendarWindow ? (
-            <p className="mt-2 text-xs font-medium text-violet-800">
-              This week’s window: {calendarWindow}
-            </p>
+        <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 text-sm text-violet-950">
+          <button
+            type="button"
+            onClick={() => setShowGuide((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left font-medium"
+            aria-expanded={showGuide}
+          >
+            <span>Guide — no auto-publish</span>
+            {showGuide ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+          {showGuide ? (
+            <div className="border-t border-violet-200 px-4 py-3 text-violet-900/90">
+              <p>
+                {visionNote ||
+                  'Generate this week’s suggestions into the queue, edit, then Approve & publish one by one.'}
+              </p>
+              {calendarWindow ? (
+                <p className="mt-2 text-xs font-medium text-violet-800">
+                  This week’s window: {calendarWindow}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -517,7 +550,22 @@ function CommunityDraftWorkspace() {
 
         {tab === 'queue' ? (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="rounded-lg border border-gray-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setShowWeekTools((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-gray-800"
+                aria-expanded={showWeekTools}
+              >
+                <span>Week tools</span>
+                {showWeekTools ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                )}
+              </button>
+              {showWeekTools ? (
+                <div className="flex flex-wrap gap-2 items-center border-t border-gray-100 px-4 py-3">
               <button
                 type="button"
                 onClick={() => void generateWeekIntoQueue()}
@@ -543,6 +591,8 @@ function CommunityDraftWorkspace() {
               <p className="text-xs text-gray-500 w-full sm:w-auto">
                 Uses AU calendar suggestions. Skips topics already pending. Does not publish.
               </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -591,6 +641,21 @@ function CommunityDraftWorkspace() {
                   <p className="py-12 text-center text-sm text-gray-500">Select a queued draft.</p>
                 ) : (
                   <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setEditorExpanded((v) => !v)}
+                      className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-gray-800"
+                      aria-expanded={editorExpanded}
+                    >
+                      <span className="truncate">{selectedQueued.title}</span>
+                      {editorExpanded ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-gray-500" />
+                      )}
+                    </button>
+                    {editorExpanded ? (
+                      <>
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
                         Title
@@ -694,6 +759,12 @@ function CommunityDraftWorkspace() {
                         You can edit/discard with read access. Publish needs community:write.
                       </p>
                     ) : null}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        Editor collapsed — expand to edit, polish, or publish.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
