@@ -1,8 +1,8 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-09-03 (Wave 5 SELPIC N AU calendar + daycare/kinder inclusive drafts)  
-**Status:** Wave 1–4 **shipped**. Wave 5 Community drafts **HITL v1.1** (calendar suggestions → Approve → publish). Wave 6+ auto-draft/publish slots not started.  
-**Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` (fundraising outreach v1) · `docs/fundraising-session-handoff.md`
+**Updated:** 2026-09-07 (Wave 4.5 Site Review — planned; Agent usage + Fundraising Agent declutter shipped)  
+**Status:** Wave 1–4 **shipped**. Wave 5 Community **HITL v1.2**. Newsletter sector **live**. Wave **4.5 Site Review** = **planned (not started)**. Wave 6+ auto-draft/publish slots not started.  
+**Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` · `docs/fundraising-session-handoff.md` · `docs/agent-site-review-wave45-handoff.md` (resume tomorrow)
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
 
@@ -44,6 +44,7 @@ SELPIC transplant: `/admin/agent` hub + sector adapters + existing `requireAdmin
 | Bot watches admin sectors; helps when errors / ops noise | Agent hub + sector health cards (API errors, inbound spikes) | Wave 2–3 | Alert + suggested fix; admin applies |
 | First-line answer when future customers ask | Messages / Bespoke (+ optional storefront help widget later) | Wave 3 | **Draft reply**; human Send |
 | Performance → concrete improvement tasks | Sales overview + Traffic + Fundraising Impact/Payout read models | Wave 4 | **Playbook drafts** (“promote X”, “restock Y”); human decides |
+| Quarterly full-site / sector health search → admin report; next quarter re-check **open/errors only**; manual sector re-search | Agent hub Site Review + Performance `site_upgrade` reuse | **Wave 4.5** | **L0 report** (+ L1 deep-links); never auto-edit Hero/CMS publish |
 | Periodic company news / SELPIC N auto posts | `/admin/community` (+ public `/community`); newsletter optional mirror | Wave 5 | **Draft post** → Approve → publish; optional scheduled publish after trust |
 | AU events / parent–student topics synthesised for visitors | Community categories + fundraising landing FAQ/news block (not homepage Hero) | Wave 5+ | Research → draft with sources → Approve; copyright/fair-use review |
 
@@ -277,6 +278,7 @@ v1 implements **only** the fundraising sector behaviours (even if files live und
 | 4 | Community / SELPIC N | Research + draft posts; **Approve → publish** |
 | 5 | Newsletter | Suggest subject/body; separate from school outreach_targets |
 | 6 | Orders | Exception queue summary; no auto refund |
+| — | **Site Review (Wave 4.5)** | Quarterly + manual sector **audit report** (read/smokes); findings → HITL deep-links — **not** auto Hero edit |
 | — | CMS / Homepage | **Draft only in CMS**, never auto-publish homepage Hero |
 | — | Administrator / Settings / Payroll | **Excluded** |
 
@@ -309,9 +311,47 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 - **Status:** **v1 live (2026-09-01)** — `/admin/agent/performance` + `GET /api/admin/agent/performance`.  
 - On-demand ranked **opportunity cards** from existing Supabase data (no new tables).  
 - v1 rules: stale fundraising pending (>7d), bank transfer pending, traffic up + flat conversion, weekly revenue down.  
+- Extended **`site_upgrade`** cards: thin product copy, weak imagery → Products HITL; inbound/community/fundraising/newsletter backlog chips.  
 - Never auto Mark Paid, never auto change prices without `products:write` + human confirm.  
 - Rule: `.cursor/rules/selpic-agent-performance-wave4.mdc`.  
-- Optional later: nightly cron, PDP-level traffic, LLM draft promo copy.
+- Optional later: nightly cron, PDP-level traffic, LLM draft promo copy.  
+- **Note:** Wave 4 is **live cards**, not a quarterly baseline report — that is Wave **4.5**.
+
+#### Wave 4.5 — Site Review (quarterly + manual sector audit) — **PLANNED**
+
+**Product intent (confirmed 2026-09-07):** Once per AU FY quarter, the agent runs a **governed storefront + sector health review**, stores a **baseline report**, and emails/shows it to admins. Admins can also **request a review for selected sectors** anytime. After findings are fixed and verified, the **next quarterly run re-checks open / regressed findings only** (plus a cheap smoke), instead of treating every page as new work.
+
+**What “search” means here (safe definition)**
+
+| In scope | Out of scope |
+|----------|----------------|
+| Fixed checklist of storefront URLs (incl. home) — **HTTP/read smoke only** | Editing `app/page.tsx` / Hero / auto CMS publish |
+| Catalog + media heuristics (reuse Performance `site_upgrade`) | Open-web scrape (schools, competitors) |
+| Sector health (Fundraising Needs reply, Inbound, Community queue, Newsletter, OpenAI usage anomalies) | Auto Mark Paid, price changes, checkout edits |
+| L0 report + L1 deep-links for humans | L2/L3 closed-loop site rewrite |
+
+**Cadence**
+
+- **Quarterly Full Review (baseline):** after AU FY quarter end (+ optional freeze days aligned with fundraising settlement), cron **or** hub **Run full review**.  
+- **Manual sector review:** hub chips → selected sectors only → same findings model (`trigger: manual`).  
+- **Incremental quarterly:** default mode after first baseline — deep re-check **`open` / `regressed` only**; `fixed` / `accepted` / `wontfix` skipped or smoke-only.
+
+**Findings model (invariant)**
+
+- Each finding has a stable **`fingerprint`**, `sector`, `severity`, `status` (`open` \| `fixed` \| `accepted` \| `wontfix` \| `regressed`), `deepLink`, `evidence`, `trigger` (`quarterly` \| `manual` \| `error_recheck`).  
+- Admin **Mark fixed** is not enough alone when possible: **Re-check this finding** must pass or status becomes `regressed` (forced into next report body).  
+- Reports keyed by `periodKey` (e.g. `FY2025-26-Q1`); persist via `site_configs` and/or Supabase (prefer shared store like other agent blobs).  
+- Audit: `logAdminActivity` on complete / mark-fixed / re-check. Optional Resend summary to admins.
+
+**Relationship to Wave 4**
+
+- Performance cards = **on-demand live view**.  
+- Site Review = **period snapshot + history + incremental re-check policy**.  
+- Reuse coach heuristics; do **not** duplicate a second ranking engine without need.
+
+**Autonomy:** L0 report default; L1 suggested fixes via existing sector HITL only. **Never** auto-publish homepage.
+
+**Implementation order:** see `docs/agent-site-review-wave45-handoff.md` (S0→S4). **Not started** until user says start Wave 4.5.
 
 #### Wave 5 — SELPIC N / Community content agent
 
@@ -408,7 +448,8 @@ Organic apply: omit entirely.
 ## 11. Explicit non-goals (until asked)
 
 - Autopilot Mark Paid / bank Save / D16 send  
-- Autopilot CMS publish or homepage redesign  
+- Autopilot CMS publish or homepage redesign (Wave 4.5 may **read/smoke** home; must not rewrite Hero)  
+- Open-web crawl / competitor or school directory scrape for Site Review  
 - Nodemailer / SendGrid  
 - ORM layer  
 - Merging newsletter consumer lists with school outreach_targets  
@@ -418,12 +459,20 @@ Organic apply: omit entirely.
 
 ## 12. Session checklist when starting build
 
+### Legacy (Fundraising A1 — already shipped)
+
 1. Read this file + `.cursor/rules/fundraising-ai-sales-agent.mdc` + fundraising handoff  
 2. Create/checkout `feature/ai-fundraising-agent`  
-3. Implement **A1 only**  
-4. Recommend commit message; wait for user before A2  
+3. Implement **A1 only** … (historical)
+
+### Next: Wave 4.5 Site Review (resume)
+
+1. Read **Wave 4.5** above + `docs/agent-site-review-wave45-handoff.md`  
+2. Branch: `feature/agent-site-review-wave45` (do not mix with unrelated homepage work)  
+3. Start at handoff **S0** (schema + checklist constants) unless user picks another step  
+4. Keep HITL: report + deep-link only; no Hero edits  
 5. Commit / push / deploy **only when user asks**  
 
 ---
 
-**End of plan.** Next user action: confirm vision, then **「개발 시작하자」** for Step A1.
+**End of plan.** Next user action for Site Review: **「Wave 4.5 시작」** / **「개발 시작하자」** → implement handoff **S0**.
