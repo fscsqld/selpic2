@@ -9,6 +9,9 @@ import { createSupabaseBrowserClientNoStore } from '@/lib/supabase/browser'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
+import { isTransientSiteConfigNetworkError } from '@/lib/siteConfigNetworkError'
+
+export { isTransientSiteConfigNetworkError } from '@/lib/siteConfigNetworkError'
 
 function siteConfigSupabase() {
   return createSupabaseBrowserClientNoStore()
@@ -45,6 +48,7 @@ let flushHandlersInstalled = false
 let cloudWritesAllowed = false
 
 const DEBOUNCE_MS = 400
+const UPSERT_NETWORK_RETRY_MS = 700
 
 type SiteConfigWriteStatus =
   | { kind: 'idle' }
@@ -53,6 +57,10 @@ type SiteConfigWriteStatus =
   | { kind: 'error'; source: 'state' | 'string'; at: number; message: string }
 
 let lastStatus: SiteConfigWriteStatus = { kind: 'idle' }
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function emitStatus(next: SiteConfigWriteStatus) {
   lastStatus = next
@@ -204,7 +212,8 @@ async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<vo
     emitStatus({ kind: 'error', source: 'state', at: Date.now(), message })
     throw new Error(message)
   }
-  try {
+
+  const attemptUpsert = async (): Promise<void> => {
     const res = await fetch('/api/admin/site-config', {
       method: 'PUT',
       credentials: 'same-origin',
@@ -229,11 +238,29 @@ async function upsertSiteConfigValue(state: Record<string, unknown>): Promise<vo
       target: STOREFRONT_CMS_CONFIG_KEY,
       description: 'Saved storefront CMS snapshot to site_configs',
     })
+  }
+
+  try {
+    try {
+      await attemptUpsert()
+    } catch (first) {
+      if (!cloudWritesAllowed) return
+      if (!isTransientSiteConfigNetworkError(first)) throw first
+      await sleep(UPSERT_NETWORK_RETRY_MS)
+      if (!cloudWritesAllowed) return
+      await attemptUpsert()
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unknown error'
+    const transient = isTransientSiteConfigNetworkError(e)
+    const userMessage = transient
+      ? 'Cloud save interrupted (dev server busy or offline). Retry shortly — local CMS is unchanged.'
+      : message
     if (getLastSiteConfigWriteStatus().kind !== 'error') {
-      console.error('[siteConfig] upsert error', e)
-      emitStatus({ kind: 'error', source: 'state', at: Date.now(), message })
+      // Use warn for transient so Next.js Console Error overlay does not treat HMR blips as app bugs.
+      if (transient) console.warn('[siteConfig] upsert transient network error', e)
+      else console.error('[siteConfig] upsert error', e)
+      emitStatus({ kind: 'error', source: 'state', at: Date.now(), message: userMessage })
     }
     throw e instanceof Error ? e : new Error(message)
   }
@@ -249,12 +276,17 @@ async function pushPersistStringToSupabase(serialized: string): Promise<void> {
     await upsertSiteConfigValue(state as Record<string, unknown>)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    console.error('[siteConfig] upsert error', e)
+    const transient = isTransientSiteConfigNetworkError(e)
+    const userMessage = transient
+      ? 'Cloud save interrupted (dev server busy or offline). Retry shortly — local CMS is unchanged.'
+      : message
+    if (transient) console.warn('[siteConfig] upsert error (string path, transient)', e)
+    else console.error('[siteConfig] upsert error', e)
     emitStatus({
       kind: 'error',
       source: 'string',
       at: Date.now(),
-      message,
+      message: userMessage,
     })
     throw e instanceof Error ? e : new Error(message)
   }
