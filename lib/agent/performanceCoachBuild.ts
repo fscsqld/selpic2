@@ -349,7 +349,7 @@ export function buildPerformanceOpportunities(
           label: s.name,
           detail: s.reason || (s.id ? `id ${s.id}` : undefined),
           href: s.id
-            ? `/admin/products?q=${encodeURIComponent(s.id)}`
+            ? `/admin/products?q=${encodeURIComponent(s.id)}&edit=${encodeURIComponent(s.id)}`
             : `/admin/products?q=${encodeURIComponent(s.name)}`,
         }))
     const fallbackNames =
@@ -372,9 +372,9 @@ export function buildPerformanceOpportunities(
       domain: 'products',
       items: imageryItems.length ? imageryItems : itemListFromLabels(fallbackNames),
       nextSteps: [
-        'Open a product via the item link (filters Products by id/name).',
-        'Upload a real https image (Media Library). Avoid indexeddb:// / data: URLs.',
-        'Optional: Photo brief (free) → Generate / Edit with AI → Apply → Save.',
+        'Open a product via the item link (filters + opens Edit when id matches).',
+        'Upload a real https image (Media Library), or Generate / Edit with AI → Apply → Save.',
+        'Avoid indexeddb:// / data: URLs — they will not sync to the storefront.',
       ],
     })
   }

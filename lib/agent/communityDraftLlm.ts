@@ -11,6 +11,7 @@ import {
   isAgentOpenAiEnabled,
   openAiChatJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from './agentOpenAiChat'
 import {
   stripCommunitySourcesFooter,
@@ -93,6 +94,7 @@ export async function polishCommunityDraftWithLlm(opts: {
   fetchImpl?: typeof fetch
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  usage?: AgentOpenAiUsageContext
 }): Promise<CommunityDraftWithSource> {
   const cleanedTemplate: CommunityDraftResult = {
     ...opts.template,
@@ -123,6 +125,7 @@ export async function polishCommunityDraftWithLlm(opts: {
     fetchImpl: opts.fetchImpl,
     timeoutMs: opts.timeoutMs,
     sectorKillEnvKey: 'AGENT_COMMUNITY_DRAFT_LLM',
+    usage: opts.usage,
   })
 
   if (!content) return templateWithSource

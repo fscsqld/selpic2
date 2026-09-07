@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 
 import {
   adminPermissionDeniedPlain,
-  requireAdminPermission,
+  requireAdminAnyPermission,
 } from '@/lib/supabase/requireAdminPermission'
 import { allowRateLimit } from '@/lib/server/simpleRateLimit'
 import {
   runProductImageryAssist,
   type ProductImageryAssistMode,
 } from '@/lib/agent/productImageryVisionLlm'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ type Body = {
  * Never writes the catalog or Media Library — human uploads + Save only.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminPermission('products:write')
+  const gate = await requireAdminAnyPermission(['products:write', 'agent:run'])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
   if (!gate.ok) {
@@ -53,10 +54,7 @@ export async function POST(req: Request) {
   const useLlm = body.useLlm === true
 
   if (useLlm) {
-    const adminKey =
-      (typeof gate.user.email === 'string' && gate.user.email) ||
-      gate.user.id ||
-      'unknown'
+    const adminKey = agentAdminLabelFromUser(gate.user)
     const ok = allowRateLimit(`product-imagery-llm:${adminKey}`, LLM_DAILY_MAX, DAY_MS)
     if (!ok) {
       return NextResponse.json(
@@ -75,6 +73,13 @@ export async function POST(req: Request) {
     category: body.category ? String(body.category) : undefined,
     imageUrl: body.imageUrl ? String(body.imageUrl) : undefined,
     useLlm,
+    usage: useLlm
+      ? {
+          sector: 'products',
+          action: mode === 'vision_review' ? 'vision_review' : 'photo_brief_llm',
+          adminLabel: agentAdminLabelFromUser(gate.user),
+        }
+      : undefined,
   })
 
   return NextResponse.json({

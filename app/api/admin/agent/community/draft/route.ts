@@ -11,6 +11,7 @@ import {
   type CommunityDraftTopicId,
 } from '@/lib/agent/communityDraft'
 import { polishCommunityDraftWithLlm } from '@/lib/agent/communityDraftLlm'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 import {
   COMMUNITY_POST_CATEGORIES,
   type CanonicalPostCategory,
@@ -36,9 +37,16 @@ type DraftBody = {
  * Does not write to community_posts. Publish stays on Approve + community:write.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminAnyPermission(['community:read', 'agent:read'])
+  const gate = await requireAdminAnyPermission([
+    'community:read',
+    'agent:read',
+    'agent:run',
+  ])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
+  if (!gate.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: DraftBody
   try {
@@ -81,7 +89,17 @@ export async function POST(req: Request) {
     })
   }
 
-  const draft = await polishCommunityDraftWithLlm({ template, useLlm })
+  const draft = await polishCommunityDraftWithLlm({
+    template,
+    useLlm,
+    usage: useLlm
+      ? {
+          sector: 'community',
+          action: 'polish_community_draft',
+          adminLabel: agentAdminLabelFromUser(gate.user),
+        }
+      : undefined,
+  })
 
   const catalogue = buildCommunityDraftCatalogue()
 

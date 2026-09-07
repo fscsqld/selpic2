@@ -9,6 +9,7 @@ import {
   type OutreachReplyIntent,
 } from '@/lib/fundraising/outreachReplyClassify'
 import { polishOutreachFollowUpDraftWithLlm } from '@/lib/fundraising/outreachReplyDraftLlm'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,9 +35,16 @@ function isOutreachIntent(raw: string): raw is OutreachReplyIntent {
  * Never sends email — Send follow-up stays on the replies route.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminAnyPermission(['fundraising:read', 'agent:read'])
+  const gate = await requireAdminAnyPermission([
+    'fundraising:read',
+    'agent:read',
+    'agent:run',
+  ])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
+  if (!gate.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: DraftBody
   try {
@@ -53,6 +61,7 @@ export async function POST(req: Request) {
     )
   }
 
+  const useLlm = body.useLlm === true
   const draft = await polishOutreachFollowUpDraftWithLlm({
     input: {
       subject: String(body.subject || ''),
@@ -67,7 +76,14 @@ export async function POST(req: Request) {
         : undefined,
       existingText: body.existingText ? String(body.existingText) : undefined,
     },
-    useLlm: body.useLlm === true,
+    useLlm,
+    usage: useLlm
+      ? {
+          sector: 'fundraising',
+          action: 'polish_outreach_followup',
+          adminLabel: agentAdminLabelFromUser(gate.user),
+        }
+      : undefined,
   })
 
   return NextResponse.json({ ok: true, draft })

@@ -149,7 +149,8 @@ function AdminProductsPageContent() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const q = new URLSearchParams(window.location.search).get('q')?.trim()
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get('q')?.trim()
     if (q) setSearchTerm(q)
   }, [])
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -485,6 +486,28 @@ function AdminProductsPageContent() {
     }
     setIsModalOpen(true)
   }
+
+  // Performance / imagery deep-link: ?edit=<productId> opens the edit modal once.
+  const [editDeepLinkHandled, setEditDeepLinkHandled] = useState(false)
+  useEffect(() => {
+    if (editDeepLinkHandled || typeof window === 'undefined') return
+    if (!canWriteProducts || !products.length) return
+    const editId = new URLSearchParams(window.location.search).get('edit')?.trim()
+    if (!editId) {
+      setEditDeepLinkHandled(true)
+      return
+    }
+    const match = products.find(
+      (p) => p.id === editId || p.id.toLowerCase() === editId.toLowerCase()
+    )
+    if (!match) {
+      // Wait until catalog is loaded before giving up on a missing id.
+      if (products.length > 0) setEditDeepLinkHandled(true)
+      return
+    }
+    setEditDeepLinkHandled(true)
+    openModal(match as ProductFormData)
+  }, [products, canWriteProducts, editDeepLinkHandled])
 
   const closeModal = () => {
     setIsModalOpen(false)
@@ -2794,7 +2817,7 @@ function AdminProductsPageContent() {
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-lg hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 >
-                  {editingProduct ? t('admin.products.edit') : t('admin.products.save')}
+                  {t('admin.products.save')}
                 </button>
               </div>
             </form>

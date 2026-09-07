@@ -12,6 +12,7 @@ import {
   type InboundIntentHint,
 } from '@/lib/agent/inboundDraft'
 import { polishInboundReplyDraftWithLlm } from '@/lib/agent/inboundDraftLlm'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,9 +36,17 @@ type DraftBody = {
  * Send still happens client-side via emailService — never auto-sends.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminAnyPermission(['messages:read', 'bespoke:read', 'agent:read'])
+  const gate = await requireAdminAnyPermission([
+    'messages:read',
+    'bespoke:read',
+    'agent:read',
+    'agent:run',
+  ])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
+  if (!gate.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: DraftBody
   try {
@@ -71,7 +80,18 @@ export async function POST(req: Request) {
 
   const template = buildInboundReplyDraft(input)
   const useLlm = body.useLlm === true
-  const draft = await polishInboundReplyDraftWithLlm({ template, input, useLlm })
+  const draft = await polishInboundReplyDraftWithLlm({
+    template,
+    input,
+    useLlm,
+    usage: useLlm
+      ? {
+          sector: 'inbound',
+          action: 'polish_inbound_draft',
+          adminLabel: agentAdminLabelFromUser(gate.user),
+        }
+      : undefined,
+  })
 
   return NextResponse.json({ ok: true, draft })
 }

@@ -4,12 +4,27 @@
  *
  * Cousins: missing key, AGENT_DRAFT_LLM=0 global kill, sector kill switches,
  * timeout, non-JSON responses, multi-sector reuse (inbound / community / later),
- * vision image_url payloads (https only at call sites).
+ * vision image_url payloads (https only at call sites), usage logging failures.
  */
+
+import { randomUUID } from 'crypto'
+import {
+  parseChatUsageFromResponse,
+} from './agentOpenAiPricing'
+import {
+  buildChatRunRecord,
+  type AgentRunSector,
+} from './agentRuns'
 
 export const AGENT_OPENAI_DEFAULT_MODEL = 'gpt-4o-mini'
 export const AGENT_OPENAI_DEFAULT_TIMEOUT_MS = 12_000
 export const AGENT_OPENAI_VISION_TIMEOUT_MS = 25_000
+
+export type AgentOpenAiUsageContext = {
+  sector: AgentRunSector
+  action: string
+  adminLabel?: string
+}
 
 export function isAgentOpenAiEnabled(
   env: NodeJS.ProcessEnv = process.env,
@@ -33,11 +48,40 @@ export function stripCodeFence(text: string): string {
 
 type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string | null } }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
 }
 
 type ChatContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } }
+
+async function recordChatUsageSafe(opts: {
+  model: string
+  usageCtx?: AgentOpenAiUsageContext
+  json: unknown
+}): Promise<void> {
+  if (!opts.usageCtx) return
+  const tokens = parseChatUsageFromResponse(opts.json)
+  if (!tokens) return
+  try {
+    const { appendAgentRun } = await import('@/lib/server/agentRunsStore')
+    const record = buildChatRunRecord({
+      id: randomUUID(),
+      sector: opts.usageCtx.sector,
+      action: opts.usageCtx.action,
+      model: opts.model,
+      adminLabel: opts.usageCtx.adminLabel || 'unknown',
+      usage: tokens,
+    })
+    await appendAgentRun(record)
+  } catch (e) {
+    console.warn('[agentOpenAiChat] usage log failed:', e)
+  }
+}
 
 /**
  * Returns raw assistant message content, or null on any failure.
@@ -51,6 +95,7 @@ export async function openAiChatJsonContent(opts: {
   model?: string
   temperature?: number
   sectorKillEnvKey?: string
+  usage?: AgentOpenAiUsageContext
 }): Promise<string | null> {
   return openAiChatCompletionContent({
     system: opts.system,
@@ -61,6 +106,7 @@ export async function openAiChatJsonContent(opts: {
     model: opts.model,
     temperature: opts.temperature,
     sectorKillEnvKey: opts.sectorKillEnvKey,
+    usage: opts.usage,
   })
 }
 
@@ -78,6 +124,7 @@ export async function openAiVisionJsonContent(opts: {
   model?: string
   temperature?: number
   sectorKillEnvKey?: string
+  usage?: AgentOpenAiUsageContext
 }): Promise<string | null> {
   const imageUrl = opts.imageUrl.trim()
   if (!/^https:\/\//i.test(imageUrl)) return null
@@ -94,6 +141,7 @@ export async function openAiVisionJsonContent(opts: {
     model: opts.model,
     temperature: opts.temperature ?? 0.2,
     sectorKillEnvKey: opts.sectorKillEnvKey,
+    usage: opts.usage,
   })
 }
 
@@ -106,6 +154,7 @@ async function openAiChatCompletionContent(opts: {
   model?: string
   temperature?: number
   sectorKillEnvKey?: string
+  usage?: AgentOpenAiUsageContext
 }): Promise<string | null> {
   const env = opts.env ?? process.env
   if (!isAgentOpenAiEnabled(env, opts.sectorKillEnvKey)) return null
@@ -141,7 +190,9 @@ async function openAiChatCompletionContent(opts: {
     if (!res.ok) return null
     const json = (await res.json()) as ChatCompletionResponse
     const content = json.choices?.[0]?.message?.content
-    return content?.trim() ? content : null
+    if (!content?.trim()) return null
+    void recordChatUsageSafe({ model, usageCtx: opts.usage, json })
+    return content
   } catch {
     return null
   } finally {

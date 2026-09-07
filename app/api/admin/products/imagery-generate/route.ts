@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 
 import {
   adminPermissionDeniedPlain,
-  requireAdminPermission,
+  requireAdminAnyPermission,
 } from '@/lib/supabase/requireAdminPermission'
 import { allowRateLimit } from '@/lib/server/simpleRateLimit'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
@@ -15,6 +15,11 @@ import {
   generateOrEditProductImage,
   sanitizeImagePrompt,
 } from '@/lib/agent/productImageryGenerate'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
+import { buildImageRunRecord } from '@/lib/agent/agentRuns'
+import { appendAgentRun } from '@/lib/server/agentRunsStore'
+import { readMediaSnapshot, writeMediaSnapshot } from '@/lib/server/mediaStore'
+import type { MediaSyncRecord } from '@/lib/mediaSync'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,13 +38,46 @@ type Body = {
   briefChecklist?: string[]
 }
 
+async function registerAiImageInMediaLibrary(opts: {
+  publicUrl: string
+  path: string
+  size: number
+  productName: string
+}): Promise<void> {
+  try {
+    const snap = await readMediaSnapshot()
+    const id = `ai-${randomUUID()}`
+    const record: MediaSyncRecord = {
+      id,
+      name: `AI product — ${opts.productName.slice(0, 60) || 'untitled'}`,
+      type: 'image',
+      url: opts.publicUrl,
+      size: opts.size,
+      uploadedAt: new Date().toISOString(),
+      category: 'product-media',
+      productName: opts.productName || undefined,
+      tags: ['ai-generated', 'product-media', 'hitl'],
+      description: `OpenAI Images HITL output (${opts.path})`,
+      usage: 'product',
+      mediaType: 'image',
+    }
+    const withoutDup = snap.mediaFiles.filter((f) => f.url !== opts.publicUrl)
+    await writeMediaSnapshot({
+      updatedAt: new Date().toISOString(),
+      mediaFiles: [record, ...withoutDup].slice(0, 2000),
+    })
+  } catch (e) {
+    console.warn('[imagery-generate] Media Library register failed:', e)
+  }
+}
+
 /**
  * POST — HITL product image generate/edit via OpenAI Images API.
  * Uploads result to Supabase Media; does not Save the product catalog.
  * Client must Apply URL into the form, then Save.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminPermission('products:write')
+  const gate = await requireAdminAnyPermission(['products:write', 'agent:run'])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
   if (!gate.ok) {
@@ -63,11 +101,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const adminKey =
-    (typeof gate.user.email === 'string' && gate.user.email) ||
-    gate.user.id ||
-    'unknown'
-  if (!allowRateLimit(`product-image-gen:${adminKey}`, GEN_DAILY_MAX, DAY_MS)) {
+  const adminLabel = agentAdminLabelFromUser(gate.user)
+  if (!allowRateLimit(`product-image-gen:${adminLabel}`, GEN_DAILY_MAX, DAY_MS)) {
     return NextResponse.json(
       {
         error:
@@ -130,6 +165,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing public URL after upload' }, { status: 500 })
   }
 
+  void appendAgentRun(
+    buildImageRunRecord({
+      id: randomUUID(),
+      sector: 'products',
+      action: result.mode === 'edit' ? 'product_image_edit' : 'product_image_generate',
+      model: result.model,
+      adminLabel,
+      imageUnits: 1,
+    })
+  )
+  void registerAiImageInMediaLibrary({
+    publicUrl,
+    path,
+    size: buffer.length,
+    productName: name || 'product',
+  })
+
   return NextResponse.json({
     ok: true,
     mode: result.mode,
@@ -138,6 +190,6 @@ export async function POST(req: Request) {
     promptUsed: prompt.slice(0, 500),
     sourceImageUrl: /^https:\/\//i.test(imageUrl) ? imageUrl : null,
     autonomyNote:
-      'AI image stored in Media only. Apply on the product form, then Save to publish. No auto catalog write.',
+      'AI image stored in Media Library. Apply on the product form, then Save to publish. No auto catalog write.',
   })
 }

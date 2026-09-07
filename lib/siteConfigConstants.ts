@@ -9,6 +9,11 @@ export const STOREFRONT_MEDIA_CONFIG_KEY = 'storefront_media'
  * Shared across local + Vercel via Supabase — not the gitignored JSON file alone.
  */
 export const AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY = 'agent_community_draft_queue'
+/**
+ * Agent OpenAI usage / Phase B2 run log (HITL calls only).
+ * Shared via site_configs — not accounting IndexedDB.
+ */
+export const AGENT_RUNS_CONFIG_KEY = 'agent_openai_runs'
 
 /**
  * sessionStorage: last `NEXT_PUBLIC_DEPLOY_VERSION` for which we merged remote CMS.

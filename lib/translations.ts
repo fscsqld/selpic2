@@ -2070,7 +2070,7 @@ export const translations = {
               iphone13: 'iPhone 13'
             },
             // Action buttons
-            save: 'Save',
+            save: 'Save product',
             cancel: 'Cancel',
             delete: 'Delete',
             edit: 'Edit',

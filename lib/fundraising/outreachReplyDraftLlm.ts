@@ -18,6 +18,7 @@ import {
   isAgentOpenAiEnabled,
   openAiChatJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from '../agent/agentOpenAiChat'
 import type { OutreachReplyIntent } from './outreachReplyClassify'
 import { buildOutreachFollowUpDraft } from './outreachReplyDraft'
@@ -179,6 +180,7 @@ export async function polishOutreachFollowUpDraftWithLlm(opts: {
   fetchImpl?: typeof fetch
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  usage?: AgentOpenAiUsageContext
 }): Promise<OutreachFollowUpDraftWithSource> {
   const fresh = buildOutreachFollowUpDraft({
     subject: opts.input.subject,
@@ -226,6 +228,7 @@ export async function polishOutreachFollowUpDraftWithLlm(opts: {
     fetchImpl: opts.fetchImpl,
     timeoutMs: opts.timeoutMs,
     sectorKillEnvKey: SECTOR_KILL,
+    usage: opts.usage,
   })
 
   if (!content) return templateWithSource

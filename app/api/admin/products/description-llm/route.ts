@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 
 import {
-  adminPermissionDeniedPlain,
-  requireAdminPermission,
-} from '@/lib/supabase/requireAdminPermission'
-import { allowRateLimit } from '@/lib/server/simpleRateLimit'
-import {
   polishProductDescriptionWithLlm,
 } from '@/lib/agent/productDescriptionDraftLlm'
 import type { ProductDescriptionField } from '@/lib/agent/productDescriptionDraft'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
+import {
+  adminPermissionDeniedPlain,
+  requireAdminAnyPermission,
+} from '@/lib/supabase/requireAdminPermission'
+
+import { allowRateLimit } from '@/lib/server/simpleRateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +31,7 @@ type Body = {
  * Never writes the catalog — Apply/Save stays in the product form.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminPermission('products:write')
+  const gate = await requireAdminAnyPermission(['products:write', 'agent:run'])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
   if (!gate.ok) {
@@ -54,10 +56,7 @@ export async function POST(req: Request) {
   const useLlm = body.useLlm === true
 
   if (useLlm) {
-    const adminKey =
-      (typeof gate.user.email === 'string' && gate.user.email) ||
-      gate.user.id ||
-      'unknown'
+    const adminKey = agentAdminLabelFromUser(gate.user)
     const ok = allowRateLimit(
       `product-desc-llm:${adminKey}`,
       LLM_DAILY_MAX,
@@ -82,6 +81,13 @@ export async function POST(req: Request) {
       existingText: body.existingText ? String(body.existingText) : undefined,
     },
     useLlm,
+    usage: useLlm
+      ? {
+          sector: 'products',
+          action: 'polish_product_description',
+          adminLabel: agentAdminLabelFromUser(gate.user),
+        }
+      : undefined,
   })
 
   return NextResponse.json({ ok: true, draft })

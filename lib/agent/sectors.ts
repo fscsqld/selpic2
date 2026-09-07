@@ -1,23 +1,21 @@
+/**
+ * SELPIC Agent Core — sector registry (Wave 2–5 + Newsletter assist).
+ * Phase B2: OpenAI usage via site_configs `agent_openai_runs`.
+ *
+ * =============================================================================
+ * AGENT_HUB_PERMISSION_NOTE (do not delete)
+ * -----------------------------------------------------------------------------
+ * Hub uses `agent:read` (legacy fundraising/messages/bespoke read aliases).
+ * `agent:run` also gates opt-in OpenAI polish/image routes.
+ * See `.cursor/rules/selpic-agent-permissions.mdc`.
+ * =============================================================================
+ */
+
 import {
   adminHasAnyPermission,
   adminHasPermission,
   type AdminLike,
 } from '@/lib/adminPermissionCheck'
-
-/**
- * SELPIC Agent Core — sector registry (Wave 2–5 + Newsletter assist).
- * Fundraising, inbound, performance, community, and newsletter drafts are live.
- *
- * =============================================================================
- * AGENT_HUB_PERMISSION_NOTE (do not delete)
- * -----------------------------------------------------------------------------
- * Phase B4 DONE: hub UI/API/dashboard use `agent:read`. Legacy aliases still
- * accept fundraising:read / messages:read / bespoke:read until staff JWTs are
- * updated. Per-sector deep-links keep domain permissions. Before a 3rd live
- * sector, confirm all relevant staff have explicit `agent:read` and trim aliases.
- * See `.cursor/rules/selpic-agent-permissions.mdc` and plan Phase B4.
- * =============================================================================
- */
 
 export type AgentSectorStatus = 'live' | 'coming_soon'
 
@@ -31,75 +29,68 @@ export type AgentSectorId =
 export type AgentSectorDef = {
   id: AgentSectorId
   label: string
+  /** One short line for the hub card. */
   description: string
   status: AgentSectorStatus
-  /** Deep-link when live */
   href?: string
-  /** Permission to open / use this sector */
   requiredPermission: string
-  /** When set, user needs at least one of these instead of requiredPermission alone */
   requiredAnyPermissions?: string[]
+  /** Extra detail — hub shows only when the card is expanded. */
   autonomyNote: string
 }
 
 export const AGENT_SECTORS: AgentSectorDef[] = [
   {
     id: 'fundraising',
-    label: 'Fundraising outreach',
-    description:
-      'Register school/org targets, send capped B2B introduction emails, track CONTACTED → CONVERTED, honour OPTED_OUT.',
+    label: 'Fundraising',
+    description: 'School outreach emails and conversion tracking.',
     status: 'live',
     href: '/admin/fundraising/agent',
     requiredPermission: 'fundraising:read',
-    autonomyNote:
-      'Send requires fundraising:write. Max 10 emails per send. Needs reply: template + optional Polish with AI (HITL). No auto-scrape / daily blast.',
+    autonomyNote: 'You confirm each send (max 10). Needs-reply drafts stay HITL.',
   },
   {
     id: 'inbound',
-    label: 'Customer care drafts',
-    description: 'Draft first-line replies for Messages and Bespoke (human Approve → Send).',
+    label: 'Customer care',
+    description: 'Draft replies for Messages and Bespoke.',
     status: 'live',
     href: '/admin/agent/inbound',
     requiredPermission: 'messages:read',
     requiredAnyPermissions: ['messages:read', 'bespoke:read', 'agent:read'],
-    autonomyNote:
-      'Wave 3 — template drafts only. Send uses existing Resend paths; needs messages:write or bespoke:write.',
+    autonomyNote: 'You send the email — never auto-reply.',
   },
   {
     id: 'performance',
-    label: 'Performance coach',
-    description:
-      'Ops + site-upgrade opportunity cards (deep-links to Products, Inbound, Community, Fundraising).',
+    label: 'Performance',
+    description: 'Opportunity cards (products, inbound, fundraising).',
     status: 'live',
     href: '/admin/agent/performance',
     requiredPermission: 'analytics:read',
     requiredAnyPermissions: ['analytics:read', 'agent:read'],
-    autonomyNote:
-      'Wave 4 v5 — imagery generate/edit HITL + weak-image site-upgrade; no auto Mark Paid, price changes, auto image publish, or auto-publish.',
-  },  {
+    autonomyNote: 'Suggestions only — no auto Mark Paid or price changes.',
+  },
+  {
     id: 'community',
-    label: 'SELPIC N / Community',
-    description: 'Draft community news posts for admin Approve → publish.',
+    label: 'Community',
+    description: 'Draft SELPIC N news posts for Approve → publish.',
     status: 'live',
     href: '/admin/agent/community',
     requiredPermission: 'community:read',
     requiredAnyPermissions: ['community:read', 'agent:read'],
-    autonomyNote:
-      'Wave 5 — template drafts + optional Polish with AI (HITL). Publish needs community:write. Never auto-edit homepage Hero.',
+    autonomyNote: 'Publish needs Approve. Never edits the homepage Hero.',
   },
   {
     id: 'newsletter',
-    label: 'Newsletter assist',
-    description:
-      'Suggest campaign subjects/bodies for subscriber sends; Apply → Newsletter admin (human Send).',
+    label: 'Newsletter',
+    description: 'Draft campaign subject/body for subscribers.',
     status: 'live',
     href: '/admin/agent/newsletter',
     requiredPermission: 'newsletter:read',
     requiredAnyPermissions: ['newsletter:read', 'agent:read'],
-    autonomyNote:
-      'HITL drafts only — never auto-send. Subscriber list only; do not mix with fundraising outreach_targets.',
+    autonomyNote: 'Apply then send in Newsletter admin — never auto-send.',
   },
 ]
+
 export function liveAgentSectors(): AgentSectorDef[] {
   return AGENT_SECTORS.filter((s) => s.status === 'live')
 }

@@ -10,6 +10,7 @@ import {
   isAgentOpenAiEnabled,
   openAiChatJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from './agentOpenAiChat'
 import {
   buildProductDescriptionDraft,
@@ -117,6 +118,7 @@ export async function polishProductDescriptionWithLlm(opts: {
   fetchImpl?: typeof fetch
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  usage?: AgentOpenAiUsageContext
 }): Promise<ProductDescriptionDraftWithSource> {
   const existing = (opts.input.existingText || '').trim()
   const fresh = buildProductDescriptionDraft({
@@ -157,6 +159,7 @@ export async function polishProductDescriptionWithLlm(opts: {
     fetchImpl: opts.fetchImpl,
     timeoutMs: opts.timeoutMs,
     sectorKillEnvKey: SECTOR_KILL,
+    usage: opts.usage,
   })
 
   if (!content) return asTemplate

@@ -10,6 +10,7 @@ import {
   isAgentOpenAiEnabled,
   openAiChatJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from './agentOpenAiChat'
 import {
   buildNewsletterCampaignDraft,
@@ -108,6 +109,7 @@ export async function polishNewsletterDraftWithLlm(
   opts?: {
     env?: NodeJS.ProcessEnv
     fetchImpl?: typeof fetch
+    usage?: AgentOpenAiUsageContext
   }
 ): Promise<NewsletterDraftWithSource> {
   const template = buildNewsletterCampaignDraft(input)
@@ -143,6 +145,7 @@ export async function polishNewsletterDraftWithLlm(
     fetchImpl: opts?.fetchImpl,
     sectorKillEnvKey: SECTOR_KILL,
     temperature: 0.35,
+    usage: opts?.usage,
   })
 
   if (!raw) return { ...base, source: 'template' }
@@ -182,6 +185,7 @@ export async function buildNewsletterDraftWithOptionalLlm(
   opts?: {
     env?: NodeJS.ProcessEnv
     fetchImpl?: typeof fetch
+    usage?: AgentOpenAiUsageContext
   }
 ): Promise<NewsletterDraftWithSource> {
   if (input.useLlm) {

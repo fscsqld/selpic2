@@ -14,6 +14,7 @@ import {
   isAgentOpenAiEnabled,
   openAiChatJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from './agentOpenAiChat'
 
 export type InboundDraftSource = 'template' | 'llm'
@@ -102,6 +103,7 @@ export async function polishInboundReplyDraftWithLlm(opts: {
   fetchImpl?: typeof fetch
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  usage?: AgentOpenAiUsageContext
 }): Promise<InboundDraftWithSource> {
   const templateWithSource: InboundDraftWithSource = { ...opts.template, source: 'template' }
 
@@ -128,6 +130,7 @@ export async function polishInboundReplyDraftWithLlm(opts: {
     fetchImpl: opts.fetchImpl,
     timeoutMs: opts.timeoutMs,
     sectorKillEnvKey: 'AGENT_INBOUND_DRAFT_LLM',
+    usage: opts.usage,
   })
 
   if (!content) return templateWithSource

@@ -466,7 +466,7 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
     permission: 'agent:read',
     name: 'AI Agent hub',
     description:
-      'Open the AI Agent hub (/admin/agent) and view sector summaries. Domain sends still need fundraising/messages/bespoke write permissions.',
+      'Open the AI Agent hub (/admin/agent), view sector summaries and OpenAI usage estimates. Domain sends still need fundraising/messages/bespoke write permissions.',
     category: 'AI Agent',
     accessiblePages: ['/admin/agent'],
   },
@@ -474,7 +474,7 @@ export const permissionDescriptions: Record<string, PermissionDescription> = {
     permission: 'agent:run',
     name: 'AI Agent run',
     description:
-      'Run cross-sector agent actions that are not covered by a domain write permission (future). Implies agent:read.',
+      'Run opt-in OpenAI Agent actions (Polish / image generate) when domain write is not granted. Implies agent:read. Domain Sends/Approve still need sector write permissions.',
     category: 'AI Agent',
     accessiblePages: ['/admin/agent'],
     requires: ['agent:read'],

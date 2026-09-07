@@ -10,6 +10,7 @@ import {
   openAiChatJsonContent,
   openAiVisionJsonContent,
   stripCodeFence,
+  type AgentOpenAiUsageContext,
 } from './agentOpenAiChat'
 
 export const AGENT_PRODUCT_IMAGERY_LLM_KILL = 'AGENT_PRODUCT_IMAGERY_LLM'
@@ -108,6 +109,7 @@ export async function runProductImageryAssist(opts: {
   env?: NodeJS.ProcessEnv
   fetchImpl?: typeof fetch
   useLlm?: boolean
+  usage?: AgentOpenAiUsageContext
 }): Promise<ProductImageryAssistResult> {
   const template = buildPhotoBriefTemplate({
     name: opts.name,
@@ -174,6 +176,7 @@ export async function runProductImageryAssist(opts: {
       env: opts.env,
       fetchImpl: opts.fetchImpl,
       sectorKillEnvKey: AGENT_PRODUCT_IMAGERY_LLM_KILL,
+      usage: opts.usage,
     })
     const parsed = raw ? parseImageryAssistJson(raw, 'vision_review') : null
     if (!parsed) {
@@ -226,6 +229,7 @@ export async function runProductImageryAssist(opts: {
     env: opts.env,
     fetchImpl: opts.fetchImpl,
     sectorKillEnvKey: AGENT_PRODUCT_IMAGERY_LLM_KILL,
+    usage: opts.usage,
   })
   const parsed = raw ? parseImageryAssistJson(raw, 'photo_brief') : null
   if (!parsed) return template

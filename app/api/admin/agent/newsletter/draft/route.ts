@@ -10,6 +10,7 @@ import {
 } from '@/lib/agent/newsletterDraft'
 import { buildNewsletterDraftWithOptionalLlm } from '@/lib/agent/newsletterDraftLlm'
 import { isAgentOpenAiEnabled } from '@/lib/agent/agentOpenAiChat'
+import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,9 +46,16 @@ export async function GET() {
  * Does not send email and does not touch outreach_targets.
  */
 export async function POST(req: Request) {
-  const gate = await requireAdminAnyPermission(['newsletter:read', 'agent:read'])
+  const gate = await requireAdminAnyPermission([
+    'newsletter:read',
+    'agent:read',
+    'agent:run',
+  ])
   const denied = adminPermissionDeniedPlain(gate)
   if (denied) return denied
+  if (!gate.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: DraftBody
   try {
@@ -61,14 +69,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'topicId is required and must be a known topic' }, { status: 400 })
   }
 
-  const draft = await buildNewsletterDraftWithOptionalLlm({
-    topicId,
-    sourceNotes: body.sourceNotes ? String(body.sourceNotes) : undefined,
-    customBrief: body.customBrief ? String(body.customBrief) : undefined,
-    useLlm: body.useLlm === true,
-    existingSubject: body.existingSubject ? String(body.existingSubject) : undefined,
-    existingMessage: body.existingMessage ? String(body.existingMessage) : undefined,
-  })
+  const useLlm = body.useLlm === true
+  const draft = await buildNewsletterDraftWithOptionalLlm(
+    {
+      topicId,
+      sourceNotes: body.sourceNotes ? String(body.sourceNotes) : undefined,
+      customBrief: body.customBrief ? String(body.customBrief) : undefined,
+      useLlm,
+      existingSubject: body.existingSubject ? String(body.existingSubject) : undefined,
+      existingMessage: body.existingMessage ? String(body.existingMessage) : undefined,
+    },
+    {
+      usage: useLlm
+        ? {
+            sector: 'newsletter',
+            action: 'polish_newsletter_draft',
+            adminLabel: agentAdminLabelFromUser(gate.user),
+          }
+        : undefined,
+    }
+  )
 
   return NextResponse.json({
     ok: true,
