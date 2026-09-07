@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import AdminRoute from '@/components/AdminRoute'
@@ -83,8 +83,11 @@ function CommunityDraftWorkspace() {
   const [message, setMessage] = useState('')
   const [includeMarketS, setIncludeMarketS] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
-  const [showWeekTools, setShowWeekTools] = useState(true)
-  const [editorExpanded, setEditorExpanded] = useState(true)
+  // Default collapsed when queue has work — avoid stacking Week tools + full editor on one screen.
+  const [showWeekTools, setShowWeekTools] = useState(false)
+  const weekToolsUserToggled = useRef(false)
+  // Cousin: auto-selecting the first queue row must not dump full Title/Body on load — expand only on click or ?draft=.
+  const [editorExpanded, setEditorExpanded] = useState(false)
 
   const selectedQueued = queue.find((q) => q.id === selectedQueueId) || null
 
@@ -139,6 +142,10 @@ function CommunityDraftWorkspace() {
       const items = json.items || []
       setQueue(items)
       if (json.calendarWindow) setCalendarWindow(json.calendarWindow)
+      // Cousin: empty queue needs Generate visible; pending drafts keep Week tools collapsed unless user opened it.
+      if (!weekToolsUserToggled.current) {
+        setShowWeekTools(items.length === 0)
+      }
       const draftParam = searchParams.get('draft')?.trim() || ''
       setSelectedQueueId((prev) => {
         if (draftParam && items.some((i) => i.id === draftParam)) return draftParam
@@ -485,9 +492,8 @@ function CommunityDraftWorkspace() {
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Wave 5 — Queue holds calendar drafts for Approve; Compose is on-demand. Template is free;
-          Polish with AI is opt-in. Nothing auto-publishes.
-          Homepage Hero stays out of scope.
+          Queue for Approve &amp; publish · Compose for one-off drafts · Nothing auto-publishes · Hero
+          out of scope. Open Guide for HITL details.
         </p>
 
         <div className="mb-4 flex gap-1 border-b border-gray-200">
@@ -528,13 +534,17 @@ function CommunityDraftWorkspace() {
             {showGuide ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
           {showGuide ? (
-            <div className="border-t border-violet-200 px-4 py-3 text-violet-900/90">
+            <div className="border-t border-violet-200 px-4 py-3 text-violet-900/90 space-y-2">
               <p>
                 {visionNote ||
-                  'Generate this week’s suggestions into the queue, edit, then Approve & publish one by one.'}
+                  'Use Week tools to enqueue this week’s AU calendar drafts, edit in the queue, then Approve & publish one by one.'}
+              </p>
+              <p className="text-xs text-violet-800">
+                Template is free; Polish with AI is opt-in. Compose is for one-off drafts. Never
+                auto-publish. Homepage Hero stays out of scope.
               </p>
               {calendarWindow ? (
-                <p className="mt-2 text-xs font-medium text-violet-800">
+                <p className="text-xs font-medium text-violet-800">
                   This week’s window: {calendarWindow}
                 </p>
               ) : null}
@@ -553,44 +563,56 @@ function CommunityDraftWorkspace() {
             <div className="rounded-lg border border-gray-200 bg-white">
               <button
                 type="button"
-                onClick={() => setShowWeekTools((v) => !v)}
+                onClick={() => {
+                  weekToolsUserToggled.current = true
+                  setShowWeekTools((v) => !v)
+                }}
                 className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-gray-800"
                 aria-expanded={showWeekTools}
               >
-                <span>Week tools</span>
+                <span className="min-w-0">
+                  <span className="block">Week tools</span>
+                  {!showWeekTools ? (
+                    <span className="mt-0.5 block text-xs font-normal text-gray-500">
+                      {queue.length === 0
+                        ? 'Expand to generate this week’s calendar drafts into the queue.'
+                        : 'Collapsed — generate more week drafts here if needed.'}
+                    </span>
+                  ) : null}
+                </span>
                 {showWeekTools ? (
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                  <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-500" />
                 )}
               </button>
               {showWeekTools ? (
                 <div className="flex flex-wrap gap-2 items-center border-t border-gray-100 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => void generateWeekIntoQueue()}
-                disabled={queueBusy}
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
-              >
-                {queueBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                Generate this week into queue
-              </button>
-              <label className="inline-flex items-center gap-2 text-xs text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={includeMarketS}
-                  onChange={(e) => setIncludeMarketS(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                Include Market S (drop is live)
-              </label>
-              <p className="text-xs text-gray-500 w-full sm:w-auto">
-                Uses AU calendar suggestions. Skips topics already pending. Does not publish.
-              </p>
+                  <button
+                    type="button"
+                    onClick={() => void generateWeekIntoQueue()}
+                    disabled={queueBusy}
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                  >
+                    {queueBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    Generate this week into queue
+                  </button>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={includeMarketS}
+                      onChange={(e) => setIncludeMarketS(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    Include Market S (drop is live)
+                  </label>
+                  <p className="text-xs text-gray-500 w-full sm:w-auto">
+                    Uses AU calendar suggestions. Skips topics already pending. Does not publish.
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -615,7 +637,10 @@ function CommunityDraftWorkspace() {
                       <li key={item.id}>
                         <button
                           type="button"
-                          onClick={() => setSelectedQueueId(item.id)}
+                          onClick={() => {
+                            setSelectedQueueId(item.id)
+                            setEditorExpanded(true)
+                          }}
                           className={`w-full text-left px-4 py-3 hover:bg-gray-50 ${
                             selectedQueueId === item.id ? 'bg-violet-50' : ''
                           }`}
@@ -647,7 +672,18 @@ function CommunityDraftWorkspace() {
                       className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-gray-800"
                       aria-expanded={editorExpanded}
                     >
-                      <span className="truncate">{selectedQueued.title}</span>
+                      <span className="min-w-0">
+                        {editorExpanded ? (
+                          <span className="block">Draft editor</span>
+                        ) : (
+                          <>
+                            <span className="block truncate">{selectedQueued.title}</span>
+                            <span className="mt-0.5 block text-[11px] font-normal uppercase tracking-wide text-violet-700">
+                              {selectedQueued.topicId} · {selectedQueued.source} — expand to edit
+                            </span>
+                          </>
+                        )}
+                      </span>
                       {editorExpanded ? (
                         <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
                       ) : (
