@@ -141,6 +141,8 @@ function AgentContent() {
     notes: '',
   })
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [supplyOpen, setSupplyOpen] = useState(false)
+  const [addTargetOpen, setAddTargetOpen] = useState(false)
   const [importText, setImportText] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importSource, setImportSource] = useState<OutreachListSourceType>('admin_csv_paste')
@@ -387,6 +389,7 @@ function AgentContent() {
 
   const startEdit = (t: FundraisingOutreachTarget) => {
     setEditingId(t.id)
+    setAddTargetOpen(true)
     setForm({
       organizationName: t.organizationName || '',
       contactName: t.contactName || '',
@@ -980,22 +983,9 @@ function AgentContent() {
         showLanguageSelector={false}
       />
       <FundraisingAdminShell
-        title="Fundraising Agent"
-        subtitle="Licensed-feed auto-collect → PENDING pool → Sydney ≤10 send (Confirm or optional auto-send). No open-web scrape."
+        subtitle="PENDING pool → ≤10/day (Sydney). Replies in Needs reply."
         current="/admin/fundraising/agent"
       >
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <div className="flex items-start gap-2">
-          <Bot className="h-4 w-4 mt-0.5 shrink-0" />
-          <div>
-            Goal path: <strong>auto-collect</strong> from a licensed HTTPS list feed into PENDING, then send up to{' '}
-            <strong>10/day</strong> (Sydney) via Confirm Send or optional auto-send. Replies land in{' '}
-            <strong>Needs reply</strong> below (not CS inbound). ACARA/gov school lists do{' '}
-            <strong>not</strong> allow marketing contact use — use a list you are licensed to email. Manual CSV remains
-            a backup. Requires <strong>fundraising:write</strong>.
-          </div>
-        </div>
-      </div>
 
       {message ? (
         <div
@@ -1053,10 +1043,8 @@ function AgentContent() {
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-sky-700" /> Needs reply ({openReplies.length})
         </h2>
-        <p className="text-xs text-gray-700">
-          Outreach email replies that need a human follow-up. Not customer care (
-          <code className="rounded bg-white px-1">/admin/agent/inbound</code>
-          ).
+        <p className="text-xs text-gray-600">
+          Outreach replies awaiting follow-up (not CS inbound).
         </p>
         {openReplies.length === 0 ? (
           <p className="text-sm text-gray-600">No open replies.</p>
@@ -1201,14 +1189,254 @@ function AgentContent() {
         )}
       </div>
 
-      <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm space-y-3">
+      <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm space-y-3">
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Bot className="h-4 w-4 text-emerald-700" /> Auto-collect (licensed HTTPS feed)
+          <ListChecks className="h-4 w-4 text-indigo-700" /> Today’s queue
         </h2>
-        <p className="text-xs text-gray-700">
-          Point this at a purchased/official CSV or JSON export URL (https). Use <strong>Test feed</strong> before
-          Collect now. Daily cron at 19:00 UTC fills PENDING (insert cap/day), then 21:00 UTC auto-send can mail ≤10
-          if enabled. Not a website scraper. Go-live checklist:{' '}
+        <p className="text-xs text-gray-600">
+          Build PENDING selection for today’s Sydney cap, then Confirm Send on the table toolbar.
+        </p>
+        <div className="flex flex-wrap gap-3 text-sm text-gray-800">
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Day: <strong>{dailyQuota?.dayKey || '—'}</strong>
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Sent today: <strong>{dailyQuota?.sentToday ?? '—'}</strong> / {dailyQuota?.dailyCap ?? 10}
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Remaining: <strong>{dailyQuota?.remaining ?? '—'}</strong>
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            PENDING pool: <strong>{dailyQuota?.pendingPoolSize ?? '—'}</strong>
+          </span>
+          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
+            Auto-send:{' '}
+            <strong>{autoSend ? (autoSend.enabled ? 'On' : 'Off') : '—'}</strong>
+          </span>
+        </div>
+        {autoSend?.lastResult ? (
+          <p className="text-xs text-gray-600">
+            Last auto-send:{' '}
+            {autoSend.lastRunAt ? new Date(autoSend.lastRunAt).toLocaleString() : '—'} · {autoSend.lastResult}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={
+              busy ||
+              loading ||
+              !dailyQuota ||
+              dailyQuota.remaining <= 0 ||
+              dailyQuota.pendingPoolSize <= 0
+            }
+            onClick={onBuildDailyQueue}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            title={
+              !dailyQuota
+                ? 'Loading daily queue…'
+                : dailyQuota.remaining <= 0
+                  ? 'Daily send cap reached for Sydney today'
+                  : dailyQuota.pendingPoolSize <= 0
+                    ? 'No PENDING targets with email — import or add targets first'
+                    : 'Select up to today’s remaining PENDING targets'
+            }
+          >
+            <ListChecks className="h-4 w-4" />
+            Build today’s queue
+          </button>
+          <button
+            type="button"
+            disabled={autoSendBusy || busy}
+            onClick={() => void onToggleAutoSend(!(autoSend?.enabled))}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {autoSendBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {autoSend?.enabled ? 'Disable daily auto-send' : 'Enable daily auto-send'}
+          </button>
+          <button
+            type="button"
+            disabled={autoSendBusy || busy}
+            onClick={() => void onRunAutoSendNow()}
+            className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+          >
+            Run auto-send now
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <label className="text-xs text-gray-600 flex items-center gap-2">
+          Status
+          <select
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          >
+            {STATUS_FILTERS.map((s) => (
+              <option key={s || 'all'} value={s}>
+                {s || 'All'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setSelected(
+              new Set(selectableIds.slice(0, dailyQuota?.remaining ?? 10))
+            )
+          }
+          className="text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          Select up to {dailyQuota?.remaining ?? 10} sendable
+        </button>
+        <button
+          type="button"
+          disabled={busy || selectedCount === 0}
+          onClick={() => void onSend()}
+          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+          Confirm Send ({selectedCount})
+        </button>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm mb-16">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-3 py-2 w-10" />
+              <th className="px-3 py-2">Organisation</th>
+              <th className="px-3 py-2">Contact</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Last sent</th>
+              <th className="px-3 py-2">Id</th>
+              <th className="px-3 py-2 w-24">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
+                  Loading…
+                </td>
+              </tr>
+            ) : targets.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
+                  No outreach targets yet. Expand Add target below, or Supply targets.
+                </td>
+              </tr>
+            ) : (
+              targets.map((t) => {
+                const canSelect =
+                  t.status !== 'CONVERTED' && t.status !== 'OPTED_OUT' && Boolean(t.contactEmail)
+                return (
+                  <tr key={t.id} className="border-t border-gray-100">
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        disabled={!canSelect}
+                        checked={selected.has(t.id)}
+                        onChange={() => toggle(t.id)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-gray-900">{t.organizationName}</div>
+                      <div className="text-xs text-gray-500">
+                        {[t.orgType, t.state].filter(Boolean).join(' · ') || '—'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div>{t.contactName || '—'}</div>
+                      <div className="text-xs text-gray-500">{t.contactEmail || 'No email'}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
+                        {t.status}
+                      </span>
+                      {t.lastError ? (
+                        <div className="text-xs text-red-600 mt-1 max-w-[200px] truncate" title={t.lastError}>
+                          {t.lastError}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      {t.lastSentAt ? new Date(t.lastSentAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-500">{t.id}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => startEdit(t)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          title="Edit target"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        {t.status === 'FAILED' ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void resetFailedToPending(t)}
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                            title="Reset FAILED to PENDING"
+                          >
+                            Retry
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void onDelete(t)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          title="Delete target"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <section className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSupplyOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          aria-expanded={supplyOpen}
+        >
+          <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <Bot className="h-4 w-4 text-emerald-700" />
+            Supply targets
+          </span>
+          <span className="text-xs text-gray-500">{supplyOpen ? 'Hide' : 'Show'} · auto-collect &amp; CSV</span>
+        </button>
+        {supplyOpen ? (
+          <div className="space-y-4 border-t border-gray-100 px-4 pb-4 pt-3">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Bot className="h-4 w-4 text-emerald-700" /> Auto-collect
+        </h2>
+        <p className="text-xs text-gray-600">
+          Licensed HTTPS CSV/JSON feed only — Test feed before Collect. See{' '}
           <code className="rounded bg-white px-1">docs/fundraising-outreach-licensed-list-golive.md</code>
         </p>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -1379,10 +1607,9 @@ function AgentContent() {
           </button>
         </div>
       </div>
-
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+      <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-4 space-y-3">
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Upload className="h-4 w-4" /> Import targets (CSV / paste) — backup
+          <Upload className="h-4 w-4" /> Import CSV / paste
         </h2>
         <p className="text-xs text-gray-600">
           Header row recommended:{' '}
@@ -1475,110 +1702,26 @@ function AgentContent() {
           </button>
         </div>
       </div>
-
-      <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm space-y-3">
-        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <ListChecks className="h-4 w-4 text-indigo-700" /> Today’s outreach queue (Sydney)
-        </h2>
-        <p className="text-xs text-gray-700">
-          Build up to <strong>10 PENDING</strong> targets for today, review, then{' '}
-          <strong>Confirm Send</strong>. Optional daily cron auto-send stays <strong>off</strong> until you enable it
-          below. Cap resets on the Australia/Sydney calendar day.
-        </p>
-        <div className="flex flex-wrap gap-3 text-sm text-gray-800">
-          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
-            Day: <strong>{dailyQuota?.dayKey || '—'}</strong>
-          </span>
-          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
-            Sent today: <strong>{dailyQuota?.sentToday ?? '—'}</strong> / {dailyQuota?.dailyCap ?? 10}
-          </span>
-          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
-            Remaining: <strong>{dailyQuota?.remaining ?? '—'}</strong>
-          </span>
-          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
-            PENDING pool: <strong>{dailyQuota?.pendingPoolSize ?? '—'}</strong>
-          </span>
-          <span className="rounded-md bg-white px-2.5 py-1 border border-indigo-100">
-            Auto-send:{' '}
-            <strong>{autoSend ? (autoSend.enabled ? 'On' : 'Off') : '—'}</strong>
-          </span>
-        </div>
-        {autoSend?.lastResult ? (
-          <p className="text-xs text-gray-600">
-            Last auto-send:{' '}
-            {autoSend.lastRunAt ? new Date(autoSend.lastRunAt).toLocaleString() : '—'} · {autoSend.lastResult}
-          </p>
+          </div>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={
-              busy ||
-              loading ||
-              !dailyQuota ||
-              dailyQuota.remaining <= 0 ||
-              dailyQuota.pendingPoolSize <= 0
-            }
-            onClick={onBuildDailyQueue}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            title={
-              !dailyQuota
-                ? 'Loading daily queue…'
-                : dailyQuota.remaining <= 0
-                  ? 'Daily send cap reached for Sydney today'
-                  : dailyQuota.pendingPoolSize <= 0
-                    ? 'No PENDING targets with email — import or add targets first'
-                    : 'Select up to today’s remaining PENDING targets'
-            }
-          >
-            <ListChecks className="h-4 w-4" />
-            Build today’s queue
-          </button>
-          <button
-            type="button"
-            disabled={busy || selectedCount === 0}
-            onClick={() => void onSend()}
-            className="inline-flex items-center gap-2 rounded-md border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-            Confirm Send ({selectedCount})
-          </button>
-          <button
-            type="button"
-            disabled={autoSendBusy || busy}
-            onClick={() => void onToggleAutoSend(!(autoSend?.enabled))}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {autoSendBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {autoSend?.enabled ? 'Disable daily auto-send' : 'Enable daily auto-send'}
-          </button>
-          <button
-            type="button"
-            disabled={autoSendBusy || busy}
-            onClick={() => void onRunAutoSendNow()}
-            className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
-          >
-            Run auto-send now
-          </button>
-        </div>
-        {message && (messageTone === 'success' || message.startsWith('Confirm Send')) ? (
-          <p
-            className={`text-sm font-medium rounded-md border px-3 py-2 ${
-              messageTone === 'error'
-                ? 'border-red-200 bg-red-50 text-red-900'
-                : 'border-emerald-200 bg-emerald-50 text-emerald-900'
-            }`}
-          >
-            {message}
-          </p>
-        ) : null}
-      </div>
+      </section>
 
-      <form onSubmit={onCreate} className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
-        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          {editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {editingId ? `Edit outreach target (${editingId})` : 'Add outreach target'}
-        </h2>
+      <section className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setAddTargetOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          aria-expanded={addTargetOpen}
+        >
+          <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            {editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {editingId ? 'Edit target' : 'Add target'}
+          </span>
+          <span className="text-xs text-gray-500">{addTargetOpen ? 'Hide' : 'Show'}</span>
+        </button>
+        {addTargetOpen ? (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+      <form onSubmit={onCreate} className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-xs text-gray-600">
             Organisation name *
@@ -1676,158 +1819,11 @@ function AgentContent() {
           ) : null}
         </div>
       </form>
+          </div>
+        ) : null}
+      </section>
 
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <label className="text-xs text-gray-600 flex items-center gap-2">
-          Status
-          <select
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          >
-            {STATUS_FILTERS.map((s) => (
-              <option key={s || 'all'} value={s}>
-                {s || 'All'}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            setSelected(
-              new Set(selectableIds.slice(0, dailyQuota?.remaining ?? 10))
-            )
-          }
-          className="text-sm text-indigo-600 hover:text-indigo-800"
-        >
-          Select up to {dailyQuota?.remaining ?? 10} sendable
-        </button>
-        <button
-          type="button"
-          disabled={busy || selectedCount === 0}
-          onClick={() => void onSend()}
-          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-          Confirm Send ({selectedCount})
-        </button>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm mb-16">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-            <tr>
-              <th className="px-3 py-2 w-10" />
-              <th className="px-3 py-2">Organisation</th>
-              <th className="px-3 py-2">Contact</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Last sent</th>
-              <th className="px-3 py-2">Id</th>
-              <th className="px-3 py-2 w-24">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
-                  Loading…
-                </td>
-              </tr>
-            ) : targets.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
-                  No outreach targets yet. Add one above.
-                </td>
-              </tr>
-            ) : (
-              targets.map((t) => {
-                const canSelect =
-                  t.status !== 'CONVERTED' && t.status !== 'OPTED_OUT' && Boolean(t.contactEmail)
-                return (
-                  <tr key={t.id} className="border-t border-gray-100">
-                    <td className="px-3 py-2">
-                      <input
-                        type="checkbox"
-                        disabled={!canSelect}
-                        checked={selected.has(t.id)}
-                        onChange={() => toggle(t.id)}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-gray-900">{t.organizationName}</div>
-                      <div className="text-xs text-gray-500">
-                        {[t.orgType, t.state].filter(Boolean).join(' · ') || '—'}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div>{t.contactName || '—'}</div>
-                      <div className="text-xs text-gray-500">{t.contactEmail || 'No email'}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
-                        {t.status}
-                      </span>
-                      {t.lastError ? (
-                        <div className="text-xs text-red-600 mt-1 max-w-[200px] truncate" title={t.lastError}>
-                          {t.lastError}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">
-                      {t.lastSentAt ? new Date(t.lastSentAt).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-500">{t.id}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => startEdit(t)}
-                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title="Edit target"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </button>
-                        {t.status === 'FAILED' ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void resetFailedToPending(t)}
-                            className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                            title="Reset FAILED to PENDING"
-                          >
-                            Retry
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void onDelete(t)}
-                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                          title="Delete target"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </FundraisingAdminShell>
+</FundraisingAdminShell>
     </div>
   )
 }

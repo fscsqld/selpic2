@@ -38,17 +38,21 @@ export function FundraisingAdminShell({
   current,
   children,
 }: {
-  title: string
-  subtitle: string
+  title?: string
+  subtitle?: string
   current: string
   children: ReactNode
 }) {
   return (
     <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        <p className="text-sm text-gray-600 mt-1">{subtitle}</p>
-      </div>
+      {(title || subtitle) && (
+        <div className="mb-4">
+          {title ? <h1 className="text-2xl font-bold text-gray-900">{title}</h1> : null}
+          {subtitle ? (
+            <p className={`text-sm text-gray-600 ${title ? 'mt-1' : ''}`}>{subtitle}</p>
+          ) : null}
+        </div>
+      )}
       <FundraisingAdminNav current={current} />
       {children}
     </div>
