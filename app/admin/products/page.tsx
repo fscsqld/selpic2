@@ -2036,7 +2036,9 @@ function AdminProductsPageContent() {
                     productName={formData.name}
                     category={formData.category}
                     imageUrl={formData.image}
+                    productId={formData.id}
                     disabled={!canWriteProducts}
+                    onApplyImage={(url) => setFormData((prev) => ({ ...prev, image: url }))}
                   />
                 </div>
 

@@ -364,8 +364,8 @@ export function buildPerformanceOpportunities(
       kind: 'site_upgrade',
       title: `${n} product${n === 1 ? '' : 's'} need stronger primary imagery`,
       summary: sample
-        ? `Includes “${sample}”. Upload https images via Media Library; optional Vision review / photo brief — human Save only.`
-        : 'Upload https images via Media Library; optional Vision review / photo brief — human Save only.',
+        ? `Includes “${sample}”. Use Products → Generate / Edit with AI → Apply → Save (HITL).`
+        : 'Use Products → Generate / Edit with AI → Apply → Save (HITL).',
       metric: 'Missing, placeholder, or non-syncable primary image URL',
       href: '/admin/products',
       actionLabel: 'Open products',
@@ -374,7 +374,7 @@ export function buildPerformanceOpportunities(
       nextSteps: [
         'Open a product via the item link (filters Products by id/name).',
         'Upload a real https image (Media Library). Avoid indexeddb:// / data: URLs.',
-        'Optional: Photo brief or Review with Vision on the product form — checklist only; Save publishes.',
+        'Optional: Photo brief (free) → Generate / Edit with AI → Apply → Save.',
       ],
     })
   }

@@ -81,6 +81,6 @@ export async function POST(req: Request) {
     ok: true,
     draft,
     autonomyNote:
-      'Checklist / brief only — upload images via Media Library, then Save. No auto image replace.',
+      'Brief checklist for the image prompt only. Use Generate / Edit with AI to create a new image, then Apply → Save.',
   })
 }

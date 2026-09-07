@@ -208,6 +208,36 @@ function PerformanceCoachWorkspace() {
           </p>
         </div>
 
+        {/* Cousin: healthy catalogs show zero weak-image cards — admins thought Imagery was missing. */}
+        <div className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <p className="font-medium">Product imagery — where to test</p>
+          <p className="mt-1 text-sky-900/90">
+            Performance only shows a <span className="font-medium">weak imagery</span> opportunity
+            when in-stock products are missing a usable primary image (empty,{' '}
+            <code className="text-xs">indexeddb://</code>, <code className="text-xs">data:</code>, or
+            placeholder). If every listing already has an https image, that card stays hidden — that
+            is expected.
+          </p>
+          <p className="mt-2 text-sky-900/90">
+            Photo brief (free) → <span className="font-medium">Generate / Edit with AI</span> → Apply
+            → Save lives on{' '}
+            <Link href="/admin/products" className="font-semibold underline underline-offset-2">
+              Products → Edit product
+            </Link>{' '}
+            under the main image upload.
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-sky-900/90">
+            <li>
+              To force the Performance card: Edit a product → clear primary image → Save → return
+              here → Refresh → Site upgrade.
+            </li>
+            <li>
+              To replace a primary image with AI: open the product → Photo brief → Generate / Edit
+              with AI → compare Before/After → Apply → Save.
+            </li>
+          </ul>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <button
             type="button"
@@ -268,8 +298,18 @@ function PerformanceCoachWorkspace() {
             <p className="font-medium text-gray-900">No opportunities in this view</p>
             <p className="mt-2">
               {filter === 'all'
-                ? 'Nothing matched the current rules. Check back after more traffic, orders, or queue activity.'
-                : 'Try All, or refresh after catalog / inbound / community activity.'}
+                ? 'Nothing matched the current rules. A healthy catalog (images + copy) and quiet queues produce an empty list — that can be correct.'
+                : filter === 'site_upgrade'
+                  ? 'No site-upgrade signals right now (weak imagery, thin copy, inbound, community, newsletter idle, etc.). Use Products imagery assist anytime, or clear a test product image and Refresh.'
+                  : 'Try All, or refresh after catalog / inbound / community activity.'}
+            </p>
+            <p className="mt-3">
+              <Link
+                href="/admin/products"
+                className="font-semibold text-emerald-800 underline underline-offset-2"
+              >
+                Open Products (imagery + copy assist)
+              </Link>
             </p>
           </div>
         ) : (
@@ -287,9 +327,9 @@ function PerformanceCoachWorkspace() {
           </ul>
         )}
 
-        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v4">
-          Performance coach v4 — collapsible details, item deep-links, newsletter idle signal. No
-          separate CRO sector.
+        <p className="mt-8 text-[11px] text-gray-400" data-agent-ux="performance-wave4-v5">
+          Performance coach v5 — imagery discoverability + weak-image site-upgrade when catalog
+          signals fire. No separate CRO sector; no auto image replace.
         </p>
       </div>
     </div>

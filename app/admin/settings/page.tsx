@@ -4943,6 +4943,7 @@ function ActivityLogView() {
     fundraising_agent_reply_handled: 'bg-indigo-100 text-indigo-800',
     agent_inbound_draft_sent: 'bg-indigo-100 text-indigo-800',
     agent_community_draft_published: 'bg-violet-100 text-violet-800',
+    agent_product_image_applied: 'bg-sky-100 text-sky-800',
   }
 
   return (
@@ -5031,6 +5032,7 @@ function ActivityLogView() {
             <option value="fundraising_agent_reply_handled">Fundraising Agent Reply Handled</option>
             <option value="agent_inbound_draft_sent">Agent Inbound Draft Send</option>
             <option value="agent_community_draft_published">Agent Community Draft Publish</option>
+            <option value="agent_product_image_applied">Agent Product Image Apply</option>
           </select>
         </div>
         <div className="flex items-end gap-2">

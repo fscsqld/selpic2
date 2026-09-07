@@ -93,6 +93,8 @@ describe('weak_product_imagery performance card', () => {
     expect(card?.kind).toBe('site_upgrade')
     expect(card?.href).toBe('/admin/products')
     expect(card?.items?.[0]?.href).toContain('q=sku-1')
-    expect(card?.nextSteps?.some((s) => /Vision|Media Library/i.test(s))).toBe(true)
+    expect(card?.nextSteps?.some((s) => /Generate \/ Edit with AI|Media Library/i.test(s))).toBe(
+      true
+    )
   })
 })

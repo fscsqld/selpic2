@@ -740,6 +740,8 @@ export default function PhoneCaseManager() {
                     productName={formData.name}
                     category={formData.category}
                     imageUrl={formData.image}
+                    productId={formData.id}
+                    onApplyImage={(url) => setFormData((prev) => ({ ...prev, image: url }))}
                   />
                 </div>
 
