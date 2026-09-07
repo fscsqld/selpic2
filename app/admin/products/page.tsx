@@ -24,6 +24,7 @@ import { sanitizeMixedLabelsSheetBundles, type MixedLabelsSheetBundle } from '@/
 import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBundlesEditor'
 import StickerPackOptionsEditor from '@/components/admin/StickerPackOptionsEditor'
 import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
+import ProductImageryAiAssist from '@/components/admin/ProductImageryAiAssist'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 import {
   buildSuggestedStickerPacks,
@@ -2030,6 +2031,12 @@ function AdminProductsPageContent() {
                       setFormData(prev => ({ ...prev, image: url }))
                     }}
                     onRemove={() => setFormData(prev => ({ ...prev, image: '' }))}
+                  />
+                  <ProductImageryAiAssist
+                    productName={formData.name}
+                    category={formData.category}
+                    imageUrl={formData.image}
+                    disabled={!canWriteProducts}
                   />
                 </div>
 

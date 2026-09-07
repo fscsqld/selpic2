@@ -24,6 +24,7 @@ import {
   type PerformanceOpportunity,
   type PerformanceOpportunityItem,
 } from './performanceCoachBuild'
+import { summarizeWeakProductImagery } from './productImageryCoach'
 
 export type {
   PerformanceCoachInputs,
@@ -66,6 +67,7 @@ export async function loadPerformanceCoachInputs(): Promise<PerformanceCoachInpu
   try {
     const products = await readCatalogProducts()
     inputs.thinProductCopy = summarizeThinProductCopy(products)
+    inputs.weakProductImagery = summarizeWeakProductImagery(products)
   } catch {
     /* non-fatal */
   }

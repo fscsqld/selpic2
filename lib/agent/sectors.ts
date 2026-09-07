@@ -75,7 +75,7 @@ export const AGENT_SECTORS: AgentSectorDef[] = [
     requiredPermission: 'analytics:read',
     requiredAnyPermissions: ['analytics:read', 'agent:read'],
     autonomyNote:
-      'Wave 4 v4 — collapsible cards, item deep-links, newsletter idle signal; no auto Mark Paid, price changes, or auto-publish.',
+      'Wave 4 v5 — collapsible cards, imagery + copy site-upgrade signals, item deep-links; no auto Mark Paid, price changes, auto image replace, or auto-publish.',
   },  {
     id: 'community',
     label: 'SELPIC N / Community',

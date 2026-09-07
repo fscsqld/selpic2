@@ -17,6 +17,7 @@ export type PerformanceOpportunityId =
   | 'traffic_up_conversion_flat'
   | 'revenue_week_down'
   | 'thin_product_copy'
+  | 'weak_product_imagery'
   | 'inbound_queue_backlog'
   | 'community_drafts_pending'
   | 'fundraising_open_replies'
@@ -68,6 +69,12 @@ export type PerformanceCoachInputs = {
     sampleName?: string
     sampleNames?: string[]
     samples?: Array<{ id?: string; name: string }>
+  }
+  weakProductImagery: {
+    count: number
+    sampleName?: string
+    sampleNames?: string[]
+    samples?: Array<{ id?: string; name: string; reason?: string }>
   }
   newInboundMessages: number
   newBespokeRequests: number
@@ -157,6 +164,7 @@ export function emptyPerformanceCoachInputs(): PerformanceCoachInputs {
     revenueThisWeekAud: 0,
     revenuePriorWeekAud: 0,
     thinProductCopy: { count: 0 },
+    weakProductImagery: { count: 0 },
     newInboundMessages: 0,
     newBespokeRequests: 0,
     inboundSamples: [],
@@ -327,6 +335,46 @@ export function buildPerformanceOpportunities(
         'Open a product via the item link (filters Products by id/name).',
         'Generate template or Polish with AI for short and/or detail description.',
         'Apply → review → Save. Do not invent prices, stock, or ship dates in published copy.',
+      ],
+    })
+  }
+
+  if (input.weakProductImagery.count > 0) {
+    const n = input.weakProductImagery.count
+    const sample = input.weakProductImagery.sampleName
+    const imageryItems: PerformanceOpportunityItem[] =
+      (input.weakProductImagery.samples || [])
+        .slice(0, MAX_ITEMS)
+        .map((s) => ({
+          label: s.name,
+          detail: s.reason || (s.id ? `id ${s.id}` : undefined),
+          href: s.id
+            ? `/admin/products?q=${encodeURIComponent(s.id)}`
+            : `/admin/products?q=${encodeURIComponent(s.name)}`,
+        }))
+    const fallbackNames =
+      input.weakProductImagery.sampleNames?.length
+        ? input.weakProductImagery.sampleNames
+        : sample
+          ? [sample]
+          : []
+    cards.push({
+      id: 'weak_product_imagery',
+      severity: n >= 8 ? 'high' : 'medium',
+      kind: 'site_upgrade',
+      title: `${n} product${n === 1 ? '' : 's'} need stronger primary imagery`,
+      summary: sample
+        ? `Includes “${sample}”. Upload https images via Media Library; optional Vision review / photo brief — human Save only.`
+        : 'Upload https images via Media Library; optional Vision review / photo brief — human Save only.',
+      metric: 'Missing, placeholder, or non-syncable primary image URL',
+      href: '/admin/products',
+      actionLabel: 'Open products',
+      domain: 'products',
+      items: imageryItems.length ? imageryItems : itemListFromLabels(fallbackNames),
+      nextSteps: [
+        'Open a product via the item link (filters Products by id/name).',
+        'Upload a real https image (Media Library). Avoid indexeddb:// / data: URLs.',
+        'Optional: Photo brief or Review with Vision on the product form — checklist only; Save publishes.',
       ],
     })
   }

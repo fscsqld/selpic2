@@ -3,11 +3,13 @@
  * Opt-in only at call sites; never auto-send / auto-publish.
  *
  * Cousins: missing key, AGENT_DRAFT_LLM=0 global kill, sector kill switches,
- * timeout, non-JSON responses, multi-sector reuse (inbound / community / later).
+ * timeout, non-JSON responses, multi-sector reuse (inbound / community / later),
+ * vision image_url payloads (https only at call sites).
  */
 
 export const AGENT_OPENAI_DEFAULT_MODEL = 'gpt-4o-mini'
 export const AGENT_OPENAI_DEFAULT_TIMEOUT_MS = 12_000
+export const AGENT_OPENAI_VISION_TIMEOUT_MS = 25_000
 
 export function isAgentOpenAiEnabled(
   env: NodeJS.ProcessEnv = process.env,
@@ -33,12 +35,71 @@ type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string | null } }>
 }
 
+type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } }
+
 /**
  * Returns raw assistant message content, or null on any failure.
  */
 export async function openAiChatJsonContent(opts: {
   system: string
   user: string
+  env?: NodeJS.ProcessEnv
+  fetchImpl?: typeof fetch
+  timeoutMs?: number
+  model?: string
+  temperature?: number
+  sectorKillEnvKey?: string
+}): Promise<string | null> {
+  return openAiChatCompletionContent({
+    system: opts.system,
+    userContent: opts.user,
+    env: opts.env,
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: opts.timeoutMs,
+    model: opts.model,
+    temperature: opts.temperature,
+    sectorKillEnvKey: opts.sectorKillEnvKey,
+  })
+}
+
+/**
+ * Vision-capable chat JSON — userContent may include https image_url parts.
+ * Call sites must reject indexeddb:// / data: before invoking.
+ */
+export async function openAiVisionJsonContent(opts: {
+  system: string
+  userText: string
+  imageUrl: string
+  env?: NodeJS.ProcessEnv
+  fetchImpl?: typeof fetch
+  timeoutMs?: number
+  model?: string
+  temperature?: number
+  sectorKillEnvKey?: string
+}): Promise<string | null> {
+  const imageUrl = opts.imageUrl.trim()
+  if (!/^https:\/\//i.test(imageUrl)) return null
+  const userContent: ChatContentPart[] = [
+    { type: 'text', text: opts.userText },
+    { type: 'image_url', image_url: { url: imageUrl, detail: 'low' } },
+  ]
+  return openAiChatCompletionContent({
+    system: opts.system,
+    userContent,
+    env: opts.env,
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: opts.timeoutMs ?? AGENT_OPENAI_VISION_TIMEOUT_MS,
+    model: opts.model,
+    temperature: opts.temperature ?? 0.2,
+    sectorKillEnvKey: opts.sectorKillEnvKey,
+  })
+}
+
+async function openAiChatCompletionContent(opts: {
+  system: string
+  userContent: string | ChatContentPart[]
   env?: NodeJS.ProcessEnv
   fetchImpl?: typeof fetch
   timeoutMs?: number
@@ -73,7 +134,7 @@ export async function openAiChatJsonContent(opts: {
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: opts.system },
-          { role: 'user', content: opts.user },
+          { role: 'user', content: opts.userContent },
         ],
       }),
     })
