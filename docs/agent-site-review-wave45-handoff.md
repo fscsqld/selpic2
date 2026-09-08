@@ -1,22 +1,23 @@
 # Wave 4.5 Site Review — handoff
 
 **Updated:** 2026-09-08  
-**Status:** **S2 done on `feature/agent-site-review-wave45`** — stop for review before S3.  
+**Status:** **S3 done on `feature/agent-site-review-wave45`** — stop for review before S4.  
+**Shipped to prod:** S0–S2 on `main` (`be298a4`) → https://www.selpic.com.au  
 **Language:** Admin UI = English. Discuss in Korean with the user if they prefer.
 
 ---
 
 ## Already shipped (do not redo)
 
-On `main` (prod https://www.selpic.com.au), 2026-09-07:
+On `main` / prod:
 
 | Commit | What |
 |--------|------|
-| `6909207` | site-config transient `Failed to fetch` guard |
-| `7e02a6b` | Agent OpenAI usage + hub declutter + `agent:run` wiring |
-| `ed2182b` | Fundraising Agent daily-ops declutter |
+| `be298a4` | Site Review S1+S2 (manual run, mark fixed, re-check) |
+| `6b46fd0` | Site Review S0 types / fingerprint helpers |
+| (earlier) | Agent usage, Fundraising declutter, image provider W1 |
 
-Smoke if needed: `/admin/agent` Usage expand · `/admin/fundraising/agent` queue · Confirm Send on table toolbar.
+Smoke: `/admin/agent` → Site Review → Run full · Mark fixed · Re-check · Activity Log.
 
 ---
 
@@ -32,34 +33,21 @@ Smoke if needed: `/admin/agent` Usage expand · `/admin/fundraising/agent` queue
 
 ## Progress (S0 → S4)
 
-### S0 — Spec lock in code — done
+### S0–S2 — done (prod)
 
-- [x] Branch / types / smoke checklist / config key / fingerprint tests
+- [x] Types, smoke checklist, manual API, hub HITL mark/re-check
 
-### S1 — Manual Full + Sector review API + hub UI — done
+### S3 — Quarterly cron + optional email — done (branch; deploy when asked)
 
-- [x] `GET/POST` `/api/admin/agent/site-review`  
-- [x] Hub panel · `logAdminActivity` on complete · no cron
+- [x] Daily Hobby-safe cron `0 22 * * *` → `/api/cron/site-review-quarterly`  
+- [x] Gates to Sydney Jul/Oct/Jan/Apr **day 1–2** only; skip if quarterly report already exists for `periodKey`  
+- [x] Default **incremental** when any prior baseline exists  
+- [x] Optional Resend summary to `ADMIN_NOTIFICATION_EMAIL` / fallbacks  
+- [x] Kill-switches: `SITE_REVIEW_CRON_ENABLED` · `SITE_REVIEW_CRON_EMAIL`  
+- [x] Ops: `?force=1` + `CRON_SECRET` to run outside window  
+- [x] `scripts/verify-vercel-crons-hobby.ts` updated · `siteReview.s3.test.ts`
 
-### S2 — Mark fixed + Re-check — done
-
-- [x] `PATCH` `/api/admin/agent/site-review` — `set_status` (`fixed` / `accepted` / `wontfix`) · `recheck`  
-- [x] Hub buttons per finding: Mark fixed / Accept / Won't fix / Re-check  
-- [x] Re-check: pass → `fixed`; fail after fixed/accepted → `regressed`  
-- [x] Findings sorted regressed → open → rest (runner + GET + store update)  
-- [x] Activity: `agent_site_review_finding_status` · `agent_site_review_finding_rechecked`  
-- [x] Tests: `siteReview.s2.test.ts`
-
-**Manual smoke:** latest report → Mark fixed on an open finding → Re-check (expect stay fixed if smoke OK) · Activity Log filters.
-
-### S3 — Quarterly cron + optional email — next
-
-- [ ] Cron after AU FY quarter boundary (avoid colliding with fundraising 19–21 UTC slots)  
-- [ ] Hobby: one scheduled job/day constraint in `vercel.json`  
-- [ ] Optional Resend summary to admins  
-- [ ] Default run mode: **incremental** if prior baseline exists
-
-### S4 — Polish
+### S4 — Polish — next
 
 - [ ] Wire Performance deep-links into findings  
 - [ ] Optional LLM **summary paragraph only** (kill-switchable); heuristics must work without OpenAI  
@@ -77,18 +65,17 @@ Smoke if needed: `/admin/agent` Usage expand · `/admin/fundraising/agent` queue
 
 ---
 
-## Key files
+## Key files (S3)
 
 | Path | Role |
 |------|------|
-| `lib/agent/siteReview/findingStatus.ts` | Mark + sort |
-| `lib/agent/siteReview/recheckFinding.ts` | Single-finding re-check |
-| `lib/server/siteReviewStore.ts` | Persist finding updates |
-| `app/api/admin/agent/site-review/route.ts` | GET/POST/PATCH |
-| `app/admin/agent/page.tsx` | Hub HITL controls |
+| `app/api/cron/site-review-quarterly/route.ts` | Cron entry |
+| `lib/agent/siteReview/quarterlyCron.ts` | Window + kill switches |
+| `lib/agent/siteReview/runQuarterlySiteReview.ts` | Run + optional email |
+| `vercel.json` | `0 22 * * *` schedule |
 
 Do **not** commit `data/agent/*.json` local caches.
 
 ---
 
-**Resume signal:** 「S3 시작」 → quarterly cron (+ optional email), then stop for review.
+**Resume signal:** 「S4 시작」 → polish (Performance links, optional LLM summary, checklist), then stop for review.

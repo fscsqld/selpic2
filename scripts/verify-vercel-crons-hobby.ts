@@ -72,6 +72,20 @@ check(
   JSON.stringify(crons)
 )
 
+check(
+  'Site Review quarterly gate is registered in vercel.json crons',
+  crons.some((j) => j.path === '/api/cron/site-review-quarterly'),
+  JSON.stringify(crons)
+)
+
+check(
+  'Site Review cron is at 22:00 UTC (after fundraising 19–21)',
+  crons.some(
+    (j) => j.path === '/api/cron/site-review-quarterly' && j.schedule === '0 22 * * *'
+  ),
+  JSON.stringify(crons)
+)
+
 const failed = cases.filter((c) => !c.ok)
 for (const c of cases) {
   console.log(`${c.ok ? 'ok' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`)

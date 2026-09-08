@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/fundraising-outreach-daily",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/site-review-quarterly",
+      "schedule": "0 22 * * *"
     }
   ],
   "redirects": [
