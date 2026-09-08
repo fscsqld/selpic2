@@ -2,7 +2,7 @@
 
 **Updated:** 2026-09-07 (Wave 4.5 Site Review — planned; Agent usage + Fundraising Agent declutter shipped)  
 **Status:** Wave 1–4 **shipped**. Wave 5 Community **HITL v1.2**. Newsletter sector **live**. Wave **4.5 Site Review** = **planned (not started)**. Wave 6+ auto-draft/publish slots not started.  
-**Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` · `docs/fundraising-session-handoff.md` · `docs/agent-site-review-wave45-handoff.md` (resume tomorrow)
+**Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` · `docs/fundraising-session-handoff.md` · `docs/agent-site-review-wave45-handoff.md` · `docs/agent-product-image-providers-design.md` (image provider default OpenAI; Google optional / removable)
 
 Language: **UI/copy = English**; this doc may be discussed in Korean with the user.
 
