@@ -39,6 +39,8 @@ pnpm-debug.log*
 .idea/
 .vscode/
 
-# Agent community draft queue (local HITL pending drafts)
+# Agent local HITL / run caches (never commit)
 data/agent/community-draft-queue.json
 data/agent/fundraising-outreach-replies.json
+data/agent/agent-runs.json
+data/agent/site-review-reports.json

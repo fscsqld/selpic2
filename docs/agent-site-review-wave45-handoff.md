@@ -1,7 +1,7 @@
-# Wave 4.5 Site Review — handoff (resume tomorrow)
+# Wave 4.5 Site Review — handoff
 
 **Updated:** 2026-09-08  
-**Status:** **S0 in progress on `feature/agent-site-review-wave45`** — types, smoke checklist, config key, fingerprint/incremental helpers + tests. S1 not started.  
+**Status:** **S2 done on `feature/agent-site-review-wave45`** — stop for review before S3.  
 **Language:** Admin UI = English. Discuss in Korean with the user if they prefer.
 
 ---
@@ -30,35 +30,29 @@ Smoke if needed: `/admin/agent` Usage expand · `/admin/fundraising/agent` queue
 
 ---
 
-## Tomorrow — start order (S0 → S4)
+## Progress (S0 → S4)
 
-Say **「Wave 4.5 시작」** or **「개발 시작하자」**, then:
+### S0 — Spec lock in code — done
 
-### S0 — Spec lock in code (half day)
+- [x] Branch / types / smoke checklist / config key / fingerprint tests
 
-- [x] Branch: `feature/agent-site-review-wave45` from latest `main`  
-- [x] Types: finding fingerprint, status enum, `periodKey`, `trigger`  
-- [x] Fixed **storefront smoke URL checklist** constant (home + key routes; read-only)  
-- [x] `site_configs` key (or SQL doc) for report store — mirror `agent_openai_runs` / community queue pattern  
-- [x] Unit tests: fingerprint stability; incremental filter (open/regressed only)
+### S1 — Manual Full + Sector review API + hub UI — done
 
-**Stop for review** after S0 unless told to continue.
+- [x] `GET/POST` `/api/admin/agent/site-review`  
+- [x] Hub panel · `logAdminActivity` on complete · no cron
 
-### S1 — Manual Full + Sector review API + hub UI
+### S2 — Mark fixed + Re-check — done
 
-- [ ] `POST/GET` admin API under `/api/admin/agent/site-review` (names flexible)  
-- [ ] Permissions: run with `agent:read` (writes stay on sector pages)  
-- [ ] Hub panel (collapsed by default): Run full review · pick sectors · latest report  
-- [ ] `logAdminActivity` on complete  
-- [ ] No cron yet
+- [x] `PATCH` `/api/admin/agent/site-review` — `set_status` (`fixed` / `accepted` / `wontfix`) · `recheck`  
+- [x] Hub buttons per finding: Mark fixed / Accept / Won't fix / Re-check  
+- [x] Re-check: pass → `fixed`; fail after fixed/accepted → `regressed`  
+- [x] Findings sorted regressed → open → rest (runner + GET + store update)  
+- [x] Activity: `agent_site_review_finding_status` · `agent_site_review_finding_rechecked`  
+- [x] Tests: `siteReview.s2.test.ts`
 
-### S2 — Mark fixed + Re-check
+**Manual smoke:** latest report → Mark fixed on an open finding → Re-check (expect stay fixed if smoke OK) · Activity Log filters.
 
-- [ ] Admin marks finding `fixed` / `accepted` / `wontfix`  
-- [ ] **Re-check this finding** → pass stays fixed, fail → `regressed`  
-- [ ] Report body sorts: regressed/open first
-
-### S3 — Quarterly cron + optional email
+### S3 — Quarterly cron + optional email — next
 
 - [ ] Cron after AU FY quarter boundary (avoid colliding with fundraising 19–21 UTC slots)  
 - [ ] Hobby: one scheduled job/day constraint in `vercel.json`  
@@ -83,14 +77,18 @@ Say **「Wave 4.5 시작」** or **「개발 시작하자」**, then:
 
 ---
 
-## Files to open first tomorrow
+## Key files
 
-1. `docs/selpic-unified-ai-agent-plan.md` → **Wave 4.5**  
-2. This handoff  
-3. `lib/agent/performanceCoachBuild.ts` (`site_upgrade`)  
-4. `lib/agent/sectors.ts` + `app/admin/agent/page.tsx`  
-5. `lib/fundraising/auFinancialQuarter.ts` (period keys / Sydney calendar — reuse carefully; Site Review period ≠ grant payout automation)
+| Path | Role |
+|------|------|
+| `lib/agent/siteReview/findingStatus.ts` | Mark + sort |
+| `lib/agent/siteReview/recheckFinding.ts` | Single-finding re-check |
+| `lib/server/siteReviewStore.ts` | Persist finding updates |
+| `app/api/admin/agent/site-review/route.ts` | GET/POST/PATCH |
+| `app/admin/agent/page.tsx` | Hub HITL controls |
+
+Do **not** commit `data/agent/*.json` local caches.
 
 ---
 
-**Resume signal:** 「Wave 4.5 시작」 → **S0 only**, then stop for review.
+**Resume signal:** 「S3 시작」 → quarterly cron (+ optional email), then stop for review.

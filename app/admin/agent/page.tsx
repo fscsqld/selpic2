@@ -6,6 +6,7 @@ import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { AGENT_SECTORS, adminCanAccessAgentSector, type AgentSectorDef } from '@/lib/agent/sectors'
 import { useAdminAuth } from '@/lib/adminAuth'
+import { logAdminActivity } from '@/lib/logAdminActivity'
 import {
   Bot,
   HeartHandshake,
@@ -20,6 +21,7 @@ import {
   ChevronRight,
   DollarSign,
   ExternalLink,
+  ClipboardList,
 } from 'lucide-react'
 
 type SummaryResponse = {
@@ -64,6 +66,35 @@ type UsageResponse = {
   error?: string
 }
 
+type SiteReviewFindingRow = {
+  id: string
+  fingerprint: string
+  sector: string
+  status: string
+  severity: string
+  title: string
+  detail?: string
+  deepLink?: string
+}
+
+type SiteReviewReportRow = {
+  id: string
+  periodKey: string
+  incremental: boolean
+  summary?: string
+  createdAt: string
+  findings: SiteReviewFindingRow[]
+}
+
+type SiteReviewGetResponse = {
+  ok?: boolean
+  periodKey?: string
+  origin?: string
+  sectors?: string[]
+  latest?: SiteReviewReportRow | null
+  error?: string
+}
+
 const SECTOR_ICONS: Record<string, typeof Bot> = {
   fundraising: HeartHandshake,
   inbound: MessageSquare,
@@ -73,6 +104,17 @@ const SECTOR_ICONS: Record<string, typeof Bot> = {
 }
 
 const USAGE_EXPANDED_KEY = 'selpic-agent-usage-expanded'
+const SITE_REVIEW_EXPANDED_KEY = 'selpic-agent-site-review-expanded'
+
+const SITE_REVIEW_SECTOR_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: 'storefront', label: 'Storefront' },
+  { id: 'fundraising', label: 'Fundraising' },
+  { id: 'inbound', label: 'Customer care' },
+  { id: 'performance', label: 'Performance' },
+  { id: 'community', label: 'Community' },
+  { id: 'newsletter', label: 'Newsletter' },
+  { id: 'products', label: 'Products' },
+]
 
 export default function AdminAgentHubPage() {
   return (
@@ -91,10 +133,19 @@ function AgentHubContent() {
   const [message, setMessage] = useState('')
   const [usageOpen, setUsageOpen] = useState(false)
   const [expandedSectorId, setExpandedSectorId] = useState<string | null>(null)
+  const [siteReviewOpen, setSiteReviewOpen] = useState(false)
+  const [siteReviewLoading, setSiteReviewLoading] = useState(false)
+  const [siteReviewRunning, setSiteReviewRunning] = useState(false)
+  const [siteReview, setSiteReview] = useState<SiteReviewGetResponse | null>(null)
+  const [siteReviewSectors, setSiteReviewSectors] = useState<string[]>(
+    SITE_REVIEW_SECTOR_OPTIONS.map((s) => s.id)
+  )
+  const [findingBusyId, setFindingBusyId] = useState<string | null>(null)
 
   useEffect(() => {
     try {
       setUsageOpen(localStorage.getItem(USAGE_EXPANDED_KEY) === '1')
+      setSiteReviewOpen(localStorage.getItem(SITE_REVIEW_EXPANDED_KEY) === '1')
     } catch {
       /* ignore */
     }
@@ -139,6 +190,154 @@ function AgentHubContent() {
     }
   }, [])
 
+  const loadSiteReview = useCallback(async () => {
+    setSiteReviewLoading(true)
+    try {
+      const res = await fetch('/api/admin/agent/site-review', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const json = (await res.json().catch(() => null)) as SiteReviewGetResponse | null
+      if (res.ok && json?.ok) setSiteReview(json)
+      else setSiteReview(null)
+    } catch {
+      setSiteReview(null)
+    } finally {
+      setSiteReviewLoading(false)
+    }
+  }, [])
+
+  const runSiteReview = async (incremental: boolean) => {
+    setSiteReviewRunning(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/agent/site-review', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sectors: siteReviewSectors,
+          incremental,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        openCount?: number
+        report?: SiteReviewReportRow
+      } | null
+      if (!res.ok || !json?.ok || !json.report) {
+        throw new Error(json?.error || 'Site Review failed')
+      }
+      setSiteReview((prev) => ({
+        ok: true,
+        periodKey: json.report!.periodKey,
+        origin: prev?.origin,
+        sectors: prev?.sectors,
+        latest: json.report!,
+      }))
+      const openN =
+        json.openCount ??
+        json.report.findings.filter((f) => f.status === 'open' || f.status === 'regressed')
+          .length
+      logAdminActivity({
+        action: 'agent_site_review_completed',
+        target: json.report.id,
+        field: 'site_review',
+        newValue: {
+          periodKey: json.report.periodKey,
+          incremental: json.report.incremental,
+          findingCount: json.report.findings.length,
+          openCount: openN,
+          sectors: siteReviewSectors,
+        },
+        description: `Site Review ${json.report.incremental ? 'incremental' : 'full'} · ${json.report.periodKey} · ${openN} open/regressed`,
+      })
+      setMessage(
+        `Site Review done · ${json.report.periodKey} · ${openN} open/regressed (report only — no auto edits)`
+      )
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Site Review failed')
+    } finally {
+      setSiteReviewRunning(false)
+    }
+  }
+
+  const patchFinding = async (
+    findingId: string,
+    body: { action: 'set_status'; status: string } | { action: 'recheck' }
+  ) => {
+    if (!siteReview?.latest?.id) return
+    setFindingBusyId(findingId)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/agent/site-review', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportId: siteReview.latest.id,
+          findingId,
+          ...body,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        error?: string
+        report?: SiteReviewReportRow
+        finding?: SiteReviewFindingRow
+        priorStatus?: string
+        nextStatus?: string
+      } | null
+      if (!res.ok || !json?.ok || !json.report || !json.finding) {
+        throw new Error(json?.error || 'Update failed')
+      }
+      setSiteReview((prev) => ({
+        ...(prev || { ok: true }),
+        latest: json.report!,
+      }))
+      if (body.action === 'set_status') {
+        logAdminActivity({
+          action: 'agent_site_review_finding_status',
+          target: json.finding.id,
+          field: 'status',
+          oldValue: undefined,
+          newValue: {
+            status: body.status,
+            reportId: json.report.id,
+            title: json.finding.title,
+          },
+          description: `Site Review finding → ${body.status}: ${json.finding.title}`,
+        })
+        setMessage(`Marked ${body.status}: ${json.finding.title}`)
+      } else {
+        logAdminActivity({
+          action: 'agent_site_review_finding_rechecked',
+          target: json.finding.id,
+          field: 'status',
+          oldValue: json.priorStatus,
+          newValue: {
+            status: json.nextStatus || json.finding.status,
+            reportId: json.report.id,
+            title: json.finding.title,
+          },
+          description: `Site Review re-check ${json.priorStatus || '?'} → ${
+            json.nextStatus || json.finding.status
+          }: ${json.finding.title}`,
+        })
+        setMessage(
+          `Re-check ${json.priorStatus || '?'} → ${json.nextStatus || json.finding.status}: ${
+            json.finding.title
+          }`
+        )
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Finding update failed')
+    } finally {
+      setFindingBusyId(null)
+    }
+  }
+
   useEffect(() => {
     void loadSummary()
   }, [loadSummary])
@@ -148,11 +347,28 @@ function AgentHubContent() {
     void loadUsage()
   }, [usageOpen, loadUsage])
 
+  useEffect(() => {
+    if (!siteReviewOpen) return
+    void loadSiteReview()
+  }, [siteReviewOpen, loadSiteReview])
+
   const toggleUsage = () => {
     setUsageOpen((prev) => {
       const next = !prev
       try {
         localStorage.setItem(USAGE_EXPANDED_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
+
+  const toggleSiteReview = () => {
+    setSiteReviewOpen((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(SITE_REVIEW_EXPANDED_KEY, next ? '1' : '0')
       } catch {
         /* ignore */
       }
@@ -249,10 +465,11 @@ function AgentHubContent() {
             onClick={() => {
               void loadSummary()
               if (usageOpen) void loadUsage()
+              if (siteReviewOpen) void loadSiteReview()
             }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || usageLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || usageLoading || siteReviewLoading || siteReviewRunning ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <span className="text-sm text-gray-500">You approve before anything sends or publishes.</span>
@@ -420,6 +637,218 @@ function AgentHubContent() {
               })}
             </div>
           )}
+        </section>
+
+        <section className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={toggleSiteReview}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50"
+          >
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <ClipboardList className="h-4 w-4 text-indigo-700" />
+              Site Review
+              {siteReviewOpen && siteReview?.latest ? (
+                <span className="font-normal text-gray-500">
+                  · {siteReview.latest.periodKey}
+                  {siteReview.latest.incremental ? ' · incremental' : ' · full'}
+                </span>
+              ) : null}
+            </span>
+            {siteReviewOpen ? (
+              <ChevronDown className="h-4 w-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-gray-500" />
+            )}
+          </button>
+          {siteReviewOpen ? (
+            <div className="space-y-3 border-t border-gray-100 px-4 py-3">
+              <p className="text-xs text-gray-600">
+                Read-only storefront smoke + sector health. Report only — never edits the homepage Hero.
+                {siteReview?.origin ? (
+                  <>
+                    {' '}
+                    Origin: <code className="rounded bg-gray-100 px-1">{siteReview.origin}</code>
+                  </>
+                ) : null}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SITE_REVIEW_SECTOR_OPTIONS.map((opt) => {
+                  const on = siteReviewSectors.includes(opt.id)
+                  return (
+                    <label
+                      key={opt.id}
+                      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                        on
+                          ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                          : 'border-gray-200 bg-white text-gray-600'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={on}
+                        onChange={() => {
+                          setSiteReviewSectors((prev) => {
+                            if (on) {
+                              const next = prev.filter((id) => id !== opt.id)
+                              return next.length ? next : prev
+                            }
+                            return [...prev, opt.id]
+                          })
+                        }}
+                      />
+                      {opt.label}
+                    </label>
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={siteReviewRunning || siteReviewSectors.length === 0}
+                  onClick={() => void runSiteReview(false)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {siteReviewRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Run full review
+                </button>
+                <button
+                  type="button"
+                  disabled={siteReviewRunning || siteReviewSectors.length === 0}
+                  onClick={() => void runSiteReview(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  Run incremental
+                </button>
+                <button
+                  type="button"
+                  disabled={siteReviewLoading || siteReviewRunning}
+                  onClick={() => void loadSiteReview()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Reload latest
+                </button>
+              </div>
+              {siteReviewLoading && !siteReview?.latest ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              ) : siteReview?.latest ? (
+                <div className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 space-y-2">
+                  <p className="text-xs text-gray-600">{siteReview.latest.summary}</p>
+                  <ul className="max-h-72 space-y-1.5 overflow-y-auto text-sm">
+                    {siteReview.latest.findings.slice(0, 40).map((f) => {
+                      const busy = findingBusyId === f.id
+                      const canMark =
+                        f.status === 'open' ||
+                        f.status === 'regressed' ||
+                        f.status === 'fixed' ||
+                        f.status === 'accepted' ||
+                        f.status === 'wontfix'
+                      return (
+                        <li
+                          key={f.id}
+                          className="rounded border border-white bg-white px-2 py-1.5 space-y-1.5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-900">
+                                <span
+                                  className={`mr-1.5 text-[10px] uppercase tracking-wide ${
+                                    f.status === 'regressed'
+                                      ? 'text-red-700'
+                                      : f.status === 'open'
+                                        ? 'text-amber-700'
+                                        : 'text-gray-500'
+                                  }`}
+                                >
+                                  {f.status}
+                                </span>
+                                {f.title}
+                              </p>
+                              {f.detail ? (
+                                <p className="text-xs text-gray-600 break-words">{f.detail}</p>
+                              ) : null}
+                            </div>
+                            {f.deepLink ? (
+                              <Link
+                                href={f.deepLink}
+                                className="shrink-0 text-xs font-medium text-indigo-700 hover:text-indigo-900"
+                              >
+                                Open
+                              </Link>
+                            ) : null}
+                          </div>
+                          {canMark ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {(f.status === 'open' || f.status === 'regressed') && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={busy || siteReviewRunning}
+                                    onClick={() =>
+                                      void patchFinding(f.id, {
+                                        action: 'set_status',
+                                        status: 'fixed',
+                                      })
+                                    }
+                                    className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    Mark fixed
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy || siteReviewRunning}
+                                    onClick={() =>
+                                      void patchFinding(f.id, {
+                                        action: 'set_status',
+                                        status: 'accepted',
+                                      })
+                                    }
+                                    className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy || siteReviewRunning}
+                                    onClick={() =>
+                                      void patchFinding(f.id, {
+                                        action: 'set_status',
+                                        status: 'wontfix',
+                                      })
+                                    }
+                                    className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    Won&apos;t fix
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                disabled={busy || siteReviewRunning}
+                                onClick={() => void patchFinding(f.id, { action: 'recheck' })}
+                                className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+                              >
+                                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                                Re-check
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {!siteReview.latest.findings.length ? (
+                    <p className="text-sm text-gray-600">No findings in the latest report.</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">No report yet — run a full review.</p>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">

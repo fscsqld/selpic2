@@ -43,6 +43,9 @@ export type ActivityLogAction =
   | 'agent_inbound_draft_sent'
   | 'agent_community_draft_published'
   | 'agent_product_image_applied'
+  | 'agent_site_review_completed'
+  | 'agent_site_review_finding_status'
+  | 'agent_site_review_finding_rechecked'
 
 export interface ActivityLog {
   id: string
@@ -117,6 +120,9 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'agent_inbound_draft_sent',
   'agent_community_draft_published',
   'agent_product_image_applied',
+  'agent_site_review_completed',
+  'agent_site_review_finding_status',
+  'agent_site_review_finding_rechecked',
 ] as const satisfies ReadonlyArray<ActivityLogAction>
 
 const KNOWN_ACTIONS = new Set<string>(SUPER_ADMIN_AUDIT_ACTIONS)

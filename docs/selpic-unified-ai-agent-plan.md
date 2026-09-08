@@ -1,6 +1,6 @@
 # SELPIC Unified AI Agent — concrete plan
 
-**Updated:** 2026-09-07 (Wave 4.5 Site Review — planned; Agent usage + Fundraising Agent declutter shipped)  
+**Updated:** 2026-09-08 (Wave 4.5 Site Review — S0+S1 on feature branch; Agent usage + Fundraising declutter + image provider W1 on main)  
 **Status:** Wave 1–4 **shipped**. Wave 5 Community **HITL v1.2**. Newsletter sector **live**. Wave **4.5 Site Review** = **planned (not started)**. Wave 6+ auto-draft/publish slots not started.  
 **Related:** `.cursor/rules/fundraising-ai-sales-agent.mdc` · `docs/fundraising-session-handoff.md` · `docs/agent-site-review-wave45-handoff.md` · `docs/agent-product-image-providers-design.md` (image provider default OpenAI; Google optional / removable)
 
@@ -317,7 +317,7 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 - Optional later: nightly cron, PDP-level traffic, LLM draft promo copy.  
 - **Note:** Wave 4 is **live cards**, not a quarterly baseline report — that is Wave **4.5**.
 
-#### Wave 4.5 — Site Review (quarterly + manual sector audit) — **PLANNED**
+#### Wave 4.5 — Site Review (quarterly + manual sector audit) — **IN PROGRESS (S1 done)**
 
 **Product intent (confirmed 2026-09-07):** Once per AU FY quarter, the agent runs a **governed storefront + sector health review**, stores a **baseline report**, and emails/shows it to admins. Admins can also **request a review for selected sectors** anytime. After findings are fixed and verified, the **next quarterly run re-checks open / regressed findings only** (plus a cheap smoke), instead of treating every page as new work.
 
@@ -351,7 +351,7 @@ These waves are **additive**. Each reuses Agent Core (draft inbox, HITL Approve,
 
 **Autonomy:** L0 report default; L1 suggested fixes via existing sector HITL only. **Never** auto-publish homepage.
 
-**Implementation order:** see `docs/agent-site-review-wave45-handoff.md` (S0→S4). **Not started** until user says start Wave 4.5.
+**Implementation order:** see `docs/agent-site-review-wave45-handoff.md` (S0→S4). **S0–S2 done** on `feature/agent-site-review-wave45`; next is **S3** (quarterly cron) when user says start.
 
 #### Wave 5 — SELPIC N / Community content agent
 
@@ -475,4 +475,4 @@ Organic apply: omit entirely.
 
 ---
 
-**End of plan.** Next user action for Site Review: **「Wave 4.5 시작」** / **「개발 시작하자」** → implement handoff **S0**.
+**End of plan.** Next user action for Site Review: **「S3 시작」** → quarterly cron (+ optional email); commit/push/deploy only when asked.

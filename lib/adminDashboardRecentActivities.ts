@@ -35,6 +35,7 @@ export const DASHBOARD_IMPORTANT_ACTIONS = [
   'fundraising_agent_reply_handled',
   'agent_inbound_draft_sent',
   'agent_community_draft_published',
+  'agent_site_review_completed',
 ] as const satisfies ReadonlyArray<ActivityLog['action']>
 
 export type DashboardImportantAction = (typeof DASHBOARD_IMPORTANT_ACTIONS)[number]
@@ -139,6 +140,8 @@ export function formatImportantActivityTitle(log: ActivityLog): string {
       return 'Agent inbound draft sent'
     case 'agent_community_draft_published':
       return 'Agent community draft published'
+    case 'agent_site_review_completed':
+      return 'Agent Site Review completed'
     default:
       return 'Admin activity'
   }
