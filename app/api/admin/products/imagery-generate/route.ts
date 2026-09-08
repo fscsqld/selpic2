@@ -57,7 +57,7 @@ async function registerAiImageInMediaLibrary(opts: {
       category: 'product-media',
       productName: opts.productName || undefined,
       tags: ['ai-generated', 'product-media', 'hitl'],
-      description: `OpenAI Images HITL output (${opts.path})`,
+      description: `AI product image HITL output (${opts.path})`,
       usage: 'product',
       mediaType: 'image',
     }
@@ -72,7 +72,7 @@ async function registerAiImageInMediaLibrary(opts: {
 }
 
 /**
- * POST — HITL product image generate/edit via OpenAI Images API.
+ * POST — HITL product image generate/edit (provider via AGENT_IMAGE_PROVIDER; default OpenAI).
  * Uploads result to Supabase Media; does not Save the product catalog.
  * Client must Apply URL into the form, then Save.
  */
@@ -171,6 +171,7 @@ export async function POST(req: Request) {
       sector: 'products',
       action: result.mode === 'edit' ? 'product_image_edit' : 'product_image_generate',
       model: result.model,
+      provider: result.provider,
       adminLabel,
       imageUnits: 1,
     })
@@ -186,6 +187,7 @@ export async function POST(req: Request) {
     ok: true,
     mode: result.mode,
     model: result.model,
+    provider: result.provider,
     publicUrl,
     promptUsed: prompt.slice(0, 500),
     sourceImageUrl: /^https:\/\//i.test(imageUrl) ? imageUrl : null,

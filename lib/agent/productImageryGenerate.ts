@@ -1,25 +1,25 @@
 /**
- * OpenAI Images edit/generate for product primary photos (HITL).
- * Returns PNG bytes; callers upload to Media / Apply on the product form.
+ * Product image HITL — shared prompts + provider router facade.
+ * OpenAI Images live in productImage/openaiImagesProvider.ts (removable later).
  *
- * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_DRAFT_LLM=0, missing key,
- * non-https source, org verification errors, oversized downloads, prompt injection of prices.
+ * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, AGENT_DRAFT_LLM=0 (openai),
+ * missing key, non-https source, oversized downloads, prompt injection of prices.
  */
 
-import { isAgentOpenAiEnabled } from './agentOpenAiChat'
 import { buildPhotoBriefTemplate } from './productImageryVisionLlm'
+import { resolveProductImageProvider } from './productImage/resolveProductImageProvider'
+import type { ProductImageGenResult } from './productImage/types'
 
-export const AGENT_PRODUCT_IMAGE_GEN_KILL = 'AGENT_PRODUCT_IMAGE_GEN'
+export { AGENT_PRODUCT_IMAGE_GEN_KILL } from './productImage/types'
+export type { ProductImageProviderId } from './productImage/types'
 
-/** Prefer gpt-image-2 (OpenAI current default). Override with AGENT_IMAGE_MODEL. */
-const DEFAULT_IMAGE_MODEL = 'gpt-image-2'
 const MAX_PROMPT = 2_500
-const MAX_SOURCE_BYTES = 15 * 1024 * 1024
 
 export function isProductImageGenEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  return isAgentOpenAiEnabled(env, AGENT_PRODUCT_IMAGE_GEN_KILL)
+  const resolved = resolveProductImageProvider(env)
+  return !('missing' in resolved)
 }
 
 export function buildImageEditPrompt(input: {
@@ -70,144 +70,35 @@ export function defaultBriefLinesForPrompt(name: string, category?: string): str
   return buildPhotoBriefTemplate({ name, category }).checklist
 }
 
-type OpenAiImagesResponse = {
-  data?: Array<{ b64_json?: string; url?: string }>
-  error?: { message?: string }
-}
-
-async function fetchHttpsImageBytes(
-  imageUrl: string,
-  fetchImpl: typeof fetch
-): Promise<{ buffer: Buffer; contentType: string; filename: string } | null> {
-  if (!/^https:\/\//i.test(imageUrl.trim())) return null
-  const res = await fetchImpl(imageUrl.trim(), { redirect: 'follow' })
-  if (!res.ok) return null
-  const contentType = (res.headers.get('content-type') || 'image/png').split(';')[0].trim()
-  if (!contentType.startsWith('image/')) return null
-  const ab = await res.arrayBuffer()
-  if (ab.byteLength < 32 || ab.byteLength > MAX_SOURCE_BYTES) return null
-  const ext =
-    contentType.includes('jpeg') || contentType.includes('jpg')
-      ? 'jpg'
-      : contentType.includes('webp')
-        ? 'webp'
-        : 'png'
-  return {
-    buffer: Buffer.from(ab),
-    contentType,
-    filename: `source.${ext}`,
-  }
-}
-
 /**
  * Edit existing https image, or generate from prompt when no usable source.
- * Returns PNG base64 (no data: prefix).
+ * Returns PNG base64 (no data: prefix) + provider id.
  */
 export async function generateOrEditProductImage(opts: {
   prompt: string
   sourceImageUrl?: string
   env?: NodeJS.ProcessEnv
   fetchImpl?: typeof fetch
-}): Promise<
-  | { ok: true; mode: 'edit' | 'generate'; b64: string; model: string }
-  | { ok: false; error: string }
-> {
+}): Promise<ProductImageGenResult> {
   const env = opts.env ?? process.env
-  if (!isProductImageGenEnabled(env)) {
-    return {
-      ok: false,
-      error:
-        'Product image AI is disabled (set OPENAI_API_KEY and do not set AGENT_PRODUCT_IMAGE_GEN=0).',
-    }
+  const resolved = resolveProductImageProvider(env)
+  if ('missing' in resolved) {
+    return { ok: false, error: resolved.error, provider: resolved.id }
   }
 
   const prompt = sanitizeImagePrompt(opts.prompt)
   if (prompt.length < 20) {
-    return { ok: false, error: 'Prompt too short after safety filters. Add a photo brief or directions.' }
-  }
-
-  const apiKey = env.OPENAI_API_KEY!.trim()
-  const model =
-    (env.AGENT_IMAGE_MODEL || DEFAULT_IMAGE_MODEL).trim() || DEFAULT_IMAGE_MODEL
-  const fetchImpl = opts.fetchImpl ?? fetch
-
-  const sourceUrl = (opts.sourceImageUrl || '').trim()
-  const source = sourceUrl
-    ? await fetchHttpsImageBytes(sourceUrl, fetchImpl)
-    : null
-
-  try {
-    if (source) {
-      const form = new FormData()
-      form.set('model', model)
-      form.set('prompt', prompt)
-      form.set('size', '1024x1024')
-      form.set(
-        'image',
-        new File([new Uint8Array(source.buffer)], source.filename, {
-          type: source.contentType,
-        })
-      )
-
-      const res = await fetchImpl('https://api.openai.com/v1/images/edits', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-      })
-      const json = (await res.json().catch(() => null)) as OpenAiImagesResponse | null
-      if (!res.ok) {
-        return {
-          ok: false,
-          error:
-            json?.error?.message ||
-            `OpenAI image edit failed (${res.status}). Check Images API access / org verification.`,
-        }
-      }
-      const b64 = json?.data?.[0]?.b64_json
-      if (!b64) {
-        return { ok: false, error: 'OpenAI edit returned no image data.' }
-      }
-      return { ok: true, mode: 'edit', b64, model }
-    }
-
-    const res = await fetchImpl('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        prompt,
-        size: '1024x1024',
-        n: 1,
-      }),
-    })
-    const json = (await res.json().catch(() => null)) as OpenAiImagesResponse | null
-    if (!res.ok) {
-      return {
-        ok: false,
-        error:
-          json?.error?.message ||
-          `OpenAI image generate failed (${res.status}). Check Images API access / org verification.`,
-      }
-    }
-    let b64 = json?.data?.[0]?.b64_json
-    if (!b64 && json?.data?.[0]?.url) {
-      const imgRes = await fetchImpl(json.data[0].url)
-      if (!imgRes.ok) {
-        return { ok: false, error: 'Failed to download generated image URL.' }
-      }
-      b64 = Buffer.from(await imgRes.arrayBuffer()).toString('base64')
-    }
-    if (!b64) {
-      return { ok: false, error: 'OpenAI generate returned no image data.' }
-    }
-    return { ok: true, mode: 'generate', b64, model }
-  } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : 'Image generation request failed',
+      provider: resolved.id,
+      error: 'Prompt too short after safety filters. Add a photo brief or directions.',
     }
   }
+
+  return resolved.generateOrEdit({
+    prompt,
+    sourceImageUrl: opts.sourceImageUrl,
+    env,
+    fetchImpl: opts.fetchImpl,
+  })
 }

@@ -14,6 +14,9 @@ import {
 
 export type AgentRunKind = 'chat' | 'image'
 
+/** Image (and future) vendor — optional; legacy rows without it treat as openai. */
+export type AgentRunProvider = 'openai' | 'google' | 'other'
+
 export type AgentRunSector =
   | 'inbound'
   | 'community'
@@ -31,6 +34,8 @@ export type AgentRunRecord = {
   kind: AgentRunKind
   model: string
   adminLabel: string
+  /** Present on newer image runs; omitted on legacy chat/image rows. */
+  provider?: AgentRunProvider
   promptTokens?: number
   completionTokens?: number
   totalTokens?: number
@@ -100,6 +105,14 @@ export function sanitizeAgentRun(raw: unknown): AgentRunRecord | null {
     typeof o.adminLabel === 'string' ? o.adminLabel.slice(0, 120) : 'unknown'
   if (!id || !createdAt) return null
   const estimatedCostUsd = Math.max(0, Number(o.estimatedCostUsd) || 0)
+  const providerRaw = typeof o.provider === 'string' ? o.provider.trim().toLowerCase() : ''
+  let provider: AgentRunProvider | undefined
+  if (providerRaw === 'openai' || providerRaw === 'google' || providerRaw === 'other') {
+    provider = providerRaw
+  } else if (kind === 'image') {
+    // Legacy image rows pre-W1 — treat as openai for hub display.
+    provider = 'openai'
+  }
   return {
     id,
     createdAt,
@@ -108,6 +121,7 @@ export function sanitizeAgentRun(raw: unknown): AgentRunRecord | null {
     kind,
     model,
     adminLabel,
+    provider,
     promptTokens: Number(o.promptTokens) || undefined,
     completionTokens: Number(o.completionTokens) || undefined,
     totalTokens: Number(o.totalTokens) || undefined,
@@ -223,6 +237,7 @@ export function buildImageRunRecord(opts: {
   model: string
   adminLabel: string
   imageUnits?: number
+  provider?: AgentRunProvider
   createdAt?: string
 }): AgentRunRecord {
   const units = Math.max(1, opts.imageUnits ?? 1)
@@ -234,6 +249,7 @@ export function buildImageRunRecord(opts: {
     kind: 'image',
     model: opts.model,
     adminLabel: opts.adminLabel.slice(0, 120) || 'unknown',
+    provider: opts.provider || 'openai',
     imageUnits: units,
     estimatedCostUsd: estimateImageCostUsd(opts.model) * units,
     ok: true,

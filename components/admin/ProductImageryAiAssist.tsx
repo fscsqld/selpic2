@@ -44,7 +44,11 @@ export default function ProductImageryAiAssist({
   const [prompt, setPrompt] = useState('')
   const [includeBrief, setIncludeBrief] = useState(true)
   const [aiUrl, setAiUrl] = useState('')
-  const [genMeta, setGenMeta] = useState<{ mode?: string; model?: string } | null>(null)
+  const [genMeta, setGenMeta] = useState<{
+    mode?: string
+    model?: string
+    provider?: string
+  } | null>(null)
   const [downloading, setDownloading] = useState(false)
 
   const httpsReady = isHttpsImageUrl(imageUrl)
@@ -110,13 +114,14 @@ export default function ProductImageryAiAssist({
         publicUrl?: string
         mode?: string
         model?: string
+        provider?: string
         error?: string
       } | null
       if (!res.ok || !json?.publicUrl) {
         throw new Error(json?.error || 'Image generate/edit failed')
       }
       setAiUrl(json.publicUrl)
-      setGenMeta({ mode: json.mode, model: json.model })
+      setGenMeta({ mode: json.mode, model: json.model, provider: json.provider })
       setMessage(
         json.mode === 'edit'
           ? 'AI edited your primary image. Compare below, then Apply → Save.'
@@ -274,6 +279,7 @@ export default function ProductImageryAiAssist({
             {genMeta?.mode ? (
               <span className="ml-2 text-[10px] font-normal uppercase tracking-wide text-violet-700">
                 {genMeta.mode}
+                {genMeta.provider ? ` · ${genMeta.provider}` : ''}
                 {genMeta.model ? ` · ${genMeta.model}` : ''}
               </span>
             ) : null}

@@ -1,7 +1,7 @@
 # Product image AI providers — removable design (SELPIC)
 
 **Updated:** 2026-09-08  
-**Status:** Design approved for implementation sequencing. **Google provider not shipped.**  
+**Status:** **W1 shipped in code** (OpenAI behind provider interface). Google provider not shipped (W2).  
 **Default (recommended until admin A/B decides otherwise):** OpenAI **`gpt-image-2`** via existing HITL pipeline.  
 **Optional later:** Google **Gemini 2.5 Flash Image (Nano Banana)** behind the same interface.  
 **Accounting:** unchanged — `apps/accounting-sandbox` keeps its own `OPENAI_API_KEY` (statement parsing). Never couple.
