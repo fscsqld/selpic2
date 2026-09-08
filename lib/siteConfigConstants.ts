@@ -14,6 +14,11 @@ export const AGENT_COMMUNITY_DRAFT_QUEUE_CONFIG_KEY = 'agent_community_draft_que
  * Shared via site_configs — not accounting IndexedDB.
  */
 export const AGENT_RUNS_CONFIG_KEY = 'agent_openai_runs'
+/**
+ * Wave 4.5 Site Review reports / findings baseline (HITL L0).
+ * Shared via site_configs — not accounting IndexedDB; never auto-edits homepage.
+ */
+export const AGENT_SITE_REVIEW_CONFIG_KEY = 'agent_site_review_reports'
 
 /**
  * sessionStorage: last `NEXT_PUBLIC_DEPLOY_VERSION` for which we merged remote CMS.

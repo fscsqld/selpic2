@@ -1,7 +1,7 @@
 # Wave 4.5 Site Review — handoff (resume tomorrow)
 
-**Updated:** 2026-09-07  
-**Status:** Spec approved and written into `docs/selpic-unified-ai-agent-plan.md` (Wave 4.5). **Code not started.**  
+**Updated:** 2026-09-08  
+**Status:** **S0 in progress on `feature/agent-site-review-wave45`** — types, smoke checklist, config key, fingerprint/incremental helpers + tests. S1 not started.  
 **Language:** Admin UI = English. Discuss in Korean with the user if they prefer.
 
 ---
@@ -36,11 +36,11 @@ Say **「Wave 4.5 시작」** or **「개발 시작하자」**, then:
 
 ### S0 — Spec lock in code (half day)
 
-- [ ] Branch: `feature/agent-site-review-wave45` from latest `main`  
-- [ ] Types: finding fingerprint, status enum, `periodKey`, `trigger`  
-- [ ] Fixed **storefront smoke URL checklist** constant (home + key routes; read-only)  
-- [ ] `site_configs` key (or SQL doc) for report store — mirror `agent_openai_runs` / community queue pattern  
-- [ ] Unit tests: fingerprint stability; incremental filter (open/regressed only)
+- [x] Branch: `feature/agent-site-review-wave45` from latest `main`  
+- [x] Types: finding fingerprint, status enum, `periodKey`, `trigger`  
+- [x] Fixed **storefront smoke URL checklist** constant (home + key routes; read-only)  
+- [x] `site_configs` key (or SQL doc) for report store — mirror `agent_openai_runs` / community queue pattern  
+- [x] Unit tests: fingerprint stability; incremental filter (open/regressed only)
 
 **Stop for review** after S0 unless told to continue.
 
