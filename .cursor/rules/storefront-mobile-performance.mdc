@@ -5,20 +5,31 @@ alwaysApply: true
 
 # Storefront mobile performance (PageSpeed / Lighthouse)
 
-Baseline (Sep 2026 mobile Slow 4G): Performance **~51**, FCP **~3.3s**, LCP **~8.4s**, TBT **~420ms**, SI **~7.7s**, CLS **0**. Goal: improve CWV without violating homepage Hero protection.
+Baseline lab (Sep 9 2026 **1:33 PM** GMT+10, mobile Slow 4G, Moto G Power, Lighthouse 13.4.1): Performance **51**, FCP **3.3s**, LCP **8.4s**, TBT **420ms**, SI **7.7s**, CLS **0**, total network **~14.5 MiB**. Field CrUX: no data. Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: improve CWV without violating homepage Hero protection.
 
 ## Invariant
 
 Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store** of every asset, or **entire-page** client bundles. Hero design (logo, HOT ITEM, motion, gradients) stays protected — optimize **how** assets load, not Hero look.
 
+## Top lab insights to keep closing (from baseline)
+
+| Insight | Order of magnitude |
+|---------|-------------------|
+| Render-blocking requests | ~3s |
+| Inefficient cache lifetimes | ~10 MiB transferable waste |
+| Enormous network payloads | ~14.5 MiB total |
+| Unused CSS | ~361 KiB |
+| Image delivery | ~263 KiB |
+| JS execution / main-thread / long tasks | ~2–3.5s / 9 tasks |
+
 ## Do (cheap, high impact)
 
 - **Fonts:** Load Google/machine fonts only on customize/stamp routes (`GoogleFontsLinks` + segment layouts). Root `app/layout.tsx` = `next/font` Inter only. Never re-add sitewide font CSS for printers.
 - **JS:** Prefer `dynamic(() => import(...), { ssr: false })` for Swiper, heavy editors, admin-only widgets on public pages. Avoid new `'use client'` on whole routes when a small island suffices.
-- **Images:** Sized/compressed sources; `loading="lazy"` below fold; avoid full-bleed remote Unsplash on first viewport when a same-origin asset exists. LCP image: prioritize, don’t lazy if it is LCP.
+- **Images:** Sized/compressed sources; `loading="lazy"` below fold; avoid full-bleed remote Unsplash on first viewport when a same-origin asset exists. LCP image: prioritize (`fetchPriority`), don’t lazy if it is LCP.
 - **Cache:** Do not add HTML `Cache-Control: no-store` for marketing pages. Public GETs (`site-config`, catalog) should allow short SWR / max-age where freshness allows — not `?cb=Date.now()` on every home mount unless required.
-- **CSS/JS weight:** Don’t import full icon packs or Swiper effect CSS globally for one section. Tree-shake; route-split.
-- **DOM:** Avoid huge client trees on `/` (long task / TBT). Cap lists; virtualize only if needed later.
+- **CSS/JS weight:** Don’t import full icon packs or Swiper effect CSS globally for one section. Tree-shake; route-split. Watch unused CSS (~361 KiB class of waste).
+- **DOM:** Avoid huge client trees on `/` (long task / TBT). Cap lists; virtualize only if needed later. Prefer a single `<main>` landmark on storefront pages.
 - **3rd parties:** No new render-blocking scripts in root layout without defer/async and a kill-switch.
 
 ## Do not
@@ -27,13 +38,14 @@ Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store** o
 - Pull accounting-sandbox into storefront webpack.
 - Fix only desktop; always assume **Moto G / Slow 4G** class devices.
 - Ship a feature that adds **>100 KiB** gzipped to the `/` critical path without lazy-loading or a separate route.
+- Treat a **1:33 PM baseline** PSI paste as a post-deploy result — remeasure after the mobile-perf deploy before claiming wins.
 
 ## Cousins to check before merge
 
-Empty CMS cache (Hero placeholder wait), cold CDN, multiple hero slides, category tiles, newsletter footer, Header cart hydrate, `ContentStoreSupabaseSync` + catalog hydrate racing first paint.
+Empty CMS cache (Hero placeholder wait), cold CDN, multiple hero slides, category tiles, newsletter footer, Header cart hydrate, `ContentStoreSupabaseSync` + catalog hydrate racing first paint, console errors on `/`, CSP hardening (separate from CWV).
 
 ## When touching `/` or root layout
 
 1. Re-read this rule + `homepage-protection.mdc`.
 2. Prefer layout/font/cache/dynamic-import changes over Hero JSX edits.
-3. After meaningful perf work: PageSpeed Insights mobile on `https://www.selpic.com.au/` — note FCP/LCP/TBT delta in the PR/commit body.
+3. After meaningful perf work: PageSpeed Insights mobile on `https://www.selpic.com.au/` — note FCP/LCP/TBT/payload delta vs Sep 9 **1:33** baseline in the PR/commit body.
