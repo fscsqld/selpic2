@@ -293,15 +293,23 @@ async function pushPersistStringToSupabase(serialized: string): Promise<void> {
 }
 
 /** Load raw value JSON from Supabase (same shape as persist `state` object). */
-export async function fetchSiteConfigValue(): Promise<Record<string, unknown> | null> {
+export async function fetchSiteConfigValue(opts?: {
+  /** Bypass short CDN/browser cache (admin preview / forced remount). */
+  forceRefresh?: boolean
+}): Promise<Record<string, unknown> | null> {
   // Primary path: same-origin server route (service-role read). This is most stable on iPad Safari.
   if (typeof window !== 'undefined') {
     try {
       const controller = new AbortController()
       // Slow tablet / LAN dev: 5.5s aborted too many good responses and left stale localStorage visible.
       const timeout = window.setTimeout(() => controller.abort(), 12_000)
-      const res = await fetch(`${resolvePublicSiteConfigUrl()}?cb=${Date.now()}`, {
-        cache: 'no-store',
+      const force = Boolean(opts?.forceRefresh)
+      const url = force
+        ? `${resolvePublicSiteConfigUrl()}?cb=${Date.now()}`
+        : resolvePublicSiteConfigUrl()
+      const res = await fetch(url, {
+        // Allow short HTTP cache from /api/site-config/public (s-maxage=30).
+        cache: force ? 'no-store' : 'default',
         signal: controller.signal,
       })
       window.clearTimeout(timeout)

@@ -1,5 +1,10 @@
 import type { Metadata } from 'next'
 import { buildPublicMetadata } from '@/lib/seo'
+import GoogleFontsLinks from '@/components/GoogleFontsLinks'
+import {
+  getStickerGoogleFontsUrls,
+  STICKER_NOTO_FALLBACK_BUNDLE_URL,
+} from '@/lib/fontList'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/custom-design',
@@ -10,5 +15,13 @@ export const metadata: Metadata = buildPublicMetadata({
 })
 
 export default function CustomDesignLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (
+    <>
+      <GoogleFontsLinks
+        hrefs={getStickerGoogleFontsUrls()}
+        extraHrefs={[STICKER_NOTO_FALLBACK_BUNDLE_URL]}
+      />
+      {children}
+    </>
+  )
 }

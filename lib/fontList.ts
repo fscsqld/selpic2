@@ -222,36 +222,67 @@ export const getEffectiveFont = (selectedFontId: string, text: string): FontConf
   return selectedFont
 }
 
-// ✅ 스티커용 폰트 7종 (Font 1=Andika, 2=nanum, 3=Edu NSW ACT, 4=Edu AU VIC WA NT Hand, 5=Edu SA Beginner, 6=Edu TAS Beginner, 7=Jua/K-Round Joy)
-const STICKER_FONT_IDS = ['andika', 'edu-nsw-act-foundation', 'edu-au-vic-wa-nt-hand', 'edu-sa-beginner', 'edu-tas-beginner', 'k-round-joy', 'nanum-myeongjo'] as const
+// ✅ 스티커용 폰트 7종 (Font 1=Andika … Font 7=Nanum Myeongjo) — customer customize UI
+const STICKER_FONT_IDS = [
+  'andika',
+  'edu-nsw-act-foundation',
+  'edu-au-vic-wa-nt-hand',
+  'edu-sa-beginner',
+  'edu-tas-beginner',
+  'k-round-joy',
+  'nanum-myeongjo',
+] as const
 
 export const getStickerFonts = () => {
   return STICKER_FONT_IDS
-    .map(id => FONT_LIST.find(f => f.id === id))
+    .map((id) => FONT_LIST.find((f) => f.id === id))
     .filter((f): f is FontConfig => !!f)
 }
 
-// ✅ 스탬프용 폰트 필터링 (모든 폰트 사용 가능)
+// ✅ 스탬프용 폰트 (전체 FONT_LIST — stamp customize UI)
 export const getStampFonts = () => {
-  // 모든 폰트를 스탬프 페이지에서도 사용 가능하도록 변경
   return FONT_LIST
 }
 
-// ✅ 모든 Google Fonts URL 수집 (중복 제거)
-export const getAllGoogleFontsUrls = (): string[] => {
-  const urls = FONT_LIST
-    .map(font => font.googleFontsUrl)
-    .filter((url): url is string => !!url)
-  
-  // 중복 제거
+/** Dedupe Google Fonts CSS URLs from a font config list. */
+export function getGoogleFontsUrlsFromConfigs(fonts: FontConfig[]): string[] {
+  const urls = fonts
+    .map((font) => font.googleFontsUrl)
+    .filter((url): url is string => Boolean(url))
   return Array.from(new Set(urls))
 }
 
+/**
+ * URLs needed for sticker / name-label customize (Font 1–7 only).
+ * Cousins: Korean fallback via getEffectiveFont → Jua (already in sticker set);
+ * Noto stacks in CSS font-family — optional compact bundle below.
+ */
+export function getStickerGoogleFontsUrls(): string[] {
+  return getGoogleFontsUrlsFromConfigs(getStickerFonts())
+}
+
+/**
+ * Compact Noto fallbacks referenced in some fontFamily stacks (not in sticker googleFontsUrl).
+ * Load only on sticker customize routes — not on homepage.
+ */
+export const STICKER_NOTO_FALLBACK_BUNDLE_URL =
+  'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap'
+
+/** Stamp customize — full FONT_LIST CDN set (still not homepage). */
+export function getStampGoogleFontsUrls(): string[] {
+  return getGoogleFontsUrlsFromConfigs(FONT_LIST)
+}
+
+/**
+ * @deprecated Prefer getStickerGoogleFontsUrls / getStampGoogleFontsUrls.
+ * Kept as alias of stamp/full set for any legacy callers — do NOT use in root layout.
+ */
+export const getAllGoogleFontsUrls = (): string[] => getStampGoogleFontsUrls()
+
 // ✅ 폰트 ID로 자판기 설정 폰트명 가져오기
 export const getMachineFontName = (fontId: string): string => {
-  const font = FONT_LIST.find(f => f.id === fontId)
+  const font = FONT_LIST.find((f) => f.id === fontId)
   if (!font) {
-    // 폰트를 찾을 수 없으면 fallback 폰트의 machineName 반환
     return KOREAN_FALLBACK_FONT.machineName
   }
   return font.machineName

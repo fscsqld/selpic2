@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { getAllGoogleFontsUrls } from '@/lib/fontList'
 import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
 import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 import ClientSwCacheReset from '@/components/ClientSwCacheReset'
@@ -92,20 +91,13 @@ export const metadata: Metadata = {
   },
 }
 
-function withDeployCacheBust(href: string): string {
-  const v = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
-  if (!v) return href
-  const sep = href.includes('?') ? '&' : '?'
-  return `${href}${sep}v=${encodeURIComponent(v)}`
-}
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Stampzone machine: load Google Fonts for label printer
-  const googleFontsUrls = getAllGoogleFontsUrls().map(withDeployCacheBust)
+  // Machine / customize Google Fonts are NOT loaded here — only on sticker/stamp
+  // customize layouts (see GoogleFontsLinks). Homepage keeps next/font Inter only.
   const organizationJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -127,24 +119,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Meta no-cache is not authoritative like HTTP headers, but helps older/embedded browsers. */}
-        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
-        <meta httpEquiv="Pragma" content="no-cache" />
-        <meta httpEquiv="Expires" content="0" />
-        {/* ✅ Google Fonts CDN 로드 */}
-        {googleFontsUrls.map((url) => (
-          <link key={url} rel="stylesheet" href={url} />
-        ))}
-        {/* ✅ 한글 폰트 추가 로드 (Google Fonts에 있는 실제 한글 폰트들) */}
-        <link key="preconnect-googleapis" rel="preconnect" href="https://fonts.googleapis.com" />
-        <link key="preconnect-gstatic" rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          key="stylesheet-ko-bundle"
-          href={withDeployCacheBust(
-            'https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Jua&family=Do+Hyeon&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Brush+Script&family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap'
-          )}
-          rel="stylesheet"
-        />
         <script
           key="jsonld-organization"
           type="application/ld+json"

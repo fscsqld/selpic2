@@ -1,13 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
-import { Swiper, SwiperSlide } from 'swiper/react'
-import { EffectFade, EffectCube, EffectCoverflow, EffectFlip, Autoplay, Navigation, Pagination } from 'swiper/modules'
-import 'swiper/css'
-import 'swiper/css/effect-fade'
-import 'swiper/css/navigation'
-import 'swiper/css/pagination'
-import 'swiper/css/autoplay'
 import { Package, Palette, Sparkles, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Header, { HeaderLogoImage } from '@/components/Header'
@@ -19,10 +12,6 @@ type CategoryItemWithType = CategoryItem & { categoryType?: string }
 /** Same-origin fallbacks when CDN/third-party hero URLs fail (strict iPad Safari / blockers). */
 const LOCAL_HERO_FALLBACK_URL = '/apple-touch-icon.png'
 const LOCAL_ASSET_VERSION = (process.env.NEXT_PUBLIC_DEPLOY_VERSION || '').trim()
-const PUBLIC_SITE_CONFIG_URL = (() => {
-  const base = (process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
-  return base ? `${base}/api/site-config/public` : '/api/site-config/public'
-})()
 
 function scheduleMicrotaskSafe(fn: () => void): void {
   try {
@@ -76,9 +65,12 @@ function HeroCmsBootstrapPlaceholder() {
 function HeroCoverImage({
   primarySrc,
   className = 'absolute inset-0 z-0 h-full w-full object-cover',
+  /** LCP: first hero slide only — high; others default/auto */
+  fetchPriority = 'auto',
 }: {
   primarySrc: string
   className?: string
+  fetchPriority?: 'high' | 'low' | 'auto'
 }) {
   const [tier, setTier] = useState(0)
   const [allFailed, setAllFailed] = useState(false)
@@ -119,6 +111,7 @@ function HeroCoverImage({
       draggable={false}
       decoding="async"
       loading="eager"
+      fetchPriority={fetchPriority}
       onError={() => {
         setTier((t) => {
           const next = t + 1
@@ -251,7 +244,8 @@ const isValidVideoUrl = (url: string): boolean => {
   return hasVideoExtension || isBlobUrl || isDataVideoUrl || (isHttpUrl && !isImageUrl) || isRelativePath || isPublicPath
 }
 
-const ImageSlide = React.memo(({ src }: { src: string }) => {
+const ImageSlide = React.memo(
+  ({ src, fetchPriority = 'auto' }: { src: string; fetchPriority?: 'high' | 'low' | 'auto' }) => {
   const s = (src || '').trim()
   if (!s || s.startsWith('indexeddb://')) {
     return (
@@ -263,7 +257,7 @@ const ImageSlide = React.memo(({ src }: { src: string }) => {
   }
   return (
     <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
-      <HeroCoverImage primarySrc={s} />
+      <HeroCoverImage primarySrc={s} fetchPriority={fetchPriority} />
     </div>
   )
 })
@@ -517,15 +511,6 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
 VideoSlide.displayName = 'VideoSlide'
 ImageSlide.displayName = 'ImageSlide'
 
-// Swiper CSS import
-import 'swiper/css'
-import 'swiper/css/effect-fade'
-import 'swiper/css/effect-cube'
-import 'swiper/css/effect-coverflow'
-import 'swiper/css/effect-flip'
-import 'swiper/css/navigation'
-import 'swiper/css/pagination'
-
 import { useStore, useStore as useStoreDirect } from '@/lib/store'
 import { translations } from '@/lib/translations'
 import {
@@ -533,11 +518,15 @@ import {
   mergeRemoteSiteConfigForStoreApply,
   normalizeRehydratedContentStoreState,
 } from '@/lib/contentStore'
+import { fetchSiteConfigValue } from '@/lib/siteConfigClient'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 
+type LazyHomeSwiperModule = typeof import('@/components/LazyHomeSwiper')
+
 const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string }) => {
-  const defaultImage = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop&q=80'
+  const defaultImage =
+    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop&q=60&auto=format'
   const bg = backgroundImage?.trim()
   const primary = bg && !bg.startsWith('indexeddb://') ? bg : defaultImage
 
@@ -550,12 +539,25 @@ export default function HomePage() {
   const [swiperInstance, setSwiperInstance] = useState<any>(null)
   const [forceUpdate, setForceUpdate] = useState(0)
   const [isClientMounted, setIsClientMounted] = useState(false)
+  const [lazySwiper, setLazySwiper] = useState<LazyHomeSwiperModule | null>(null)
   const [hasPersistedCmsSnapshot, setHasPersistedCmsSnapshot] = useState(false)
 
   // Prevent SSR/CSR markup mismatch on iPad Safari when persisted CMS state differs at hydration time.
   useEffect(() => {
     setIsClientMounted(true)
   }, [])
+
+  // Defer Swiper + effect CSS until after mount (improves TBT / unused JS on Slow 4G).
+  useEffect(() => {
+    if (!isClientMounted) return
+    let cancelled = false
+    void import('@/components/LazyHomeSwiper').then((mod) => {
+      if (!cancelled) setLazySwiper(mod)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isClientMounted])
 
   // New tablets with no selpic-store: fill products from server catalog so category counts are not stuck at 0.
   useEffect(() => {
@@ -604,17 +606,11 @@ export default function HomePage() {
     let cancelled = false
     const applyRemoteCmsOnce = async () => {
       try {
-        const res = await fetch(`${PUBLIC_SITE_CONFIG_URL}?cb=${Date.now()}`, { cache: 'no-store' })
-        if (!res.ok) return
-        const body = (await res.json().catch(() => ({}))) as { success?: boolean; value?: unknown }
-        if (!body?.success || !body.value || typeof body.value !== 'object' || Array.isArray(body.value)) return
-        if (cancelled) return
+        const value = await fetchSiteConfigValue()
+        if (!value || cancelled) return
 
         const current = useContentStore.getState()
-        const merged = mergeRemoteSiteConfigForStoreApply(
-          body.value as Record<string, unknown>,
-          current
-        )
+        const merged = mergeRemoteSiteConfigForStoreApply(value, current)
         normalizeRehydratedContentStoreState(merged)
         useContentStore.setState(merged)
         useContentStore.getState().setSiteConfigRemoteSynced(true)
@@ -1016,16 +1012,20 @@ export default function HomePage() {
   const { getActiveHeroSlides, heroSlides: storeHeroSlides, categoryItems: allCategoryItems, heroSliderSettings } = useContentStore()
   const heroSlides = getActiveHeroSlides()
   
-  // Swiper modules를 useMemo로 메모이제이션 (effect 변경 시에만 재생성)
-  // 안전한 기본값 보장
+  // Swiper modules — only after LazyHomeSwiper chunk loads
   const swiperModules = useMemo(() => {
-    // 기본 모듈 (항상 유효한 값 보장)
+    if (!lazySwiper) return []
+    const {
+      Autoplay,
+      Navigation,
+      Pagination,
+      EffectCube,
+      EffectCoverflow,
+      EffectFlip,
+      EffectFade,
+    } = lazySwiper
     const baseModules = [Autoplay, Navigation, Pagination]
-    
-    // heroSliderSettings가 없거나 effect가 없으면 기본값 사용
     const effect = heroSliderSettings?.effect || 'fade'
-    
-    // effect에 따른 모듈 선택
     switch (effect) {
       case 'cube':
         return [EffectCube, ...baseModules]
@@ -1036,7 +1036,7 @@ export default function HomePage() {
       default:
         return [EffectFade, ...baseModules]
     }
-  }, [heroSliderSettings?.effect])
+  }, [heroSliderSettings?.effect, lazySwiper])
   
   // Hero Slider Settings 변경 시 Swiper 인스턴스 업데이트
   useEffect(() => {
@@ -1557,8 +1557,62 @@ export default function HomePage() {
         </h1>
           {canRenderCmsVisualSections ? (
           <>
-            {/* Swiper Slider */}
-            <Swiper
+            {!lazySwiper ? (
+              (() => {
+                const slide = Array.isArray(slidesToUse) ? slidesToUse[0] : null
+                if (!slide?.id) return <HeroCmsBootstrapPlaceholder />
+                const hasLink = slide.linkUrl && slide.linkUrl.trim() !== ''
+                return (
+                  <div className={`relative h-screen w-full ${hasLink ? 'cursor-pointer' : ''}`}>
+                    <div className="absolute inset-0 w-full h-full">
+                      {slide.type === 'video' ? (
+                        <VideoSlide
+                          src={slide.src || ''}
+                          fallbackImage={slide.fallbackImage || ''}
+                          title={slide.title}
+                          subtitle={slide.subtitle}
+                        />
+                      ) : (
+                        <ImageSlide src={slide.src || ''} fetchPriority="high" />
+                      )}
+                      <div
+                        className={`pointer-events-none absolute inset-0 z-20 ${
+                          slide.color === 'pink'
+                            ? 'bg-pink-500/20'
+                            : slide.color === 'blue'
+                              ? 'bg-blue-500/20'
+                              : slide.color === 'yellow'
+                                ? 'bg-yellow-500/20'
+                                : slide.color === 'purple'
+                                  ? 'bg-purple-500/20'
+                                  : slide.color === 'green'
+                                    ? 'bg-green-500/20'
+                                    : 'bg-gray-500/20'
+                        }`}
+                      />
+                      <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                    </div>
+                    <div className="relative z-30 flex items-center justify-center h-full">
+                      <div className="text-center text-white px-4 max-w-4xl mx-auto">
+                        {slide.title ? (
+                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 drop-shadow-lg">
+                            {slide.title}
+                          </h2>
+                        ) : null}
+                        {slide.subtitle ? (
+                          <p className="text-lg md:text-2xl mb-8 drop-shadow-md opacity-95">
+                            {slide.subtitle}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()
+            ) : (
+            <>
+            {/* Swiper Slider — chunk loaded after first paint */}
+            <lazySwiper.Swiper
               key={`swiper-${heroSliderSettings?.effect || 'fade'}-${heroSliderSettings?.speed || 1000}-${heroLoopEnabled}-${slidesToUse.length}-${slidesToUse.map(s => `${s.id}-${s.type}`).join('-')}-${forceUpdate}`}
               modules={swiperModules}
               effect={(heroSliderSettings?.effect || 'fade') as any}
@@ -1623,7 +1677,7 @@ export default function HomePage() {
             const mediaKey = `${slide.type || 'image'}-${slide.id}-${index}`
             
             return (
-              <SwiperSlide key={uniqueKey} className={`relative ${hasLink ? 'cursor-pointer' : ''}`}>
+              <lazySwiper.SwiperSlide key={uniqueKey} className={`relative ${hasLink ? 'cursor-pointer' : ''}`}>
                 {/* Background Content */}
                 <div className="absolute inset-0 w-full h-full">
                   {/* ✅ 슬라이드 전환 시 잔상이 남지 않도록 조건부 렌더링으로 이전 미디어 엘리먼트 확실히 언마운트 */}
@@ -1636,7 +1690,11 @@ export default function HomePage() {
                       subtitle={slide.subtitle}
                     />
                   ) : (
-                    <ImageSlide key={mediaKey} src={slide.src || ''} />
+                    <ImageSlide
+                      key={mediaKey}
+                      src={slide.src || ''}
+                      fetchPriority={index === 0 ? 'high' : 'auto'}
+                    />
                   )}
                   
                   {/* Color Overlay — visual only; must not intercept touches (iPad Safari / Swiper) */}
@@ -1687,10 +1745,10 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-              </SwiperSlide>
+              </lazySwiper.SwiperSlide>
             )
               }).filter(Boolean) : null}
-            </Swiper>
+            </lazySwiper.Swiper>
         
             {/* Floating Elements - Between Text and Pagination */}
             <div className="absolute inset-0 pointer-events-none">
@@ -1730,6 +1788,8 @@ export default function HomePage() {
                 <div className="w-1 h-3 bg-white/80 rounded-full mt-2 animate-pulse"></div>
               </div>
             </div>
+          </>
+            )}
           </>
           ) : (
             <HeroCmsBootstrapPlaceholder />
