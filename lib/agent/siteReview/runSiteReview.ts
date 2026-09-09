@@ -24,6 +24,12 @@ import {
   selectFindingsForIncrementalDeepRecheck,
 } from './findings'
 import { sortSiteReviewFindings } from './findingStatus'
+import { buildFindingsFromPerformanceOpportunities } from './performanceFindings'
+import {
+  buildHeuristicSummary,
+  composeReportSummary,
+  maybeSiteReviewSummaryParagraph,
+} from './summaryLlm'
 import { siteReviewPeriodKey } from './periodKey'
 import { resolvePublicSiteOrigin } from './publicOrigin'
 import {
@@ -262,25 +268,33 @@ export async function runSiteReview(opts: {
   if (sectors.includes('performance')) {
     try {
       const opportunities = await loadPerformanceOpportunities()
-      if (opportunities.length > 0) {
-        const fp = 'sector_health|performance|opportunities'
-        drafted.push(
+      const perfFindings = buildFindingsFromPerformanceOpportunities(opportunities, {
+        trigger,
+        nowIso,
+        priorByFingerprint: priorMap,
+        merge: (args) =>
           mergeFindingByFingerprint({
-            prior: priorMap.get(fp),
-            nowIso,
-            nextDraft: {
-              fingerprint: fp,
-              sector: 'performance',
-              kind: 'sector_health',
-              severity: 'info',
-              title: `Performance opportunities: ${opportunities.length}`,
-              detail: 'Open Performance coach for ranked cards (suggestions only).',
-              deepLink: '/admin/agent/performance',
-              trigger,
-              status: 'open',
-            },
-          })
-        )
+            prior: args.prior,
+            nowIso: args.nowIso,
+            nextDraft: args.nextDraft,
+          }),
+      })
+      drafted.push(...perfFindings)
+      const seen = new Set(perfFindings.map((f) => f.fingerprint.toLowerCase()))
+      // Prior open/regressed Performance cards that disappeared → fixed (cleared).
+      for (const [fp, prior] of priorMap) {
+        if (!fp.startsWith('catalog_heuristic|performance|')) continue
+        if (seen.has(fp)) continue
+        if (prior.status !== 'open' && prior.status !== 'regressed') continue
+        drafted.push({
+          ...prior,
+          status: 'fixed',
+          detail: prior.detail
+            ? `${prior.detail} · Cleared from Performance coach`
+            : 'Cleared from Performance coach',
+          updatedAt: nowIso,
+          trigger,
+        })
       }
     } catch {
       /* ignore */
@@ -361,9 +375,28 @@ export async function runSiteReview(opts: {
   )
 
   const openCount = findings.filter((f) => f.status === 'open' || f.status === 'regressed').length
-  const summary = incremental
-    ? `Incremental review · ${periodKey} · ${openCount} open/regressed · origin ${origin}`
-    : `Full review · ${periodKey} · ${findings.length} findings · origin ${origin}`
+  const heuristic = buildHeuristicSummary({
+    periodKey,
+    incremental,
+    findings,
+  })
+  // Fallback one-liner if helper ever fails — keep origin for ops.
+  const baseSummary =
+    heuristic ||
+    (incremental
+      ? `Incremental review · ${periodKey} · ${openCount} open/regressed · origin ${origin}`
+      : `Full review · ${periodKey} · ${findings.length} findings · origin ${origin}`)
+
+  let llmParagraph: string | null = null
+  try {
+    llmParagraph = await maybeSiteReviewSummaryParagraph(findings, {
+      env: opts.env,
+      fetchImpl: opts.fetchImpl,
+      periodKey,
+    })
+  } catch {
+    llmParagraph = null
+  }
 
   return {
     id: `sr-${randomUUID()}`,
@@ -373,6 +406,6 @@ export async function runSiteReview(opts: {
     updatedAt: nowIso,
     incremental,
     findings,
-    summary,
+    summary: composeReportSummary({ heuristic: baseSummary, llmParagraph }),
   }
 }

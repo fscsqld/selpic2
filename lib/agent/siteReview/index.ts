@@ -40,6 +40,21 @@ export {
 } from './normalize'
 
 export {
+  buildFindingsFromPerformanceOpportunities,
+  performanceOpportunityFingerprint,
+  performanceOpportunityStillOpen,
+} from './performanceFindings'
+
+export {
+  isSiteReviewSummaryLlmEnabled,
+  composeReportSummary,
+  parseSummaryParagraphJson,
+  SITE_REVIEW_SUMMARY_LLM_KILL,
+} from './summaryLlmParse'
+
+export { maybeSiteReviewSummaryParagraph, buildHeuristicSummary } from './summaryLlm'
+
+export {
   getSiteReviewQuarterWindow,
   hasQuarterlyReportForPeriod,
   isSiteReviewCronEnabled,

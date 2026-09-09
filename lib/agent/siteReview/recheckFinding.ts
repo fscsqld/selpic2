@@ -16,6 +16,7 @@ import type { FundraisingOutreachTargetStatus } from '@/lib/fundraising/types'
 import { markFindingRegressed, mergeFindingByFingerprint } from './findings'
 import { resolveRecheckStatus } from './findingStatus'
 import { evaluateStorefrontSmoke } from './recheckStorefrontSmoke'
+import { performanceOpportunityStillOpen } from './performanceFindings'
 import type { SiteReviewFinding } from './types'
 
 export { resolveRecheckStatus } from './findingStatus'
@@ -102,10 +103,10 @@ async function evaluateStillFailing(
     }
   }
 
-  if (fp === 'sector_health|performance|opportunities') {
-    let n = 0
+  if (fp === 'sector_health|performance|opportunities' || fp.startsWith('catalog_heuristic|performance|')) {
+    let opportunities: Awaited<ReturnType<typeof loadPerformanceOpportunities>> = []
     try {
-      n = (await loadPerformanceOpportunities()).length
+      opportunities = await loadPerformanceOpportunities()
     } catch {
       return {
         stillFailing: true,
@@ -113,10 +114,21 @@ async function evaluateStillFailing(
         evidence: 'performance=error',
       }
     }
+    if (fp === 'sector_health|performance|opportunities') {
+      const n = opportunities.length
+      return {
+        stillFailing: n > 0,
+        detail: n > 0 ? `Performance opportunities still ${n}` : 'No open performance opportunities',
+        evidence: `opportunities=${n}`,
+      }
+    }
+    const still = performanceOpportunityStillOpen(finding.fingerprint, opportunities)
     return {
-      stillFailing: n > 0,
-      detail: n > 0 ? `Performance opportunities still ${n}` : 'No open performance opportunities',
-      evidence: `opportunities=${n}`,
+      stillFailing: still,
+      detail: still
+        ? 'Performance opportunity still open in coach'
+        : 'Performance opportunity cleared from coach',
+      evidence: `fingerprint=${finding.fingerprint}; still=${still}`,
     }
   }
 
