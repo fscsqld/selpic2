@@ -4,7 +4,9 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import { Package, Palette, Sparkles, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Header, { HeaderLogoImage } from '@/components/Header'
-import { optimizeStorefrontImageUrl } from '@/lib/optimizeStorefrontImageUrl'
+import {
+  resolveStorefrontImageSrc,
+} from '@/lib/optimizeStorefrontImageUrl'
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
 
@@ -82,9 +84,9 @@ function HeroCoverImage({
   }, [primarySrc])
 
   const chain = useMemo(() => {
-    const p = optimizeStorefrontImageUrl((primarySrc || '').trim(), {
-      maxWidth: 1200,
-      quality: 60,
+    const p = resolveStorefrontImageSrc((primarySrc || '').trim(), {
+      maxWidth: 1080,
+      quality: 55,
     })
     const out: string[] = []
     if (p) out.push(p)
@@ -95,6 +97,7 @@ function HeroCoverImage({
 
   const idx = Math.min(tier, Math.max(0, chain.length - 1))
   const src = chain[idx] || LOCAL_HERO_FALLBACK_URL
+  const isLcp = fetchPriority === 'high'
 
   if (allFailed) {
     return (
@@ -113,7 +116,7 @@ function HeroCoverImage({
       role="presentation"
       className={className}
       draggable={false}
-      decoding="async"
+      decoding={isLcp ? 'sync' : 'async'}
       loading="eager"
       fetchPriority={fetchPriority}
       onError={() => {
@@ -150,9 +153,9 @@ function CategoryCoverImage({
   }, [primarySrc])
 
   const chain = useMemo(() => {
-    const p = optimizeStorefrontImageUrl((primarySrc || '').trim(), {
-      maxWidth: 800,
-      quality: 60,
+    const p = resolveStorefrontImageSrc((primarySrc || '').trim(), {
+      maxWidth: 720,
+      quality: 55,
     })
     const ordered = [
       p,
@@ -273,11 +276,14 @@ const ImageSlide = React.memo(
 function computeVideoSlideSafeSrc(raw: string): string {
   const trimmedSrc = (raw || '').trim()
   if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) return ''
+  if (/sample-videos\.com/i.test(trimmedSrc)) return ''
   return trimmedSrc.startsWith('data:') ||
     trimmedSrc.startsWith('blob:') ||
     trimmedSrc.startsWith('http://') ||
     trimmedSrc.startsWith('https://')
-    ? trimmedSrc
+    ? trimmedSrc.startsWith('http://')
+      ? `https://${trimmedSrc.slice('http://'.length)}`
+      : trimmedSrc
     : encodeURI(trimmedSrc)
 }
 
@@ -1381,8 +1387,8 @@ export default function HomePage() {
     {
       id: 'default-1',
       type: 'image' as const,
-      src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?auto=format&fit=crop&w=1200&q=60',
-      fallbackImage: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?auto=format&fit=crop&w=1200&q=60',
+      src: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1080&q=55',
+      fallbackImage: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1080&q=55',
       title: 'Selpic',
       subtitle: 'Premium Sticker Shop',
       color: 'blue' as const,
@@ -1398,8 +1404,8 @@ export default function HomePage() {
     {
       id: 'default-3',
       type: 'image' as const,
-      src: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1200&q=60',
-      fallbackImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1200&q=60',
+      src: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1080&q=55',
+      fallbackImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1080&q=55',
       title: 'High Quality',
       subtitle: 'Professional Grade Materials',
       color: 'green' as const,
@@ -1481,6 +1487,12 @@ export default function HomePage() {
     return sortedSlides
   }, [heroSlides, forceUpdate]) // 🆕 forceUpdate도 의존성에 추가
 
+  const lcpHeroImageHref = useMemo(() => {
+    const slide = Array.isArray(slidesToUse) ? slidesToUse[0] : null
+    if (!slide || slide.type === 'video') return ''
+    return resolveStorefrontImageSrc(slide.src || '', { maxWidth: 1080, quality: 55 })
+  }, [slidesToUse])
+
   // Swiper loop with 0–1 slides breaks on some Safari/iPad builds (blank slider).
   const heroLoopEnabled =
     slidesToUse.length > 1 && (heroSliderSettings?.loop !== false)
@@ -1554,6 +1566,10 @@ export default function HomePage() {
       )}
       
       <main id="main-content">
+      {canRenderCmsVisualSections && lcpHeroImageHref ? (
+        // Next hoists this into <head> — starts LCP fetch earlier on Slow 4G.
+        <link rel="preload" as="image" href={lcpHeroImageHref} />
+      ) : null}
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden" aria-labelledby="home-primary-heading">
         {/* Single document heading for SEO (one h1 per page). Visually minimal; slides keep h2 for slide-specific titles. */}

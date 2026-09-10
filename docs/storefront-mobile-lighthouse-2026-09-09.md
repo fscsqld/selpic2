@@ -1,82 +1,74 @@
 # Storefront mobile performance — Lighthouse learning
 
-## Post-deploy report (primary) — Sep 10, 2026, 10:11:17 AM GMT+10
+## Latest lab report — Sep 10, 2026, **1:26:02 PM** GMT+10
 
 | Field | Value |
 |-------|--------|
 | URL | `https://www.selpic.com.au/` |
 | Tool | PageSpeed Insights / Lighthouse **13.4.1** |
 | Device | Emulated **Moto G Power**, Mobile, Slow 4G |
-| Browser | HeadlessChromium 151.0.7922.71 with lr |
 | Field CrUX | **No Data** |
 
-### Scores vs baseline (Sep 9 **1:33** PM)
+### Score trail
 
-| Category / metric | Baseline 1:33 | **After 10:11** | Delta |
-|-------------------|-------------:|----------------:|------:|
-| Performance | 51 | **67** | **+16** |
-| Accessibility | 98 | 98 | — |
-| Best Practices | 96 | 96 | — |
-| SEO | 100 | 100 | — |
-| Agentic Browsing | 2/2 | 2/2 | — |
-| FCP | 3.3 s | **2.4 s** | **−0.9 s** |
-| LCP | 8.4 s | **5.8 s** | **−2.6 s** |
-| TBT | 420 ms | **50 ms** | **−370 ms** |
-| CLS | 0 | 0 | — |
-| Speed Index | 7.7 s | **9.3 s** | +1.6 s (lab noise / below-fold) |
-| Network payload | ~14,565 KiB | **~14,167 KiB** | −~400 KiB |
+| Metric | Baseline 1:33 | Mid 10:11 | **Latest 1:26** |
+|--------|-------------:|----------:|----------------:|
+| Performance | 51 | 67 | **73** |
+| FCP | 3.3 s | 2.4 s | **1.1 s** |
+| LCP | 8.4 s | 5.8 s | **5.2 s** |
+| TBT | 420 ms | 50 ms | **120 ms** |
+| SI | 7.7 s | 9.3 s | **7.0 s** |
+| CLS | 0 | 0 | **0** |
+| Payload | ~14.5 MiB | ~14.2 MiB | **~13.9 MiB** |
+| Accessibility | 98 | 98 | 98 |
+| Best Practices | 96 | 96 | 96 |
+| SEO | 100 | 100 | 100 |
 
-Score weights (10:11): FCP +7, LCP +4, TBT +30, CLS +25, SI +1 → **TBT win drove most of the +16**; LCP still the main CWV gap (5.8 s ≫ 2.5 s “good”).
+Weights (1:26): FCP +10, LCP +6, TBT +29, CLS +25, SI +3 → FCP win + still-good TBT lifted Perf to **73**; **LCP 5.2s** remains the CWV gap.
 
-### Precise analysis (what worked / what remains)
+### What improved (verified live)
 
-| Insight (10:11) | Est. | Verdict | Action |
-|-----------------|-----:|---------|--------|
-| Improve image delivery | ~213 KiB | Still material; Unsplash `w=2070` CMS/defaults | **Fix:** `optimizeStorefrontImageUrl` caps Unsplash to w≤1200/q60 on Hero/category |
-| Use efficient cache lifetimes | ~10,456 KiB | **Root cause:** `next.config` `/:path*` **no-store** overwrote `_next/static` + public API SWR | **Fix:** immutable cache for `/_next/static`; drop no-store override on public catalog/site-config; media public SWR |
-| Render-blocking requests | (listed) | Fonts already off `/`; residual CSS | Monitor after deploy |
-| Enormous network payloads | ~14.2 MiB | Mostly CMS/media + below-fold images | Incremental; same-origin media later |
-| Unused CSS | ~21 KiB | Was ~361 KiB — large win from font/Swiper scope | Low priority |
-| Unused JS | ~51 KiB | Still | Further islands later |
-| Legacy JS | ~12 KiB | Polyfills | Low |
-| Long main-thread tasks | **5** (was 9) | Swiper defer helped | Keep not growing `/` |
-| LCP breakdown / discovery | — | Hero image still late on Slow 4G | Image size + cache + priority (done); remeasure |
-| DOM size | — | Large home tree | Don’t grow first viewport |
-| **main landmark** | A11y | Missing | **Fix:** wrap home sections in `<main id="main-content">` |
-| Console errors / CSP | BP 96 | Header amplifier + weak CSP | **BP batch:** see below |
+- Perf **51 → 73** (+22 vs baseline); FCP **3.3 → 1.1s**; LCP **8.4 → 5.2s**; SI **7.0s**; payload ~13.9 MiB.
+- Probed after BP deploy: HTML has `<main id="main-content">`; CSP + COOP present; `/_next/static` → `max-age=31536000, immutable`.
 
-### Best Practices batch (2026-09-10)
+### Why some PSI audits still fail
 
-1. `HeaderErrorBoundary` — ignore resource-load `window` errors; no prod `console.error` amplifier  
-2. CSP via `lib/productionSecurityHeaders.ts` + `proxy.ts` — `default-src`/`script-src`, drop `block-all-mixed-content`, add COOP `same-origin-allow-popups`  
-3. contentStore default `sample-videos.com` Hero Video → inactive / empty URL  
-4. `optimizeStorefrontImageUrl` upgrades `http://` → `https://`  
-5. **Deferred:** Trusted Types (high breakage risk)
+| PSI still says | Live check | Likely reason |
+|----------------|------------|---------------|
+| No `main` landmark | `<main id="main-content">` in HTML | Lab false negative / a11y-tree timing — **not missing in prod** |
+| CSP not effective vs XSS | Full CSP with `default-src`/`script-src` | Audit wants **no** `'unsafe-inline'`/`'unsafe-eval'` — Next still needs them → expected until nonce CSP |
+| Console errors | Header amplifier fixed | Residual CMS media 404s / 3rd-party — Chrome still logs failed resources |
+| Trusted Types | Not shipped | Deferred (high breakage) |
+| Cache lifetimes ~10.5 MiB | Own static assets immutable | Savings often **3rd-party** (Unsplash/Supabase) TTL we don’t control |
+| Image delivery ~191 KiB | Optimizer live | Remaining large CMS / non-Unsplash assets |
+| Render-blocking ~700 ms | Fonts off `/` | Residual critical CSS |
 
-### Invariant (unchanged)
+### Remaining priorities
 
-Optimize **load path**, not Hero look (logo, HOT ITEM, Framer, gradients protected).
+1. ~~**Google Gemini key**~~ — **deferred to tomorrow** (owner).  
+2. **LCP / console (today)** — skip dead media URLs before request; tighter Unsplash w/q; LCP `decoding=sync` + preload first hero image. Prefer Supabase/self-host in CMS for further LCP (ops).  
+3. **Console ops** — fix remaining 404 URLs in Admin CMS media.  
+4. Strict CSP / Trusted Types — larger follow-up.  
+5. Wave 6+ / W3 after Google A/B.
+
+### Today batch (2+3 combined) — 2026-09-10
+
+Recommendation learned: do **image delivery + console** together — skipping non-requestable URLs cuts Failed-to-load noise and wasted LCP bytes.
+
+- `isRequestableStorefrontMediaUrl` / `resolveStorefrontImageSrc`  
+- Hero Unsplash max **1080 / q55**; category **720**  
+- LCP img `decoding="sync"`; `<link rel="preload" as="image">` for first slide  
+- Video: skip `sample-videos.com` / upgrade http  
+
+### Invariant
+
+Optimize load path; do not redesign Hero (logo, HOT ITEM, Framer, gradients).
 
 ---
 
-## Baseline (pre mobile-perf) — Sep 9, 2026, 1:33:42 PM
+## Earlier snapshots
 
-Kept for delta comparison only. See git history / earlier sections in prior commits for full baseline tables.
+- **10:11 AM** — Perf 67 (fonts/Swiper/CMS cache).  
+- **1:33 PM Sep 9** — baseline Perf 51.  
 
-Shipped batch 1 (`cd6b32f`): font scoping, site-config SWR, LazyHomeSwiper, LCP `fetchPriority`.
-
-## Perf batch 2 (this learning cycle) — code
-
-1. `lib/optimizeStorefrontImageUrl.ts` — Unsplash downsize on Hero/category  
-2. `next.config.js` — `/_next/static` immutable; stop killing public API caches  
-3. `app/api/media/public` — short SWR  
-4. Homepage `<main>` landmark  
-
-## Re-measure checklist (after batch 2 deploy)
-
-- [ ] PSI mobile again on `https://www.selpic.com.au/`  
-- [ ] Expect: cache-lifetime savings drop; image-delivery savings drop; Perf maybe 70+ if LCP improves  
-- [ ] Confirm `/_next/static/...` response header `max-age=31536000`  
-- [ ] Confirm `/api/site-config/public` not forced `no-store` by config  
-- [ ] A11y: main landmark passes  
-- [ ] Customize fonts still load; Hero look unchanged  
+Commits: `cd6b32f` fonts/Swiper; `7546cbb` cache/LCP/`main`/W2.5; `47867f1` CSP/COOP/Header console.

@@ -2912,7 +2912,7 @@ const defaultHeroSlides: HeroSlide[] = [
   {
     id: 'hero-1',
     type: 'image',
-    src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+    src: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1080&q=55',
     title: 'Selpic',
     subtitle: 'Premium Sticker Shop',
     color: 'blue',
@@ -2948,7 +2948,7 @@ const defaultHeroSlides: HeroSlide[] = [
   {
     id: 'hero-4',
     type: 'image',
-    src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+    src: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1080&q=55',
     title: 'Premium Stickers',
     subtitle: 'High Quality Materials',
     color: 'pink',

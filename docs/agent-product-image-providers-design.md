@@ -1,10 +1,9 @@
 # Product image AI providers — removable design (SELPIC)
 
 **Updated:** 2026-09-10  
-**Status:** **W1 + W2 + W2.5 shipped in code** (adapters + Admin UI provider picker). Google option disabled until Gemini key. Default remains OpenAI.  
-**Default until A/B ends:** OpenAI **`gpt-image-2`** for images when OpenAI selected / configured.  
-**Optional:** Google **Gemini 2.5 Flash Image** via `googleGeminiImage.ts`.  
-**Accounting:** unchanged — sandbox keeps its own `OPENAI_API_KEY`. Never couple.
+**Status:** **W1 + W2 + W2.5 shipped**. Google UI shows until key exists (disabled). Default OpenAI.  
+**Schedule (learned):** Owner will add **Google Gemini API key tomorrow** — do not block today’s LCP/console work on the key.  
+**Accounting:** unchanged.
 
 Language: Admin UI = English. This doc may be discussed in Korean.
 
@@ -281,8 +280,7 @@ Site Review may **deep-link** to Products Assist — must stay provider-blind (o
 | User says | Start |
 |-----------|--------|
 | 「이미지 어댑터 시작」 / 「W1 시작」 | Provider split (OpenAI behind interface) |
-| 「구글 이미지 붙이자」 / 「W2 시작」 | Nano Banana adapter + env |
-| 「UI에서 선택」 / 「W2.5」 / 「A/B 선택」 | Admin image provider picker + per-request override |
+| 「구글 키 넣자」 / tomorrow key | Wire `GOOGLE_GEMINI_API_KEY` + smoke Google Generate |
 | 「구글 제거」 / 「OpenAI 이미지만」 | §3.A |
 | 「OpenAI 이미지 제거」 / 「구글만」 | §3.B |
 | 「Wave 4.5 시작」 | Site Review S0 (parallel track) |

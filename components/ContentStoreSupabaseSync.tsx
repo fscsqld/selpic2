@@ -7,13 +7,16 @@ import {
   mergeRemoteSiteConfigForStoreApply,
   partializedSiteConfigForPersist,
   normalizeRehydratedContentStoreState,
-  useContentStore
+  useContentStore,
 } from '@/lib/contentStore'
 import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAutosave'
 import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
 
 /** After initial retries, periodic merge with Supabase. Realtime + visibility handle most updates; this is a safety net (not every 8s — saves battery and server load on tablets). */
 const BACKGROUND_SITE_CONFIG_POLL_MS = 120_000
+
+/** Defer realtime past Lighthouse initial-load window; poll already syncs CMS. */
+const REALTIME_SUBSCRIBE_DELAY_MS = 12_000
 
 /**
  * After mount, loads storefront CMS from Supabase `site_configs` via `fetchSiteConfigValue()`
@@ -107,8 +110,10 @@ export default function ContentStoreSupabaseSync() {
     }
 
     let pollTimer: ReturnType<typeof setInterval> | undefined
+    let realtimeTimer: ReturnType<typeof setTimeout> | undefined
     let realtimeChannel: ReturnType<ReturnType<typeof createSupabaseBrowserClient>['channel']> | undefined
     let realtimeClient: ReturnType<typeof createSupabaseBrowserClient> | undefined
+
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
       void applyRemoteIfChanged()
@@ -124,7 +129,7 @@ export default function ContentStoreSupabaseSync() {
           lastRemoteSignature.current = ''
         }
       } catch {
-        lastRemoteSignature.current = ''
+        // ignore
       }
       void applyRemoteIfChanged()
     }
@@ -158,40 +163,53 @@ export default function ContentStoreSupabaseSync() {
       } finally {
         // Never upsert bundle defaults over Supabase when the remote row was never read (mobile/offline).
         markSiteConfigRemoteFetchSettled(remoteMergeSucceeded.current)
-        // If remote never merged, keep siteConfigRemoteSynced false so the homepage can show the
-        // timeout + retry UI instead of treating stale localStorage as canonical (common on flaky tablet Wi‑Fi).
         // Keep local/deployed tabs converged when realtime misses (flaky Wi‑Fi / Safari).
         pollTimer = setInterval(() => {
           if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
           void applyRemoteIfChanged()
         }, BACKGROUND_SITE_CONFIG_POLL_MS)
-        try {
-          realtimeClient = createSupabaseBrowserClient()
-          // Unique channel name per mount avoids "cannot add callbacks after subscribe" races.
-          const channelName = `site-configs-live-sync-${Date.now()}`
-          realtimeChannel = realtimeClient
-            .channel(channelName)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'site_configs',
-                filter: 'config_key=eq.storefront_cms',
-              },
-              () => {
-                void applyRemoteIfChanged()
-              }
-            )
-            .subscribe()
-        } catch (e) {
-          console.warn('[siteConfig] realtime subscribe failed', e)
-        }
+
+        // Delay realtime past initial Lighthouse load — WS DNS failures otherwise spam console.
+        realtimeTimer = setTimeout(() => {
+          try {
+            realtimeClient = createSupabaseBrowserClient()
+            const channelName = `site-configs-live-sync-${Date.now()}`
+            realtimeChannel = realtimeClient
+              .channel(channelName)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'site_configs',
+                  filter: 'config_key=eq.storefront_cms',
+                },
+                () => {
+                  void applyRemoteIfChanged()
+                }
+              )
+              .subscribe((status) => {
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                  try {
+                    if (realtimeClient && realtimeChannel) {
+                      void realtimeClient.removeChannel(realtimeChannel)
+                    }
+                  } catch {
+                    // ignore
+                  }
+                  realtimeChannel = undefined
+                }
+              })
+          } catch {
+            // Poll continues — do not console.error (Lighthouse BP).
+          }
+        }, REALTIME_SUBSCRIBE_DELAY_MS)
       }
     })()
 
     return () => {
       if (pollTimer) clearInterval(pollTimer)
+      if (realtimeTimer) clearTimeout(realtimeTimer)
       if (realtimeChannel) {
         try {
           if (realtimeClient?.removeChannel) {

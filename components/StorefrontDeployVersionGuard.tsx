@@ -177,7 +177,7 @@ export default function StorefrontDeployVersionGuard() {
         // Defer past React commit — sync reload during layout effect caused removeChild errors on localhost.
         window.setTimeout(() => {
           window.location.replace(next.toString())
-        }, 0)
+        }, 150)
       })
       return
     }
@@ -221,7 +221,7 @@ export default function StorefrontDeployVersionGuard() {
       const next = new URL(window.location.href)
       window.setTimeout(() => {
         window.location.replace(next.toString())
-      }, 0)
+      }, 150)
     })
   }, [pathname])
 
