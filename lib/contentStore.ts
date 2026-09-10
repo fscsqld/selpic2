@@ -3457,7 +3457,7 @@ const defaultCategoryHeroSlides: CategoryHeroSlide[] = [
     id: 'cat-hero-stickers-1',
     category: 'stickers',
     type: 'image',
-    src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?w=1920&h=1080&fit=crop',
+    src: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=1920&h=1080&fit=crop',
     speed: 5,
     direction: 'left',
     effect: 'slide',
