@@ -600,9 +600,10 @@ const defaultContent: ContentItem[] = [
     section: 'hero',
     title: 'Hero Video',
     content: 'Hero section background video',
-    mediaUrl: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
+    // Dead third-party sample URL removed — caused console / network errors when active.
+    mediaUrl: '',
     order: 5,
-    isActive: true,
+    isActive: false,
     createdAt: new Date(),
     updatedAt: new Date()
   },

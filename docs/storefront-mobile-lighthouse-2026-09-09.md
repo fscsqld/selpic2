@@ -43,7 +43,15 @@ Score weights (10:11): FCP +7, LCP +4, TBT +30, CLS +25, SI +1 → **TBT win dro
 | LCP breakdown / discovery | — | Hero image still late on Slow 4G | Image size + cache + priority (done); remeasure |
 | DOM size | — | Large home tree | Don’t grow first viewport |
 | **main landmark** | A11y | Missing | **Fix:** wrap home sections in `<main id="main-content">` |
-| Console errors / CSP | BP 96 | Separate hardening | Later |
+| Console errors / CSP | BP 96 | Header amplifier + weak CSP | **BP batch:** see below |
+
+### Best Practices batch (2026-09-10)
+
+1. `HeaderErrorBoundary` — ignore resource-load `window` errors; no prod `console.error` amplifier  
+2. CSP via `lib/productionSecurityHeaders.ts` + `proxy.ts` — `default-src`/`script-src`, drop `block-all-mixed-content`, add COOP `same-origin-allow-popups`  
+3. contentStore default `sample-videos.com` Hero Video → inactive / empty URL  
+4. `optimizeStorefrontImageUrl` upgrades `http://` → `https://`  
+5. **Deferred:** Trusted Types (high breakage risk)
 
 ### Invariant (unchanged)
 

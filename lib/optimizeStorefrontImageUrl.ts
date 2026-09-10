@@ -16,7 +16,7 @@ export function optimizeStorefrontImageUrl(
   url: string,
   opts: OptimizeStorefrontImageOpts = {}
 ): string {
-  const raw = (url || '').trim()
+  let raw = (url || '').trim()
   if (!raw) return raw
   if (
     raw.startsWith('data:') ||
@@ -24,6 +24,10 @@ export function optimizeStorefrontImageUrl(
     raw.startsWith('indexeddb:')
   ) {
     return raw
+  }
+  // Avoid mixed-content / CSP console noise when CMS stores http://
+  if (raw.startsWith('http://')) {
+    raw = `https://${raw.slice('http://'.length)}`
   }
   if (!/images\.unsplash\.com/i.test(raw)) return raw
 

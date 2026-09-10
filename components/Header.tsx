@@ -87,8 +87,16 @@ function HeaderErrorBoundary({ children }: { children: React.ReactNode }) {
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
-    const handleError = (error: ErrorEvent) => {
-      console.error('Header error:', error)
+    const handleError = (event: ErrorEvent) => {
+      // Resource failures (broken CMS img/video/script src) fire window "error" but are
+      // not Header crashes — re-logging them fails Lighthouse BP and wrongly swaps the bar.
+      const target = event.target
+      if (target && target !== window && typeof (target as Node).nodeName === 'string') {
+        return
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Header runtime error:', event.error || event.message)
+      }
       setHasError(true)
     }
 

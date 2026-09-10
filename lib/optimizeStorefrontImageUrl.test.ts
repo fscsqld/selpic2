@@ -32,4 +32,12 @@ describe('optimizeStorefrontImageUrl', () => {
       'data:image/png;base64,aaa'
     )
   })
+
+  it('upgrades http Unsplash URLs to https before sizing', () => {
+    const out = optimizeStorefrontImageUrl(
+      'http://images.unsplash.com/photo-x?w=2070&q=80'
+    )
+    expect(out.startsWith('https://')).toBe(true)
+    expect(out).toContain('w=1200')
+  })
 })

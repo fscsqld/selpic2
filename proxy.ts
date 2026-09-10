@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server'
 import { createSupabaseMiddlewareClient } from '@/lib/supabase/middleware'
 import { userHasAdminAccess } from '@/lib/supabase/adminClaims'
 import { hasUsableSupabaseBrowserEnv } from '@/lib/supabase/publicEnv'
+import {
+  CROSS_ORIGIN_OPENER_POLICY,
+  CROSS_ORIGIN_RESOURCE_POLICY,
+  buildProductionContentSecurityPolicy,
+} from '@/lib/productionSecurityHeaders'
 
 function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
@@ -52,10 +57,9 @@ function applyProductionSecurityHeaders(response: NextResponse, isLocal: boolean
     response.headers.set('X-Frame-Options', 'SAMEORIGIN')
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-    response.headers.set(
-      'Content-Security-Policy',
-      "upgrade-insecure-requests; block-all-mixed-content; connect-src 'self' https: wss:; media-src 'self' https: data: blob:; img-src 'self' https: data: blob:; font-src 'self' https: data:"
-    )
+    response.headers.set('Cross-Origin-Opener-Policy', CROSS_ORIGIN_OPENER_POLICY)
+    response.headers.set('Cross-Origin-Resource-Policy', CROSS_ORIGIN_RESOURCE_POLICY)
+    response.headers.set('Content-Security-Policy', buildProductionContentSecurityPolicy())
   }
   return response
 }
