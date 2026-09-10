@@ -174,6 +174,21 @@ export default function ContentStoreSupabaseSync() {
           try {
             realtimeClient = createSupabaseBrowserClient()
             const channelName = `site-configs-live-sync-${Date.now()}`
+            let channelTeardownStarted = false
+            const teardownRealtimeChannel = () => {
+              // removeChannel → CLOSED status → this callback again = Maximum call stack.
+              if (channelTeardownStarted) return
+              channelTeardownStarted = true
+              const client = realtimeClient
+              const channel = realtimeChannel
+              realtimeChannel = undefined
+              if (!client || !channel) return
+              try {
+                void client.removeChannel(channel)
+              } catch {
+                // ignore
+              }
+            }
             realtimeChannel = realtimeClient
               .channel(channelName)
               .on(
@@ -189,14 +204,10 @@ export default function ContentStoreSupabaseSync() {
                 }
               )
               .subscribe((status) => {
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-                  try {
-                    if (realtimeClient && realtimeChannel) {
-                      void realtimeClient.removeChannel(realtimeChannel)
-                    }
-                  } catch {
-                    // ignore
-                  }
+                // CLOSED is the result of removeChannel — do not remove again.
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                  teardownRealtimeChannel()
+                } else if (status === 'CLOSED') {
                   realtimeChannel = undefined
                 }
               })
