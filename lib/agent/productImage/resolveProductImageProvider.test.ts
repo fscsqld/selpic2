@@ -1,14 +1,23 @@
 /**
- * Product image provider router — W1 (OpenAI only; google reserved).
+ * Product image provider router — W1 OpenAI + W2 Google.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   parseProductImageProviderId,
   resolveProductImageProvider,
 } from './resolveProductImageProvider'
+import {
+  extractGeminiInlineImageB64,
+  googleGeminiImageProvider,
+} from './googleGeminiImage'
 import { sanitizeImagePrompt } from '../productImageryGenerate'
 import { sanitizeAgentRun } from '../agentRuns'
+import {
+  AGENT_GOOGLE_IMAGE_FLAT_USD,
+  AGENT_IMAGE_FLAT_USD,
+  estimateImageCostUsd,
+} from '../agentOpenAiPricing'
 
 describe('parseProductImageProviderId', () => {
   it('defaults blank and openai to openai', () => {
@@ -17,7 +26,7 @@ describe('parseProductImageProviderId', () => {
     expect(parseProductImageProviderId('OpenAI')).toBe('openai')
   })
 
-  it('accepts google id for future W2', () => {
+  it('accepts google id', () => {
     expect(parseProductImageProviderId('google')).toBe('google')
   })
 
@@ -31,22 +40,57 @@ describe('resolveProductImageProvider', () => {
     const r = resolveProductImageProvider({
       AGENT_PRODUCT_IMAGE_GEN: '0',
       OPENAI_API_KEY: 'sk-test',
+      GOOGLE_GEMINI_API_KEY: 'g-test',
+      AGENT_IMAGE_PROVIDER: 'google',
     })
     expect('missing' in r).toBe(true)
     if ('missing' in r) expect(r.error).toMatch(/AGENT_PRODUCT_IMAGE_GEN/)
   })
 
-  it('returns clear error when google selected before W2', () => {
+  it('resolves google when key present', () => {
+    const r = resolveProductImageProvider({
+      AGENT_IMAGE_PROVIDER: 'google',
+      GOOGLE_GEMINI_API_KEY: 'g-test',
+    })
+    expect('missing' in r).toBe(false)
+    if (!('missing' in r)) expect(r.id).toBe('google')
+  })
+
+  it('accepts GEMINI_API_KEY alias for google', () => {
+    const r = resolveProductImageProvider({
+      AGENT_IMAGE_PROVIDER: 'google',
+      GEMINI_API_KEY: 'alias-key',
+    })
+    expect('missing' in r).toBe(false)
+    if (!('missing' in r)) expect(r.id).toBe('google')
+  })
+
+  it('returns clear error when google selected without key', () => {
     const r = resolveProductImageProvider({
       AGENT_IMAGE_PROVIDER: 'google',
       OPENAI_API_KEY: 'sk-test',
-      GOOGLE_GEMINI_API_KEY: 'x',
     })
     expect('missing' in r).toBe(true)
     if ('missing' in r) {
       expect(r.id).toBe('google')
-      expect(r.error).toMatch(/not enabled yet/i)
+      expect(r.error).toMatch(/GOOGLE_GEMINI_API_KEY/)
     }
+  })
+
+  it('google works even when AGENT_DRAFT_LLM=0 (openai images would not)', () => {
+    const google = resolveProductImageProvider({
+      AGENT_IMAGE_PROVIDER: 'google',
+      GOOGLE_GEMINI_API_KEY: 'g-test',
+      AGENT_DRAFT_LLM: '0',
+    })
+    expect('missing' in google).toBe(false)
+
+    const openai = resolveProductImageProvider({
+      AGENT_IMAGE_PROVIDER: 'openai',
+      OPENAI_API_KEY: 'sk-test',
+      AGENT_DRAFT_LLM: '0',
+    })
+    expect('missing' in openai).toBe(true)
   })
 
   it('resolves openai when key present', () => {
@@ -55,6 +99,106 @@ describe('resolveProductImageProvider', () => {
     })
     expect('missing' in r).toBe(false)
     if (!('missing' in r)) expect(r.id).toBe('openai')
+  })
+})
+
+describe('extractGeminiInlineImageB64', () => {
+  it('reads camelCase inlineData', () => {
+    expect(
+      extractGeminiInlineImageB64({
+        candidates: [
+          { content: { parts: [{ inlineData: { data: 'a'.repeat(40), mimeType: 'image/png' } }] } },
+        ],
+      })
+    ).toBe('a'.repeat(40))
+  })
+
+  it('reads snake_case inline_data', () => {
+    expect(
+      extractGeminiInlineImageB64({
+        candidates: [
+          {
+            content: {
+              parts: [{ inline_data: { data: 'b'.repeat(40), mime_type: 'image/png' } }],
+            },
+          },
+        ],
+      })
+    ).toBe('b'.repeat(40))
+  })
+
+  it('returns null when text-only', () => {
+    expect(
+      extractGeminiInlineImageB64({
+        candidates: [{ content: { parts: [{ text: 'Sorry, I cannot.' }] } }],
+      })
+    ).toBeNull()
+  })
+})
+
+describe('googleGeminiImageProvider generateOrEdit', () => {
+  it('maps successful generateContent to b64 contract', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ inlineData: { data: 'c'.repeat(48), mimeType: 'image/png' } }],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    ) as unknown as typeof fetch
+
+    const result = await googleGeminiImageProvider.generateOrEdit({
+      prompt: 'Clean white background product shot for SELPIC stickers storefront.',
+      env: { GOOGLE_GEMINI_API_KEY: 'g-test' },
+      fetchImpl,
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.provider).toBe('google')
+      expect(result.mode).toBe('generate')
+      expect(result.b64.length).toBeGreaterThan(32)
+      expect(result.model).toMatch(/gemini/)
+    }
+  })
+
+  it('returns English error when Google returns text only', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'I cannot create that image.' }] } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    ) as unknown as typeof fetch
+
+    const result = await googleGeminiImageProvider.generateOrEdit({
+      prompt: 'Clean white background product shot for SELPIC stickers storefront.',
+      env: { GOOGLE_GEMINI_API_KEY: 'g-test' },
+      fetchImpl,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.provider).toBe('google')
+      expect(result.error).toMatch(/text only|no image/i)
+    }
+  })
+})
+
+describe('estimateImageCostUsd provider branch', () => {
+  it('uses Google flat for google provider', () => {
+    expect(estimateImageCostUsd('gemini-2.5-flash-image', 'google')).toBe(
+      AGENT_GOOGLE_IMAGE_FLAT_USD
+    )
+  })
+
+  it('defaults missing provider to OpenAI flat', () => {
+    expect(estimateImageCostUsd('gpt-image-2')).toBe(AGENT_IMAGE_FLAT_USD)
   })
 })
 

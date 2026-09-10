@@ -8,6 +8,7 @@ import {
   estimateImageCostUsd,
   parseChatUsageFromResponse,
   AGENT_IMAGE_FLAT_USD,
+  AGENT_GOOGLE_IMAGE_FLAT_USD,
 } from './agentOpenAiPricing'
 import {
   buildChatRunRecord,
@@ -29,6 +30,9 @@ describe('agentOpenAiPricing', () => {
   it('uses flat image estimate', () => {
     expect(estimateImageCostUsd('gpt-image-2')).toBe(AGENT_IMAGE_FLAT_USD)
     expect(estimateImageCostUsd('gpt-image-1')).toBe(AGENT_IMAGE_FLAT_USD)
+    expect(estimateImageCostUsd('gemini-2.5-flash-image', 'google')).toBe(
+      AGENT_GOOGLE_IMAGE_FLAT_USD
+    )
   })
 
   it('parses usage from OpenAI-shaped JSON', () => {

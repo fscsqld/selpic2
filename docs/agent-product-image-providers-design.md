@@ -1,10 +1,10 @@
 # Product image AI providers — removable design (SELPIC)
 
-**Updated:** 2026-09-08  
-**Status:** **W1 shipped in code** (OpenAI behind provider interface). Google provider not shipped (W2).  
-**Default (recommended until admin A/B decides otherwise):** OpenAI **`gpt-image-2`** via existing HITL pipeline.  
-**Optional later:** Google **Gemini 2.5 Flash Image (Nano Banana)** behind the same interface.  
-**Accounting:** unchanged — `apps/accounting-sandbox` keeps its own `OPENAI_API_KEY` (statement parsing). Never couple.
+**Updated:** 2026-09-10  
+**Status:** **W1 + W2 shipped in code** (OpenAI + Google adapters). Default server env still OpenAI. **Admin UI provider picker not shipped yet** (learned intent below → next: W2.5).  
+**Default until A/B ends:** OpenAI **`gpt-image-2`** for images when no override.  
+**Optional:** Google **Gemini 2.5 Flash Image** via `googleGeminiImage.ts`.  
+**Accounting:** unchanged — sandbox keeps its own `OPENAI_API_KEY`. Never couple.
 
 Language: Admin UI = English. This doc may be discussed in Korean.
 
@@ -14,13 +14,28 @@ Language: Admin UI = English. This doc may be discussed in Korean.
 
 | Decision | Choice |
 |----------|--------|
-| Catalog main-shot default | **OpenAI `gpt-image-2`** (edit preferred when https source exists) |
+| **Text polish** (Inbound / Community / Newsletter / descriptions) | **OpenAI only** — not part of image A/B |
+| Catalog main-shot **image** default | OpenAI `gpt-image-2` until admin picks a winner |
 | Photo Brief UI | **Free template only** (not a billed image provider) |
-| Google Nano Banana | **Optional second provider** after adapter exists — not a forced cutover |
-| When admin decides a winner | **Remove the loser cleanly** via checklist below — no dead imports, no broken Save/Apply |
-| HITL | Generate → Supabase Media URL → **Apply** (form) → **Save product** (catalog). Never auto-catalog |
+| Google Nano Banana | Second **image** provider for A/B — not a forced cutover |
+| **A/B phase (learned 2026-09-10)** | Admin **chooses provider per Generate** in Products HITL UI (OpenAI \| Google), while both keys exist. Same SKU can be tried on both. CTA label stays **Generate / Edit with AI**. |
+| **After A/B (W3)** | Pick one winner → **delete the loser cleanly** (§3.A or §3.B) — no dead UI options, no leftover env |
+| HITL | Generate → Supabase Media URL → **Apply** (form) → **Save product**. Never auto-catalog |
 | Storage | Supabase `SELPIC_CONTENTS` + Media Library — **not** AWS S3 |
 | Homepage Hero | **Out of scope forever** for this feature |
+
+### 0.1 Why UI choice then delete (learned)
+
+Owner intent: keep using OpenAI for general agent work; for **product images** try Google while comparing; later **keep one image provider and remove the other**.
+
+That matches the removable-plugin shape:
+
+1. **Both adapters live** behind the same `{ ok, b64, provider, model, mode }` contract.  
+2. **During A/B:** UI sends `provider: 'openai' | 'google'` on `imagery-generate` (preferred). Server validates key for that provider; if missing → clear English 503. Env `AGENT_IMAGE_PROVIDER` = **default** when UI omits provider (backward compatible).  
+3. **After decision:** follow §3 — delete loser module + env + UI option; Apply/Save/Media untouched.  
+4. Do **not** force a global env-only flip for A/B (hard to compare side-by-side). Do **not** couple text Polish to the image picker.
+
+**Invariant:** Removing a provider never breaks catalog Save or Hero. Usage hub keeps historical runs (`provider` field; legacy = openai).
 
 ---
 
@@ -198,23 +213,52 @@ Do **not** start Google cutover before **W1**. Wave 4.5 Site Review is a **paral
 
 **Exit:** Grep shows no Images API calls outside OpenAI adapter file.
 
-### W2 — Google adapter (optional, behind flag)
+### W2 — Google adapter (optional, behind flag) — **shipped 2026-09-09**
 
-1. Add `GOOGLE_GEMINI_API_KEY` to `.env.example` + Vercel when user asks.  
-2. Implement Google adapter (`gemini-2.5-flash-image` or env override).  
-3. Map inline image bytes → same `b64` contract.  
-4. Pricing estimate branch.  
-5. Default provider **remains openai** until user sets `AGENT_IMAGE_PROVIDER=google`.  
-6. Admin A/B: same SKU, both providers, compare identity drift / retries.  
-7. Docs: how to flip provider; link removal checklist §3.
+1. ~~Add `GOOGLE_GEMINI_API_KEY` to `.env.example`~~ (+ `GEMINI_API_KEY` alias, `AGENT_GOOGLE_IMAGE_MODEL`)  
+2. ~~Implement Google adapter~~ — `lib/agent/productImage/googleGeminiImage.ts` (`gemini-2.5-flash-image`)  
+3. ~~Map inline image bytes → same `b64` contract~~  
+4. ~~Pricing estimate branch~~ — `estimateImageCostUsd(model, 'google')` ≈ $0.039  
+5. Default provider **remains openai** until `AGENT_IMAGE_PROVIDER=google`  
+6. Admin A/B: same SKU, both providers, compare identity drift / retries (ops)  
+7. Flip without UI code change (below)
 
 **Exit:** Flipping env switches provider without UI code change.
 
+#### How to flip to Google (ops)
+
+```bash
+# .env.local or Vercel Production
+AGENT_IMAGE_PROVIDER=google
+GOOGLE_GEMINI_API_KEY=...          # or GEMINI_API_KEY=
+# optional:
+AGENT_GOOGLE_IMAGE_MODEL=gemini-2.5-flash-image
+```
+
+- Leave unset / `openai` → OpenAI path (needs `OPENAI_API_KEY`; also respects `AGENT_DRAFT_LLM=0`).  
+- Google path ignores `AGENT_DRAFT_LLM` (image ≠ draft kill).  
+- Master kill still: `AGENT_PRODUCT_IMAGE_GEN=0`.  
+- UI CTA stays **Generate / Edit with AI**; result badge shows `provider · model`.  
+- Removal later: §3.A / §3.B.
+
+### W2.5 — Admin UI provider picker (A/B) — **next when keys + asked**
+
+Learned 2026-09-10: env-only flip is not enough for side-by-side image A/B.
+
+1. Products HITL: small control **Image provider: OpenAI | Google** (English). Hide or disable options whose key is missing (status from a tiny GET or generate 503).  
+2. `POST imagery-generate` accepts optional `provider`; resolve that adapter; else fall back to `AGENT_IMAGE_PROVIDER` / openai.  
+3. Result badge already shows `provider · model` — keep.  
+4. Optional: remember last choice in `localStorage` (device-only; not a second source of truth for billing).  
+5. When only one provider remains after W3, remove the control entirely (or hard-code single provider).  
+6. Tests: body provider override; missing key; unknown provider → openai default + warn.
+
+**Exit:** Same admin can Generate once with OpenAI and once with Google on one SKU without redeploying env.
+
 ### W3 — Admin decision → remove loser (§3.A or §3.B)
 
-1. Follow checklist.  
+1. Follow checklist (delete adapter + env + UI option).  
 2. Deploy.  
-3. Update this doc status.
+3. Update this doc status — A/B closed.
 
 ### W4 — (Parallel) Wave 4.5 Site Review
 
@@ -239,9 +283,11 @@ Site Review may **deep-link** to Products Assist — must stay provider-blind (o
 |-----------|--------|
 | 「이미지 어댑터 시작」 / 「W1 시작」 | Provider split (OpenAI behind interface) |
 | 「구글 이미지 붙이자」 / 「W2 시작」 | Nano Banana adapter + env |
+| 「UI에서 선택」 / 「W2.5」 / 「A/B 선택」 | Admin image provider picker + per-request override |
 | 「구글 제거」 / 「OpenAI 이미지만」 | §3.A |
+| 「OpenAI 이미지 제거」 / 「구글만」 | §3.B |
 | 「Wave 4.5 시작」 | Site Review S0 (parallel track) |
 
 ---
 
-**End of design.** Next code step when asked: **W1**.
+**End of design.** Next when asked: **W2.5** (UI picker, after Gemini key) → then **W3** remove loser.

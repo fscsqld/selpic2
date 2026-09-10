@@ -28,6 +28,9 @@ const DEFAULT_CHAT = { inPer1M: 0.5, outPer1M: 2.0 }
  */
 export const AGENT_IMAGE_FLAT_USD = 0.05
 
+/** Google Gemini Flash Image (~Nano Banana) flat ballpark per image — not Google Billing. */
+export const AGENT_GOOGLE_IMAGE_FLAT_USD = 0.039
+
 export function normalizeModelKey(model: string): string {
   return model.trim().toLowerCase() || 'gpt-4o-mini'
 }
@@ -42,7 +45,15 @@ export function estimateChatCostUsd(model: string, usage: ChatUsageTokens): numb
   return Math.round(cost * 1_000_000) / 1_000_000
 }
 
-export function estimateImageCostUsd(_model?: string): number {
+/**
+ * Image cost estimate. Missing provider → OpenAI flat (legacy runs).
+ * Google → AGENT_GOOGLE_IMAGE_FLAT_USD; unknown → OpenAI flat.
+ */
+export function estimateImageCostUsd(
+  _model?: string,
+  provider?: 'openai' | 'google' | 'other' | string
+): number {
+  if (provider === 'google') return AGENT_GOOGLE_IMAGE_FLAT_USD
   return AGENT_IMAGE_FLAT_USD
 }
 

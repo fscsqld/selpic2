@@ -36,3 +36,9 @@ export type ProductImageProvider = {
 
 export const AGENT_PRODUCT_IMAGE_GEN_KILL = 'AGENT_PRODUCT_IMAGE_GEN'
 export const AGENT_IMAGE_PROVIDER_ENV = 'AGENT_IMAGE_PROVIDER'
+
+/** Master kill for all product image providers (OpenAI + Google). */
+export function isProductImageMasterKill(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = env[AGENT_PRODUCT_IMAGE_GEN_KILL]
+  return v === '0' || v === 'false'
+}

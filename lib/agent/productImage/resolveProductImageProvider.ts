@@ -1,18 +1,22 @@
 /**
  * Resolve product image AI provider from env.
- * Unknown ids fall back to openai (never crash). Google adapter lands in W2.
+ * Unknown ids fall back to openai (never crash).
  */
 
+import { googleGeminiImageProvider } from './googleGeminiImage'
 import { openaiProductImageProvider } from './openaiImagesProvider'
 import {
   AGENT_IMAGE_PROVIDER_ENV,
-  AGENT_PRODUCT_IMAGE_GEN_KILL,
+  isProductImageMasterKill,
   type ProductImageProvider,
   type ProductImageProviderId,
 } from './types'
 
-const PROVIDERS: Record<'openai', ProductImageProvider> = {
+export { isProductImageMasterKill } from './types'
+
+const PROVIDERS: Record<ProductImageProviderId, ProductImageProvider> = {
   openai: openaiProductImageProvider,
+  google: googleGeminiImageProvider,
 }
 
 export function parseProductImageProviderId(
@@ -29,20 +33,15 @@ export function parseProductImageProviderId(
   return 'openai'
 }
 
-export function isProductImageMasterKill(env: NodeJS.ProcessEnv = process.env): boolean {
-  const v = env[AGENT_PRODUCT_IMAGE_GEN_KILL]
-  return v === '0' || v === 'false'
-}
-
 /**
- * Active provider for this process. Google is recognized but not registered until W2.
+ * Active provider for this process.
  */
 export function resolveProductImageProvider(
   env: NodeJS.ProcessEnv = process.env
 ): ProductImageProvider | { id: ProductImageProviderId; missing: true; error: string } {
   if (isProductImageMasterKill(env)) {
     return {
-      id: 'openai',
+      id: parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV]),
       missing: true,
       error:
         'Product image AI is disabled (AGENT_PRODUCT_IMAGE_GEN=0). Remove the kill switch to enable.',
@@ -50,23 +49,22 @@ export function resolveProductImageProvider(
   }
 
   const id = parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV])
+  const provider = PROVIDERS[id]
 
-  if (id === 'google') {
-    return {
-      id: 'google',
-      missing: true,
-      error:
-        'Google product image provider is not enabled yet. Set AGENT_IMAGE_PROVIDER=openai (default) or wait for W2.',
-    }
-  }
-
-  const provider = PROVIDERS.openai
   if (!provider.isConfigured(env)) {
+    if (id === 'google') {
+      return {
+        id: 'google',
+        missing: true,
+        error:
+          'Google product image AI needs GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY). Or set AGENT_IMAGE_PROVIDER=openai.',
+      }
+    }
     return {
       id: 'openai',
       missing: true,
       error:
-        'Product image AI is disabled (set OPENAI_API_KEY and do not set AGENT_PRODUCT_IMAGE_GEN=0).',
+        'Product image AI is disabled (set OPENAI_API_KEY and do not set AGENT_PRODUCT_IMAGE_GEN=0). AGENT_DRAFT_LLM=0 also disables the OpenAI image path.',
     }
   }
   return provider

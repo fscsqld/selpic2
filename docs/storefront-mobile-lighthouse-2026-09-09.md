@@ -88,11 +88,35 @@ Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store** o
 4. LCP: `fetchPriority="high"` on first hero image; leaner Unsplash fallback  
 5. Rule: `.cursor/rules/storefront-mobile-performance.mdc`
 
+## Live verify — font scoping on production (2026-09-09 ~16:06 GMT+10)
+
+Probed HTML while PSI still “working” — **font optimization is already live** (independent of Google’s report finish).
+
+| URL | `fonts.googleapis.com` in HTML | Expected |
+|-----|-------------------------------:|----------|
+| `https://www.selpic.com.au/` | **0** | Yes — homepage must not load machine fonts |
+| `https://www.selpic.com.au/stickers/customize` | **many** (sticker CSS links + preconnect) | Yes — customize-only via `GoogleFontsLinks` |
+
+Code path: `app/layout.tsx` comment + Inter only; fonts mounted from `app/stickers/customize/layout.tsx` (and sibling customize/stamp layouts), not root. Commit: `cd6b32f` (still on prod after docs deploy `0d7e6d1`).
+
+## Parallel work while PSI is still running (learned 2026-09-09 ~16:13)
+
+Do **not** block product work on Google’s report UI. Fonts (and batch 1) are already live; PSI only measures.
+
+| Track | Start now? | Why |
+|-------|------------|-----|
+| **W2 Google image provider** | **Yes (preferred)** | Design ready (`docs/agent-product-image-providers-design.md`); HITL; no Hero; independent of CWV |
+| **Wave 6+ automation** | Only if trust is enough | Cron auto-draft / gated auto-publish — needs Community HITL trust; higher product risk |
+| Perf batch 2 (images/CSS/payload) | **After** PSI numbers | Blind tuning wastes time; paste report then prioritize |
+| `<main>` / console cleanup | Optional filler | Tiny, safe; can interleave anytime |
+
+**Default while waiting:** start **W2** (or say which track). Paste PSI when ready → update this doc deltas → then perf 2 if still needed.
+
 ## Recommended next (after post-deploy PSI)
 
-1. Re-run PSI mobile on production → record Perf / FCP / LCP / TBT / total KiB vs this baseline  
-2. If LCP still >> 4s: image delivery (same-origin LCP, sizes, compression) + residual render-blocking CSS  
-3. Payload budget: cut total under ~2–3 MiB where practical (14.5 MiB is extreme)  
+1. Record Perf / FCP / LCP / TBT / total KiB vs Sep 9 **1:33** baseline  
+2. If LCP still >> 4s: image delivery + residual render-blocking CSS  
+3. Payload budget (~14.5 MiB class)  
 4. Unused CSS split; `<main>` landmark; console-error cleanup  
 
 ## Re-measure checklist

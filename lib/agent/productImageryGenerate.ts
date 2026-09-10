@@ -1,8 +1,8 @@
 /**
  * Product image HITL — shared prompts + provider router facade.
- * OpenAI Images live in productImage/openaiImagesProvider.ts (removable later).
+ * OpenAI: productImage/openaiImagesProvider.ts · Google: productImage/googleGeminiImage.ts
  *
- * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, AGENT_DRAFT_LLM=0 (openai),
+ * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, AGENT_DRAFT_LLM=0 (openai only),
  * missing key, non-https source, oversized downloads, prompt injection of prices.
  */
 

@@ -251,7 +251,7 @@ export function buildImageRunRecord(opts: {
     adminLabel: opts.adminLabel.slice(0, 120) || 'unknown',
     provider: opts.provider || 'openai',
     imageUnits: units,
-    estimatedCostUsd: estimateImageCostUsd(opts.model) * units,
+    estimatedCostUsd: estimateImageCostUsd(opts.model, opts.provider || 'openai') * units,
     ok: true,
   }
 }
