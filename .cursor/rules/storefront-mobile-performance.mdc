@@ -7,28 +7,33 @@ alwaysApply: true
 
 **Baseline** (Sep 9 2026 **1:33** PM GMT+10): Perf **51**, FCP 3.3s, LCP 8.4s, TBT 420ms, SI 7.7s, CLS 0, ~14.5 MiB.  
 **Post batch-1** (Sep 10 **10:11** AM): Perf **67**, FCP 2.4s, LCP 5.8s, TBT 50ms, SI 9.3s, CLS 0, ~14.2 MiB.  
-Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: push LCP toward ≤2.5–4s lab without Hero redesign.
+**Latest lab** (Sep 10 **2:29** PM GMT+10): Perf **74**, FCP **1.1s**, LCP **4.7s**, TBT 120ms, SI **8.9s**, CLS 0.002, payload **~17.1 MiB**. A11y **83**, BP **96**, SEO **100**. CrUX **No Data**.  
+Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: LCP ≤2.5–4s lab without Hero redesign.
 
 ## Invariant
 
 Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load.
 
-## Top remaining lab insights (after 10:11)
+## Top remaining lab insights (after 2:29)
 
 | Insight | Notes |
 |---------|--------|
-| Image delivery (~213 KiB) | Cap Unsplash `w`/`q` via `optimizeStorefrontImageUrl`; prefer same-origin media |
-| Cache lifetimes (~10 MiB class) | Never blanket-`no-store` `/_next/static`; public APIs use route SWR |
-| Payload ~14 MiB | Lazy below-fold; don’t add heavy first-viewport media |
-| LCP still 5.8s | Priority + smaller LCP bytes + shorter critical chain |
+| Image delivery (~**12.6 MiB** claimed) | Hero **video ~3.2 MB** + other heavy media; prefer poster/fallback LCP, defer video bytes; WebP budgets in `storefront-cms-media-budgets.mdc` |
+| Cache lifetimes (~**13 MiB** claimed) | Own `/_next/static` already immutable — savings mostly **3rd-party** TTL |
+| Enormous payload **~17.1 MiB** | Regressed vs ~13.9 MiB @ 1:26 — audit first-viewport video + below-fold |
+| LCP **4.7s** (was 5.2 → better) | Still above CWV “good”; next: smaller LCP candidate, don’t autoplay heavy MP4 on mobile first paint |
+| SI **8.9s** | Regressed vs 7.0s @ 1:26 — often tied to large media paint |
+| Console errors (BP) | Still flagged — keep skipping dead URLs; CMS hygiene |
+| A11y **83** (was ~98) | Accessible names, contrast, video captions — fix without Hero redesign |
 
 ## Do
 
 - **Fonts:** Customize/stamp only (`GoogleFontsLinks`). Root = Inter only.
 - **JS:** `dynamic` / deferred Swiper (`LazyHomeSwiper`); avoid new whole-route `'use client'` weight on `/`.
-- **Images:** `optimizeStorefrontImageUrl` for Unsplash; `fetchPriority=high` on LCP image; lazy below fold.
+- **Images:** `optimizeStorefrontImageUrl` for Unsplash; `fetchPriority=high` on LCP image; lazy below fold. CMS/AI: WebP budgets + product AI `encodeStorefrontWebp`.
+- **Video hero:** Mobile LCP should prefer **fallback/poster WebP**; avoid forcing full MP4 into critical path when practical.
 - **Cache:** `/_next/static` = `immutable` long max-age. Public GET handlers own SWR. HTML home may stay `no-store`. Do **not** re-add `next.config` no-store on `/api/site-config` or `/api/catalog` that overrides route SWR.
-- **A11y:** Prefer a single `<main>` on storefront pages.
+- **A11y:** Prefer a single `<main>` on storefront pages; icon-only controls need `aria-label`; hero video needs captions `track` (see `/media/decorative-silent.vtt`); footer text on `bg-gray-900` prefer `text-gray-300/400` not `gray-500`.
 - **3rd parties:** No new render-blocking scripts in root layout.
 
 ## Do not
@@ -36,9 +41,9 @@ Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of 
 - Redesign Hero / remove Framer / change brand gradients.
 - Pull accounting-sandbox into storefront webpack.
 - Treat only desktop; assume Moto G / Slow 4G.
-- Claim wins from a **1:33 baseline** paste after deploy — use latest PSI time.
+- Claim wins from a **1:33 baseline** paste after deploy — use latest PSI time (**2:29**).
 
 ## When touching `/` or root layout / next.config headers
 
 1. Re-read this rule + `homepage-protection.mdc`.
-2. After meaningful perf work: PSI mobile — note Perf/FCP/LCP/TBT/payload vs **10:11** (67 / 5.8s LCP).
+2. After meaningful perf work: PSI mobile — note Perf/FCP/LCP/TBT/payload vs **2:29** (74 / 4.7s LCP / ~17 MiB).

@@ -445,6 +445,10 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
           playsInline
           poster={safeFallback}
           src={useDirectSrc ? actualSrc : undefined}
+          aria-label={
+            [title, subtitle].filter(Boolean).join(' — ') ||
+            'Decorative background video'
+          }
           onPlaying={() => {
             setVideoLoaded(true)
             setVideoError(false)
@@ -498,6 +502,14 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
             transition: 'opacity 0.5s ease-in-out'
           }}
         >
+          {/* Silent decorative reel — satisfies captions audit without inventing dialogue */}
+          <track
+            kind="captions"
+            src="/media/decorative-silent.vtt"
+            srcLang="en"
+            label="English"
+            default
+          />
           {/* blob/data: no `src` on <video>; use <source> only */}
           {!useDirectSrc && actualSrc && (isBlobUrl || actualSrc.startsWith('data:')) && (
             <>
@@ -1619,12 +1631,12 @@ export default function HomePage() {
                     <div className="relative z-30 flex items-center justify-center h-full">
                       <div className="text-center text-white px-4 max-w-4xl mx-auto">
                         {slide.title ? (
-                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 drop-shadow-lg">
+                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_12px_rgba(0,0,0,0.75)]">
                             {slide.title}
                           </h2>
                         ) : null}
                         {slide.subtitle ? (
-                          <p className="text-lg md:text-2xl mb-8 drop-shadow-md opacity-95">
+                          <p className="text-lg md:text-2xl mb-8 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_10px_rgba(0,0,0,0.7)]">
                             {slide.subtitle}
                           </p>
                         ) : null}
@@ -1646,14 +1658,8 @@ export default function HomePage() {
                 disableOnInteraction: false,
               }}
               loop={heroLoopEnabled}
-              navigation={{
-                nextEl: '.swiper-button-next',
-                prevEl: '.swiper-button-prev',
-              }}
-              pagination={{
-                clickable: true,
-                el: '.swiper-pagination',
-              }}
+              navigation={false}
+              pagination={false}
               onSlideChange={(swiper) => {
             // ✅ loop={true} 설정 시 realIndex와 activeIndex가 어긋나지 않도록 처리
             // loop 모드에서는 realIndex를 우선 사용, 없으면 activeIndex 사용
@@ -1744,12 +1750,12 @@ export default function HomePage() {
                       {/* Slide Content */}
                       <div className="space-y-6">
                         {slide.title && (
-                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_12px_rgba(0,0,0,0.75)]">
                             {slide.title}
                           </h2>
                         )}
                         {slide.subtitle && (
-                          <p className="text-xl lg:text-2xl font-medium leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] opacity-90">
+                          <p className="text-xl lg:text-2xl font-medium leading-relaxed text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_10px_rgba(0,0,0,0.7)]">
                             {slide.subtitle}
                           </p>
                         )}
@@ -1781,26 +1787,37 @@ export default function HomePage() {
               <div className="absolute top-1/2 left-1/2 w-2.5 h-2.5 bg-selpic-yellow-400 rounded-full opacity-40 animate-float blur-sm" style={{animationDelay: '4s'}}></div>
             </div>
         
-            {/* Custom Pagination - Center Aligned with Background */}
+            {/* Custom Pagination — named buttons (Swiper built-in bullets omitted for a11y) */}
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
-              <div className="swiper-pagination-container">
-                <div className="swiper-pagination flex space-x-4">
+              <div className="swiper-pagination-container" role="group" aria-label="Hero slides">
+                <div className="swiper-pagination flex space-x-2">
                   {Array.isArray(slidesToUse) && slidesToUse.length > 0 ? slidesToUse.map((slide, index) => (
-                    <div
+                    <button
+                      type="button"
                       key={`pagination-${slide?.id ?? 'slide'}-${index}`}
-                      className={`w-4 h-4 rounded-full transition-all duration-300 cursor-pointer border-2 border-white/40 ${
-                        currentSlide === index 
-                          ? 'bg-white scale-125 shadow-lg shadow-white/50' 
-                          : 'bg-white/60 hover:bg-white/80 hover:scale-110'
-                      }`}
+                      aria-label={
+                        slide?.title
+                          ? `Go to slide ${index + 1}: ${slide.title}`
+                          : `Go to slide ${index + 1}`
+                      }
+                      aria-current={currentSlide === index ? 'true' : undefined}
+                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                       onClick={() => {
                         if (swiperInstance) {
-                          // 🆕 loop 모드에서는 realIndex를 사용하여 정확한 슬라이드로 이동
                           const targetIndex = heroSliderSettings?.loop !== false ? index : index
                           swiperInstance.slideTo(targetIndex)
                         }
                       }}
-                    />
+                    >
+                      <span
+                        className={`block w-4 h-4 rounded-full transition-all duration-300 border-2 border-white/40 ${
+                          currentSlide === index
+                            ? 'bg-white scale-125 shadow-lg shadow-white/50'
+                            : 'bg-white/60 hover:bg-white/80 hover:scale-110'
+                        }`}
+                        aria-hidden
+                      />
+                    </button>
                   )) : null}
                 </div>
               </div>
@@ -1999,19 +2016,19 @@ export default function HomePage() {
                 {footerContent.find(item => item.title === 'Company Name')?.content || 'Selpic'}
               </h3>
             )}
-            <p className="text-gray-400">
+            <p className="text-gray-300">
               {footerContent.find(item => item.title === 'Company Description')?.content || 'Your digital sticker journey starts here. Customize and print your own stickers with ease.'}
             </p>
-            <p className="text-gray-500 text-[11px] mt-2 whitespace-pre-line">
+            <p className="text-gray-400 text-[11px] mt-2 whitespace-pre-line">
               {`ABN: ${COMPANY_LEGAL.abn}\nACN: ${COMPANY_LEGAL.acn}`}
             </p>
-            <p className="text-gray-500 text-[11px] mt-2 whitespace-nowrap">
+            <p className="text-gray-400 text-[11px] mt-2 whitespace-nowrap">
               {String(COMPANY_CONTACT.address || '').replace(/Address:\s*/i, '')}
             </p>
-            <p className="text-gray-500 text-[11px] whitespace-nowrap">
+            <p className="text-gray-400 text-[11px] whitespace-nowrap">
               Phone: {COMPANY_CONTACT.phone}
             </p>
-            <p className="text-gray-500 text-[11px] whitespace-nowrap">
+            <p className="text-gray-400 text-[11px] whitespace-nowrap">
               Email: {COMPANY_CONTACT.email}
             </p>
           </div>
@@ -2022,7 +2039,7 @@ export default function HomePage() {
             <ul className="space-y-2">
               {quickLinks.map((link) => (
                 <li key={`quick-link-${link.url}`}>
-                  <Link href={link.url} className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
+                  <Link href={link.url} className="text-gray-300 hover:text-white transition-colors duration-300 text-sm">
                     {link.label}
                   </Link>
                 </li>
@@ -2038,7 +2055,7 @@ export default function HomePage() {
                 <li key={`help-link-${link.url}`}>
                   <Link
                     href={link.url}
-                    className="text-gray-400 hover:text-white transition-colors duration-300 text-sm whitespace-nowrap"
+                    className="text-gray-300 hover:text-white transition-colors duration-300 text-sm whitespace-nowrap"
                   >
                     {link.label}
                   </Link>
@@ -2050,12 +2067,12 @@ export default function HomePage() {
             <h3 className="text-white text-lg font-bold mb-4">Community / Partnerships</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/community" className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
+                <Link href="/community" className="text-gray-300 hover:text-white transition-colors duration-300 text-sm">
                   Community Board
                 </Link>
               </li>
               <li>
-                <Link href="/fundraising" className="text-gray-400 hover:text-white transition-colors duration-300 text-sm">
+                <Link href="/fundraising" className="text-gray-300 hover:text-white transition-colors duration-300 text-sm">
                   Fundraising
                 </Link>
               </li>
@@ -2065,13 +2082,13 @@ export default function HomePage() {
             <h3 className="text-white text-lg font-bold mb-4">
               {footerContent.find(item => item.title === 'Newsletter Title')?.content || 'Newsletter'}
             </h3>
-            <p className="text-gray-400 mb-4 text-sm">
+            <p className="text-gray-300 mb-4 text-sm">
               {footerContent.find(item => item.title === 'Newsletter Description')?.content || 'Subscribe to our newsletter for updates.'}
             </p>
             <NewsletterForm variant="dark" />
           </div>
         </div>
-        <div className="mt-16 text-center text-gray-500 text-sm">
+        <div className="mt-16 text-center text-gray-400 text-sm">
           &copy; {currentYear} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'Selpic'}. All rights reserved.
         </div>
       </footer>

@@ -92,6 +92,7 @@ export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps
         name="email"
         type="email"
         placeholder="Enter your email"
+        aria-label="Email address for newsletter"
         autoComplete="email"
         inputMode="email"
         value={newsletterEmail}

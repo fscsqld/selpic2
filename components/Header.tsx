@@ -604,9 +604,10 @@ export default function Header() {
                     setIsSearchOpen(true)
                   }}
                   type="button"
+                  aria-label="Open product search"
                   className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 >
-                  <Search size={22} />
+                  <Search size={22} aria-hidden />
                 </button>
               )}
 
@@ -628,15 +629,22 @@ export default function Header() {
                       e.stopPropagation()
                       setIsAccountMenuOpen(!isAccountMenuOpen)
                     }}
+                    type="button"
                     className="p-3 text-gray-700 rounded-full transition-all duration-200 flex items-center space-x-2 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                     title={currentUser?.name || currentUser?.email || 'Account'}
+                    aria-label="Account menu"
+                    aria-expanded={isAccountMenuOpen}
                   >
-                    <User size={22} />
+                    <User size={22} aria-hidden />
                     <span className="hidden sm:inline text-sm font-medium truncate max-w-[120px]">{currentUser?.name || currentUser?.email}</span>
                   </button>
                 ) : (
-                  <Link href={loginLinkUrl} className="p-3 text-gray-600 transition-all duration-200 rounded-full hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]">
-                    <User size={22} />
+                  <Link
+                    href={loginLinkUrl}
+                    className="p-3 text-gray-600 transition-all duration-200 rounded-full hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                    aria-label="Sign in"
+                  >
+                    <User size={22} aria-hidden />
                   </Link>
                 )}
 
@@ -696,12 +704,21 @@ export default function Header() {
               </div>
 
               {/* Cart */}
-              <Link href={cartLinkUrl} className="relative p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]">
-                <ShoppingCart size={22} />
+              <Link
+                href={cartLinkUrl}
+                className="relative p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                aria-label={
+                  hydrationSafeCartItemCount > 0
+                    ? `Cart, ${hydrationSafeCartItemCount} items`
+                    : 'Cart'
+                }
+              >
+                <ShoppingCart size={22} aria-hidden />
                 {hydrationSafeCartItemCount > 0 && (
                   <span
                     suppressHydrationWarning
                     className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center"
+                    aria-hidden
                   >
                     {hydrationSafeCartItemCount}
                   </span>
@@ -714,7 +731,7 @@ export default function Header() {
                   title="Site language: English"
                   aria-label="Site language English"
                 >
-                  <Globe size={22} />
+                  <Globe size={22} aria-hidden />
                   <span className="text-sm font-semibold">{language.toUpperCase()}</span>
                 </div>
               )}
@@ -729,9 +746,9 @@ export default function Header() {
                 }}
                 className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 aria-expanded={isNavigationOpen}
-                aria-label="Open navigation menu"
+                aria-label={isNavigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
               >
-                <Menu size={24} />
+                <Menu size={24} aria-hidden />
               </button>
             </div>
           </div>
@@ -778,8 +795,9 @@ export default function Header() {
                         type="button"
                         onClick={() => setIsNavigationOpen(false)}
                         className="p-2 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                        aria-label="Close navigation menu"
                       >
-                        <X size={24} />
+                        <X size={24} aria-hidden />
                       </button>
                     </div>
                   </div>
@@ -923,10 +941,12 @@ export default function Header() {
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">Product Search</h2>
                     <button
+                      type="button"
                       onClick={() => setIsSearchOpen(false)}
                       className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+                      aria-label="Close search"
                     >
-                      <X size={24} />
+                      <X size={24} aria-hidden />
                     </button>
                   </div>
 
@@ -941,12 +961,13 @@ export default function Header() {
                         className="w-full px-4 py-4 pl-12 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                         autoFocus
                       />
-                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} aria-hidden />
                       <button
                         type="submit"
                         className="absolute right-4 top-1/2 transform -translate-y-1/2 p-2 text-pink-600 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors"
+                        aria-label="Submit search"
                       >
-                        <ArrowRight size={20} />
+                        <ArrowRight size={20} aria-hidden />
                       </button>
                     </div>
                   </form>

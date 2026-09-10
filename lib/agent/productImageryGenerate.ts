@@ -4,7 +4,8 @@
  *
  * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, per-request provider (W2.5),
  * AGENT_DRAFT_LLM=0 (openai only), missing key, non-https source, oversized downloads,
- * prompt injection of prices.
+ * prompt injection of prices, multi-MB PNG outputs (must compress to WebP on upload —
+ * see storefront-cms-media-budgets.mdc; OpenAI + Google Nano Banana share post-b64 encode).
  */
 
 import { buildPhotoBriefTemplate } from './productImageryVisionLlm'
@@ -45,6 +46,7 @@ export function buildImageEditPrompt(input: {
     'Keep the real product identity, colours, and print detail accurate — do not invent brand logos, prices, stock badges, or shipping claims as text overlays.',
     'Prefer clean lighting, neutral background, product filling the frame with a small crop margin for PDP cards.',
     'Photorealistic ecommerce style suitable for parents and school gear.',
+    'Compose for web delivery: single clear subject, no huge unused canvas; output will be stored as a compressed WebP for mobile LCP.',
   ]
   if (fromBrief.length) {
     parts.push('Follow this photo brief:')

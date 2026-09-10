@@ -21,6 +21,7 @@ import { buildImageRunRecord } from '@/lib/agent/agentRuns'
 import { appendAgentRun } from '@/lib/server/agentRunsStore'
 import { readMediaSnapshot, writeMediaSnapshot } from '@/lib/server/mediaStore'
 import type { MediaSyncRecord } from '@/lib/mediaSync'
+import { encodeStorefrontWebp } from '@/lib/agent/productImage/encodeStorefrontWebp'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -55,6 +56,9 @@ async function registerAiImageInMediaLibrary(opts: {
       name: `AI product — ${opts.productName.slice(0, 60) || 'untitled'}`,
       type: 'image',
       url: opts.publicUrl,
+      ...(opts.publicUrl.toLowerCase().includes('.webp')
+        ? { webpUrl: opts.publicUrl }
+        : {}),
       size: opts.size,
       uploadedAt: new Date().toISOString(),
       category: 'product-media',
@@ -171,20 +175,30 @@ export async function POST(req: Request) {
     )
   }
 
-  const buffer = Buffer.from(result.b64, 'base64')
-  if (buffer.length < 32) {
+  const raw = Buffer.from(result.b64, 'base64')
+  if (raw.length < 32) {
     return NextResponse.json({ error: 'Generated image was empty' }, { status: 502 })
+  }
+
+  // OpenAI + Google share post-b64 encode — web-ready WebP (no Squoosh pass).
+  const encoded = await encodeStorefrontWebp(raw, { usage: 'product' })
+  if (encoded.fellBackToOriginal) {
+    console.warn(
+      '[imagery-generate] WebP encode fell back to original',
+      encoded.contentType,
+      encoded.bytes
+    )
   }
 
   const path = buildSelpicStoragePath(
     'product-media',
     `ai-${randomUUID()}`,
-    'product-ai.png'
+    `product-ai.${encoded.ext}`
   )
   const supabase = getSupabaseAdmin()
   const { error: upErr } = await supabase.storage
     .from(SELPIC_CONTENTS_BUCKET)
-    .upload(path, buffer, { contentType: 'image/png', upsert: true })
+    .upload(path, encoded.buffer, { contentType: encoded.contentType, upsert: true })
   if (upErr) {
     return NextResponse.json(
       { error: upErr.message || 'Failed to store generated image' },
@@ -211,7 +225,7 @@ export async function POST(req: Request) {
   void registerAiImageInMediaLibrary({
     publicUrl,
     path,
-    size: buffer.length,
+    size: encoded.bytes,
     productName: name || 'product',
   })
 
@@ -221,9 +235,12 @@ export async function POST(req: Request) {
     model: result.model,
     provider: result.provider,
     publicUrl,
+    bytes: encoded.bytes,
+    contentType: encoded.contentType,
+    compressed: encoded.compressed,
     promptUsed: prompt.slice(0, 500),
     sourceImageUrl: /^https:\/\//i.test(imageUrl) ? imageUrl : null,
     autonomyNote:
-      'AI image stored in Media Library. Apply on the product form, then Save to publish. No auto catalog write.',
+      'AI image stored in Media Library as web-ready WebP when possible. Apply on the product form, then Save to publish. No auto catalog write.',
   })
 }

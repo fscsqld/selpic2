@@ -22,6 +22,7 @@ Language: Admin UI = English. This doc may be discussed in Korean.
 | HITL | Generate → Supabase Media URL → **Apply** (form) → **Save product**. Never auto-catalog |
 | Storage | Supabase `SELPIC_CONTENTS` + Media Library — **not** AWS S3 |
 | Homepage Hero | **Out of scope forever** for this feature |
+| **Output bytes (learned 2026-09-10)** | After Generate, Media URL must be **web-ready** — prefer **WebP ≤ ~300–500 KB** (hero image/fallback ≤ ~200–500 KB). Do not leave multi‑MB PNG so admins must Squoosh again. See `.cursor/rules/storefront-cms-media-budgets.mdc`. |
 
 ### 0.1 Why UI choice then delete (learned)
 
@@ -110,10 +111,21 @@ export type ProductImageProvider = {
 | Provider selected but key missing | Clear 503 JSON — **no throw into UI stack** |
 | Unknown provider string | Fall back to **openai** + `console.warn` (never crash build) |
 
+### 2.1b Deliverable size (shipped 2026-09-10 — OpenAI & Nano Banana)
+
+Prompt text can ask for “web ecommerce photo”; **file size is enforced after base64**:
+
+1. Both adapters return `{ ok, b64, … }`.
+2. Shared helper `lib/agent/productImage/encodeStorefrontWebp.ts` + `imagery-generate` upload: **WebP**, max edge 1600, target **≤ ~500 KB** (hero usage target same; see budgets rule).
+3. Admin should not need a second Squoosh pass for the same AI output.
+4. Sharp failure → keep original bytes + warn (Generate still returns a URL).
+
+Confirmed manual hero compress (same day): hero fallbacks/images landed ~42–133 KB WebP; former ~6 MB PNG is the failure mode to prevent.
+
 ### 2.2 What must stay provider-blind
 
 - `ProductImageryAiAssist.tsx` — no `if (openai)` branches except optional read-only badge `provider` from API  
-- Imagery-generate upload / Media tags (`ai-generated`)  
+- Imagery-generate upload / Media tags (`ai-generated`) + **shared** post-b64 encode  
 - Apply / Save / `logAdminActivity`  
 - Catalog / Hero / accounting-sandbox  
 

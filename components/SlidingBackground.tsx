@@ -169,7 +169,15 @@ const VideoSlide = ({
             opacity: videoLoaded ? 1 : 0,
             transition: 'opacity 0.5s ease-in-out'
           }}
+          aria-label="Decorative background video"
         >
+          <track
+            kind="captions"
+            src="/media/decorative-silent.vtt"
+            srcLang="en"
+            label="English"
+            default
+          />
           {/* blob/data URL인 경우 source 태그 사용 */}
           {(isBlobUrl || actualSrc.startsWith('data:')) && (
             <>

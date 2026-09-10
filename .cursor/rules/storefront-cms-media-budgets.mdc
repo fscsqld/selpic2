@@ -1,0 +1,54 @@
+---
+description: CMS/hero/product media size budgets — OpenAI & Google Nano Banana must ship web-ready assets
+globs: lib/agent/productImage/**/*,lib/agent/productImagery*.ts,components/admin/ProductImagery*.tsx,app/api/admin/products/imagery-*/**,app/admin/content/**/*,components/MediaUpload.tsx,lib/optimizeStorefrontImageUrl.ts,docs/agent-product-image-providers-design.md
+alwaysApply: false
+---
+
+# Storefront / CMS media budgets (learned 2026-09-10)
+
+## Invariant
+
+Admins (and **OpenAI / Google Nano Banana** image AI) must land **web-ready** files in Supabase Media — so nobody has to re-Squoosh the same asset after Generate/Upload for LCP.
+
+Hero **design** stays protected (`homepage-protection.mdc`). This rule is about **bytes/format**, not layout.
+
+## Confirmed live budgets (home hero, after manual compress)
+
+| Slot | Target after upload | Notes |
+|------|---------------------|--------|
+| Home hero **image** / video **fallback** | **≤ ~200–500 KB**, prefer **WebP** | Live OK: hero-1 fallback ~133 KB, hero-2 ~42 KB, hero-3 ~128 KB WebP |
+| Home hero **video** | Prefer **≤ ~2–3 MB** MP4 when practical | Live ~3.2 MB — optional later trim |
+| Category hero / section BG | Prefer **≤ ~500 KB** WebP | Stickers/hot-goods PNGs were 1.7–2.4 MB — compress when touched |
+| Product PDP / card (AI or manual) | Prefer **≤ ~300–500 KB** WebP; long edge ~1080–1600 | Same Apply → Media → Save HITL |
+
+**Reject / warn class:** multi‑MB **PNG** fallbacks (e.g. former ~6 MB hero PNG) — never leave those as LCP candidates.
+
+## OpenAI + Google Nano Banana (product image AI)
+
+- Providers: OpenAI Images + Google `gemini-2.5-flash-image` (Nano Banana). Prompt SSOT: `buildImageEditPrompt` / `sanitizeImagePrompt`.
+- **Prompt alone does not guarantee file size.** Models often return large PNG/JPEG base64.
+- **Shipped:** `encodeStorefrontWebp` runs in `POST /api/admin/products/imagery-generate` after `{ ok, b64 }` (OpenAI + Google). Uploads `.webp` under product budget.
+- Keep HITL: Generate → URL → **Apply** → **Save**. Never auto-catalog.
+- Provider-agnostic: do not duplicate encode per adapter.
+- Homepage Hero remains **out of scope** for product-image Assist; if a CMS AI path is added later, call `encodeStorefrontWebp(..., { usage: 'hero' })`.
+- Manual CMS uploads still need admin Squoosh / future shared upload encode — product AI path is covered.
+
+## Manual CMS (Edit Slide / Media Library)
+
+- Prefer **WebP** uploads for hero images and video fallbacks.
+- After Update, verify via public site-config + `Content-Length` (or Network) — do not assume Admin preview = mobile LCP bytes.
+- Prefer Supabase `selpic-contents` over Unsplash for hero (dead CDN ids cause console 404s).
+
+## Cousins / edge cases
+
+- Video slide LCP may use **fallback** image — fallback must meet image budget even if video is heavy.
+- Inactive category Unsplash slides: ignore until reactivated; then replace with Supabase + budget.
+- `optimizeStorefrontImageUrl` helps Unsplash query params only — **does not** shrink already-huge Supabase PNGs.
+- Do not “fix” by redesigning Hero gradients/Framer.
+
+## Do not
+
+- Ship raw multi‑MB AI PNG as the final Media URL without a compress step (product Generate must use `encodeStorefrontWebp`).
+- Treat Squoosh-as-forever-process as the product plan for AI outputs — encode on generate is shipped; extend to CMS upload when building that path.
+- Pull accounting-sandbox into media/AI paths.
+---
