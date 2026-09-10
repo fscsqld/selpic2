@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   parseProductImageProviderId,
   resolveProductImageProvider,
+  getProductImageProviderAvailability,
 } from './resolveProductImageProvider'
 import {
   extractGeminiInlineImageB64,
@@ -54,6 +55,40 @@ describe('resolveProductImageProvider', () => {
     })
     expect('missing' in r).toBe(false)
     if (!('missing' in r)) expect(r.id).toBe('google')
+  })
+
+  it('prefers per-request override over env default (W2.5)', () => {
+    const r = resolveProductImageProvider(
+      {
+        AGENT_IMAGE_PROVIDER: 'openai',
+        OPENAI_API_KEY: 'sk-test',
+        GOOGLE_GEMINI_API_KEY: 'g-test',
+      },
+      'google'
+    )
+    expect('missing' in r).toBe(false)
+    if (!('missing' in r)) expect(r.id).toBe('google')
+  })
+
+  it('override to google without key returns clear missing error', () => {
+    const r = resolveProductImageProvider(
+      { OPENAI_API_KEY: 'sk-test', AGENT_IMAGE_PROVIDER: 'openai' },
+      'google'
+    )
+    expect('missing' in r).toBe(true)
+    if ('missing' in r) {
+      expect(r.id).toBe('google')
+      expect(r.error).toMatch(/GOOGLE_GEMINI_API_KEY/)
+    }
+  })
+
+  it('getProductImageProviderAvailability reports configured flags', () => {
+    const a = getProductImageProviderAvailability({
+      OPENAI_API_KEY: 'sk-test',
+    })
+    expect(a.openai.configured).toBe(true)
+    expect(a.google.configured).toBe(false)
+    expect(a.defaultProvider).toBe('openai')
   })
 
   it('accepts GEMINI_API_KEY alias for google', () => {

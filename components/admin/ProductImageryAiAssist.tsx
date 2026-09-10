@@ -1,12 +1,12 @@
 'use client'
 
 /**
- * HITL product imagery: free Photo brief → prompt → OpenAI image edit/generate
+ * HITL product imagery: free Photo brief → prompt → Generate/Edit (OpenAI or Google)
  * → preview → Apply (form only). Save on the product form publishes.
- * Polish-brief LLM removed — low value vs Generate/Edit cost.
+ * W2.5: admin picks image provider per request; Google disabled until Gemini key exists.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, Camera, Wand2, Check, ImageOff, Download } from 'lucide-react'
 import { logAdminActivity } from '@/lib/logAdminActivity'
 
@@ -26,8 +26,38 @@ type BriefDraft = {
   source?: string
 }
 
+type ImageProviderId = 'openai' | 'google'
+
+type ProviderAvailability = {
+  masterKill?: boolean
+  defaultProvider?: ImageProviderId
+  openai?: { configured?: boolean }
+  google?: { configured?: boolean }
+  hint?: string | null
+}
+
+const LS_PROVIDER_KEY = 'selpic-product-image-provider'
+
 function isHttpsImageUrl(url: string | undefined): boolean {
   return /^https:\/\//i.test((url || '').trim())
+}
+
+function readStoredProvider(): ImageProviderId | null {
+  try {
+    const v = localStorage.getItem(LS_PROVIDER_KEY)
+    if (v === 'openai' || v === 'google') return v
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function storeProvider(id: ImageProviderId) {
+  try {
+    localStorage.setItem(LS_PROVIDER_KEY, id)
+  } catch {
+    /* ignore */
+  }
 }
 
 export default function ProductImageryAiAssist({
@@ -50,9 +80,54 @@ export default function ProductImageryAiAssist({
     provider?: string
   } | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [availability, setAvailability] = useState<ProviderAvailability | null>(null)
+  const [provider, setProvider] = useState<ImageProviderId>('openai')
 
   const httpsReady = isHttpsImageUrl(imageUrl)
   const trimmedImage = (imageUrl || '').trim()
+
+  const openaiOk = Boolean(availability?.openai?.configured)
+  const googleOk = Boolean(availability?.google?.configured)
+  const masterKill = Boolean(availability?.masterKill)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/products/imagery-generate', {
+          method: 'GET',
+          credentials: 'include',
+        })
+        const json = (await res.json().catch(() => null)) as ProviderAvailability | null
+        if (cancelled || !res.ok || !json) return
+        setAvailability(json)
+
+        const stored = readStoredProvider()
+        const fallback =
+          (json.defaultProvider === 'google' || json.defaultProvider === 'openai'
+            ? json.defaultProvider
+            : 'openai') as ImageProviderId
+        let next: ImageProviderId = stored || fallback
+        if (next === 'google' && !json.google?.configured) next = 'openai'
+        if (next === 'openai' && !json.openai?.configured && json.google?.configured) {
+          next = 'google'
+        }
+        setProvider(next)
+      } catch {
+        /* keep openai default */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const selectProvider = (id: ImageProviderId) => {
+    if (id === 'google' && !googleOk) return
+    if (id === 'openai' && !openaiOk) return
+    setProvider(id)
+    storeProvider(id)
+  }
 
   const runBrief = async () => {
     setBusy('brief')
@@ -107,6 +182,7 @@ export default function ProductImageryAiAssist({
           prompt: prompt.trim() || undefined,
           includeBrief,
           briefChecklist: brief?.checklist,
+          provider,
         }),
       })
       const json = (await res.json().catch(() => null)) as {
@@ -166,10 +242,17 @@ export default function ProductImageryAiAssist({
       field: 'image',
       oldValue: prev || null,
       newValue: aiUrl,
-      description: `Applied AI product image (${genMeta?.mode || 'ai'}) — Save still required to publish`,
+      description: `Applied AI product image (${genMeta?.provider || 'ai'}/${genMeta?.mode || 'ai'}) — Save still required to publish`,
     })
     setMessage('Applied to the product form. Click Save to publish on the storefront.')
   }
+
+  const generateDisabled =
+    disabled ||
+    busy !== null ||
+    masterKill ||
+    (provider === 'openai' && availability !== null && !openaiOk) ||
+    (provider === 'google' && !googleOk)
 
   return (
     <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5 space-y-2">
@@ -179,6 +262,56 @@ export default function ProductImageryAiAssist({
         <span className="font-medium">Generate / Edit with AI</span> creates a new image (billable) ·
         3) Apply · 4) Save. Nothing auto-replaces the catalog.
       </p>
+
+      <div className="rounded-md border border-sky-100 bg-white/80 px-2.5 py-2 space-y-1.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+          Image provider
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={disabled || busy !== null || (availability !== null && !openaiOk)}
+            onClick={() => selectProvider('openai')}
+            className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50 ${
+              provider === 'openai'
+                ? 'border-violet-500 bg-violet-50 text-violet-950'
+                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            OpenAI
+            {availability !== null && !openaiOk ? ' (unavailable)' : ''}
+          </button>
+          <button
+            type="button"
+            disabled={disabled || busy !== null || !googleOk}
+            onClick={() => selectProvider('google')}
+            title={
+              googleOk
+                ? 'Google Gemini Flash Image'
+                : 'Add GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY) to enable'
+            }
+            className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50 ${
+              provider === 'google'
+                ? 'border-violet-500 bg-violet-50 text-violet-950'
+                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Google
+            {!googleOk ? ' (add API key)' : ''}
+          </button>
+        </div>
+        {!googleOk ? (
+          <p className="text-[10px] text-gray-500">
+            {availability?.hint ||
+              'Google needs GOOGLE_GEMINI_API_KEY. You can keep using OpenAI until the key is set.'}
+          </p>
+        ) : null}
+        {masterKill ? (
+          <p className="text-[10px] text-amber-800">
+            Product image AI is disabled (AGENT_PRODUCT_IMAGE_GEN=0).
+          </p>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-start gap-3 rounded-md border border-sky-100 bg-white/80 p-2">
         {httpsReady ? (
@@ -220,7 +353,7 @@ export default function ProductImageryAiAssist({
         </button>
         <button
           type="button"
-          disabled={disabled || busy !== null}
+          disabled={generateDisabled}
           onClick={() => void runGenerate()}
           className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400 bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
         >

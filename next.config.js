@@ -117,8 +117,8 @@ const nextConfig = {
     return [
       ...securityHeaders,
       {
-        // Strong no-cache for HTML/API shells. Do NOT send Clear-Site-Data on document navigations:
-        // browsers may wipe localStorage/sessionStorage while React is hydrating (removeChild errors).
+        // HTML / dynamic shells — avoid long-lived CDN HTML (CMS-driven home).
+        // Do NOT send Clear-Site-Data on document navigations.
         source: '/:path*',
         headers: [
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
@@ -127,45 +127,54 @@ const nextConfig = {
         ],
       },
       {
-        // Home is CMS-driven on the client; avoid long-lived CDN HTML cache so mobile/desktop
-        // do not keep an old prerender shell / RSC payload while JS bundles are already updated.
         source: '/',
         headers: [
-          { key: 'Cache-Control', value: 'private, no-store, no-cache, must-revalidate' }
-        ]
+          { key: 'Cache-Control', value: 'private, no-store, no-cache, must-revalidate' },
+        ],
       },
       {
-        // Dynamic checkout/cart pages must stay real-time
         source: '/checkout',
         headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
-        ]
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' },
+        ],
       },
       {
         source: '/cart',
         headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
-        ]
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' },
+        ],
       },
       {
-        // Payment/order-related APIs should never be cached
         source: '/api/orders/:path*',
         headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
-        ]
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' },
+        ],
       },
       {
-        source: '/api/catalog/:path*',
+        // Admin APIs — never CDN-cache
+        source: '/api/admin/:path*',
         headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
-        ]
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' },
+        ],
+      },
+      // Public catalog/site-config/media: Cache-Control comes from route handlers (SWR).
+      // Do not override them with no-store here (PSI “efficient cache lifetimes”).
+      {
+        // Hashed Next build assets — must overwrite the catch-all no-store above.
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
       },
       {
-        source: '/api/site-config/:path*',
+        source: '/images/:path*',
         headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, private' }
-        ]
-      }
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
     ]
   },
   async redirects() {

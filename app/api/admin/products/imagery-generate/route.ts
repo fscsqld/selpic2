@@ -15,6 +15,7 @@ import {
   generateOrEditProductImage,
   sanitizeImagePrompt,
 } from '@/lib/agent/productImageryGenerate'
+import { getProductImageProviderAvailability } from '@/lib/agent/productImage/resolveProductImageProvider'
 import { agentAdminLabelFromUser } from '@/lib/agent/agentAdminLabel'
 import { buildImageRunRecord } from '@/lib/agent/agentRuns'
 import { appendAgentRun } from '@/lib/server/agentRunsStore'
@@ -36,6 +37,8 @@ type Body = {
   /** When true (default), merge Photo brief template lines into the prompt. */
   includeBrief?: boolean
   briefChecklist?: string[]
+  /** W2.5: openai | google — omit to use AGENT_IMAGE_PROVIDER / openai. */
+  provider?: string
 }
 
 async function registerAiImageInMediaLibrary(opts: {
@@ -72,7 +75,29 @@ async function registerAiImageInMediaLibrary(opts: {
 }
 
 /**
- * POST — HITL product image generate/edit (provider via AGENT_IMAGE_PROVIDER; default OpenAI).
+ * GET — provider availability for Admin UI picker (no secrets).
+ */
+export async function GET() {
+  const gate = await requireAdminAnyPermission(['products:write', 'agent:run', 'products:read'])
+  const denied = adminPermissionDeniedPlain(gate)
+  if (denied) return denied
+  if (!gate.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const availability = getProductImageProviderAvailability()
+  return NextResponse.json({
+    ok: true,
+    ...availability,
+    hint: availability.google.configured
+      ? null
+      : 'Add GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY) to enable Google. OpenAI stays available if configured.',
+  })
+}
+
+/**
+ * POST — HITL product image generate/edit.
+ * Body.provider overrides env AGENT_IMAGE_PROVIDER (W2.5 A/B). Default OpenAI.
  * Uploads result to Supabase Media; does not Save the product catalog.
  * Client must Apply URL into the form, then Save.
  */
@@ -134,9 +159,16 @@ export async function POST(req: Request) {
   const result = await generateOrEditProductImage({
     prompt,
     sourceImageUrl: imageUrl || undefined,
+    provider: body.provider,
   })
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 502 })
+    const status = /needs |disabled|AGENT_PRODUCT_IMAGE_GEN/i.test(result.error || '')
+      ? 503
+      : 502
+    return NextResponse.json(
+      { error: result.error, provider: result.provider },
+      { status }
+    )
   }
 
   const buffer = Buffer.from(result.b64, 'base64')

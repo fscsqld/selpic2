@@ -1,5 +1,5 @@
 /**
- * Resolve product image AI provider from env.
+ * Resolve product image AI provider from env and optional per-request override (W2.5).
  * Unknown ids fall back to openai (never crash).
  */
 
@@ -28,27 +28,54 @@ export function parseProductImageProviderId(
   if (v === 'google') return 'google'
   if (v === 'openai' || !v) return 'openai'
   console.warn(
-    `[productImage] Unknown ${AGENT_IMAGE_PROVIDER_ENV}=${raw}; falling back to openai`
+    `[productImage] Unknown provider=${raw}; falling back to openai`
   )
   return 'openai'
 }
 
+export type ProductImageProviderAvailability = {
+  masterKill: boolean
+  defaultProvider: ProductImageProviderId
+  openai: { configured: boolean }
+  google: { configured: boolean }
+}
+
+/** Status for Admin UI picker — no secrets. */
+export function getProductImageProviderAvailability(
+  env: NodeJS.ProcessEnv = process.env
+): ProductImageProviderAvailability {
+  return {
+    masterKill: isProductImageMasterKill(env),
+    defaultProvider: parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV]),
+    openai: { configured: openaiProductImageProvider.isConfigured(env) },
+    google: { configured: googleGeminiImageProvider.isConfigured(env) },
+  }
+}
+
 /**
- * Active provider for this process.
+ * Active provider. `preferred` (from UI body) wins when non-empty; else env default.
  */
 export function resolveProductImageProvider(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  preferred?: string | null
 ): ProductImageProvider | { id: ProductImageProviderId; missing: true; error: string } {
   if (isProductImageMasterKill(env)) {
+    const id =
+      preferred != null && String(preferred).trim() !== ''
+        ? parseProductImageProviderId(preferred)
+        : parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV])
     return {
-      id: parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV]),
+      id,
       missing: true,
       error:
         'Product image AI is disabled (AGENT_PRODUCT_IMAGE_GEN=0). Remove the kill switch to enable.',
     }
   }
 
-  const id = parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV])
+  const id =
+    preferred != null && String(preferred).trim() !== ''
+      ? parseProductImageProviderId(preferred)
+      : parseProductImageProviderId(env[AGENT_IMAGE_PROVIDER_ENV])
   const provider = PROVIDERS[id]
 
   if (!provider.isConfigured(env)) {
@@ -57,15 +84,26 @@ export function resolveProductImageProvider(
         id: 'google',
         missing: true,
         error:
-          'Google product image AI needs GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY). Or set AGENT_IMAGE_PROVIDER=openai.',
+          'Google product image AI needs GOOGLE_GEMINI_API_KEY (or GEMINI_API_KEY). Choose OpenAI, or add the Gemini key.',
       }
     }
     return {
       id: 'openai',
       missing: true,
       error:
-        'Product image AI is disabled (set OPENAI_API_KEY and do not set AGENT_PRODUCT_IMAGE_GEN=0). AGENT_DRAFT_LLM=0 also disables the OpenAI image path.',
+        'OpenAI product image AI needs OPENAI_API_KEY (and AGENT_DRAFT_LLM must not be 0). Choose Google if configured, or fix OpenAI env.',
     }
   }
   return provider
+}
+
+/** True if at least one image provider can run (usage hub). */
+export function isAnyProductImageProviderConfigured(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  if (isProductImageMasterKill(env)) return false
+  return (
+    openaiProductImageProvider.isConfigured(env) ||
+    googleGeminiImageProvider.isConfigured(env)
+  )
 }

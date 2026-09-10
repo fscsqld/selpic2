@@ -1,8 +1,8 @@
 # Product image AI providers — removable design (SELPIC)
 
 **Updated:** 2026-09-10  
-**Status:** **W1 + W2 shipped in code** (OpenAI + Google adapters). Default server env still OpenAI. **Admin UI provider picker not shipped yet** (learned intent below → next: W2.5).  
-**Default until A/B ends:** OpenAI **`gpt-image-2`** for images when no override.  
+**Status:** **W1 + W2 + W2.5 shipped in code** (adapters + Admin UI provider picker). Google option disabled until Gemini key. Default remains OpenAI.  
+**Default until A/B ends:** OpenAI **`gpt-image-2`** for images when OpenAI selected / configured.  
 **Optional:** Google **Gemini 2.5 Flash Image** via `googleGeminiImage.ts`.  
 **Accounting:** unchanged — sandbox keeps its own `OPENAI_API_KEY`. Never couple.
 
@@ -241,18 +241,17 @@ AGENT_GOOGLE_IMAGE_MODEL=gemini-2.5-flash-image
 - UI CTA stays **Generate / Edit with AI**; result badge shows `provider · model`.  
 - Removal later: §3.A / §3.B.
 
-### W2.5 — Admin UI provider picker (A/B) — **next when keys + asked**
+### W2.5 — Admin UI provider picker (A/B) — **shipped 2026-09-10**
 
-Learned 2026-09-10: env-only flip is not enough for side-by-side image A/B.
+1. ~~Products HITL: Image provider OpenAI | Google~~ (`ProductImageryAiAssist`)  
+2. ~~`POST imagery-generate` accepts `provider`~~; env = default when omitted  
+3. ~~Result badge `provider · model`~~  
+4. ~~Last choice in `localStorage` (`selpic-product-image-provider`)~~  
+5. When only one provider remains after W3, remove the control (or hard-code)  
+6. ~~Tests: override, missing key, availability GET~~  
+7. ~~`GET /api/admin/products/imagery-generate`~~ — configured flags + hint (no secrets)
 
-1. Products HITL: small control **Image provider: OpenAI | Google** (English). Hide or disable options whose key is missing (status from a tiny GET or generate 503).  
-2. `POST imagery-generate` accepts optional `provider`; resolve that adapter; else fall back to `AGENT_IMAGE_PROVIDER` / openai.  
-3. Result badge already shows `provider · model` — keep.  
-4. Optional: remember last choice in `localStorage` (device-only; not a second source of truth for billing).  
-5. When only one provider remains after W3, remove the control entirely (or hard-code single provider).  
-6. Tests: body provider override; missing key; unknown provider → openai default + warn.
-
-**Exit:** Same admin can Generate once with OpenAI and once with Google on one SKU without redeploying env.
+**Exit:** Same admin can Generate with OpenAI now; with Google after key — no env flip required for A/B.
 
 ### W3 — Admin decision → remove loser (§3.A or §3.B)
 
@@ -290,4 +289,4 @@ Site Review may **deep-link** to Products Assist — must stay provider-blind (o
 
 ---
 
-**End of design.** Next when asked: **W2.5** (UI picker, after Gemini key) → then **W3** remove loser.
+**End of design.** Next when asked: add Gemini key → smoke Google · then **W3** remove loser after A/B.

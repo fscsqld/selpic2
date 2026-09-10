@@ -2,12 +2,16 @@
  * Product image HITL — shared prompts + provider router facade.
  * OpenAI: productImage/openaiImagesProvider.ts · Google: productImage/googleGeminiImage.ts
  *
- * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, AGENT_DRAFT_LLM=0 (openai only),
- * missing key, non-https source, oversized downloads, prompt injection of prices.
+ * Cousins: AGENT_PRODUCT_IMAGE_GEN=0, AGENT_IMAGE_PROVIDER, per-request provider (W2.5),
+ * AGENT_DRAFT_LLM=0 (openai only), missing key, non-https source, oversized downloads,
+ * prompt injection of prices.
  */
 
 import { buildPhotoBriefTemplate } from './productImageryVisionLlm'
-import { resolveProductImageProvider } from './productImage/resolveProductImageProvider'
+import {
+  isAnyProductImageProviderConfigured,
+  resolveProductImageProvider,
+} from './productImage/resolveProductImageProvider'
 import type { ProductImageGenResult } from './productImage/types'
 
 export { AGENT_PRODUCT_IMAGE_GEN_KILL } from './productImage/types'
@@ -18,8 +22,7 @@ const MAX_PROMPT = 2_500
 export function isProductImageGenEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  const resolved = resolveProductImageProvider(env)
-  return !('missing' in resolved)
+  return isAnyProductImageProviderConfigured(env)
 }
 
 export function buildImageEditPrompt(input: {
@@ -72,16 +75,17 @@ export function defaultBriefLinesForPrompt(name: string, category?: string): str
 
 /**
  * Edit existing https image, or generate from prompt when no usable source.
- * Returns PNG base64 (no data: prefix) + provider id.
+ * `provider` = per-request UI override (W2.5); omit to use env default.
  */
 export async function generateOrEditProductImage(opts: {
   prompt: string
   sourceImageUrl?: string
+  provider?: string | null
   env?: NodeJS.ProcessEnv
   fetchImpl?: typeof fetch
 }): Promise<ProductImageGenResult> {
   const env = opts.env ?? process.env
-  const resolved = resolveProductImageProvider(env)
+  const resolved = resolveProductImageProvider(env, opts.provider)
   if ('missing' in resolved) {
     return { ok: false, error: resolved.error, provider: resolved.id }
   }

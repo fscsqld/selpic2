@@ -4,6 +4,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useR
 import { Package, Palette, Sparkles, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Header, { HeaderLogoImage } from '@/components/Header'
+import { optimizeStorefrontImageUrl } from '@/lib/optimizeStorefrontImageUrl'
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
 
@@ -81,7 +82,10 @@ function HeroCoverImage({
   }, [primarySrc])
 
   const chain = useMemo(() => {
-    const p = (primarySrc || '').trim()
+    const p = optimizeStorefrontImageUrl((primarySrc || '').trim(), {
+      maxWidth: 1200,
+      quality: 60,
+    })
     const out: string[] = []
     if (p) out.push(p)
     const fb = withAssetVersion(LOCAL_HERO_FALLBACK_URL)
@@ -146,7 +150,10 @@ function CategoryCoverImage({
   }, [primarySrc])
 
   const chain = useMemo(() => {
-    const p = (primarySrc || '').trim()
+    const p = optimizeStorefrontImageUrl((primarySrc || '').trim(), {
+      maxWidth: 800,
+      quality: 60,
+    })
     const ordered = [
       p,
       withAssetVersion(LOCAL_HERO_FALLBACK_URL),
@@ -1374,8 +1381,8 @@ export default function HomePage() {
     {
       id: 'default-1',
       type: 'image' as const,
-      src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      fallbackImage: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+      src: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?auto=format&fit=crop&w=1200&q=60',
+      fallbackImage: 'https://images.unsplash.com/photo-1618472043393-b31d17f5b5d7?auto=format&fit=crop&w=1200&q=60',
       title: 'Selpic',
       subtitle: 'Premium Sticker Shop',
       color: 'blue' as const,
@@ -1391,8 +1398,8 @@ export default function HomePage() {
     {
       id: 'default-3',
       type: 'image' as const,
-      src: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      fallbackImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
+      src: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1200&q=60',
+      fallbackImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1200&q=60',
       title: 'High Quality',
       subtitle: 'Professional Grade Materials',
       color: 'green' as const,
@@ -1546,6 +1553,7 @@ export default function HomePage() {
         </div>
       )}
       
+      <main id="main-content">
       {/* Hero Section - CASETiFY 스타일 슬라이딩 */}
       <section className="relative min-h-screen overflow-hidden" aria-labelledby="home-primary-heading">
         {/* Single document heading for SEO (one h1 per page). Visually minimal; slides keep h2 for slide-specific titles. */}
@@ -1950,6 +1958,8 @@ export default function HomePage() {
         </div>
       </section>
 
+
+      </main>
 
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-300 py-16">

@@ -40,4 +40,13 @@ describe('productImageryGenerate helpers', () => {
       })
     ).toBe(true)
   })
+
+  it('enables when only Google image key is present', () => {
+    expect(
+      isProductImageGenEnabled({
+        GOOGLE_GEMINI_API_KEY: 'g-test',
+        AGENT_DRAFT_LLM: '0',
+      })
+    ).toBe(true)
+  })
 })

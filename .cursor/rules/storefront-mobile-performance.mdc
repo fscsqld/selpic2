@@ -1,51 +1,44 @@
 ---
-description: Storefront mobile performance (Lighthouse CWV) — apply on every storefront/admin UI change
+description: Storefront mobile performance (PageSpeed / Lighthouse) — apply on every storefront/admin UI change
 alwaysApply: true
 ---
 
 # Storefront mobile performance (PageSpeed / Lighthouse)
 
-Baseline lab (Sep 9 2026 **1:33 PM** GMT+10, mobile Slow 4G, Moto G Power, Lighthouse 13.4.1): Performance **51**, FCP **3.3s**, LCP **8.4s**, TBT **420ms**, SI **7.7s**, CLS **0**, total network **~14.5 MiB**. Field CrUX: no data. Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: improve CWV without violating homepage Hero protection.
+**Baseline** (Sep 9 2026 **1:33** PM GMT+10): Perf **51**, FCP 3.3s, LCP 8.4s, TBT 420ms, SI 7.7s, CLS 0, ~14.5 MiB.  
+**Post batch-1** (Sep 10 **10:11** AM): Perf **67**, FCP 2.4s, LCP 5.8s, TBT 50ms, SI 9.3s, CLS 0, ~14.2 MiB.  
+Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: push LCP toward ≤2.5–4s lab without Hero redesign.
 
 ## Invariant
 
-Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store** of every asset, or **entire-page** client bundles. Hero design (logo, HOT ITEM, motion, gradients) stays protected — optimize **how** assets load, not Hero look.
+Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load.
 
-## Top lab insights to keep closing (from baseline)
+## Top remaining lab insights (after 10:11)
 
-| Insight | Order of magnitude |
-|---------|-------------------|
-| Render-blocking requests | ~3s |
-| Inefficient cache lifetimes | ~10 MiB transferable waste |
-| Enormous network payloads | ~14.5 MiB total |
-| Unused CSS | ~361 KiB |
-| Image delivery | ~263 KiB |
-| JS execution / main-thread / long tasks | ~2–3.5s / 9 tasks |
+| Insight | Notes |
+|---------|--------|
+| Image delivery (~213 KiB) | Cap Unsplash `w`/`q` via `optimizeStorefrontImageUrl`; prefer same-origin media |
+| Cache lifetimes (~10 MiB class) | Never blanket-`no-store` `/_next/static`; public APIs use route SWR |
+| Payload ~14 MiB | Lazy below-fold; don’t add heavy first-viewport media |
+| LCP still 5.8s | Priority + smaller LCP bytes + shorter critical chain |
 
-## Do (cheap, high impact)
+## Do
 
-- **Fonts:** Load Google/machine fonts only on customize/stamp routes (`GoogleFontsLinks` + segment layouts). Root `app/layout.tsx` = `next/font` Inter only. Never re-add sitewide font CSS for printers.
-- **JS:** Prefer `dynamic(() => import(...), { ssr: false })` for Swiper, heavy editors, admin-only widgets on public pages. Avoid new `'use client'` on whole routes when a small island suffices.
-- **Images:** Sized/compressed sources; `loading="lazy"` below fold; avoid full-bleed remote Unsplash on first viewport when a same-origin asset exists. LCP image: prioritize (`fetchPriority`), don’t lazy if it is LCP.
-- **Cache:** Do not add HTML `Cache-Control: no-store` for marketing pages. Public GETs (`site-config`, catalog) should allow short SWR / max-age where freshness allows — not `?cb=Date.now()` on every home mount unless required.
-- **CSS/JS weight:** Don’t import full icon packs or Swiper effect CSS globally for one section. Tree-shake; route-split. Watch unused CSS (~361 KiB class of waste).
-- **DOM:** Avoid huge client trees on `/` (long task / TBT). Cap lists; virtualize only if needed later. Prefer a single `<main>` landmark on storefront pages.
-- **3rd parties:** No new render-blocking scripts in root layout without defer/async and a kill-switch.
+- **Fonts:** Customize/stamp only (`GoogleFontsLinks`). Root = Inter only.
+- **JS:** `dynamic` / deferred Swiper (`LazyHomeSwiper`); avoid new whole-route `'use client'` weight on `/`.
+- **Images:** `optimizeStorefrontImageUrl` for Unsplash; `fetchPriority=high` on LCP image; lazy below fold.
+- **Cache:** `/_next/static` = `immutable` long max-age. Public GET handlers own SWR. HTML home may stay `no-store`. Do **not** re-add `next.config` no-store on `/api/site-config` or `/api/catalog` that overrides route SWR.
+- **A11y:** Prefer a single `<main>` on storefront pages.
+- **3rd parties:** No new render-blocking scripts in root layout.
 
 ## Do not
 
-- “Fix LCP” by redesigning Hero / removing Framer / changing brand gradients (homepage-protection).
+- Redesign Hero / remove Framer / change brand gradients.
 - Pull accounting-sandbox into storefront webpack.
-- Fix only desktop; always assume **Moto G / Slow 4G** class devices.
-- Ship a feature that adds **>100 KiB** gzipped to the `/` critical path without lazy-loading or a separate route.
-- Treat a **1:33 PM baseline** PSI paste as a post-deploy result — remeasure after the mobile-perf deploy before claiming wins.
+- Treat only desktop; assume Moto G / Slow 4G.
+- Claim wins from a **1:33 baseline** paste after deploy — use latest PSI time.
 
-## Cousins to check before merge
-
-Empty CMS cache (Hero placeholder wait), cold CDN, multiple hero slides, category tiles, newsletter footer, Header cart hydrate, `ContentStoreSupabaseSync` + catalog hydrate racing first paint, console errors on `/`, CSP hardening (separate from CWV).
-
-## When touching `/` or root layout
+## When touching `/` or root layout / next.config headers
 
 1. Re-read this rule + `homepage-protection.mdc`.
-2. Prefer layout/font/cache/dynamic-import changes over Hero JSX edits.
-3. After meaningful perf work: PageSpeed Insights mobile on `https://www.selpic.com.au/` — note FCP/LCP/TBT/payload delta vs Sep 9 **1:33** baseline in the PR/commit body.
+2. After meaningful perf work: PSI mobile — note Perf/FCP/LCP/TBT/payload vs **10:11** (67 / 5.8s LCP).
