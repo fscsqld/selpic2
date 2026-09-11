@@ -207,6 +207,10 @@ const nextConfig = {
   async redirects() {
     return []
   },
+  async rewrites() {
+    // Browsers still request /favicon.ico by default; serve the storefront logo (avoids 404 console noise).
+    return [{ source: '/favicon.ico', destination: '/images/logo.png' }]
+  },
 }
 
 module.exports = nextConfig

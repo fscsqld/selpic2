@@ -1697,7 +1697,7 @@ export default function HomePage() {
                     <div className="relative z-30 flex items-center justify-center h-full">
                       <div className="text-center text-white px-4 max-w-4xl mx-auto">
                         {/* Dark scrim behind copy only — keeps brand overlays; improves PSI contrast on light video frames */}
-                        <div className="inline-block max-w-full rounded-2xl bg-black/55 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                        <div className="inline-block max-w-full rounded-2xl bg-black/70 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
                         {slide.title ? (
                           <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white">
                             {slide.title}
@@ -1818,7 +1818,7 @@ export default function HomePage() {
                   <div className="text-center text-white max-w-4xl mx-auto px-4">
                     <div className="space-y-8">
                       {/* Dark scrim behind copy only — a11y contrast without changing Hero brand gradients */}
-                      <div className="inline-block max-w-full rounded-2xl bg-black/55 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6">
+                      <div className="inline-block max-w-full rounded-2xl bg-black/70 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.45)] space-y-6">
                         {slide.title && (
                           <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white">
                             {slide.title}
@@ -1916,7 +1916,7 @@ export default function HomePage() {
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
               Shop by Category
             </h2>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-gray-700">
               Discover our amazing product collections
             </p>
           </div>
@@ -1959,7 +1959,7 @@ export default function HomePage() {
                   
                   {/* Readability scrim — contrast for white copy on light CMS photos (a11y); does not change card layout */}
                   <div
-                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/65 via-black/30 to-black/15"
+                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/75 via-black/40 to-black/25"
                     aria-hidden
                   />
                   
@@ -1971,7 +1971,7 @@ export default function HomePage() {
                       <h3
                         className={`text-3xl font-bold mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] ${
                           category.title === 'SELPIC N'
-                            ? 'font-playfair tracking-wider text-4xl text-emerald-50'
+                            ? 'font-playfair tracking-wider text-4xl text-white'
                             : ''
                         }`}
                       >
@@ -2039,7 +2039,7 @@ export default function HomePage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
                 {howItWorksContent.find(item => item.title === 'Step 1 Title')?.content || howItWorksContent.find(item => item.title === '1단계 제목')?.content || t('home.howItWorks.step1.title')}
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-700">
                 {howItWorksContent.find(item => item.title === 'Step 1 Description')?.content || howItWorksContent.find(item => item.title === '1단계 설명')?.content || t('home.howItWorks.step1.description')}
               </p>
             </div>
@@ -2051,7 +2051,7 @@ export default function HomePage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
                 {howItWorksContent.find(item => item.title === 'Step 2 Title')?.content || howItWorksContent.find(item => item.title === '2단계 제목')?.content || t('home.howItWorks.step2.title')}
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-700">
                 {howItWorksContent.find(item => item.title === 'Step 2 Description')?.content || howItWorksContent.find(item => item.title === '2단계 설명')?.content || t('home.howItWorks.step2.description')}
               </p>
             </div>
@@ -2063,7 +2063,7 @@ export default function HomePage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
                 {howItWorksContent.find(item => item.title === 'Step 3 Title')?.content || howItWorksContent.find(item => item.title === '3단계 제목')?.content || t('home.howItWorks.step3.title')}
               </h3>
-              <p className="text-gray-600">
+              <p className="text-gray-700">
                 {howItWorksContent.find(item => item.title === 'Step 3 Description')?.content || howItWorksContent.find(item => item.title === '3단계 설명')?.content || t('home.howItWorks.step3.description')}
               </p>
             </div>

@@ -8,8 +8,10 @@ interface NewsletterFormProps {
   variant?: 'dark' | 'light'
 }
 
-const baseInputClasses = 'w-full px-4 py-2.5 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
-const baseButtonClasses = 'w-full bg-emerald-700 text-white px-3 py-2.5 min-h-11 rounded-md hover:bg-emerald-800 transition-colors duration-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed'
+const baseInputClasses =
+  'w-full px-4 py-2.5 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600'
+const baseButtonClasses =
+  'w-full bg-emerald-800 text-white px-3 py-2.5 min-h-11 rounded-md hover:bg-emerald-900 transition-colors duration-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed'
 
 export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps) {
   const [newsletterEmail, setNewsletterEmail] = useState('')
@@ -99,8 +101,8 @@ export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps
         onChange={(e) => setNewsletterEmail(e.target.value)}
         className={`${baseInputClasses} ${
           isDark
-            ? 'bg-gray-800 text-white border border-gray-700'
-            : 'bg-white text-gray-900 border border-gray-300'
+            ? 'bg-gray-800 text-white border border-gray-600 placeholder:text-gray-300'
+            : 'bg-white text-gray-900 border border-gray-300 placeholder:text-gray-600'
         }`}
         required
       />
