@@ -287,13 +287,46 @@ function computeVideoSlideSafeSrc(raw: string): string {
     : encodeURI(trimmedSrc)
 }
 
-// Video Slide Component with error handling (최적화됨)
-// 학습: 동영상이 전체로 보이도록 항상 object-contain 사용. 잘림 없이 비율 유지, 여백은 밝은 배경으로 채움(black flash 방지).
-const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: string, fallbackImage: string, title?: string, subtitle?: string }) => {
+/** Mobile / Save-Data / slow-2g: delay MP4 so LCP can be the WebP fallback. Desktop loads sooner. */
+function shouldDeferHeroVideoNetwork(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    const conn = (
+      navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string }
+      }
+    ).connection
+    if (conn?.saveData) return true
+    if (conn?.effectiveType && /^(slow-)?2g$/i.test(conn.effectiveType)) return true
+  } catch {
+    // ignore
+  }
+  try {
+    return window.matchMedia('(max-width: 1023px)').matches
+  } catch {
+    return false
+  }
+}
+
+// Video Slide — object-contain; mobile poster-first (defer MP4) for LCP/SI.
+const VideoSlide = React.memo(({
+  src,
+  fallbackImage,
+  title,
+  subtitle,
+  fetchPriority = 'auto',
+}: {
+  src: string
+  fallbackImage: string
+  title?: string
+  subtitle?: string
+  fetchPriority?: 'high' | 'low' | 'auto'
+}) => {
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [actualSrc, setActualSrc] = useState<string>(() => computeVideoSlideSafeSrc(src))
   const [mediaReady, setMediaReady] = useState(false)
+  const [allowVideoSrc, setAllowVideoSrc] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
@@ -312,44 +345,66 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     setActualSrc(safeSrc)
     setVideoError(false)
     setVideoLoaded(false)
+    setAllowVideoSrc(false)
   }, [src])
+
+  // Defer MP4 on mobile/Save-Data; desktop unlocks immediately after mount.
+  useEffect(() => {
+    if (!mediaReady || !actualSrc?.trim() || videoError) return
+    if (!shouldDeferHeroVideoNetwork()) {
+      setAllowVideoSrc(true)
+      return
+    }
+    let cancelled = false
+    const unlock = () => {
+      if (!cancelled) setAllowVideoSrc(true)
+    }
+    const timeoutId = window.setTimeout(unlock, 2800)
+    let idleId: number | undefined
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(() => unlock(), { timeout: 4000 })
+    }
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+      if (idleId != null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId)
+      }
+    }
+  }, [mediaReady, actualSrc, videoError])
   
-  // ✅ 이전 미디어 엘리먼트가 확실히 언마운트되도록 cleanup 처리
   useEffect(() => {
     return () => {
-      // 컴포넌트 언마운트 시 비디오 정지 및 리소스 해제 (SSR 안전)
       if (typeof window !== 'undefined' && videoRef.current) {
         try {
           videoRef.current.pause()
           videoRef.current.src = ''
           videoRef.current.load()
         } catch (error) {
-          // cleanup 중 에러 무시 (이미 언마운트된 경우)
           devWarn('Video cleanup error:', error)
         }
       }
     }
   }, [])
   
-  // Defensive helpers (메모이제이션)
   const isBlobUrl = useMemo(() => typeof actualSrc === 'string' && actualSrc.startsWith('blob:'), [actualSrc])
-  const safeFallback = useMemo(
-    () =>
+  const safeFallback = useMemo(() => {
+    const raw =
       fallbackImage && fallbackImage.trim() !== ''
-        ? fallbackImage
-        : LOCAL_HERO_FALLBACK_URL,
-    [fallbackImage]
-  )
+        ? fallbackImage.trim()
+        : LOCAL_HERO_FALLBACK_URL
+    return (
+      resolveStorefrontImageSrc(raw, { maxWidth: 1080, quality: 55 }) ||
+      LOCAL_HERO_FALLBACK_URL
+    )
+  }, [fallbackImage])
   
-  // ✅ actualSrc 변경 시 에러·로드 상태 초기화
   useEffect(() => {
     setVideoError(false)
     setVideoLoaded(false)
   }, [actualSrc])
   
-  
   const handleVideoError = useCallback(() => {
-    // ✅ Category Hero Backgrounds와 동일하게 간단한 에러 처리
     setVideoError(true)
   }, [])
   
@@ -363,9 +418,8 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
     setVideoError(false)
   }, [])
 
-  // iOS Safari: call play() after paint; ref + muted + playsinline are set in ref callback.
   useLayoutEffect(() => {
-    if (videoError || !actualSrc?.trim()) return
+    if (videoError || !actualSrc?.trim() || !allowVideoSrc) return
     let cancelled = false
     let raf2 = 0
     const tryPlay = () => {
@@ -390,15 +444,19 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
       cancelAnimationFrame(raf1)
       cancelAnimationFrame(raf2)
     }
-  }, [actualSrc, videoError])
+  }, [actualSrc, videoError, allowVideoSrc])
 
-  // Single non-video shell for SSR, first client paint, and error/empty src — identical DOM avoids hydration mismatch.
+  // Poster-only until client ready + video unlock (mobile deferred).
   const canRenderVideo =
-    mediaReady && !videoError && !!actualSrc && actualSrc.trim() !== ''
+    mediaReady &&
+    allowVideoSrc &&
+    !videoError &&
+    !!actualSrc &&
+    actualSrc.trim() !== ''
   if (!canRenderVideo) {
     return (
       <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
-        <HeroCoverImage primarySrc={safeFallback} />
+        <HeroCoverImage primarySrc={safeFallback} fetchPriority={fetchPriority} />
       </div>
     )
   }
@@ -496,7 +554,7 @@ const VideoSlide = React.memo(({ src, fallbackImage, title, subtitle }: { src: s
             setVideoLoaded(true)
             setVideoError(false)
           }}
-          preload="auto"
+          preload="metadata"
           style={{ 
             opacity: videoLoaded ? 1 : 0,
             transition: 'opacity 0.5s ease-in-out'
@@ -1501,7 +1559,14 @@ export default function HomePage() {
 
   const lcpHeroImageHref = useMemo(() => {
     const slide = Array.isArray(slidesToUse) ? slidesToUse[0] : null
-    if (!slide || slide.type === 'video') return ''
+    if (!slide) return ''
+    // Video slide 1: LCP is the fallback/poster WebP, not the MP4.
+    if (slide.type === 'video') {
+      return resolveStorefrontImageSrc(slide.fallbackImage || '', {
+        maxWidth: 1080,
+        quality: 55,
+      })
+    }
     return resolveStorefrontImageSrc(slide.src || '', { maxWidth: 1080, quality: 55 })
   }, [slidesToUse])
 
@@ -1607,6 +1672,7 @@ export default function HomePage() {
                           fallbackImage={slide.fallbackImage || ''}
                           title={slide.title}
                           subtitle={slide.subtitle}
+                          fetchPriority="high"
                         />
                       ) : (
                         <ImageSlide src={slide.src || ''} fetchPriority="high" />
@@ -1721,6 +1787,7 @@ export default function HomePage() {
                       fallbackImage={slide.fallbackImage || ''}
                       title={slide.title}
                       subtitle={slide.subtitle}
+                      fetchPriority={index === 0 ? 'high' : 'auto'}
                     />
                   ) : (
                     <ImageSlide

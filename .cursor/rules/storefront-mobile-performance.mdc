@@ -7,44 +7,45 @@ alwaysApply: true
 
 **Baseline** (Sep 9 2026 **1:33** PM GMT+10): Perf **51**, FCP 3.3s, LCP 8.4s, TBT 420ms, SI 7.7s, CLS 0, ~14.5 MiB.  
 **Post batch-1** (Sep 10 **10:11** AM): Perf **67**, FCP 2.4s, LCP 5.8s, TBT 50ms, SI 9.3s, CLS 0, ~14.2 MiB.  
-**Prior lab** (Sep 10 **2:29** PM): Perf **74**, LCP **4.7s**, A11y **83**, payload **~17.1 MiB**, image-delivery claim ~12.6 MiB.  
-**Latest lab** (Sep 10 **4:58** PM GMT+10): Perf **74**, FCP **1.1s**, LCP **4.8s**, TBT **100ms**, SI **8.8s**, CLS 0.002, payload **~4.8 MiB** (4,764 KiB). A11y **92**, BP **100**, SEO **100**, Agentic **2/2**. CrUX **No Data**.  
+**Prior** (Sep 10 **4:58** PM): Perf **74**, LCP **4.8s**, TBT 100ms, SI 8.8s, A11y **92**, payload **~4.8 MiB**.  
+**Latest lab** (Sep 11 **3:29** PM GMT+10): Perf **78**, FCP **1.1s**, LCP **4.4s**, TBT **30ms**, SI **7.3s**, CLS 0.002, payload **~4.8 MiB** (4,778 KiB). A11y **92**, BP **100**, SEO **100**, Agentic **2/2**. CrUX **No Data**. Weights: FCP +10, LCP +10, TBT +30, CLS +25, SI +3.  
 Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: LCP ≤2.5–4s lab without Hero redesign.
 
 ## Invariant
 
-Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load.
+Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load. Text readability scrim behind titles is OK.
 
-## Top remaining lab insights (after 4:58)
+## Top remaining lab insights (after 3:29)
 
 | Insight | Notes |
 |---------|--------|
-| Image delivery (~**393 KiB** claimed) | **Huge win vs ~12.6 MiB @ 2:29** — CMS WebP re-uploads (hero + category). Residual ~393 KiB + hero **MP4 ~3.2 MB** |
-| Cache lifetimes (~**3.2 MiB** claimed) | Down from ~13 MiB; mostly 3rd-party TTL |
-| Payload **~4.8 MiB** | Down from ~17 MiB — ops compress worked; video still large share |
-| LCP **4.8s** | ≈2:29 (4.7s); still CWV gap — next: poster-first / defer hero video on mobile |
-| SI **8.8s** | Still high — tied to video + paint |
-| A11y **92** (was 83) | Labels/captions ship helped; residual **contrast** (+ touch targets BP, not scored) |
-| Console / BP **100** | Console errors cleared in this lab |
+| Image delivery (~**393 KiB**) | Same class as 4:58 — residual; hero **MP4 ~3.2 MB** still dominates LCP/SI |
+| Cache lifetimes (~**3.2 MiB**) | Mostly **3rd-party** TTL (Supabase/CDN we don’t control); own `/_next/static` already immutable |
+| Render-blocking (~**720 ms**) | Better than ~930ms @ 4:58; mostly Next CSS — keep Google Fonts off `/` |
+| LCP **4.4s** | Improved vs 4.8s; still above “good” — next: **poster-first / defer hero video** on mobile |
+| SI **7.3s** | Improved vs 8.8s |
+| TBT **30ms** | Strong (was 100ms) |
+| A11y **92** | Contrast still listed — **Newsletter Subscribe `emerald-500`** is a concrete fix; Header touch targets: enforce min 44px. Do not redesign Hero for 100 |
+| LCP/SI brief | Generic “Next Image priority” ≠ our Hero; real lever = **video poster-first**. See doc § External Lighthouse brief mapping |
 
 ## Do
 
 - **Fonts:** Root Inter only (`display: swap`, preload). Customize/stamp fonts stay off `/` (`GoogleFontsLinks`).
 - **JS:** `dynamic` / deferred Swiper (`LazyHomeSwiper`); avoid new whole-route `'use client'` weight on `/`.
 - **Images:** Prefer CMS WebP under budgets; product AI `encodeStorefrontWebp`; Unsplash via `optimizeStorefrontImageUrl`.
-- **Video hero:** Mobile LCP should prefer **fallback/poster WebP**; avoid forcing full MP4 into critical path when practical.
-- **Cache:** `/_next/static` immutable; `/images`, `/media`, logo/apple-touch = 1d + SWR; public site-config `s-maxage=60` SWR 300 (catalog/media public already 60/300). HTML home may stay `no-store`. Do not blanket-`no-store` public CMS/catalog.
-- **A11y:** Icon `aria-label`s + video captions; hero/category copy on dark scrim (avoid `text-transparent`/`bg-clip-text` for body copy); footer `text-gray-300` on `bg-gray-900`.
+- **Video hero:** On ≤1023px / Save-Data, show WebP fallback first and defer MP4 (~2.8s / idle); preload LCP href uses video `fallbackImage`. Desktop still loads video promptly. Admin smaller MP4 remains helpful.
+- **Cache:** `/_next/static` immutable; `/images`, `/media`, logo/apple-touch = 1d + SWR; public site-config `s-maxage=60` SWR 300. HTML home may stay `no-store`. Do not blanket-`no-store` public CMS/catalog.
+- **A11y:** Icon labels + captions + dark scrim; avoid `text-transparent`/`bg-clip-text` for body copy; footer `text-gray-300` on `bg-gray-900`.
 - **3rd parties:** No new render-blocking scripts in root layout.
 
 ## Do not
 
-- Redesign Hero logo / HOT ITEM / Framer / brand gradients (text readability scrim behind titles is OK).
+- Redesign Hero logo / HOT ITEM / Framer / brand gradients (text readability scrim OK).
 - Pull accounting-sandbox into storefront webpack.
 - Treat only desktop; assume Moto G / Slow 4G.
-- Claim wins from a **1:33 baseline** paste — use latest PSI time (**4:58**).
+- Claim wins from older baselines — use latest PSI time (**3:29** Sep 11).
 
 ## When touching `/` or root layout / next.config headers
 
 1. Re-read this rule + `homepage-protection.mdc`.
-2. After meaningful perf work: PSI mobile — note vs **4:58** (74 / 4.8s LCP / ~4.8 MiB / A11y 92).
+2. After meaningful perf work: PSI mobile — note vs **3:29** (78 / 4.4s LCP / TBT 30ms / ~4.8 MiB / A11y 92).

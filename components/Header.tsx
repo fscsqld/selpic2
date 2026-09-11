@@ -605,7 +605,7 @@ export default function Header() {
                   }}
                   type="button"
                   aria-label="Open product search"
-                  className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 >
                   <Search size={22} aria-hidden />
                 </button>
@@ -630,7 +630,7 @@ export default function Header() {
                       setIsAccountMenuOpen(!isAccountMenuOpen)
                     }}
                     type="button"
-                    className="p-3 text-gray-700 rounded-full transition-all duration-200 flex items-center space-x-2 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center p-3 text-gray-700 rounded-full transition-all duration-200 flex items-center space-x-2 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                     title={currentUser?.name || currentUser?.email || 'Account'}
                     aria-label="Account menu"
                     aria-expanded={isAccountMenuOpen}
@@ -641,7 +641,7 @@ export default function Header() {
                 ) : (
                   <Link
                     href={loginLinkUrl}
-                    className="p-3 text-gray-600 transition-all duration-200 rounded-full hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center p-3 text-gray-600 transition-all duration-200 rounded-full hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                     aria-label="Sign in"
                   >
                     <User size={22} aria-hidden />
@@ -706,7 +706,7 @@ export default function Header() {
               {/* Cart */}
               <Link
                 href={cartLinkUrl}
-                className="relative p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                className="relative inline-flex min-h-11 min-w-11 items-center justify-center p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 aria-label={
                   hydrationSafeCartItemCount > 0
                     ? `Cart, ${hydrationSafeCartItemCount} items`
@@ -744,7 +744,7 @@ export default function Header() {
                   console.log('📱 Navigation menu button clicked')
                   setIsNavigationOpen(!isNavigationOpen)
                 }}
-                className="p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center p-3 text-gray-600 rounded-full transition-all duration-200 hover:text-[color:var(--color-brand-blue)] hover:bg-[rgba(52,170,220,0.12)]"
                 aria-expanded={isNavigationOpen}
                 aria-label={isNavigationOpen ? 'Close navigation menu' : 'Open navigation menu'}
               >

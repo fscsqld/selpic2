@@ -9,7 +9,7 @@ interface NewsletterFormProps {
 }
 
 const baseInputClasses = 'w-full px-4 py-2.5 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
-const baseButtonClasses = 'w-full bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors duration-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed'
+const baseButtonClasses = 'w-full bg-emerald-700 text-white px-3 py-2.5 min-h-11 rounded-md hover:bg-emerald-800 transition-colors duration-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed'
 
 export default function NewsletterForm({ variant = 'dark' }: NewsletterFormProps) {
   const [newsletterEmail, setNewsletterEmail] = useState('')

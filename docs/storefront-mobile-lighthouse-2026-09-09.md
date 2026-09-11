@@ -1,6 +1,6 @@
 # Storefront mobile performance — Lighthouse learning
 
-## Latest lab report — Sep 10, 2026, **4:58:07 PM** GMT+10
+## Latest lab report — Sep 11, 2026, **3:29:13 PM** GMT+10
 
 | Field | Value |
 |-------|--------|
@@ -8,53 +8,80 @@
 | Tool | PageSpeed Insights / Lighthouse **13.4.1** |
 | Device | Emulated **Moto G Power**, Mobile, Slow 4G |
 | Field CrUX | **No Data** |
-| Weights | FCP +10, LCP +8, TBT +29, CLS +25, SI +2 |
+| Weights | FCP +10, LCP +10, TBT +30, CLS +25, SI +3 |
 
 ### Score trail
 
-| Metric | Baseline 1:33 | 10:11 | 1:26 | 2:29 | **Latest 4:58** |
-|--------|-------------:|------:|-----:|-----:|----------------:|
-| Performance | 51 | 67 | 73 | 74 | **74** |
-| FCP | 3.3 s | 2.4 s | 1.1 s | 1.1 s | **1.1 s** |
-| LCP | 8.4 s | 5.8 s | 5.2 s | 4.7 s | **4.8 s** |
-| TBT | 420 ms | 50 ms | 120 ms | 120 ms | **100 ms** |
-| SI | 7.7 s | 9.3 s | 7.0 s | 8.9 s | **8.8 s** |
-| CLS | 0 | 0 | 0 | 0.002 | **0.002** |
-| Payload | ~14.5 MiB | ~14.2 | ~13.9 | **~17.1** | **~4.8 MiB** |
-| Image delivery (claimed) | — | ~213 KiB | ~191 KiB | **~12.6 MiB** | **~393 KiB** |
-| Accessibility | 98 | 98 | 98 | **83** | **92** |
-| Best Practices | 96 | 96 | 96 | 96 | **100** |
-| SEO | 100 | 100 | 100 | 100 | **100** |
-| Agentic | — | — | — | 1/2 | **2/2** |
+| Metric | Baseline 1:33 | 10:11 | 4:58 | **Latest 3:29 (Sep 11)** |
+|--------|-------------:|------:|-----:|-------------------------:|
+| Performance | 51 | 67 | 74 | **78** |
+| FCP | 3.3 s | 2.4 s | 1.1 s | **1.1 s** |
+| LCP | 8.4 s | 5.8 s | 4.8 s | **4.4 s** |
+| TBT | 420 ms | 50 ms | 100 ms | **30 ms** |
+| SI | 7.7 s | 9.3 s | 8.8 s | **7.3 s** |
+| CLS | 0 | 0 | 0.002 | **0.002** |
+| Payload | ~14.5 MiB | ~14.2 | ~4.8 | **~4.8 MiB** |
+| Image delivery (claimed) | — | ~213 KiB | ~393 KiB | **~393 KiB** |
+| Accessibility | 98 | 98 | 92 | **92** |
+| Best Practices | 96 | 96 | 100 | **100** |
+| SEO | 100 | 100 | 100 | **100** |
+| Agentic | — | — | 2/2 | **2/2** |
 
-**Read:** Ops CMS WebP (hero + category) + a11y deploy worked. **Payload 17 → ~4.8 MiB** and image-delivery claim **12.6 MiB → 393 KiB** are the clearest wins. Perf stays **74** because **LCP ~4.8s** / SI still dominate the weighted score; remaining LCP likely **hero video (~3.2 MB)** + critical path, not multi‑MB PNGs.
+**Read:** Contrast/cache deploy (`b504b07`) correlated with **Perf 74 → 78**, **LCP 4.8 → 4.4s**, **TBT 100 → 30ms**, **SI 8.8 → 7.3s**. Payload flat (~4.8 MiB). A11y stays **92** with contrast still flagged (lab may sample hero video pixels under pink overlay, or other nodes) — do not rip Hero design for 100. Next CWV lever remains **hero video defer / poster-first**.
 
-### What improved (4:58 vs 2:29)
+### What improved (3:29 vs 4:58)
 
-- Accessibility **83 → 92** (icon names, captions track, footer contrast).
-- Best Practices **96 → 100**; Agentic **2/2**; console errors gone in this lab.
-- Network payload **~17 MiB → ~4.8 MiB**; image-delivery insight collapsed.
-- TBT slightly better (120 → 100 ms).
+- Performance **74 → 78**
+- LCP **4.8s → 4.4s**; SI **8.8s → 7.3s**; TBT **100 → 30ms**
+- Render-blocking claim **~930ms → ~720ms**
+- BP / SEO / Agentic held at 100 / 100 / 2/2
+
+## External Lighthouse “refactor brief” → SELPIC mapping (learned 2026-09-11)
+
+Generic Next/Tailwind checklists must be **adapted**. Do not blindly convert Hero to `next/image` or redesign brand.
+
+| Brief item | Apply to SELPIC home? | Status / adaptation |
+|------------|----------------------|---------------------|
+| LCP = Hero in first viewport | **Yes** | LCP is hero slide 1 — often **video** (~3.2 MB MP4) + WebP fallback, not a Next `<Image />` |
+| `priority` + `fetchPriority="high"` on Next Image | **Partial** | Already: plain `<img>` `fetchPriority="high"` + preload on first **image** slide. No whole-Hero `next/image` rewrite (homepage protection) |
+| Explicit `sizes` on Next Image | **Skip / N/A** for Hero | Not using `next/image` on Hero; Unsplash already capped via `optimizeStorefrontImageUrl` |
+| Font `display: swap` | **Done** | Root Inter only; customize fonts off `/` |
+| Lazy third-party `Script` | **Low priority** | No heavy 3rd-party scripts on `/`; don’t add |
+| Video hero | **Yes — top** | **Poster-first / defer MP4** on ≤1023px + Save-Data (shipped); admin trim video ≤~2 MB still helps |
+| Subscribe `bg-emerald-500` → darker for contrast | **Yes — good** | `NewsletterForm` `baseButtonClasses` — bump to `emerald-700` (+ hover 800). Likely residual A11y 92 contrast |
+| Sign in / Search touch ≥44–48px | **Yes — good** | Header already `p-3`; enforce `min-h-11 min-w-11` (44px) or `min-h-12` (48px) on icon controls — layout-safe |
+| “Refactor whole project” | **No** | Scope = storefront `/` + shared Header/Newsletter only; never accounting-sandbox |
+
+### Apply order when implementing this brief
+
+1. Newsletter Subscribe contrast (`emerald-700`).  
+2. Header icon hit targets (`min-h/w-11` or 12).  
+3. Hero video poster-first / deferred load (code) + optional admin smaller MP4.  
+4. Re-run PSI vs **3:29** baseline (78 / 4.4s LCP / A11y 92).
+
+### Do not from this brief
+
+- Replace Hero with `next/image` / change Framer / brand gradients / HOT ITEM.  
+- Drive-by refactors across admin/accounting.  
+- Chase A11y 100 by redesigning Hero video frames.
 
 ### Still open
 
-1. **Hero video** defer / poster-first on mobile (LCP/SI).  
-2. Residual image delivery ~393 KiB + 3rd-party cache.  
-3. ~~A11y residual contrast~~ — **patched locally** (hero/category scrim, solid SELPIC N title, footer gray-300, header logo text); needs deploy + PSI recheck.  
-4. Cache micro: site-config **60s/300 SWR**; `/media`, logo, apple-touch long cache — deploy to measure. Render-blocking ~930ms mostly Next CSS/font — Inter already `swap`+preload; do not pull Google Fonts onto `/`.  
-5. Gemini key / product AI — tomorrow (owner).  
+1. **Hero video** defer / poster-first on mobile (primary LCP/SI lever).  
+2. Newsletter Subscribe contrast + Header touch mins (from brief — good to ship next).  
+3. Residual image delivery ~393 KiB + 3rd-party cache ~3.2 MiB.  
+4. Gemini key / product AI — owner schedule.
 
 ### Invariant
 
-Optimize load path; do not redesign Hero (logo, HOT ITEM, Framer, gradients).
+Optimize load path; do not redesign Hero (logo, HOT ITEM, Framer, gradients). Text scrim OK.
 
 ---
 
 ## Earlier snapshots
 
-- **2:29 PM** — Perf 74, A11y 83, payload ~17 MiB (pre category WebP).  
-- **1:26 PM** — Perf 73, LCP 5.2s.  
-- **10:11 AM** — Perf 67.  
+- **4:58 PM Sep 10** — Perf 74, LCP 4.8s, A11y 92, payload ~4.8 MiB (post CMS WebP).  
+- **2:29 PM Sep 10** — Perf 74, A11y 83, payload ~17 MiB.  
 - **1:33 PM Sep 9** — baseline Perf 51.  
 
-Commits (trail): fonts/Swiper; cache/LCP; CSP; console/Unsplash; a11y+WebP encode `b6cc455`; realtime recursion `5e0c11e`; plus CMS ops WebP.
+Commits (trail): fonts/Swiper; cache/LCP; CSP; console; a11y+WebP `b6cc455`; realtime `5e0c11e`; contrast/cache `b504b07`.
