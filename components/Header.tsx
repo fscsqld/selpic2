@@ -779,13 +779,13 @@ export default function Header() {
                           alt={HEADER_LOGO_ALT_EN}
                           className="h-7 md:h-9 lg:h-11 max-w-[200px] w-auto object-contain object-left"
                           exhaustedFallback={
-                            <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
+                            <span className="text-2xl font-playfair font-extrabold tracking-wider text-slate-800 truncate block">
                               {companyName}
                             </span>
                           }
                         />
                       ) : (
-                        <span className="text-2xl font-playfair font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 truncate block">
+                        <span className="text-2xl font-playfair font-extrabold tracking-wider text-slate-800 truncate block">
                           {companyName}
                         </span>
                       )}

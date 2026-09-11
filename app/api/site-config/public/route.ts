@@ -29,7 +29,7 @@ function getSiteConfigClient(): SupabaseClient | null {
 
 /**
  * Public storefront CMS snapshot from server-side Supabase client.
- * Short CDN cache (30s) + SWR — admin edits appear within ~30–120s on storefront.
+ * Short CDN cache (60s) + SWR — admin edits appear within ~60–300s on storefront.
  */
 export async function GET() {
   const client = getSiteConfigClient()

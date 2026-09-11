@@ -33,6 +33,63 @@ Hero **design** stays protected (`homepage-protection.mdc`). This rule is about 
 - Homepage Hero remains **out of scope** for product-image Assist; if a CMS AI path is added later, call `encodeStorefrontWebp(..., { usage: 'hero' })`.
 - Manual CMS uploads still need admin Squoosh / future shared upload encode — product AI path is covered.
 
+## Homepage `/` coverage matrix (learned 2026-09-10 PM — precise gaps)
+
+| Slot on home | URL source | Runtime size shrink? | Upload byte budget? |
+|--------------|------------|----------------------|---------------------|
+| Hero **image** slide | CMS `heroSlides[].src` | Unsplash only (`HeroCoverImage` → `resolveStorefrontImageSrc` w1080/q55). **Supabase = pass-through** | **No** — `MediaUpload` / `selpic-contents/upload` store-as-is (≤80–500 MB caps only) |
+| Hero **video** | CMS `heroSlides[].src` MP4 | **No** (URL sanitize only; `preload=auto`) | **No** |
+| Hero video **fallback** `<img>` | CMS `fallbackImage` | Unsplash only via `HeroCoverImage` | **No** (ops Squoosh fixed live WebPs) |
+| Hero video **`poster=`** | same fallback URL | **Raw URL — no optimize** | **No** |
+| LCP `<link preload>` | first **image** slide only | Yes if Unsplash | N/A |
+| Category card BG | CMS `categoryItems[].backgroundImage` | Unsplash only (`CategoryCoverImage` w720/q55). **Supabase PNG full bytes** | **No** — gap for ~1.7–2.4 MB Stickers/Hot Goods |
+| SELPIC N tile | CMS or hardcoded Unsplash | Same category path | **No** for CMS |
+| Header / footer logo | CMS logo `mediaUrl` | **No** `optimize*` — remote `<img>` full file | **No** |
+| How it works | text / CSS circles | No images | — |
+| Product AI Generate | Products HITL (not home CMS) | N/A on `/` | **Yes** — only path with `encodeStorefrontWebp` |
+
+**Invariant restated:** Homepage **displays** whatever bytes are in Supabase. Runtime helper **never** recompresses Supabase. Only **product AI Generate** hard-encodes WebP. Manual hero WebP stays small because **storage file** is small.
+
+### Code anchors (do not “fix” by Hero redesign)
+
+- Pass-through: `optimizeStorefrontImageUrl` — `if (!images.unsplash.com) return raw`
+- Home hero/category: `app/page.tsx` `HeroCoverImage` / `CategoryCoverImage` / `VideoSlide`
+- AI only: `app/api/admin/products/imagery-generate/route.ts` + `encodeStorefrontWebp`
+- CMS upload gap: `components/MediaUpload.tsx` → `uploadToSelpicContents` / `app/api/admin/selpic-contents/upload`
+- `encodeStorefrontWebp({ usage: 'hero' })` exists in tests — **not wired** to CMS upload yet
+
+## Admin re-upload → homepage (learned 2026-09-10)
+
+### Does a smaller re-upload reach `/` and help mobile?
+
+**Yes — when the full chain completes.** Confirmed live: hero-2/3 + video fallback WebP re-uploads changed `site_configs` URLs and `Content-Length` dropped (e.g. ~6 MB PNG → ~128 KB WebP). Mobile LCP improved after that ops change (PSI LCP 5.2s → 4.7s).
+
+### Happy path (what must happen)
+
+1. Admin **File upload** in Edit Slide / Categories → `MediaUpload` → `uploadToSelpicContents` → **new** storage path (`{folder}/{fileId}-{name}`) → **new** public URL (does not overwrite the old object).
+2. Admin clicks **Update** → `updateHeroSlide` / category update → Zustand `content-store`.
+3. `SiteConfigStoreAutosave` (logged-in `/admin`) debounced upsert → Supabase `site_configs` key `storefront_cms`.
+4. Storefront `ContentStoreSupabaseSync` merges remote (initial fetch + visibility/`pageshow` + poll ~120s + realtime after delay) → homepage reads new `src` / `fallbackImage` / `backgroundImage`.
+5. Browser requests the **new** URL → downloads the smaller file → **payload/LCP can improve**. Runtime `optimizeStorefrontImageUrl` still does **not** recompress Supabase; size wins come from the **file in storage**.
+
+### When it looks “not reflected”
+
+| Cause | What happens |
+|-------|----------------|
+| Uploaded but **no Update/Save** | Form has new URL; canonical CMS row still old |
+| Public API cache | `GET /api/site-config/public` = `s-maxage=60, stale-while-revalidate=300` — visitors may see old JSON ≤ ~60s (CDN) |
+| Visitor `localStorage` `content-store` | Until remote merge wins; Soft refresh / new tab / wait for sync |
+| **Same URL** overwritten (rare; paste-only / replace in place) | Browser/CDN may keep **old large bytes** — prefer new upload (new URL) or hard-refresh / cache-bust |
+| `withAssetVersion` | Only for **local** `/…` assets, **not** Supabase URLs |
+| Home still “slow” after image shrink | Hero **MP4** (~3 MB) + category multi‑MB PNGs still dominate; images alone don’t fix SI/payload |
+
+### Ops checklist after re-upload
+
+1. Edit Slide → upload compressed WebP → **Update**.  
+2. Wait ~60s or Soft refresh storefront; confirm Network shows **new** URL + small `Content-Length`.  
+3. Optional: probe `/api/site-config/public` `heroSlides` / category BG URLs.  
+4. Do not expect homepage code to shrink bytes — **upload small**.
+
 ## Manual CMS (Edit Slide / Media Library)
 
 - Prefer **WebP** uploads for hero images and video fallbacks.
@@ -44,11 +101,13 @@ Hero **design** stays protected (`homepage-protection.mdc`). This rule is about 
 - Video slide LCP may use **fallback** image — fallback must meet image budget even if video is heavy.
 - Inactive category Unsplash slides: ignore until reactivated; then replace with Supabase + budget.
 - `optimizeStorefrontImageUrl` helps Unsplash query params only — **does not** shrink already-huge Supabase PNGs.
+- Category **pages** (`SlidingBackground`) share the same CMS upload gap (not on `/`, same class of bug).
 - Do not “fix” by redesigning Hero gradients/Framer.
 
 ## Do not
 
 - Ship raw multi‑MB AI PNG as the final Media URL without a compress step (product Generate must use `encodeStorefrontWebp`).
 - Treat Squoosh-as-forever-process as the product plan for AI outputs — encode on generate is shipped; extend to CMS upload when building that path.
+- Assume homepage “optimize” = file compression — it is Unsplash query rewrite only.
 - Pull accounting-sandbox into media/AI paths.
 ---

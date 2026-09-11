@@ -5,7 +5,7 @@ import { COMPANY_CONTACT, COMPANY_LEGAL } from '@/lib/companyLegal'
 import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 import ClientSwCacheReset from '@/components/ClientSwCacheReset'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], display: 'swap', preload: true })
 const siteUrl = getPublicSiteUrl()
 const siteName = 'Selpic'
 const siteTitle = 'Custom Stickers & Name Labels Australia | Selpic'

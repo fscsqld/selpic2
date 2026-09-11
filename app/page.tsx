@@ -1630,16 +1630,19 @@ export default function HomePage() {
                     </div>
                     <div className="relative z-30 flex items-center justify-center h-full">
                       <div className="text-center text-white px-4 max-w-4xl mx-auto">
+                        {/* Dark scrim behind copy only — keeps brand overlays; improves PSI contrast on light video frames */}
+                        <div className="inline-block max-w-full rounded-2xl bg-black/55 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                         {slide.title ? (
-                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_12px_rgba(0,0,0,0.75)]">
+                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white">
                             {slide.title}
                           </h2>
                         ) : null}
                         {slide.subtitle ? (
-                          <p className="text-lg md:text-2xl mb-8 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_10px_rgba(0,0,0,0.7)]">
+                          <p className="text-lg md:text-2xl mb-0 text-white">
                             {slide.subtitle}
                           </p>
                         ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1747,15 +1750,15 @@ export default function HomePage() {
                 <div className="relative z-30 flex items-center justify-center h-full">
                   <div className="text-center text-white max-w-4xl mx-auto px-4">
                     <div className="space-y-8">
-                      {/* Slide Content */}
-                      <div className="space-y-6">
+                      {/* Dark scrim behind copy only — a11y contrast without changing Hero brand gradients */}
+                      <div className="inline-block max-w-full rounded-2xl bg-black/55 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] space-y-6">
                         {slide.title && (
-                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_12px_rgba(0,0,0,0.75)]">
+                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white">
                             {slide.title}
                           </h2>
                         )}
                         {slide.subtitle && (
-                          <p className="text-xl lg:text-2xl font-medium leading-relaxed text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_10px_rgba(0,0,0,0.7)]">
+                          <p className="text-xl lg:text-2xl font-medium leading-relaxed text-white">
                             {slide.subtitle}
                           </p>
                         )}
@@ -1887,27 +1890,37 @@ export default function HomePage() {
                     <SELPICNBackgroundImage backgroundImage={category.backgroundImage} />
                   )}
                   
-                  {/* 오버레이 제거: 배경 이미지 선명하게 표시 */}
+                  {/* Readability scrim — contrast for white copy on light CMS photos (a11y); does not change card layout */}
+                  <div
+                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/65 via-black/30 to-black/15"
+                    aria-hidden
+                  />
                   
                   <div className="relative z-10 p-8 h-full flex flex-col justify-between text-white">
                     <div className={category.title === 'SELPIC N' ? 'mt-[-8px]' : ''}>
                       <div className={`text-6xl mb-4 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] ${category.title === 'SELPIC N' ? 'transform group-hover:scale-110 transition-transform duration-300' : ''}`}>
                         {category.emoji}
                       </div>
-                      <h3 className={`text-3xl font-bold mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] drop-shadow-[0_0_12px_rgba(0,0,0,0.7)] ${category.title === 'SELPIC N' ? 'font-playfair tracking-wider text-4xl bg-gradient-to-r from-green-300 via-emerald-200 to-teal-300 bg-clip-text text-transparent' : ''}`}>
+                      <h3
+                        className={`text-3xl font-bold mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] ${
+                          category.title === 'SELPIC N'
+                            ? 'font-playfair tracking-wider text-4xl text-emerald-50'
+                            : ''
+                        }`}
+                      >
                         {category.title || 'Untitled Category'}
                       </h3>
-                      <p className="text-lg opacity-95 mb-4 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] drop-shadow-[0_0_8px_rgba(0,0,0,0.6)]">
+                      <p className="text-lg text-white mb-4 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
                         {category.description || ''}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {category.tags.map((tag, index) => (
                           <span 
                             key={`${category.id}-tag-${index}-${String(tag)}`} 
-                            className={`px-3 py-1 rounded-full text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
+                            className={`px-3 py-1 rounded-full text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
                               category.title === 'SELPIC N' 
-                                ? 'bg-white/30 backdrop-blur-sm border border-white/40' 
-                                : 'bg-white/20'
+                                ? 'bg-black/45 backdrop-blur-sm border border-white/50' 
+                                : 'bg-black/40'
                             }`}
                           >
                             {tag}
@@ -1917,11 +1930,11 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center justify-between">
                       {category.title !== 'Custom Design' && category.title !== 'SELPIC N' && (
-                        <span className="text-sm opacity-90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <span className="text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {`${productCount} products`}
                         </span>
                       )}
-                      <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+                      <ArrowRight className="w-6 h-6 text-white group-hover:translate-x-2 transition-transform duration-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" aria-hidden />
                     </div>
                   </div>
                   
@@ -2019,16 +2032,16 @@ export default function HomePage() {
             <p className="text-gray-300">
               {footerContent.find(item => item.title === 'Company Description')?.content || 'Your digital sticker journey starts here. Customize and print your own stickers with ease.'}
             </p>
-            <p className="text-gray-400 text-[11px] mt-2 whitespace-pre-line">
+            <p className="text-gray-300 text-xs mt-2 whitespace-pre-line">
               {`ABN: ${COMPANY_LEGAL.abn}\nACN: ${COMPANY_LEGAL.acn}`}
             </p>
-            <p className="text-gray-400 text-[11px] mt-2 whitespace-nowrap">
+            <p className="text-gray-300 text-xs mt-2 whitespace-nowrap">
               {String(COMPANY_CONTACT.address || '').replace(/Address:\s*/i, '')}
             </p>
-            <p className="text-gray-400 text-[11px] whitespace-nowrap">
+            <p className="text-gray-300 text-xs whitespace-nowrap">
               Phone: {COMPANY_CONTACT.phone}
             </p>
-            <p className="text-gray-400 text-[11px] whitespace-nowrap">
+            <p className="text-gray-300 text-xs whitespace-nowrap">
               Email: {COMPANY_CONTACT.email}
             </p>
           </div>
@@ -2088,7 +2101,7 @@ export default function HomePage() {
             <NewsletterForm variant="dark" />
           </div>
         </div>
-        <div className="mt-16 text-center text-gray-400 text-sm">
+        <div className="mt-16 text-center text-gray-300 text-sm">
           &copy; {currentYear} {footerContent.find(item => item.title === 'Copyright Information')?.content || 'Selpic'}. All rights reserved.
         </div>
       </footer>
