@@ -1697,7 +1697,7 @@ export default function HomePage() {
                     <div className="relative z-30 flex items-center justify-center h-full">
                       <div className="text-center text-white px-4 max-w-4xl mx-auto">
                         {/* Dark scrim behind copy only — keeps brand overlays; improves PSI contrast on light video frames */}
-                        <div className="inline-block max-w-full rounded-2xl bg-black/70 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
+                        <div className="inline-block max-w-full rounded-2xl bg-black/45 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
                         {slide.title ? (
                           <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white">
                             {slide.title}
@@ -1818,7 +1818,7 @@ export default function HomePage() {
                   <div className="text-center text-white max-w-4xl mx-auto px-4">
                     <div className="space-y-8">
                       {/* Dark scrim behind copy only — a11y contrast without changing Hero brand gradients */}
-                      <div className="inline-block max-w-full rounded-2xl bg-black/70 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.45)] space-y-6">
+                      <div className="inline-block max-w-full rounded-2xl bg-black/45 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-6">
                         {slide.title && (
                           <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white">
                             {slide.title}
