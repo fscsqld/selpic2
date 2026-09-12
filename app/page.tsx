@@ -1696,19 +1696,17 @@ export default function HomePage() {
                     </div>
                     <div className="relative z-30 flex items-center justify-center h-full">
                       <div className="text-center text-white px-4 max-w-4xl mx-auto">
-                        {/* Dark scrim behind copy only — keeps brand overlays; improves PSI contrast on light video frames */}
-                        <div className="inline-block max-w-full rounded-2xl bg-black/45 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+                        {/* Text only + shadow — no fill panel (owner: keep hero video/image sharp) */}
                         {slide.title ? (
-                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white">
+                          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
                             {slide.title}
                           </h2>
                         ) : null}
                         {slide.subtitle ? (
-                          <p className="text-lg md:text-2xl mb-0 text-white">
+                          <p className="text-lg md:text-2xl mb-0 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
                             {slide.subtitle}
                           </p>
                         ) : null}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -1817,15 +1815,15 @@ export default function HomePage() {
                 <div className="relative z-30 flex items-center justify-center h-full">
                   <div className="text-center text-white max-w-4xl mx-auto px-4">
                     <div className="space-y-8">
-                      {/* Dark scrim behind copy only — a11y contrast without changing Hero brand gradients */}
-                      <div className="inline-block max-w-full rounded-2xl bg-black/45 px-5 py-4 sm:px-8 sm:py-6 shadow-[0_8px_32px_rgba(0,0,0,0.35)] space-y-6">
+                      {/* Text only + shadow — no fill panel (owner: keep hero video/image sharp) */}
+                      <div className="space-y-6">
                         {slide.title && (
-                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white">
+                          <h2 className="text-3xl lg:text-5xl font-bold leading-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
                             {slide.title}
                           </h2>
                         )}
                         {slide.subtitle && (
-                          <p className="text-xl lg:text-2xl font-medium leading-relaxed text-white">
+                          <p className="text-xl lg:text-2xl font-medium leading-relaxed text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
                             {slide.subtitle}
                           </p>
                         )}

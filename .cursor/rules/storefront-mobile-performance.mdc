@@ -13,7 +13,9 @@ Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: LCP ≤2.
 
 ## Invariant
 
-Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load. Text readability scrim behind titles is OK.
+Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load.
+
+**Hero title (learned 2026-09-12 evening):** Owner wants **text only** over the hero video/image — **no** filled scrim panel (`bg-black/*` rounded box) behind title/subtitle. Any dark box makes the media look muddy. Prefer white copy + `drop-shadow` / `text-shadow` for readability. Do **not** re-add a title background panel for A11y/PSI alone. Category card scrims are separate (OK).
 
 ## Top remaining lab insights (after 3:29)
 
@@ -35,12 +37,13 @@ Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of 
 - **Images:** Prefer CMS WebP under budgets; product AI `encodeStorefrontWebp`; Unsplash via `optimizeStorefrontImageUrl`.
 - **Video hero:** On ≤1023px / Save-Data, show WebP fallback first and defer MP4 (~2.8s / idle); preload LCP href uses video `fallbackImage`. Desktop still loads video promptly. Admin smaller MP4 remains helpful.
 - **Cache:** `/_next/static` immutable; `/images`, `/media`, logo/apple-touch = 1d + SWR; public site-config `s-maxage=60` SWR 300. HTML home may stay `no-store`. Do not blanket-`no-store` public CMS/catalog.
-- **A11y:** Icon labels + captions + dark scrim; avoid `text-transparent`/`bg-clip-text` for body copy; footer `text-gray-300` on `bg-gray-900`.
+- **A11y:** Icon labels + captions; hero title = **no fill panel** — text + shadow only so video stays sharp; avoid `text-transparent`/`bg-clip-text` for body copy; footer `text-gray-300` on `bg-gray-900`.
 - **3rd parties:** No new render-blocking scripts in root layout.
 
 ## Do not
 
-- Redesign Hero logo / HOT ITEM / Framer / brand gradients (text readability scrim OK).
+- Redesign Hero logo / HOT ITEM / Framer / brand gradients.
+- Re-add a filled hero title scrim panel (`bg-black/…` box behind SELPIC/subtitle) — owner prefers clear video + text-only (2026-09-12).
 - Pull accounting-sandbox into storefront webpack.
 - Treat only desktop; assume Moto G / Slow 4G.
 - Claim wins from older baselines — use latest PSI time (**3:29** Sep 11).

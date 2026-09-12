@@ -48,8 +48,9 @@ Generic Next/Tailwind checklists must be **adapted**. Do not blindly convert Her
 | Font `display: swap` | **Done** | Root Inter only; customize fonts off `/` |
 | Lazy third-party `Script` | **Low priority** | No heavy 3rd-party scripts on `/`; don’t add |
 | Video hero | **Yes — top** | **Poster-first / defer MP4** on ≤1023px + Save-Data (shipped); admin trim video ≤~2 MB still helps |
-| Subscribe `bg-emerald-500` → darker for contrast | **Yes — good** | `NewsletterForm` `baseButtonClasses` — bump to `emerald-700` (+ hover 800). Likely residual A11y 92 contrast |
-| Sign in / Search touch ≥44–48px | **Yes — good** | Header already `p-3`; enforce `min-h-11 min-w-11` (44px) or `min-h-12` (48px) on icon controls — layout-safe |
+| Subscribe `bg-emerald-500` → darker for contrast | **Yes — good** | `NewsletterForm` — `emerald-800` shipped |
+| Sign in / Search touch ≥44–48px | **Yes — good** | Header `min-h/w-11` shipped |
+| Hero title scrim for contrast | **No fill panel** | **Learned 2026-09-12 evening:** owner wants text-only + shadow; any `bg-black` title box muddies hero video/image. Don’t re-add for A11y alone |
 | “Refactor whole project” | **No** | Scope = storefront `/` + shared Header/Newsletter only; never accounting-sandbox |
 
 ### Apply order when implementing this brief
