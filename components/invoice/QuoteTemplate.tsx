@@ -156,11 +156,12 @@ export default function QuoteTemplate({
             </div>
           )}
           {(company.phone || company.email) && (
-            <p className="text-sm text-gray-600 mt-1">
-              {company.phone && <span>{company.phone}</span>}
-              {company.phone && company.email && <span className="mx-2">|</span>}
-              {company.email && <span>{company.email}</span>}
-            </p>
+            <div className="text-sm text-gray-600 mt-1 space-y-0.5">
+              {company.phone ? (
+                <p className="whitespace-nowrap">{company.phone}</p>
+              ) : null}
+              {company.email ? <p className="break-all">{company.email}</p> : null}
+            </div>
           )}
         </div>
         <div className="text-right">
@@ -221,11 +222,12 @@ export default function QuoteTemplate({
             </p>
           )}
           {(billing.phone || billing.email) && (
-            <p className="text-gray-600 text-sm mt-2">
-              {billing.phone ? <span>{billing.phone}</span> : null}
-              {billing.phone && billing.email ? <span className="mx-2 text-gray-300">|</span> : null}
-              {billing.email ? <span>{billing.email}</span> : null}
-            </p>
+            <div className="text-gray-600 text-sm mt-2 space-y-0.5">
+              {billing.phone ? (
+                <p className="whitespace-nowrap">{billing.phone}</p>
+              ) : null}
+              {billing.email ? <p className="break-all">{billing.email}</p> : null}
+            </div>
           )}
         </div>
 

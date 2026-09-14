@@ -1,0 +1,43 @@
+---
+description: Invoice/quote contact phone+email layout — avoid mid-line wrap with |
+globs:
+  - components/invoice/**
+  - app/admin/invoices/**
+  - app/admin/documents/**
+  - lib/pdf/**
+alwaysApply: false
+---
+
+# Invoice / quote contact line layout
+
+## Learned 2026-09-14 (Blue Whale Construction invoice)
+
+Customer fixture (Bill To):
+
+- **BLUE WHALE Construction**
+- ABN: 38 629 116 856
+- 1/15 Parramatta RD, Underwood QLD 4119
+- Phone: **0412 473 160**
+- Email: **office@bluewhaleconstruction.com.au**
+
+Owner feedback on the PDF/email attachment: contact looked awkward — phone appeared split (e.g. `0412 473 16` on one line, `0|office@…` on the next) because phone and email were forced onto **one** line with a `|` separator in a narrow column.
+
+## Cause (was)
+
+`InvoiceTemplate` / `QuoteTemplate` used inline `phone | email` on one `<p>`. PDF/print in a narrow column wrapped mid-number (e.g. Blue Whale `0412 473 16` / `0|office@…`).
+
+## Preferred layout (owner) — applied in templates
+
+1. **Phone alone** on its own line (`whitespace-nowrap`).
+2. **Email** on the next line (`break-all` OK for long addresses).
+3. No `|` joining them. Same for company header + Bill To / Quote To in **InvoiceTemplate** and **QuoteTemplate**.
+
+## Do
+
+- Keep stacked phone/email lines in invoice/quote HTML → PDF paths.
+- Sister paths (`lib/pdf/serverReceiptPdf`, shipping PDF) still use `phone | email` for Selpic footer — change only if the same wrap shows up there.
+
+## Do not
+
+- Reintroduce single-line `phone | email` on invoice/quote customer or company blocks.
+- Fix only one customer fixture — any long phone + long email hits the same bug.
