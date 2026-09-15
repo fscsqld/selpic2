@@ -17,7 +17,16 @@ Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: LCP ≤2.
 
 Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of hashed static assets**, or **entire-page** client bundles. Hero design stays protected — optimize **how** assets load.
 
-**Hero title (learned 2026-09-12 evening):** Owner wants **text only** over the hero video/image — **no** filled scrim panel (`bg-black/*` rounded box) behind title/subtitle. Any dark box makes the media look muddy. Prefer white copy + `drop-shadow` / `text-shadow` for readability. Do **not** re-add a title background panel for A11y/PSI alone. Category card scrims are separate (OK).
+**Hero title (learned 2026-09-12 evening):** Owner wants **text only** over the hero video/image — **no** filled scrim panel (`bg-black/*` rounded box) behind title/subtitle. Any dark box makes the media look muddy. Prefer white copy + `drop-shadow` / `text-shadow` for readability. Do **not** re-add a title background panel for A11y/PSI alone.
+
+**Category images look dark (re-learned 2026-09-16):** Not a broken CMS upload — intentional overlays for white title/emoji text.
+
+| Where | Overlay | Why |
+|-------|---------|-----|
+| **Admin → Category Management** card preview | `bg-black/20` full tile (`CategoryManager.tsx`) | Preview mirrors storefront: white title/description readable on light photos |
+| **Storefront homepage** category cards | gradient `from-black/40 via-black/15 to-black/5` (`app/page.tsx`) | **Lightened again 2026-09-16** (was `/55` `/25` `/10`, earlier `/75`…) so CMS photos read brighter |
+
+Do **not** remove these scrims without owner OK — photos will look brighter but white text may fail contrast. Category card scrims are **separate** from the hero title “no fill panel” rule.
 
 **PSI score vs header logo (learned 2026-09-12 10:11):** Owner re-uploaded a smaller transparent header logo (~16.5 KB) then saw Perf **75 → 69**. **Not caused by the logo.** Payload stayed **~3,247 → 3,249 KiB** (flat). Score fell because **LCP 4.8s → 6.1s** (weight +8 → +3) and **SI 7.1s → 8.5s**, plus TBT **80 → 120ms** — classic **lab variance / Slow-4G hero timing**. LCP element is **hero slide 1 video** (`hero-banner.mp4` ~**multi‑MB**) + poster WebP, not the sticky header logo (~17 KB). Do **not** blame CMS logo swaps for Perf swings of this size; re-run PSI or trim hero MP4 instead.
 

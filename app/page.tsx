@@ -1955,9 +1955,9 @@ export default function HomePage() {
                     <SELPICNBackgroundImage backgroundImage={category.backgroundImage} />
                   )}
                   
-                  {/* Readability scrim — contrast for white copy on light CMS photos (a11y); does not change card layout */}
+                  {/* Readability scrim — lightened for clearer CMS photos; keep soft contrast for white copy */}
                   <div
-                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/75 via-black/40 to-black/25"
+                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/40 via-black/15 to-black/5"
                     aria-hidden
                   />
                   

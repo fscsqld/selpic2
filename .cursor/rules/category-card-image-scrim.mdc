@@ -1,0 +1,41 @@
+---
+description: Why category images look dark in Admin Category Management and on the storefront
+globs:
+  - app/admin/content/components/CategoryManager.tsx
+  - app/page.tsx
+alwaysApply: false
+---
+
+# Category card image darkness
+
+## Re-learned 2026-09-16
+
+Owner: Category Management previews look dark. **Cause = intentional dark overlay**, not a dim source file.
+
+### Admin — Category Management
+
+In `CategoryManager.tsx` preview tile:
+
+```tsx
+<div className="absolute inset-0 bg-black/20"></div>
+```
+
+20% black over the background image so white emoji/title/description stay readable in the admin list.
+
+### Storefront homepage
+
+Category cards use a readability scrim (owner: keep photos visible, not muddy):
+
+```tsx
+bg-gradient-to-t from-black/40 via-black/15 to-black/5
+```
+
+**2026-09-16:** Lightened stepwise from `/75`→`/55`→`/40` so customers see brighter category images. Soft base remains for white copy. Do not jump back to `/75` without owner OK.
+
+Admin Category Management preview stays at `bg-black/20` (list UI only).
+
+### Do / don’t
+
+- Do: explain overlay first if owner says “image is dark.”
+- Do not: strip admin `/20` or home gradient without owner OK (text contrast regresses).
+- Do not: confuse with hero title rule (hero = no fill panel; category cards may keep scrims).
