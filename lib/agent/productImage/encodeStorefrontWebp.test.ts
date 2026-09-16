@@ -50,6 +50,10 @@ describe('encodeStorefrontWebp', () => {
     const out = await encodeStorefrontWebp(png, { usage: 'hero' })
     expect(out.contentType).toBe('image/webp')
     expect(out.bytes).toBeLessThanOrEqual(HERO_WEBP_TARGET_BYTES)
+
+    const cat = await encodeStorefrontWebp(png, { usage: 'category' })
+    expect(cat.contentType).toBe('image/webp')
+    expect(cat.maxEdge).toBeLessThanOrEqual(800)
   })
 
   it('falls back safely on empty / tiny buffers', async () => {

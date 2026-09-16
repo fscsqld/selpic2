@@ -1,6 +1,6 @@
 # Storefront mobile performance — Lighthouse learning
 
-## Latest lab report — Sep 12, 2026, **10:11:31 PM** GMT+10
+## Latest lab report — Sep 16, 2026, **10:01:56 AM** GMT+10
 
 | Field | Value |
 |-------|--------|
@@ -8,38 +8,36 @@
 | Tool | PageSpeed Insights / Lighthouse **13.4.1** |
 | Device | Emulated **Moto G Power**, Mobile, Slow 4G |
 | Field CrUX | **No Data** |
-| Weights | FCP +10, LCP +3, TBT +29, CLS +25, SI +2 |
+| Weights | FCP +10, LCP +10, TBT +30, CLS +25, SI +2 |
 
 ### Score trail
 
-| Metric | Baseline 1:33 | 10:11 AM | 4:58 | 3:29 | 9:42 PM | **Latest 10:11 PM** |
-|--------|-------------:|---------:|-----:|-----:|--------:|--------------------:|
-| Performance | 51 | 67 | 74 | 78 | 75 | **69** |
-| FCP | 3.3 s | 2.4 s | 1.1 s | 1.1 s | 1.1 s | **1.1 s** |
-| LCP | 8.4 s | 5.8 s | 4.8 s | 4.4 s | 4.8 s | **6.1 s** |
-| TBT | 420 ms | 50 ms | 100 ms | 30 ms | 80 ms | **120 ms** |
-| SI | 7.7 s | 9.3 s | 8.8 s | 7.3 s | 7.1 s | **8.5 s** |
-| CLS | 0 | 0 | 0.002 | 0.002 | 0.03 | **0.002** |
-| Payload | ~14.5 MiB | ~14.2 | ~4.8 | ~4.8 | ~3.2 | **~3.2 MiB** (3,249 KiB) |
-| Image delivery (claimed) | — | ~213 | ~393 | ~393 | ~592 | **~407 KiB** |
-| Accessibility | 98 | 98 | 92 | 92 | 100 | **100** |
-| Best Practices | 96 | 96 | 100 | 100 | 100 | **100** |
-| SEO | 100 | 100 | 100 | 100 | 100 | **100** |
-| Agentic | — | — | 2/2 | 2/2 | 2/2 | **2/2** |
+| Metric | 3:29 | 9:42 PM | 10:11 PM | **Latest 10:01 AM (Sep 16)** |
+|--------|-----:|--------:|---------:|-----------------------------:|
+| Performance | 78 | 75 | 69 | **77** |
+| FCP | 1.1 s | 1.1 s | 1.1 s | **1.1 s** |
+| LCP | 4.4 s | 4.8 s | 6.1 s | **4.4 s** |
+| TBT | 30 ms | 80 ms | 120 ms | **40 ms** |
+| SI | 7.3 s | 7.1 s | 8.5 s | **7.8 s** |
+| CLS | 0.002 | 0.03 | 0.002 | **0.002** |
+| Payload | ~4.8 | ~3.2 | ~3.2 | **~3.2 MiB** (3,264 KiB) |
+| Image delivery (claimed) | ~393 | ~592 | ~407 | **~608 KiB** |
+| Accessibility | 92 | 100 | 100 | **100** |
+| Best Practices | 100 | 100 | 100 | **100** |
+| SEO | 100 | 100 | 100 | **100** |
+| Agentic | 2/2 | 2/2 | 2/2 | **2/2** |
 
-**Read (10:11 PM — why Perf fell after logo upload):** Header logo re-upload (~**16.5 KB** transparent WebP) did **not** cause the drop. Total payload **3,247 → 3,249 KiB** (unchanged). Score fell because **LCP 4.8s → 6.1s** (LCP weight +8 → **+3**) and **SI 7.1 → 8.5s**. Live LCP media is still hero slide 1 **video** `hero-banner.mp4` ~**1.7 MB** + poster WebP ~**133 KB** — orders of magnitude above the header logo. Treat **75 ↔ 69** as lab/Slow-4G variance on hero timing; next real lever remains **smaller admin MP4**, not logo KB.
+**Read (10:01 Sep 16):** Strong recovery — Perf **69 → 77**, LCP **6.1 → 4.4s** (weight +3 → **+10**), TBT **120 → 40ms**, SI **8.5 → 7.8s**. Payload still ~**3.2 MiB**. Confirms Sep 12 evening **69** was **lab/Slow-4G hero timing noise**, not the header-logo upload. A11y/BP/SEO/Agentic held at 100. Remaining: image delivery ~**608 KiB**, 3rd-party cache ~**2.0 MiB**, render-blocking ~**670 ms**, unused JS/CSS, 2 long tasks. Primary CWV lever if chasing 85+ / LCP ≤4s: **admin smaller hero MP4**.
 
-### What changed (10:11 PM vs 9:42 PM)
+### What changed (10:01 Sep 16 vs 10:11 PM Sep 12)
 
-- Perf **75 → 69**; LCP **4.8 → 6.1s**; SI **7.1 → 8.5s**; TBT **80 → 120ms**
-- CLS **0.03 → 0.002** (improved); A11y/BP/SEO/Agentic held at 100 / 100 / 100 / 2/2
-- Payload flat ~**3.2 MiB**; image-delivery claim **~592 → ~407 KiB**
-- Insights: cache ~**2,006 KiB**, render-blocking ~**610 ms**, unused JS/CSS same class, 4 long tasks
+- Perf **69 → 77**; LCP **6.1 → 4.4s**; TBT **120 → 40ms**; SI **8.5 → 7.8s**
+- FCP / CLS / payload / A11y held
+- Insights: render-blocking ~**670 ms**, cache ~**2,006 KiB**, image delivery ~**608 KiB**
 
-### Prior note (9:42 vs 3:29)
+### Prior note (10:11 PM — logo ≠ score drop)
 
-- Accessibility **92 → 100**; payload **~4.8 → ~3.2 MiB**
-- Perf **78 → 75**; LCP **4.4 → 4.8s** — already lab noise before logo change
+Header logo ~16.5 KB did not move payload; LCP swing drove the 75→69 dip.
 
 ## External brief — Sep 12 “defer video + prioritize LCP Image” (learned 2026-09-12)
 
@@ -49,7 +47,7 @@ Claim: LCP 6.1s because 1.7 MB hero MP4 hogged Slow 4G; fix = (1) defer `<video>
 |-----|--------------------------|--------|
 | Defer `hero-banner.mp4` / `preload=none\|metadata` | **Yes — already done** | `VideoSlide`: `shouldDeferHeroVideoNetwork()` on ≤1023px / Save-Data / slow-2g → no `<video src>` for ~2.8s (idle); then unlock. `preload="metadata"`. Poster `HeroCoverImage` first. |
 | Prioritize LCP banner image | **Yes direction / wrong tool** | LCP for video slide 1 is **`fallbackImage` WebP**, not the MP4. Already: `fetchPriority="high"`, head `<link rel="preload" as="image" href={lcpHeroImageHref}>`. **Do not** convert to Next `<Image fill>` as the fix — protected Hero + intentional `<img>` onError chain. |
-| Guarantee Perf **>85** from these two | **No** | Already shipped; 69/75 still lab-noise on hero. Remaining: **compress MP4 in Admin** (primary), optional longer mobile defer — not another Image rewrite. |
+| Guarantee Perf **>85** from these two | **No** | Already shipped; lab swings **69↔77** on hero timing. Remaining: **compress MP4 in Admin** (primary). |
 
 **Apply?** Only incremental tweaks if owner asks (e.g. longer defer, `preload="none"`). **Do not** execute the brief as a fresh Hero `next/image` refactor.
 

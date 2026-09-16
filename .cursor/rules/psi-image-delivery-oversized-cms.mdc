@@ -1,0 +1,43 @@
+---
+description: Why PSI “Improve image delivery” flags Supabase hero/category/logo and /images/logo.png
+globs:
+  - app/page.tsx
+  - lib/optimizeStorefrontImageUrl.ts
+  - components/Header.tsx
+  - app/layout.tsx
+alwaysApply: false
+---
+
+# PSI “Improve image delivery” on homepage (learned 2026-09-16)
+
+Owner pasted PageSpeed Mobile insight: Supabase ~686 KiB with ~503 KiB claimed savings + 1st-party `/images/logo.png` ~89 KiB.
+
+## Root cause (not “wrong logo upload”)
+
+PSI compares **file pixel size / bytes** vs **CSS displayed size**. We serve **full CMS WebP URLs** (Supabase pass-through). There is **no** runtime resize for Supabase (`optimizeStorefrontImageUrl` only mutates **Unsplash** `w`/`q`). Category cards display ~400px tall; files are often ~800–1000px → “larger than needed.”
+
+## Line-item map (live classes)
+
+| PSI target | Typical issue | Why in SELPIC |
+|------------|---------------|---------------|
+| `category-bg/*.webp` (~90–149 KiB, e.g. 973×1024 shown at ~400×400) | Oversized for display | `CategoryCoverImage` uses CMS URL as-is (`maxWidth: 720` only helps Unsplash). Cards are ~400px; download is full asset. |
+| `hero-banner/…________1.webp` (~133 KiB) + other hero WebP | “Increase compression” | Poster/fallback already WebP; PSI wants higher lossy compress or smaller encode. Not a wrong URL. |
+| `header-logo/…a2wiua96u-logo.webp` (~16.5 KiB, 584×172 → ~136×40) | Oversized for display | **Correct new CMS logo** is loading. Header CSS is `h-10` (~40px). File is brand-resolution; tiny display → claimed ~15 KiB save. |
+| `/images/logo.png` (~89 KiB, 584×172 → ~95×28) | Old PNG + oversized + not WebP | **Favicon / layout icons / OG / HeaderLogo fallback** — **not** Admin Logo Image Management. Hardcoded `app/layout.tsx` + favicon rewrite. Confirms old static still requested alongside new header WebP. |
+
+## What this does **not** mean
+
+- Header brand mark failed to update — CMS WebP **is** in the list (`header-logo/…logo.webp`).
+- Need Hero `next/image` rewrite for this insight alone — optional later; primary LCP lever remains **hero MP4**.
+- Category “dark” overlay causes byte waste — overlay is CSS, not download size.
+
+## Levers (when owner asks to fix)
+
+1. **Admin:** re-upload category/hero images closer to display size (e.g. long edge ~800–1080, tighter WebP).
+2. **Code (optional):** `srcset`/`sizes` or Next Image / transform CDN for Supabase; or upload-time `encodeStorefrontWebp` for CMS (not only product AI).
+3. **Static logo:** replace `public/images/logo.png` (+ apple-touch) with small WebP/PNG and point `layout.tsx` icons there to clear the 89 KiB 1st-party hit.
+
+## Do not
+
+- Re-upload header logo repeatedly expecting `/images/logo.png` to disappear — that path is separate.
+- Chase every KiB of header-logo 584→136 display mismatch before hero MP4 / category oversized BGs.

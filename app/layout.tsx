@@ -11,7 +11,7 @@ const siteName = 'Selpic'
 const siteTitle = 'Custom Stickers & Name Labels Australia | Selpic'
 const siteDescription =
   'Order custom stickers and waterproof name labels in Australia with Selpic. Fast turnaround, premium print quality, and easy online personalization for school, home, and business.'
-const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.png`
+const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.webp`
 
 /** Ensures phones/tablets use device width; viewportFit helps safe-area on notched iOS; theme for browser chrome. */
 export const viewport: Viewport = {
@@ -82,11 +82,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: '/images/logo.webp', type: 'image/webp' },
       { url: '/images/logo.png', type: 'image/png' },
       { url: '/favicon.ico', sizes: 'any' },
     ],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: ['/images/logo.png'],
+    shortcut: ['/images/logo.webp', '/images/logo.png'],
   },
   appleWebApp: {
     capable: true,

@@ -4,7 +4,9 @@
  */
 /** PNGs are committed under public/; SVGs are optional — try PNG first for Linux/Vercel case-sensitive paths. */
 export const HEADER_LOGO_STATIC_FALLBACKS: readonly string[] = [
+  '/images/logo.webp',
   '/images/logo.png',
+  '/logo.webp',
   '/logo.png',
   '/images/logo.svg',
   '/logo.svg',

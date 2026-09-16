@@ -66,14 +66,47 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const contentType =
+  let contentType =
     contentTypeField ||
     (typeof File !== 'undefined' && file instanceof File && file.type
       ? file.type
       : 'application/octet-stream')
 
+  let uploadBuffer: Buffer = buffer
+  let uploadPath = path
+
+  // Homepage CMS images: auto WebP + resize so PSI "oversized" / byte claims stay low.
+  const isImage =
+    /^image\/(png|jpeg|jpg|webp|gif)$/i.test(contentType) ||
+    /\.(png|jpe?g|webp|gif)$/i.test(path)
+  const usage: 'hero' | 'category' | 'header' | null = path.includes('cms/hero-banner')
+    ? 'hero'
+    : path.includes('cms/category-bg')
+      ? 'category'
+      : path.includes('cms/header-logo')
+        ? 'header'
+        : null
+
+  if (isImage && usage) {
+    try {
+      const { encodeStorefrontWebp } = await import(
+        '@/lib/agent/productImage/encodeStorefrontWebp'
+      )
+      const encoded = await encodeStorefrontWebp(buffer, { usage })
+      if (encoded.compressed && encoded.buffer.length > 0) {
+        uploadBuffer = encoded.buffer
+        contentType = encoded.contentType
+        if (!uploadPath.toLowerCase().endsWith(`.${encoded.ext}`)) {
+          uploadPath = uploadPath.replace(/\.[a-z0-9]+$/i, '') + `.${encoded.ext}`
+        }
+      }
+    } catch (err) {
+      console.warn('[admin/selpic-contents/upload] encode skipped:', err)
+    }
+  }
+
   const supabase = getSupabaseAdmin()
-  const { error } = await supabase.storage.from(SELPIC_CONTENTS_BUCKET).upload(path, buffer, {
+  const { error } = await supabase.storage.from(SELPIC_CONTENTS_BUCKET).upload(uploadPath, uploadBuffer, {
     contentType,
     upsert: true,
   })
@@ -82,6 +115,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 })
   }
 
-  const { data } = supabase.storage.from(SELPIC_CONTENTS_BUCKET).getPublicUrl(path)
+  const { data } = supabase.storage.from(SELPIC_CONTENTS_BUCKET).getPublicUrl(uploadPath)
   return NextResponse.json({ publicUrl: data.publicUrl })
 }

@@ -1,0 +1,56 @@
+---
+description: Header logo CMS vs static legacy PNG — what loads where after admin upload
+globs:
+  - components/Header.tsx
+  - lib/headerLogoDisplay.ts
+  - lib/pickLogoImageItem.ts
+  - app/layout.tsx
+  - app/admin/content/**
+alwaysApply: false
+---
+
+# Header logo: CMS upload vs legacy static PNG
+
+## Audit 2026-09-16 (live selpic.com.au)
+
+### Canonical CMS (Admin → Logo Image Management) — **new logo IS live**
+
+| Field | Value |
+|-------|--------|
+| `contentItems` id | `header-logo` |
+| `isActive` | `true` |
+| `mediaUrl` | `…/cms/header-logo/1789215001838-a2wiua96u-logo.webp` |
+| Size | **~16.9 KB** WebP, transparent (alpha) |
+| `updatedAt` | **2026-09-12T12:10:04Z** (no newer CMS row as of this audit) |
+
+Sticky **Header** + home **footer** brand image use `pickLogoImageItem` → this `mediaUrl` after storefront CMS sync. **Not** the 91 KB static PNG for the visible header mark when CMS is healthy.
+
+### Where **old** `/images/logo.png` (~91 KB) still loads
+
+These paths are **hardcoded / rewrite**, independent of Logo Image Management:
+
+| Path | Role |
+|------|------|
+| `app/layout.tsx` `icons.icon` / `shortcut` | Browser tab favicon metadata → `/images/logo.png` |
+| `next.config.js` rewrite `/favicon.ico` → `/images/logo.png` | Default favicon request |
+| `/apple-touch-icon.png` | iOS home-screen icon (same ~91 KB file in `public/`) |
+| OG / Twitter `defaultOgImage` | Social share preview (`/images/logo.png`) |
+| `HEADER_LOGO_STATIC_FALLBACKS` | Only if CMS `mediaUrl` empty/fails (`indexeddb://`, network error) |
+
+SSR HTML often lists `/images/logo.png` in `<link rel="icon">` etc.; **Supabase header-logo URL may be absent from first HTML** until client hydrates `content-store` from `/api/site-config/public`. That does **not** mean the header keeps showing the old PNG after sync — Header reads Zustand CMS `mediaUrl`.
+
+### How to verify (owner)
+
+1. Network tab → filter `header-logo` → should see `…a2wiua96u-logo.webp` (~17 KB).
+2. Also expect `/favicon.ico` or `/images/logo.png` (~91 KB) for **tab icon only** — expected until static assets are replaced.
+3. If header still shows old mark: check CMS sync (`Use Logo Image` on, `mediaUrl` non-empty), hard refresh, or failed image → fallback to PNG.
+
+### Do
+
+- Treat Admin logo upload as source of truth for **header/footer brand image**.
+- If owner wants zero old-PNG requests: replace `public/images/logo.png`, `public/logo.png`, `public/apple-touch-icon.png`, and/or point `layout.tsx` icons at the CMS WebP URL (separate change).
+
+### Do not
+
+- Assume Network “logo.png” means Admin upload failed — check whether it is favicon/OG vs header `img`.
+- Blame Perf LCP on header logo (hero video dominates).

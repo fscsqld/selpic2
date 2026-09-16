@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
 const SITE_URL = getPublicSiteUrl()
-const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logo.png`
+const DEFAULT_OG_IMAGE = `${SITE_URL}/images/logo.webp`
 
 type PublicSeoInput = {
   path: string

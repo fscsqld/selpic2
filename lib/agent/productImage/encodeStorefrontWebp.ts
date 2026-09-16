@@ -17,22 +17,30 @@ export const HERO_WEBP_TARGET_BYTES = 500 * 1024
 
 const QUALITY_STEPS = [80, 72, 64, 56, 48] as const
 
-export type StorefrontWebpUsage = 'product' | 'hero'
+export type StorefrontWebpUsage = 'product' | 'hero' | 'category' | 'header'
 
-export type EncodeStorefrontWebpResult = {
-  buffer: Buffer
-  contentType: 'image/webp' | 'image/png' | 'image/jpeg'
-  ext: 'webp' | 'png' | 'jpg'
-  bytes: number
-  compressed: boolean
-  quality: number | null
-  maxEdge: number
-  /** True when sharp failed and original bytes were kept. */
-  fellBackToOriginal: boolean
-}
+/** Category card display ~400px — 2× retina. */
+export const CATEGORY_WEBP_MAX_EDGE = 800
+export const CATEGORY_WEBP_TARGET_BYTES = 120 * 1024
+/** Sticky header logo displays ~136×40 — keep 2–3× for sharpness. */
+export const HEADER_WEBP_MAX_EDGE = 360
+export const HEADER_WEBP_TARGET_BYTES = 24 * 1024
+/** Hero poster / image slide — tighter than generic product. */
+export const HERO_WEBP_MAX_EDGE = 1280
+export const HERO_WEBP_TIGHT_TARGET_BYTES = 160 * 1024
 
 function targetForUsage(usage: StorefrontWebpUsage): number {
-  return usage === 'hero' ? HERO_WEBP_TARGET_BYTES : STOREFRONT_WEBP_TARGET_BYTES
+  if (usage === 'hero') return HERO_WEBP_TIGHT_TARGET_BYTES
+  if (usage === 'category') return CATEGORY_WEBP_TARGET_BYTES
+  if (usage === 'header') return HEADER_WEBP_TARGET_BYTES
+  return STOREFRONT_WEBP_TARGET_BYTES
+}
+
+function defaultMaxEdgeForUsage(usage: StorefrontWebpUsage): number {
+  if (usage === 'hero') return HERO_WEBP_MAX_EDGE
+  if (usage === 'category') return CATEGORY_WEBP_MAX_EDGE
+  if (usage === 'header') return HEADER_WEBP_MAX_EDGE
+  return STOREFRONT_WEBP_MAX_EDGE
 }
 
 /**
@@ -48,7 +56,7 @@ export async function encodeStorefrontWebp(
   }
 ): Promise<EncodeStorefrontWebpResult> {
   const usage = opts?.usage ?? 'product'
-  const maxEdge = opts?.maxEdge ?? STOREFRONT_WEBP_MAX_EDGE
+  const maxEdge = opts?.maxEdge ?? defaultMaxEdgeForUsage(usage)
   const targetBytes = opts?.targetBytes ?? targetForUsage(usage)
 
   if (!input?.length || input.length < 32) {

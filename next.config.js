@@ -209,7 +209,7 @@ const nextConfig = {
   },
   async rewrites() {
     // Browsers still request /favicon.ico by default; serve the storefront logo (avoids 404 console noise).
-    return [{ source: '/favicon.ico', destination: '/images/logo.png' }]
+    return [{ source: '/favicon.ico', destination: '/images/logo.webp' }]
   },
 }
 
