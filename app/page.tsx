@@ -606,6 +606,7 @@ import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { COMPANY_CONTACT, COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 
 type LazyHomeSwiperModule = typeof import('@/components/LazyHomeSwiper')
+type LazyHomeSwiperExtraEffectsModule = typeof import('@/components/LazyHomeSwiperExtraEffects')
 
 const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string }) => {
   const defaultImage =
@@ -618,11 +619,13 @@ const SELPICNBackgroundImage = ({ backgroundImage }: { backgroundImage?: string 
 
 export default function HomePage() {
   const { products, language, _hasHydrated, refreshProducts } = useStore()
+  const heroEffect = useContentStore((s) => s.heroSliderSettings?.effect || 'fade')
   const [currentSlide, setCurrentSlide] = useState(0)
   const [swiperInstance, setSwiperInstance] = useState<any>(null)
   const [forceUpdate, setForceUpdate] = useState(0)
   const [isClientMounted, setIsClientMounted] = useState(false)
   const [lazySwiper, setLazySwiper] = useState<LazyHomeSwiperModule | null>(null)
+  const [lazySwiperExtra, setLazySwiperExtra] = useState<LazyHomeSwiperExtraEffectsModule | null>(null)
   const [hasPersistedCmsSnapshot, setHasPersistedCmsSnapshot] = useState(false)
 
   // Prevent SSR/CSR markup mismatch on iPad Safari when persisted CMS state differs at hydration time.
@@ -630,7 +633,7 @@ export default function HomePage() {
     setIsClientMounted(true)
   }, [])
 
-  // Defer Swiper + effect CSS until after mount (improves TBT / unused JS on Slow 4G).
+  // Defer Swiper + fade CSS until after mount (improves TBT / unused JS on Slow 4G).
   useEffect(() => {
     if (!isClientMounted) return
     let cancelled = false
@@ -641,6 +644,22 @@ export default function HomePage() {
       cancelled = true
     }
   }, [isClientMounted])
+
+  // Cube/coverflow/flip CSS+JS only when Admin CMS effect is not fade.
+  useEffect(() => {
+    if (!isClientMounted || !lazySwiper) return
+    if (heroEffect === 'fade') {
+      setLazySwiperExtra(null)
+      return
+    }
+    let cancelled = false
+    void import('@/components/LazyHomeSwiperExtraEffects').then((mod) => {
+      if (!cancelled) setLazySwiperExtra(mod)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isClientMounted, lazySwiper, heroEffect])
 
   // New tablets with no selpic-store: fill products from server catalog so category counts are not stuck at 0.
   useEffect(() => {
@@ -1095,20 +1114,16 @@ export default function HomePage() {
   const { getActiveHeroSlides, heroSlides: storeHeroSlides, categoryItems: allCategoryItems, heroSliderSettings } = useContentStore()
   const heroSlides = getActiveHeroSlides()
   
-  // Swiper modules — only after LazyHomeSwiper chunk loads
+  // Swiper modules — only after LazyHomeSwiper chunk loads; extras when effect ≠ fade
   const swiperModules = useMemo(() => {
     if (!lazySwiper) return []
-    const {
-      Autoplay,
-      Navigation,
-      Pagination,
-      EffectCube,
-      EffectCoverflow,
-      EffectFlip,
-      EffectFade,
-    } = lazySwiper
+    const { Autoplay, Navigation, Pagination, EffectFade } = lazySwiper
     const baseModules = [Autoplay, Navigation, Pagination]
     const effect = heroSliderSettings?.effect || 'fade'
+    if (effect === 'fade' || !lazySwiperExtra) {
+      return [EffectFade, ...baseModules]
+    }
+    const { EffectCube, EffectCoverflow, EffectFlip } = lazySwiperExtra
     switch (effect) {
       case 'cube':
         return [EffectCube, ...baseModules]
@@ -1119,7 +1134,7 @@ export default function HomePage() {
       default:
         return [EffectFade, ...baseModules]
     }
-  }, [heroSliderSettings?.effect, lazySwiper])
+  }, [heroSliderSettings?.effect, lazySwiper, lazySwiperExtra])
   
   // Hero Slider Settings 변경 시 Swiper 인스턴스 업데이트
   useEffect(() => {
@@ -1658,7 +1673,7 @@ export default function HomePage() {
         </h1>
           {canRenderCmsVisualSections ? (
           <>
-            {!lazySwiper ? (
+            {!lazySwiper || (heroEffect !== 'fade' && !lazySwiperExtra) ? (
               (() => {
                 const slide = Array.isArray(slidesToUse) ? slidesToUse[0] : null
                 if (!slide?.id) return <HeroCmsBootstrapPlaceholder />
