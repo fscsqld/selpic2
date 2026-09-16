@@ -5,6 +5,15 @@ import { X, Loader2, Printer } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import {
+  QUICK_SHIP_PARCEL_PRESETS,
+  resolveQuickShipParcelNote,
+  type QuickShipParcelPresetId,
+} from '@/lib/shipping/quickShipParcelPresets'
+import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
+import ShippingLabelFromOverrideFields, {
+  EMPTY_SHIPPING_LABEL_FROM_FORM,
+} from '@/components/admin/ShippingLabelFromOverrideFields'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -21,7 +30,7 @@ type Props = {
 }
 
 /**
- * Minimal ledger row for printing the internal AusPost-style PDF (address + contents + weight).
+ * Minimal ledger row for printing the internal AusPost-style PDF (address + default weight).
  * No catalog pricing — intended for counter / manual posting only.
  */
 export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrdersFromServer }: Props) {
@@ -34,10 +43,10 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
   const [state, setState] = useState('')
   const [postcode, setPostcode] = useState('')
   const [country, setCountry] = useState('Australia')
-  const [itemDescription, setItemDescription] = useState('')
-  const [quantity, setQuantity] = useState(1)
-  const [declaredWeightKg, setDeclaredWeightKg] = useState('0.05')
-  const [labelNotes, setLabelNotes] = useState('')
+  const [parcelPreset, setParcelPreset] = useState<QuickShipParcelPresetId>('none')
+  const [customParcelNote, setCustomParcelNote] = useState('')
+  const [useCustomFrom, setUseCustomFrom] = useState(false)
+  const [fromOverride, setFromOverride] = useState<ShippingLabelFromOverride>(EMPTY_SHIPPING_LABEL_FROM_FORM)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [createdOrder, setCreatedOrder] = useState<OrderRecord | null>(null)
@@ -54,10 +63,10 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setState('')
     setPostcode('')
     setCountry('Australia')
-    setItemDescription('')
-    setQuantity(1)
-    setDeclaredWeightKg('0.05')
-    setLabelNotes('')
+    setParcelPreset('none')
+    setCustomParcelNote('')
+    setUseCustomFrom(false)
+    setFromOverride(EMPTY_SHIPPING_LABEL_FROM_FORM)
     setError('')
     setCreatedOrder(null)
     setLabelSlot('top-left')
@@ -75,8 +84,6 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setError('')
     setBusy(true)
     try {
-      const wRaw = declaredWeightKg.trim()
-      const wNum = wRaw === '' ? undefined : Number(wRaw)
       const res = await fetch('/api/orders/manual-ship-label', {
         method: 'POST',
         credentials: 'same-origin',
@@ -91,10 +98,9 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           state: state.trim(),
           postcode: postcode.trim(),
           country: country.trim(),
-          itemDescription: itemDescription.trim(),
-          quantity,
-          declaredWeightKg: wNum !== undefined && Number.isFinite(wNum) ? wNum : undefined,
-          labelNotes: labelNotes.trim(),
+          labelNotes: resolveQuickShipParcelNote(parcelPreset, customParcelNote),
+          useCustomFrom,
+          fromOverride: useCustomFrom ? fromOverride : undefined,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { order?: OrderRecord; error?: string }
@@ -135,8 +141,8 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Quick ship label</h2>
             <p className="mt-1 text-xs text-gray-500">
-              Creates a minimal order for the Avery L7169 / AV959020 A4 4-up label PDF. No storefront catalog or
-              pricing checks.
+              Address-only label for Avery L7169 / AV959020 A4 4-up. Saves a minimal ledger row — no storefront
+              checkout or customer email required.
             </p>
           </div>
           <button
@@ -195,15 +201,14 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
               <input
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="Full name (optional if email is enough)"
+                placeholder="Full name (required if no email)"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <input
                 type="email"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email *"
+                placeholder="Email (optional)"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <input
@@ -263,44 +268,42 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
               </div>
             </fieldset>
 
+            <ShippingLabelFromOverrideFields
+              enabled={useCustomFrom}
+              onEnabledChange={setUseCustomFrom}
+              value={fromOverride}
+              onChange={setFromOverride}
+            />
+
             <fieldset className="space-y-3">
               <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500">Parcel</legend>
-              <input
-                required
-                value={itemDescription}
-                onChange={(e) => setItemDescription(e.target.value)}
-                placeholder='Contents for label, e.g. "Vinyl stickers × 2" *'
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-gray-600">
-                  <span className="mb-1 block">Quantity</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="text-xs text-gray-600">
-                  <span className="mb-1 block">Declared weight (kg)</span>
-                  <input
-                    value={declaredWeightKg}
-                    onChange={(e) => setDeclaredWeightKg(e.target.value)}
-                    placeholder="0.05"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-              <textarea
-                value={labelNotes}
-                onChange={(e) => setLabelNotes(e.target.value)}
-                placeholder="Notes for the PERSONALIZATION box on the PDF (optional)"
-                rows={3}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
+              <label className="block text-xs text-gray-600">
+                <span className="mb-1 block font-medium text-gray-700">Common delivery request</span>
+                <select
+                  value={parcelPreset}
+                  onChange={(e) => setParcelPreset(e.target.value as QuickShipParcelPresetId)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  {QUICK_SHIP_PARCEL_PRESETS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {parcelPreset === 'custom' ? (
+                <textarea
+                  value={customParcelNote}
+                  onChange={(e) => setCustomParcelNote(e.target.value)}
+                  placeholder="Short custom note for the label"
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              ) : null}
+              <p className="text-xs text-gray-500">
+                Printed on the PDF when selected. Not emailed to the customer. Contents / weight stay at defaults
+                (Standard Letter).
+              </p>
             </fieldset>
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}

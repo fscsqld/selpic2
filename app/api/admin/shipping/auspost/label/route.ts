@@ -14,6 +14,10 @@ import {
   buildAdminShippingLabelPdfBase64,
   type AdminShippingLabelSlot,
 } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import {
+  validateShippingLabelFromOverrideInput,
+  type ShippingLabelFromOverride,
+} from '@/lib/shipping/shippingLabelFrom'
 
 /** Barcode + PDF generation require Node APIs (`bwip-js/node`, `Buffer`). */
 export const runtime = 'nodejs'
@@ -135,9 +139,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Order database not configured' }, { status: 503 })
   }
 
-  let body: { orderId?: string; force?: boolean; slot?: string }
+  let body: {
+    orderId?: string
+    force?: boolean
+    slot?: string
+    /** When provided, update or clear order.shippingLabelFromOverride before PDF. */
+    useCustomFrom?: boolean
+    fromOverride?: ShippingLabelFromOverride
+  }
   try {
-    body = (await request.json()) as { orderId?: string; force?: boolean; slot?: string }
+    body = (await request.json()) as {
+      orderId?: string
+      force?: boolean
+      slot?: string
+      useCustomFrom?: boolean
+      fromOverride?: ShippingLabelFromOverride
+    }
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -159,10 +176,33 @@ export async function POST(request: Request) {
     const slot = normalizeSlot(body.slot)
     const existing = order.ausPostShippingLabel
 
-    const isCached =
-      !force && existing?.status === 'created' && isInternalLabelMode(existing.mode)
+    let nextFrom: ShippingLabelFromOverride | null | undefined = order.shippingLabelFromOverride
+    let fromTouched = false
+    if (typeof body.useCustomFrom === 'boolean') {
+      fromTouched = true
+      if (body.useCustomFrom) {
+        const fromCheck = validateShippingLabelFromOverrideInput(body.fromOverride)
+        if (!fromCheck.ok) {
+          return NextResponse.json({ error: fromCheck.error }, { status: 400 })
+        }
+        nextFrom = fromCheck.value
+      } else {
+        nextFrom = null
+      }
+    }
 
-    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order, { slot })
+    const orderForPdf: OrderRecord = {
+      ...order,
+      shippingLabelFromOverride: nextFrom === undefined ? order.shippingLabelFromOverride : nextFrom,
+    }
+
+    const isCached =
+      !force &&
+      !fromTouched &&
+      existing?.status === 'created' &&
+      isInternalLabelMode(existing.mode)
+
+    const pdfBase64 = await buildAdminShippingLabelPdfBase64(orderForPdf, { slot })
 
     if (isCached) {
       return NextResponse.json({
@@ -184,11 +224,14 @@ export async function POST(request: Request) {
       timestamp: now,
       action: 'shipping_updated' as const,
       performedBy,
-      description: auditDescription,
+      description: fromTouched
+        ? `${auditDescription}${nextFrom ? ' (custom FROM)' : ' (company FROM)'}`
+        : auditDescription,
     }
 
     const updated: OrderRecord = normalizeLedgerOrder({
-      ...order,
+      ...orderForPdf,
+      shippingLabelFromOverride: nextFrom === undefined ? order.shippingLabelFromOverride : nextFrom,
       ausPostShippingLabel: {
         status: 'created',
         mode: 'internal',

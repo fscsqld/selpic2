@@ -1,0 +1,85 @@
+---
+description: Shipping label FROM address — company default + optional factory override toggle (learned 2026-09-16)
+alwaysApply: false
+---
+
+# Postal label FROM — company vs factory (toggle)
+
+Learned **2026-09-16**. Owner: Quick ship / internal Avery labels today always print company FROM; sometimes admin ships from a **factory** and needs a manual FROM block.
+
+## Today (as of learning)
+
+| Piece | Behavior |
+|-------|----------|
+| PDF `FROM` | Hardcoded in `buildAdminShippingLabelPdf.ts`: name `SELPIC`, lines `7 Harvest St` / `Mansfield QLD 4122` |
+| Legal/contact | Same address family as `COMPANY_CONTACT.address` in `lib/companyLegal.ts` (invoices, emails, policies) |
+| Quick ship UI | Recipient + delivery address + Parcel presets only — **no FROM editor** |
+
+**Invariant:** Changing label FROM for one ship must **not** rewrite `COMPANY_CONTACT` or CMS address. Invoices / footers stay company HQ.
+
+## Required UX logic (when implementing)
+
+### Default (most labels)
+
+- **Use company FROM** (SELPIC + Mansfield warehouse / registered address lines).
+- Factory / custom FROM controls are **disabled / collapsed** — not shown as editable fields.
+- One clear control, e.g. checkbox or switch: **“Use different FROM (factory / direct ship)”** — **off** by default.
+
+### When admin needs factory direct ship
+
+1. Admin **clicks / toggles** the control → **on**.
+2. FROM fields **activate** (enabled + visible):
+   - Sender name (optional default still `SELPIC` or factory trade name)
+   - Street / line 1
+   - Line 2 (optional)
+   - Suburb, state, postcode
+   - Country (default Australia)
+3. Validation only when override is **on**: street + suburb + state + postcode required (same AU postcode rules as delivery).
+4. Toggle **off** again → discard or ignore override fields; PDF uses company FROM again (do not leave stale factory text on the label).
+
+### Where to surface
+
+| Surface | Notes |
+|---------|--------|
+| **Quick ship label** modal | Primary — counter / factory runs often start here |
+| Order detail **Generate label** | Same toggle when reprinting / regenerating for an existing order |
+| Batch 4-up | Prefer **per-order** override stored on each order; batch should not force one factory address onto every label unless product later asks for a batch-level FROM |
+
+### Data / PDF flow (design)
+
+```
+override OFF → PDF FROM = company constants (or shared helper from companyLegal split lines)
+override ON  → PDF FROM = admin-entered sender fields
+```
+
+- Pass override in `POST /api/admin/shipping/auspost/label` body and/or persist on `order.ausPostShippingLabel` / a small `shippingLabelFrom` snapshot so **Regenerate** reprints the same FROM.
+- Quick ship `POST /api/orders/manual-ship-label`: if override on, store FROM on the new minimal order before print.
+- Empty override with toggle on → reject save (do not silently fall back without warning).
+
+### Do / Do not
+
+**Do**
+
+- Default OFF; company FROM always safe path.
+- Keep copy English in admin UI.
+- Keep company address single source for legal (`companyLegal`); label PDF may map those lines into FROM when override is off.
+- Learn edge cases: international FROM rare — still allow country field when override on.
+
+**Do not**
+
+- Make factory address the new global default.
+- Edit `COMPANY_CONTACT` from Quick ship.
+- Print both company and factory FROM blocks.
+- Require factory fields when toggle is off.
+
+## Status
+
+**Shipped 2026-09-16:** toggle + fields on Quick ship + order detail; PDF via `resolveShippingLabelFromPrint`; persist `order.shippingLabelFromOverride`; batch uses per-order snapshot.
+
+Helpers: `lib/shipping/shippingLabelFrom.ts`, UI `components/admin/ShippingLabelFromOverrideFields.tsx`.
+
+## Cousins
+
+- `postal-shipping-label-unnecessary-copy.mdc` — PDF clutter / Quick ship Parcel presets
+- `lib/shipping/quickShipParcelPresets.ts` — delivery request dropdown
+- `docs/auspost-shipping-label-print-plan.md` — AusPost live labels (separate from internal FROM)

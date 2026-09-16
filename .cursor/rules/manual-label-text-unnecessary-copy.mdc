@@ -1,0 +1,60 @@
+---
+description: Manual name-label text flow + unnecessary/redundant copy (learned 2026-09-16)
+alwaysApply: false
+---
+
+# Manual label writing — flow + unnecessary text
+
+Learned **2026-09-16**. Owner asked to inspect admin “manual label writing” for leftover text.
+
+## Flow (precise)
+
+**There is no separate admin WYSIWYG label-text editor.**
+
+1. Admin configures products / Mixed Labels hints / sample sheet images under `/admin/products` (+ stickers).
+2. Actual name/phrase typing uses **storefront customize** (admin may open the same URLs to test):
+   - `/stickers/customize` — grid name stickers (`Emily` default)
+   - `/stickers/customize/mixed` — Mixed Labels name field
+   - `/stamp/customize` — stamp text (`Your Name` default)
+   - `/custom-design` — Custom Design Studio
+   - `/stickers/custom` — Bespoke **request form** (not live sheet editor)
+3. `EditStageModal` watermark = **media** watermark, not name-label copy.
+4. Invoice / AusPost PDFs ≠ sticker name sheets.
+
+## Unnecessary / inconsistent text (inspection)
+
+### P0 — clear leftovers
+
+| Text | Where | Why unnecessary / wrong |
+|------|-------|-------------------------|
+| Preview fallback **`네임 스티커`** | `components/CustomizationModal.tsx` | Storefront default is English; Korean hardcode when text empty |
+| Broken / mismatched `t('custom.*')` keys vs `translations` `customize.*` | Same modal | Shows raw keys or wrong labels; modal overlaps `/stickers/customize` |
+| Dead Mixed overlay pipeline | `MixedLabelsSheetPreview.tsx`, `lib/mixedLabelsPreviewImage.ts` | **0 imports** — Name-only preview replaced them; dead copy/comments |
+
+### P1 — inconsistent sample / helper (confusing, not always “delete”)
+
+| Text | Where | Issue |
+|------|-------|--------|
+| Default **`Emily`** vs **`Your Name`** vs empty + `e.g. Emily or 지우` | stickers customize / stamp / Mixed | Same product family, different preview defaults |
+| Font guide **`Hello` / `Selpic`** (stamp: `안녕하세요 Hello`) | Font Style Guide blocks | Not customer input; can be confused with live sheet text |
+| Product select fills ``${product.name}\nCustomText`` | Custom Design Studio | Product title dumped into label lines |
+| Phone “up to **10**” vs “up to **9**” chars | stickers vs custom-design | Inconsistent helper |
+| Admin “sample sheet with placeholder name” / “until customize preview is live” | Mixed Labels admin copy | May be stale if preview is already live |
+
+### P2 — developer / legacy exposure
+
+| Text | Where | Why |
+|------|-------|-----|
+| **`Form UX v5`** + hard-refresh hint | `app/stickers/custom/page.tsx` footer | Customer-facing; HMR/dev note |
+| Legacy **Custom Stickers** strings | CMS migrate + invoice sample lines | Rebranded to Bespoke; leftovers elsewhere |
+| `NAME_LABEL_PREVIEW.md` | under customize | Learning doc only — not runtime |
+
+## Do / Do not when cleaning
+
+**Do:** Fix P0 English + remove or quarantine dead Mixed preview modules; unify sample name if product asks.  
+**Do not:** Strip Font Guide samples without owner OK (intentional). Do not treat shipping/invoice PDF strings as name-label bugs. Do not redesign Hero while cleaning customize copy.
+
+## Cousins
+
+- Homepage protection / English default rules
+- Mixed Labels product helpers: `lib/mixedLabelsProduct.ts`

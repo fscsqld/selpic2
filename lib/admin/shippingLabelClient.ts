@@ -1,5 +1,6 @@
 import type { OrderRecord } from '@/lib/store'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
 
 export function openPdfBase64(b64: string): void {
   if (typeof window === 'undefined') return
@@ -25,6 +26,9 @@ export async function openInternalShippingLabelPdf(
   options?: {
     force?: boolean
     slot?: AdminShippingLabelSlot
+    /** When set, updates order FROM override (true = factory, false = clear to company). */
+    useCustomFrom?: boolean
+    fromOverride?: ShippingLabelFromOverride
     onOrderMerged?: (order: OrderRecord) => void
   }
 ): Promise<{ ok: boolean; error?: string }> {
@@ -34,8 +38,14 @@ export async function openInternalShippingLabelPdf(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       orderId,
-      force: Boolean(options?.force),
+      force: Boolean(options?.force) || typeof options?.useCustomFrom === 'boolean',
       slot: options?.slot ?? 'top-left',
+      ...(typeof options?.useCustomFrom === 'boolean'
+        ? {
+            useCustomFrom: options.useCustomFrom,
+            fromOverride: options.fromOverride,
+          }
+        : {}),
     }),
   })
   const data = (await res.json().catch(() => ({}))) as {

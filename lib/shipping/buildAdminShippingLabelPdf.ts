@@ -7,13 +7,25 @@ import {
   formatDeclaredWeightForLabel,
 } from '@/lib/shipping/orderDeclaredWeightKg'
 import { getShippingLabelBarcodePayload } from '@/lib/shipping/shippingLabelBarcodePayload'
-
-/** Fixed sender (production packing / AusPost-style layout). */
-const SENDER_NAME = 'SELPIC'
-const SENDER_ADDRESS_LINES = ['7 Harvest St', 'Mansfield QLD 4122'] as const
+import { resolveShippingLabelFromPrint } from '@/lib/shipping/shippingLabelFrom'
 
 /** Service line on internal labels until live API selects a product. */
 const INTERNAL_SERVICE_DISPLAY = 'Standard Letter'
+
+/** Ledger / counter option names must not print on the physical label. */
+function serviceDisplayName(order: OrderRecord): string {
+  const raw = (order.shippingOptionName || '').trim()
+  if (!raw) return INTERNAL_SERVICE_DISPLAY
+  if (/manual\s*ship|auspost-style|counter\s*\/|not a storefront/i.test(raw)) {
+    return INTERNAL_SERVICE_DISPLAY
+  }
+  return raw
+}
+
+function hasPersonalizationForLabel(pers: string): boolean {
+  const t = pers.trim()
+  return t.length > 0 && t !== '—'
+}
 
 export type AdminShippingLabelLayout = 'avery-l7169'
 export type AdminShippingLabelSlot = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -83,10 +95,20 @@ function isAustralia(country: string): boolean {
 }
 
 function itemsSummaryLine(order: OrderRecord, maxLen: number): string {
-  const parts = (order.items || []).map((it) => `${String(it.name || 'Item').trim()} ×${it.quantity || 1}`)
+  const parts = (order.items || [])
+    .map((it) => {
+      const name = String(it.name || '').trim()
+      if (!name) return ''
+      return `${name} ×${it.quantity || 1}`
+    })
+    .filter(Boolean)
   const s = parts.join(' · ')
   if (s.length <= maxLen) return s
   return `${s.slice(0, maxLen - 1)}…`
+}
+
+function shouldPrintItemsLine(order: OrderRecord): boolean {
+  return itemsSummaryLine(order, 110).trim().length > 0
 }
 
 function toCode128Payload(text: string): string {
@@ -164,7 +186,7 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   }
 
   const phone = (order.customer?.phone || '').trim()
-  if (phone) {
+  if (phone && phone !== '—') {
     doc.text(`Ph ${phone}`, innerL, y)
     y += ADDR_LINE_H
   }
@@ -175,38 +197,42 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   doc.line(innerL, y, innerR, y)
   y += 3.2
 
-  // 2) Order / personalization / items (larger type, tight spacing)
+  // 2) Order / personalization / items (skip empty PERSONALIZATION — no "—" box)
   const pers = formatOrderPersonalizationForLabel(order)
-  doc.setDrawColor(203, 213, 225)
-  doc.setFillColor(248, 250, 252)
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(71, 85, 105)
-  const persAll = doc.splitTextToSize(pers, innerW - 3)
-  const maxPersLines = 3
-  const persLines =
-    persAll.length > maxPersLines
-      ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 48)}…`]
-      : persAll
-  const persLineH = 3.4
-  const persBoxH = 4.5 + persLines.length * persLineH + 1.2
-  const persTop = y
-  doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
-  doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
-  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(17, 24, 39)
-  doc.text(persLines, innerL + 1.5, persTop + 4.6)
-  y = persTop + persBoxH + 2.2
+  if (hasPersonalizationForLabel(pers)) {
+    doc.setDrawColor(203, 213, 225)
+    doc.setFillColor(248, 250, 252)
+    doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(71, 85, 105)
+    const persAll = doc.splitTextToSize(pers, innerW - 3)
+    const maxPersLines = 3
+    const persLines =
+      persAll.length > maxPersLines
+        ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 48)}…`]
+        : persAll
+    const persLineH = 3.4
+    const persBoxH = 4.5 + persLines.length * persLineH + 1.2
+    const persTop = y
+    doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
+    doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
+    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(17, 24, 39)
+    doc.text(persLines, innerL + 1.5, persTop + 4.6)
+    y = persTop + persBoxH + 2.2
+  }
 
   const weightKg = computeDeclaredShippingWeightKg(order)
   const weightStr = formatDeclaredWeightForLabel(weightKg)
-  const serviceName = (order.shippingOptionName || '').trim() || INTERNAL_SERVICE_DISPLAY
+  const serviceName = serviceDisplayName(order)
   doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(55, 65, 81)
   doc.text(`Service: ${serviceName}  ·  Wt: ${weightStr}`, innerL, y, { maxWidth: innerW })
   y += 3.6
 
-  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(31, 41, 55)
-  const itemLine = itemsSummaryLine(order, 110)
-  const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 3)
-  doc.text(itemWrapped, innerL, y)
-  y += itemWrapped.length * 3.5 + 1.5
+  if (shouldPrintItemsLine(order)) {
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(31, 41, 55)
+    const itemLine = itemsSummaryLine(order, 110)
+    const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 3)
+    doc.text(itemWrapped, innerL, y)
+    y += itemWrapped.length * 3.5 + 1.5
+  }
 
   const created = order.createdAtIso
     ? new Date(order.createdAtIso).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
@@ -218,8 +244,7 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   // 3) Barcode soon after content (no large empty middle)
   const barH = 14
   const fromBlockH = 14
-  const thanksH = 5
-  const barcodeY = Math.min(y + 0.5, contentMaxY - barH - fromBlockH - thanksH - 2)
+  const barcodeY = Math.min(y + 0.5, contentMaxY - barH - fromBlockH - 2)
   const barcodeText = toCode128Payload(getShippingLabelBarcodePayload(order))
   const png: Buffer = await bwipjs.toBuffer({
     bcid: 'code128',
@@ -245,8 +270,8 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
 
   // 4) FROM under barcode — clear gap below barcode
   let fromY = barcodeY + barH + 5.5
-  if (fromY + fromBlockH + thanksH > contentMaxY) {
-    fromY = Math.max(barcodeY + barH + 3.5, contentMaxY - fromBlockH - thanksH)
+  if (fromY + fromBlockH > contentMaxY) {
+    fromY = Math.max(barcodeY + barH + 3.5, contentMaxY - fromBlockH)
   }
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
@@ -255,20 +280,14 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   doc.setFont('helvetica', 'bold').setFontSize(5).setTextColor(100, 116, 139)
   doc.text('FROM', innerL, fromY)
   fromY += 2.8
+  const fromPrint = resolveShippingLabelFromPrint(order)
   doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(55, 65, 81)
-  doc.text(SENDER_NAME, innerL, fromY)
+  doc.text(fromPrint.name, innerL, fromY)
   fromY += 2.8
   doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
-  doc.text(`${SENDER_ADDRESS_LINES[0]}, ${SENDER_ADDRESS_LINES[1]}`, innerL, fromY, {
+  doc.text(`${fromPrint.addressLine1}, ${fromPrint.addressLine2}`, innerL, fromY, {
     maxWidth: innerW,
   })
-  fromY += 3.8
-
-  // 5) Short thanks for the delivery person (bottom)
-  doc.setFont('helvetica', 'italic').setFontSize(6).setTextColor(100, 116, 139)
-  const thanks = 'Thank you for delivering with care.'
-  const thanksY = Math.min(Math.max(fromY, contentMaxY - 1.5), contentMaxY - 0.5)
-  doc.text(thanks, innerL + innerW / 2, thanksY, { align: 'center' })
 }
 
 /**

@@ -1,0 +1,49 @@
+---
+description: Internal postal shipping label PDF — strip unnecessary copy (learned 2026-09-16)
+alwaysApply: false
+---
+
+# Postal / shipping label — unnecessary text (cleaned 2026-09-16)
+
+## What this is
+
+Admin **internal** Avery L7169 packing PDF (`buildAdminShippingLabelPdf`), not MyPost Business paid AusPost labels. Manual path: Orders → **Quick ship label**.
+
+## Quick ship label (learned 2026-09-16)
+
+**Purpose:** Admin prints an **address label** fast — counter / manual post. Not a storefront checkout.
+
+| Field | Required? | On PDF |
+|-------|-----------|--------|
+| Recipient name | Name **or** email (one of two) | DELIVER TO name |
+| Email | **Optional** | Not printed; ledger only if filled |
+| Phone | Optional | `Ph …` when filled |
+| Delivery address | Street, suburb, state, postcode | DELIVER TO block |
+| Parcel → common delivery request | Optional dropdown | PERSONALIZATION when not “None” |
+| Parcel → Custom note… | Optional free text | Same |
+| ~~Parcel contents/qty~~ | **Not in Quick ship UI** | weight defaults 0.05 kg |
+
+**Parcel presets** (`lib/shipping/quickShipParcelPresets.ts`): Fragile, Handle with care, Do not bend, Leave at door, Leave in a safe place, Authority to leave, Signature required, Call before delivery, Leave with neighbour if not home, Gift — no receipt, Do not crush (stickers), Custom…
+
+API still accepts `itemDescription` / `quantity` / `declaredWeightKg` / `labelNotes` for other callers.
+
+**Do not** re-require email or parcel contents/qty on Quick ship unless product asks.
+
+## Removed / guarded (do not re-add)
+
+| Text | Why |
+|------|-----|
+| Empty **PERSONALIZATION** box with `—` | Wasted label space when no notes/custom text |
+| `Thank you for delivering with care.` | Decorative; not needed for post |
+| Long Service `Manual ship label (counter / AusPost-style PDF)` | Ledger name — print **Standard Letter** instead (`serviceDisplayName`) |
+| Quick ship `Items` + PERSONALIZATION both repeating item name | Notes-only in PERSONALIZATION when `productId === 'manual-ship-label'` |
+| `Ph —` when phone empty | Skip placeholder dash |
+
+## Keep on PDF
+
+DELIVER TO address, real phone, Service/Wt, Items, Order id/date, barcode, FROM (SELPIC + warehouse).
+
+## Cousins
+
+- Name-sticker copy: `manual-label-text-unnecessary-copy.mdc` (different feature)
+- Plan doc: `docs/auspost-shipping-label-print-plan.md`

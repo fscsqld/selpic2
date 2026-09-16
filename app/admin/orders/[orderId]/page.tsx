@@ -19,6 +19,10 @@ import Link from 'next/link'
 import { recordOrderToAccountingAsyncWithRetry } from '@/lib/admin/recordOrderToAccountingBridge'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
+import ShippingLabelFromOverrideFields, {
+  EMPTY_SHIPPING_LABEL_FROM_FORM,
+} from '@/components/admin/ShippingLabelFromOverrideFields'
 import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
 
@@ -57,6 +61,8 @@ export default function AdminOrderDetailPage() {
   const [isSendingReceipt, setIsSendingReceipt] = useState(false)
   const [ausPostLabelBusy, setAusPostLabelBusy] = useState(false)
   const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
+  const [useCustomFrom, setUseCustomFrom] = useState(false)
+  const [fromOverride, setFromOverride] = useState<ShippingLabelFromOverride>(EMPTY_SHIPPING_LABEL_FROM_FORM)
   const [ledgerReady, setLedgerReady] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
 
@@ -124,6 +130,33 @@ export default function AdminOrderDetailPage() {
       router.push('/admin/orders')
     }
   }, [order, router, ledgerReady])
+
+  useEffect(() => {
+    if (!order) return
+    const saved = order.shippingLabelFromOverride
+    if (saved && saved.streetAddress && saved.suburb && saved.state && saved.postcode) {
+      setUseCustomFrom(true)
+      setFromOverride({
+        name: saved.name || 'SELPIC',
+        streetAddress: saved.streetAddress,
+        streetAddress2: saved.streetAddress2 || '',
+        suburb: saved.suburb,
+        state: saved.state,
+        postcode: saved.postcode,
+        country: saved.country || 'Australia',
+      })
+    } else {
+      setUseCustomFrom(false)
+      setFromOverride(EMPTY_SHIPPING_LABEL_FROM_FORM)
+    }
+    // Hydrate when order id or persisted FROM snapshot changes (not on every order object identity).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional snapshot key
+  }, [
+    order?.id,
+    order?.shippingLabelFromOverride
+      ? `${order.shippingLabelFromOverride.name}|${order.shippingLabelFromOverride.streetAddress}|${order.shippingLabelFromOverride.suburb}|${order.shippingLabelFromOverride.state}|${order.shippingLabelFromOverride.postcode}|${order.shippingLabelFromOverride.country || ''}`
+      : '',
+  ])
 
   const handleAddTrackingNumber = async (trackingNumber: string, provider: string) => {
     if (!canWriteOrders) {
@@ -900,6 +933,14 @@ Selpic Team`
                         ))}
                       </select>
                     </div>
+                    <div className="mb-4">
+                      <ShippingLabelFromOverrideFields
+                        enabled={useCustomFrom}
+                        onEnabledChange={setUseCustomFrom}
+                        value={fromOverride}
+                        onChange={setFromOverride}
+                      />
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -911,6 +952,8 @@ Selpic Team`
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: false,
                               slot: labelSlot,
+                              useCustomFrom,
+                              fromOverride: useCustomFrom ? fromOverride : undefined,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
                             })
                             if (!r.ok) alert(r.error || 'Failed to generate label.')
@@ -932,6 +975,8 @@ Selpic Team`
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: true,
                               slot: labelSlot,
+                              useCustomFrom,
+                              fromOverride: useCustomFrom ? fromOverride : undefined,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
                             })
                             if (!r.ok) alert(r.error || 'Failed to regenerate label.')

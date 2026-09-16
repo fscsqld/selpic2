@@ -19,6 +19,17 @@ const QUALITY_STEPS = [80, 72, 64, 56, 48] as const
 
 export type StorefrontWebpUsage = 'product' | 'hero' | 'category' | 'header'
 
+export type EncodeStorefrontWebpResult = {
+  buffer: Buffer
+  contentType: 'image/webp' | 'image/jpeg' | 'image/png'
+  ext: 'webp' | 'jpg' | 'png'
+  bytes: number
+  compressed: boolean
+  quality: number | null
+  maxEdge: number
+  fellBackToOriginal: boolean
+}
+
 /** Category card display ~400px — 2× retina. */
 export const CATEGORY_WEBP_MAX_EDGE = 800
 export const CATEGORY_WEBP_TARGET_BYTES = 120 * 1024

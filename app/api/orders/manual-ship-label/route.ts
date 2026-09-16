@@ -5,6 +5,10 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
+import {
+  validateShippingLabelFromOverrideInput,
+  type ShippingLabelFromOverride,
+} from '@/lib/shipping/shippingLabelFrom'
 
 const MAX_KG = 22
 
@@ -22,8 +26,11 @@ export type ManualShipLabelBody = {
   itemDescription?: string
   quantity?: number
   declaredWeightKg?: number
-  /** Printed in the PERSONALIZATION block on the internal AusPost-style PDF. */
+  /** Optional notes for the PDF PERSONALIZATION block (omitted when empty). */
   labelNotes?: string
+  /** When true, require and persist factory / direct-ship FROM. */
+  useCustomFrom?: boolean
+  fromOverride?: ShippingLabelFromOverride
 }
 
 function buildAsSingleLine(a: {
@@ -78,8 +85,14 @@ export async function POST(req: Request) {
     }
     w = Math.min(MAX_KG, Math.round(w * 1000) / 1000)
 
-    if (!email.includes('@')) {
-      return NextResponse.json({ error: 'Enter a valid customer email.' }, { status: 400 })
+    if (email && !email.includes('@')) {
+      return NextResponse.json({ error: 'Enter a valid email or leave the field empty.' }, { status: 400 })
+    }
+    if (!recipientName && !email) {
+      return NextResponse.json(
+        { error: 'Enter the recipient name or an email address.' },
+        { status: 400 }
+      )
     }
     if (!street || !suburb || !state || !postcode) {
       return NextResponse.json(
@@ -87,15 +100,23 @@ export async function POST(req: Request) {
         { status: 400 }
       )
     }
-    if (!itemDescription) {
-      return NextResponse.json({ error: 'Describe what is in the parcel (contents line for the label).' }, { status: 400 })
-    }
 
     if (isAustralia(country) && !/^\d{4}$/.test(postcode)) {
       return NextResponse.json(
         { error: 'Australian addresses need a 4-digit postcode for domestic labels.' },
         { status: 400 }
       )
+    }
+
+    let shippingLabelFromOverride: ShippingLabelFromOverride | null | undefined
+    if (body.useCustomFrom) {
+      const fromCheck = validateShippingLabelFromOverrideInput(body.fromOverride)
+      if (!fromCheck.ok) {
+        return NextResponse.json({ error: fromCheck.error }, { status: 400 })
+      }
+      shippingLabelFromOverride = fromCheck.value
+    } else {
+      shippingLabelFromOverride = null
     }
 
     const displayName = recipientName || email.split('@')[0] || 'Customer'
@@ -117,8 +138,8 @@ export async function POST(req: Request) {
       externalOrderKey: `manual-ship:${id}`,
       customer: {
         name: displayName,
-        email,
-        phone: phone || '—',
+        email: email || '',
+        phone: phone || '',
       },
       address: {
         streetAddress: [street, street2].filter(Boolean).join(', '),
@@ -128,28 +149,32 @@ export async function POST(req: Request) {
         country,
         asSingleLine: asSingle,
       },
-      items: [
-        {
-          productId: 'manual-ship-label',
-          name: itemDescription,
-          price: 0,
-          quantity: qty,
-          image: '',
-          customizations: {},
-          buyerPersonalization: labelNotes || undefined,
-        },
-      ],
+      items:
+        itemDescription || labelNotes
+          ? [
+              {
+                productId: 'manual-ship-label',
+                name: itemDescription || '',
+                price: 0,
+                quantity: qty,
+                image: '',
+                customizations: {},
+                buyerPersonalization: labelNotes || undefined,
+              },
+            ]
+          : [],
       subtotal: 0,
       shippingPrice: 0,
       discount: 0,
       paymentFee: 0,
       total: 0,
       shippingOptionId: 'manual-ship-label',
-      shippingOptionName: 'Manual ship label (counter / AusPost-style PDF)',
+      shippingOptionName: 'Standard Letter',
       paymentMethod: 'bank',
-      paymentMethodName: 'Manual label (not a storefront checkout)',
+      paymentMethodName: 'Manual label',
       status: 'processing',
       declaredShippingWeightKg: w,
+      shippingLabelFromOverride,
       auditLog: [
         {
           id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,

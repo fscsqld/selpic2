@@ -113,7 +113,12 @@ export function collectOrderPersonalizationParts(order: OrderRecord): string[] {
     const name = String(it.name || 'Item').trim()
     const bp = typeof it.buyerPersonalization === 'string' ? it.buyerPersonalization.trim() : ''
     if (bp) {
-      parts.push(`${name}: ${bp}`)
+      // Quick ship: item name already on Items line — notes only in PERSONALIZATION
+      if (it.productId === 'manual-ship-label') {
+        parts.push(bp)
+      } else {
+        parts.push(`${name}: ${bp}`)
+      }
       continue
     }
     const etsyRaw = it.customizations?.['Etsy personalization']

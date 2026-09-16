@@ -12,6 +12,7 @@ import {
   buildOrderConfirmationEmailHtml
 } from '@/lib/orderConfirmationEmail'
 import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
+import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
 
 export interface Product {
   id: string
@@ -286,6 +287,11 @@ export interface OrderRecord {
   declaredShippingWeightKg?: number
   /** AusPost shipping label (admin): internal PDF by default; live API optional later. */
   ausPostShippingLabel?: AusPostShippingLabelMeta
+  /**
+   * When set, internal Avery label PDF prints this FROM instead of company Mansfield.
+   * Clear / omit to use company default. Does not change COMPANY_CONTACT.
+   */
+  shippingLabelFromOverride?: ShippingLabelFromOverride | null
   // 이메일 확인 관련
   emailConfirmation?: {
     sent: boolean
