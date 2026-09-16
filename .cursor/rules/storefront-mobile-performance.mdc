@@ -24,7 +24,7 @@ Mobile first paint and LCP must not wait on **unused** CDN fonts, **no-store of 
 | Where | Overlay | Why |
 |-------|---------|-----|
 | **Admin → Category Management** card preview | `bg-black/20` full tile (`CategoryManager.tsx`) | Preview mirrors storefront: white title/description readable on light photos |
-| **Storefront homepage** category cards | gradient `from-black/40 via-black/15 to-black/5` (`app/page.tsx`) | **Lightened again 2026-09-16** (was `/55` `/25` `/10`, earlier `/75`…) so CMS photos read brighter |
+| **Storefront homepage** category cards | gradient `from-black/28 via-black/10 to-transparent` (`app/page.tsx`) | **Lightened again 2026-09-16** (was `/40` `/15` `/5`) — brighter CMS photos |
 
 Do **not** remove these scrims without owner OK — photos will look brighter but white text may fail contrast. Category card scrims are **separate** from the hero title “no fill panel” rule.
 

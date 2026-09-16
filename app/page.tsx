@@ -1955,9 +1955,9 @@ export default function HomePage() {
                     <SELPICNBackgroundImage backgroundImage={category.backgroundImage} />
                   )}
                   
-                  {/* Readability scrim — lightened for clearer CMS photos; keep soft contrast for white copy */}
+                  {/* Readability scrim — lightened for clearer CMS photos; soft base for white copy */}
                   <div
-                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/40 via-black/15 to-black/5"
+                    className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/28 via-black/10 to-transparent"
                     aria-hidden
                   />
                   

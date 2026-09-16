@@ -27,10 +27,10 @@ In `CategoryManager.tsx` preview tile:
 Category cards use a readability scrim (owner: keep photos visible, not muddy):
 
 ```tsx
-bg-gradient-to-t from-black/40 via-black/15 to-black/5
+bg-gradient-to-t from-black/28 via-black/10 to-transparent
 ```
 
-**2026-09-16:** Lightened stepwise from `/75`→`/55`→`/40` so customers see brighter category images. Soft base remains for white copy. Do not jump back to `/75` without owner OK.
+**2026-09-16:** Lightened stepwise `/75`→`/55`→`/40`→`/28` so customers see brighter category images. Soft base remains for white copy. Do not jump back to `/75` without owner OK.
 
 Admin Category Management preview stays at `bg-black/20` (list UI only).
 
