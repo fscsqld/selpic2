@@ -1,0 +1,88 @@
+---
+description: Header search behavior and inactive CMS category/image impact on storefront perf (learned 2026-09-16)
+alwaysApply: true
+---
+
+# Header search + inactive categories (storefront perf)
+
+Learned **2026-09-16** against live `/api/site-config/public` + `/api/catalog/public` + Header code-split.
+
+## Header magnifying-glass search
+
+### What works
+
+- CMS row `header` / **Search Button Enabled** with `content: "true"` and `isActive: true` → icon shows after mount (`hydrationSafeSearchEnabled`).
+- Click opens `HeaderSearchPanel` via `next/dynamic` (`ssr: false`) — chunk loads **only when opened** (not on first paint).
+- Live filter over Zustand `products`: name / description / category (case-insensitive).
+- Result cards link to `/products#{productId}` and close the panel.
+
+### Gaps / traps
+
+| Behavior | Reality |
+|----------|---------|
+| Result link `href={`/products#${id}`}` | **`/products` list route does not exist** → **404** (verified). Real PDP is `/products/[id]` → **200** |
+| Submit (→) / Enter | Closes panel only — no navigation |
+| Thumbnails | Package icon only (by design for open-cost) |
+| Catalog scope | Public catalog Stickers-only today — Stamp/Phone Case SKUs never appear in search |
+
+### Fix backlog (priority)
+
+1. **P0 — broken result navigation** (`components/header/HeaderSearchPanel.tsx`)  
+   Change result links from `/products#${id}` → **`/products/${id}`** (existing `app/products/[id]/page.tsx`).  
+   Optional: category-aware destination (`/stickers` list vs PDP) later — PDP is enough for Stickers catalog.
+
+2. **P1 — submit does nothing useful** (same file `handleSearch`)  
+   On Enter/→: if one strong match → `router.push(/products/${id})`; else keep panel open with results (or go to `/stickers?q=` if/when query support exists). Do **not** invent `/products` list page unless product asks for a full search index page.
+
+3. **P2 — popular tags / empty query UX** (optional)  
+   Tags already set query; fine. Consider filtering tags that match zero products.
+
+4. **Not a storefront fix — inactive Stamps/Phone Cases**  
+   No code change required for PSI. Optional later: strip inactive `categoryItems`/`sidebarMenuItems` from **public** site-config payload only (keep full set in admin write path) if JSON size becomes an issue.
+
+### Do not
+
+- Blame Header `dynamic()` split for “search broken” if the icon is missing — check CMS **Search Button Enabled** first.
+- Prefetch the search panel on home LCP path.
+- Create `app/products/page.tsx` only to satisfy the old `#hash` link — prefer fixing the href.
+- Delete inactive categories solely for speed.
+
+## Inactive categories (Stamps, Phone Cases, …) vs speed
+
+### Live snapshot (2026-09-16)
+
+| Category | `isActive` | `backgroundImage` |
+|----------|------------|-------------------|
+| Stickers / Market S / Custom Design / SELPIC N | true | URL present (~128 chars) |
+| Stamps / Phone Cases | **false** | **empty** |
+| Sidebar Stamps / Phone Cases | **false** | n/a |
+
+Public payloads: site-config ~**78 KiB**, catalog ~**83 KiB**, catalog products = Stickers only.
+
+### Storefront homepage
+
+- Renders `allCategoryItems.filter(c => c.isActive)` only → **inactive tiles and their images are not requested** as `<img>` / network LCP siblings.
+- Sidebar uses `getActiveSidebarMenuItems()` → inactive Stamps/Phone Cases links stay out of the drawer UI.
+
+### Where inactive rows still exist (small cost)
+
+1. **CMS JSON** (`/api/site-config/public` + `localStorage` `content-store`) still includes inactive `categoryItems` / sidebar rows as metadata (URLs strings if set). That is **JSON weight**, not image download — today inactive rows have **no** `backgroundImage`.
+2. **Admin → Content → Category Management** loads **all** categories and can preview images — **admin-only**; does **not** affect storefront PSI / mobile Slow 4G.
+
+### If inactive categories later get large images again
+
+- Still **not** painted on home while `isActive: false`.
+- Still add **URL strings** to the public CMS blob → minor parse/storage cost.
+- Real image cost returns only if someone turns `isActive: true` or another page maps those URLs without filtering.
+
+### Do not
+
+- Delete inactive categories solely for PSI — home already filters them; live Stamps/Phone Cases have no bg URL.
+- Treat admin Category Manager image previews as storefront LCP factors.
+- Assume catalog still ships Stamps/Phone Cases SKUs — verify `/api/catalog/public` category counts before blaming search or home for those products.
+
+## Cousins
+
+- Category card scrims: `.cursor/rules/category-card-image-scrim.mdc`
+- CMS image budgets / PSI oversized assets: `.cursor/rules/psi-image-delivery-oversized-cms.mdc`, `storefront-cms-media-budgets.mdc`
+- Header logo CMS vs static: `.cursor/rules/header-logo-cms-vs-static.mdc`

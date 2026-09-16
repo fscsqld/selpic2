@@ -1,0 +1,123 @@
+---
+description: Header search should include sticker subcategories (Basic/Premium/…) + full fix backlog
+alwaysApply: true
+---
+
+# Header search: sticker subcategories + full fix backlog
+
+Learned **2026-09-16**. Owner: customers click Basic / Premium / Bespoke Labels / Stationery Essentials / Mixed Labels on `/stickers` and land on those pages — **searching those names in the header should reach the same pages**.
+
+## Today (verified local)
+
+### Click path (works)
+
+- Source: CMS `contentStore.subcategoryItems` where `category === 'stickers' && isActive`
+- Cards on `app/stickers/page.tsx` use `getStickersSubcategoryHref()` → normalize `linkUrl` / title → `/stickers/...`
+- Live active rows (site-config):
+
+| Title | CMS `linkUrl` | Resolves to (click) | Route status |
+|-------|---------------|---------------------|--------------|
+| Basic | `/stickers/basic` | `/stickers/basic` | 200 |
+| Premium | `/stickers/premium` | `/stickers/premium` | 200 |
+| Bespoke Labels | `/stickers/custom` | `/stickers/custom` | 200 |
+| Stationery Essentials | `stickers/Stationery` (**missing leading `/`**) | normalized via helper → `/stickers/stationery` | 200 |
+| Mixed Labels | `/stickers/mixed-labels` | `/stickers/mixed-labels` | 200 |
+
+Inactive (kids / Office / Set): shown neither on `/stickers` cards nor should appear in search.
+
+### Header search path (gap)
+
+- `HeaderSearchPanel` filters **products only** (`name` / `description` / `category`).
+- Typing **Basic**, **Premium**, **Mixed Labels**, **Fundraising**, etc. does **not** list subcategory or site pages (unless a product string coincidentally matches).
+- Product `category` is usually `Stickers`, not `Basic` — so subcategory titles are **not** auto-found via catalog.
+
+**Answer:** Click → page works. **Search → same page: not yet.** Needs explicit page/subcategory hits in the panel.
+
+## Should subcategory search be included?
+
+**Yes.** Same class of UX as Fundraising page search: high-intent browse destinations that are not SKUs. Especially important because `/stickers` is the hub and subcats are the real shopping entry.
+
+## How to implement (recommended)
+
+1. **Shared href normalizer** — extract `getStickersSubcategoryHref` / slug logic from `app/stickers/page.tsx` into e.g. `lib/stickersSubcategoryHref.ts` (one helper for stickers page + search). Always force leading `/`.
+2. **Search page index builder** in `lib/storefrontSearchPages.ts` (or similar):
+   - **Fixed site pages:** Fundraising, About, Contact, Help, Privacy, Terms, Refund, Community, Cart, Login, Promo Codes, Benefits, Stickers hub, Market S, Custom Design, …
+   - **Dynamic from CMS:** `getActiveSubcategoryItems('stickers')` → `{ label: title, href: normalizedLinkUrl, keywords: [title, description, pageTitle, slug] }`
+   - Optional later: active `categoryItems` + active sidebar link rows (skip `disabled`, skip `/admin`).
+3. **`HeaderSearchPanel` UI:** sections **Products** | **Collections / Pages** (English). Match query against label + keywords (case-insensitive).
+4. **Submit:** exact product name → PDP; else strong page/subcat match → that href; else first product; else first page; else stay open.
+5. **Inactive:** only `isActive` subcategories (and optionally hide `/stamp` `/phone-cases` while parent tiles inactive).
+
+### Future subcategory auto?
+
+| Change | Auto in header search? |
+|--------|-------------------------|
+| Admin adds **active** sticker subcategory with valid `linkUrl` | **Yes**, if search reads live `subcategoryItems` |
+| Admin sets subcategory `isActive: false` | Disappears from search (same as cards) |
+| New CMS **category** tile only | Not a subcategory — needs categoryItems merge or allowlist |
+| New **product** in catalog | Product section only (existing pipeline) |
+| Broken `linkUrl` (no leading `/`) | Still OK if search uses **same** normalizer as stickers page |
+
+## Full modification checklist (all search-related)
+
+### A. Already shipped / partial
+
+- [x] P0 product result URL → `/products/[id]` (not `/products#id`)
+- [x] P1 Enter/→ navigates to best product match
+- [x] Popular tags prefer tags with catalog hits
+- [ ] Commit/deploy of A if not yet on production (check `dae8411` vs local HeaderSearchPanel)
+
+### B. Product search polish (optional)
+
+- [ ] Optionally hide `inStock === false` from product results
+- [ ] Do **not** add thumbnails on open (perf)
+
+### C. Storefront **page** search
+
+- [x] `lib/storefrontSearchPages.ts` + HeaderSearchPanel Pages section (2026-09-16)
+
+### D. Sticker **subcategory** search
+
+- [x] Shared href helper + active `subcategoryItems` in search (2026-09-16)
+
+### E. CMS data hygiene (**shipped 2026-09-16**)
+
+- [x] `lib/subcategoryLinkUrl.ts` — normalize / migrate linkUrls
+- [x] contentStore merge + rehydrate migrates rows (e.g. Stationery `stickers/Stationery` → `/stickers/stationery`)
+- [x] Admin SubcategoryManager add/edit uses shared normalize
+- [x] Stickers aliases: Bespoke → `/stickers/custom`, Stationery → `/stickers/stationery`, Mixed → `/stickers/mixed-labels`
+- [x] Do not invent `/stamps/` (plural); collapse to `/stamp`
+- Live Supabase: cleaned URLs persist on next CMS autosave after clients hydrate
+
+### F. Sister verticals (**later — prep done in defaults**)
+
+| Parent | Hub | `[slug]` subcategory pages? | New-sub default link |
+|--------|-----|-----------------------------|----------------------|
+| Stickers | `/stickers` | Yes | `/stickers/{slug}` (+ aliases) |
+| Stamps | `/stamp` | **No** yet | `/stamp` (hub only) |
+| Phone Cases | `/phone-cases` | **No** yet | `/phone-cases` |
+| Market S | `/hot-goods` | **No** yet | `/hot-goods` |
+
+When re-enabling Stamps/Phone Cases shopping: activate CMS parent tile → add `app/stamp/[subcategory]` (etc.) if needed → switch `buildCategorySubcategoryPath` from hub-only to `/stamp/${slug}` → sync catalog SKUs. Header search already picks up active subs when parent tile is on.
+
+### G. Docs / rules
+
+- [x] `header-search-storefront-pages.mdc` — site pages
+- [x] `header-search-fix-and-future-categories.mdc` — product pipeline
+- [x] This rule — subcategories + consolidated backlog
+
+## Do not
+
+- Fake catalog products named “Basic” / “Premium” only for search.
+- Scrape all `app/stickers/**` files — use CMS `subcategoryItems` + fixed legal/help pages.
+- Point subcategory search at PDP unless the query matches a real product.
+- Show inactive subcategory pages in search while cards hide them (one-sided UX).
+
+## Status
+
+**Shipped 2026-09-16 (local):**
+- Search: pages + sticker collections + product PDP links
+- CMS hygiene: `lib/subcategoryLinkUrl.ts` + contentStore migrate + SubcategoryManager
+- Sister verticals: defaults point at hubs until `[slug]` routes exist
+
+Still optional: commit/deploy when owner asks.

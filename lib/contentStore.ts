@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
 import { scheduleLogAdminActivity, scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
+import { migrateSubcategoryLinkUrls } from '@/lib/subcategoryLinkUrl'
 
 const CONTENT_STORE_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -160,6 +161,10 @@ function migrateLegacyBespokeLabelsSubcategoryItems<T extends SubcategoryItem>(i
       updatedAt: new Date()
     } as T
   })
+}
+
+function migrateSubcategoryItems<T extends SubcategoryItem>(items: T[]): T[] {
+  return migrateSubcategoryLinkUrls(migrateLegacyBespokeLabelsSubcategoryItems(items))
 }
 
 // 사이드바 메뉴 타입 정의
@@ -3821,7 +3826,7 @@ export function mergePersistedSiteConfig(
       : persistedState?.categoryItems && Array.isArray(persistedState.categoryItems) && persistedState.categoryItems.length > 0
         ? persistedState.categoryItems
         : currentState.categoryItems,
-    subcategoryItems: migrateLegacyBespokeLabelsSubcategoryItems(
+    subcategoryItems: migrateSubcategoryItems(
       fromRemoteSupabaseSync
         ? mergeRecordArraysByLastWrite(persistedState?.subcategoryItems, currentState.subcategoryItems)
         : persistedState?.subcategoryItems &&
@@ -4013,7 +4018,7 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
     }))
   }
   if (state.subcategoryItems) {
-    state.subcategoryItems = migrateLegacyBespokeLabelsSubcategoryItems(
+    state.subcategoryItems = migrateSubcategoryItems(
       state.subcategoryItems.map((item: any) => ({
         ...item,
         createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,

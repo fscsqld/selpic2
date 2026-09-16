@@ -1,0 +1,114 @@
+---
+description: How to fix Header search + whether future CMS categories auto-appear in search (learned 2026-09-16)
+alwaysApply: true
+---
+
+# Header search — how to fix + future categories
+
+Learned **2026-09-16**. Orthogonal systems: **CMS tiles** (`contentStore.categoryItems`) ≠ **catalog products** (`useStore().products` ← `/api/catalog/public`).
+
+## How search works today
+
+```
+Admin product save → scheduleCatalogSyncToServer → site_configs[storefront_catalog]
+Visitor CatalogStoreHydrator / empty-fill → GET /api/catalog/public → useStore.products
+Header open → HeaderSearchPanel(products) → client text filter (name|description|category)
+```
+
+- Panel: `components/header/HeaderSearchPanel.tsx` (dynamic from `Header.tsx`).
+- Icon gated by CMS `Search Button Enabled` = `"true"`.
+- **No** filter on CMS `categoryItems.isActive`, sidebar, `inStock`, or product publish flag (none exists).
+- Public catalog returns **entire** snapshot — Stickers-only live data is **what was synced**, not an API strip of Stamps/Phone Cases.
+
+## How to fix search (do this)
+
+### P0 — result URL (shipped 2026-09-16)
+
+| Wrong | Right |
+|-------|--------|
+| `/products#${id}` → **404** | `/products/${encodeURIComponent(id)}` → PDP **200** |
+
+### P1 — submit (shipped 2026-09-16)
+
+Enter / →: exact name match else first hit → `router.push` PDP; zero hits keep panel open. Popular tags hide zero-hit tags when catalog has products.
+
+### P2 — optional polish
+
+- Reuse list-path map from `ProductDetailJsonLd` / listings: Stickers→`/stickers`, Stamps→`/stamp`, PhoneCases→`/phone-cases`, HotGoods→`/hot-goods` as secondary “browse category”; primary stay PDP.
+- Optionally hide `inStock === false` from results.
+- Do **not** add result thumbnails on open (extra image cost on Slow 4G).
+
+### Do not
+
+- Prefetch search chunk on home LCP.
+- Tie search visibility to CMS tile `isActive` unless product explicitly asks for that product gate.
+- Blame `dynamic()` split for 404 links.
+
+## Future categories — will search pick them up automatically?
+
+### Short answer
+
+| Action | Auto in Header search? |
+|--------|-------------------------|
+| CMS Category Manager: new tile / set `isActive: true` | **No** — tiles only; no products created |
+| Admin Products: save product with `category` string + catalog sync OK | **Yes** — appears after visitor hydrate (CDN ~60s possible) |
+| Re-enable Stamps/Phone Cases **tile** only | **No** — need Stamps/PhoneCases **products** in synced catalog |
+| New custom CMS title (e.g. “Gift Boxes”) with no matching products | Tile may show; **search empty** for that vertical |
+| Product `category` = custom string not in admin dropdown | Search **can** match the string if synced; listing pages / admin form may **not** support that name yet |
+
+### Precise pipeline for a new sellable category
+
+1. **Products** in Admin → Products with `product.category` set (today UI is mostly Stickers / Stamps / PhoneCases / HotGoods).
+2. Save triggers `lib/catalogSyncScheduler.ts` → `POST /api/catalog/products` → Supabase `storefront_catalog` (or file fallback).
+3. Storefront `CatalogStoreHydrator` (`app/template.tsx`) replaces local products when signature differs.
+4. Search substring-matches `name` / `description` / **`category`** — no CMS registration required for the text match itself.
+5. **Separately** (nav/home): CategoryManager tile `isActive` + sensible `linkUrl` (not default `/products` 404) for browsing.
+
+### Naming traps (future edge cases)
+
+- CMS title **“Phone Cases”** vs product category **`PhoneCases`** / list `/phone-cases` — counts use fuzzy normalize; search matches whatever string is on the product.
+- CMS **“Market S”** ↔ products **`HotGoods`** — search for “Market” may miss unless name/description contains it; category field is `HotGoods`.
+- **SELPIC N** / community tile → usually **no** catalog products; enabling it never fills search.
+- Admin new-category default `linkUrl: '/products'` is a **404** — fix link when adding tiles.
+- Bundle sanitize allows child categories only in `{Stamps,Stickers,PhoneCases,HotGoods}`; parent row still searchable if in catalog.
+
+### Auto-search guarantee (invariant)
+
+> Header search automatically includes **any product present in the public catalog snapshot** after hydration.  
+> It does **not** automatically include a CMS category.  
+> “Add category” in Content ≠ “add searchable SKUs.”
+
+To make a future category “searchable by default,” ops must: **create/sync products** (and optionally align `product.category` + list route + CMS tile). Code change only needed if we want admin CategoryManager to also create product-category options or strip/gate search by active CMS tiles.
+
+## “Fundraising” → 0 results (learned 2026-09-16, local)
+
+**Not a search bug.** Header search only matches **catalog products** (`name` / `description` / `category`).
+
+| Check | Result |
+|-------|--------|
+| `GET /api/catalog/public` | ~27 Stickers SKUs; **0** rows with Fundraising in name/description/category |
+| Storefront `/fundraising` | Real **page** (school fundraising / partnerships), footer + community links — **not** a product |
+| Homepage footer | Explicit `<Link href="/fundraising">Fundraising</Link>` |
+| Hero/how-it-works | Deliberately **excludes** fundraising from some link strips (`app/page.tsx` — “School Fundraising lives only under Community / Partnerships”) |
+
+So typing **Fundraising** correctly yields **Search Results (0 items)**. Same class of miss: About, Contact, Promo Codes, SELPIC N community, Cart, Login — pages/features, not SKUs.
+
+### If owner wants “Fundraising” findable from the magnifying glass
+
+Choose one (do not silently mix without product ask):
+
+1. **Site/page hits in search** (extend panel): static map e.g. `{ label: 'Fundraising', href: '/fundraising', keywords: ['fundrais','school','partnership'] }` shown above or beside product results.
+2. **Leave as-is** — discover via footer / Community / Partnerships only (current design).
+3. **Do not** invent a fake catalog product named Fundraising just to satisfy product search.
+
+### Do not
+
+- “Fix” 0 results by pointing Fundraising to a Sticker PDP.
+- Assume CMS or admin Fundraising agent screens put rows into `/api/catalog/public`.
+
+
+## Cousins
+
+- `.cursor/rules/header-search-and-inactive-categories.mdc` (perf / inactive tiles)
+- Catalog: `lib/catalogHydration.ts`, `lib/catalogSync.ts`, `app/api/catalog/public/route.ts`
+- PDP: `app/products/[id]/page.tsx`

@@ -1,0 +1,61 @@
+---
+description: Market S display name vs /hot-goods URL — rename difficulty (learned 2026-09-16)
+alwaysApply: false
+---
+
+# Market S path: `/hot-goods` vs `/Market S` (or `/market-s`)
+
+Learned **2026-09-16** when owner asked whether changing Market S link from `/hot-goods` to `/Market S` is hard.
+
+## Three different strings (do not conflate)
+
+| Layer | Value today | Role |
+|-------|-------------|------|
+| **UI label** | `Market S` | CMS category title, search label, copy |
+| **URL path** | `/hot-goods` | Next route `app/hot-goods/`, sitemap, CMS `linkUrl`, sidebar `url` |
+| **Product taxonomy** | `HotGoods` | `product.category` in catalog / admin / sanitize / discounts |
+
+Changing the **URL** does **not** require renaming `HotGoods` in the catalog (and usually should not). Changing only the **label** is already done (Market S).
+
+## Do not use `/Market S` literally
+
+- Spaces in paths become `%20` (`/Market%20S`) — ugly, easy to mistype, bad for SEO/share.
+- Prefer kebab-case: **`/market-s`** (or keep `/hot-goods`).
+- App Router folder cannot be `Market S` with a space; would be `app/market-s/`.
+
+## Is a URL rename complex?
+
+**Moderate — not trivial, not a rewrite.** Harder than a CMS title edit; easier than renaming Stickers.
+
+### Must touch if path becomes `/market-s`
+
+1. **Route folder:** `app/hot-goods/` → `app/market-s/` (page + layout + metadata `path`)
+2. **Hardcoded hrefs** in code (~dozens of files): homepage category jump, About CTA defaults, sitemap, ProductDetailJsonLd, storefrontSearchPages, subcategoryLinkUrl, smoke checklist, contact `?from=hot-goods`, etc.
+3. **CMS / persisted data (easy to miss):** live `categoryItems.linkUrl`, `sidebarMenuItems.url`, contentItems link fields still storing `/hot-goods` in Supabase `storefront_cms` — need migrate or admin re-save + **301 redirect**
+4. **Redirect:** `next.config` redirect `/hot-goods` → `/market-s` (and `/hot-goods/:path*`) so old bookmarks/Google/emails keep working
+5. **Optional:** leave product category as `HotGoods` forever (recommended) — only map display “Market S” ↔ path `/market-s`
+
+### Does not need to change for a URL-only rename
+
+- Catalog product rows’ `category: 'HotGoods'`
+- Admin products Hot Goods manager (`app/admin/products/hotgoods`) unless it deep-links to storefront path
+- Most discount/VIP logic keyed on `HotGoods`
+
+### Extra pain if also renaming `HotGoods` → `MarketS`
+
+**High complexity** — catalog sanitize, admin forms, cart/checkout, invoices, packing slips, agent drafts, tests. Avoid unless there is a strong product reason.
+
+## Recommendation
+
+| Goal | Effort | Advice |
+|------|--------|--------|
+| Keep showing **Market S**, URL stays `/hot-goods` | None | **Preferred** — label already Market S; path is internal |
+| Pretty URL `/market-s` | **Medium** — route move + grep hrefs + CMS migrate + **redirect** | Doable in one focused PR |
+| Path `/Market S` (with space) | Don’t | Use `/market-s` |
+| Rename product category `HotGoods` | **High** | Separate project; not required for URL |
+
+## Cousins
+
+- Search pages allowlist: `lib/storefrontSearchPages.ts` (`Market S` → `/hot-goods`)
+- Subcategory defaults: `lib/subcategoryLinkUrl.ts`
+- Homepage category filter matches `linkUrl === '/hot-goods'` or title `Market S` (`app/hot-goods/page.tsx`)

@@ -1,0 +1,99 @@
+---
+description: Whether Header search should include storefront pages (not only products) — learned 2026-09-16
+alwaysApply: true
+---
+
+# Header search: products + storefront pages?
+
+Learned **2026-09-16** after owner noted customers may search for **pages** (e.g. Fundraising), not only SKUs. Current panel is **product-only** → pages correctly return **0 items**.
+
+## Verdict: is page search needed?
+
+**Yes, as a product UX gap — recommended when convenient, not a bugfix.**
+
+| Audience need | Today | Gap |
+|---------------|--------|-----|
+| Find a sticker by name | Catalog search works (after PDP link fix) | — |
+| Find **Fundraising**, About, Contact, Community | Footer / sidebar / category tiles only | Magnifying glass shows **0 items** → feels “broken” |
+| Find inactive Stamp / Phone Case **listing** pages | Routes `/stamp`, `/phone-cases` still exist | Debatable — tiles inactive; listing may be empty |
+
+**Why it matters on this site:** several high-intent destinations are **pages/programs**, not products — especially **`/fundraising`** (intentionally kept out of some Help footer strips; lives under Community / Partnerships + footer Partnerships). Customers who type “Fundraising” into the global search bar are behaving reasonably.
+
+**Why it is not urgent for PSI:** page hits are a tiny static map (no images). Adding them does not hurt LCP if kept out of the critical path (panel already `dynamic`).
+
+## What must stay product-only vs page-eligible
+
+### Include in a future “Pages” / “Site” result group (storefront, English labels)
+
+Stable, customer-facing routes (verify before shipping; do not invent admin URLs):
+
+| Label | href | Example keywords |
+|-------|------|------------------|
+| Fundraising | `/fundraising` | fundrais, school, partnership, raise |
+| Community (SELPIC N) | `/community` | community, selpic n, tips |
+| Stickers | `/stickers` | sticker, labels |
+| Market S | `/hot-goods` | market, hot, limited |
+| Custom Design | `/custom-design` | custom, design, bespoke |
+| About | `/about` | about, company |
+| Contact | `/contact` | contact, email, support |
+| Help | `/help` | help, faq |
+| Privacy | `/privacy` | privacy |
+| Terms | `/terms` | terms, conditions |
+| Refund Policy | `/refund` | refund, return |
+| Promo Codes | `/promo-codes` | promo, coupon, discount |
+| Benefits | `/benefits` | benefits, member |
+| Cart | `/cart` | cart, bag |
+| Login | `/login` | login, sign in |
+
+Align labels with live CMS sidebar/footer when possible; **keywords** cover aliases (“Market S” vs Hot Goods).
+
+### Exclude (do not surface in public search)
+
+- `/admin/**`, agent, fundraising **admin**, accounting-sandbox
+- Auth internals: `/reset-password`, `/forgot-password`, `/auth/**`, `/unsubscribe` (unless product asks)
+- Checkout funnel: `/checkout`, `/success` (cart → checkout is enough)
+- Account-only unless logged in: `/orders`, `/profile` (optional: show only when session exists)
+- Inactive verticals unless product asks: `/stamp`, `/phone-cases` while CMS tiles `isActive: false` (or show with “Coming soon” — prefer hide)
+- Test routes: `/test-sidebar`, tetris promo unless marketed
+
+## Recommended design (when implementing)
+
+1. **Two result sections** in `HeaderSearchPanel`: **Products** (catalog) then **Pages** (static allowlist + keyword match). Empty products + matching page → show pages only (fixes “Fundraising” 0 items).
+2. **Single allowlist module** e.g. `lib/storefrontSearchPages.ts` — one source for href/label/keywords; unit-test keyword → href. Do not scrape all `app/*/page.tsx`.
+3. **Submit (Enter):** if page exact/keyword strong match and no products → go to that page; if both → prefer exact product name, else first product, else best page.
+4. **CMS categories do not replace this.** Toggling a tile does not add a page row unless we also maintain the allowlist (or generate allowlist from **active** `categoryItems` + fixed legal/help links).
+5. **Optional later:** merge active `categoryItems` + active `sidebarMenuItems` into page hits so new CMS tiles appear without code change — **plus** fixed pages (Fundraising, Privacy, …) that are not category tiles.
+
+### Auto with future categories?
+
+| Source | Auto in page search? |
+|--------|----------------------|
+| New CMS category tile (`isActive` + `linkUrl`) | **Only if** implementation derives page hits from active `categoryItems` / sidebar — otherwise update allowlist |
+| New catalog products | Already auto in **product** search after sync |
+| New hardcoded route (e.g. `/events`) | Needs allowlist (or CMS link row) — routes are not discovered automatically |
+
+## Do / Do not
+
+**Do**
+
+- Treat “Fundraising → 0 items” as **missing page search**, not catalog failure.
+- Keep page map small, English, no admin.
+- Prefer `/products/[id]` for SKUs; page hrefs for programs/policies.
+
+**Do not**
+
+- Index every Next.js route.
+- Create a fake “Fundraising” product in the catalog.
+- Block product search behind page search.
+- Pull accounting or admin paths into the storefront panel.
+
+## Implementation status
+
+- **Not shipped** (learning only as of 2026-09-16 afternoon). Product PDP link + submit fixes shipped separately.
+- When owner says implement: add `lib/storefrontSearchPages.ts` + section UI in `HeaderSearchPanel.tsx`.
+
+## Cousins
+
+- `header-search-subcategories-and-backlog.mdc` — Basic/Premium/Mixed Labels + **full fix checklist**
+- `header-search-fix-and-future-categories.mdc` — product pipeline / Fundraising 0-result note
+- `header-search-and-inactive-categories.mdc` — inactive tiles vs perf

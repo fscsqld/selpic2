@@ -14,26 +14,7 @@ import {
   sortProductsByCatalogPrice,
   type StorefrontPriceSort,
 } from '@/lib/storefrontProductSort'
-
-function toSubcategorySlug(value: string): string {
-  return decodeURIComponent(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function getStickersSubcategoryHref(item: { title: string; linkUrl: string }): string {
-  const raw = (item.linkUrl || '').trim()
-  if (raw.startsWith('/stickers/')) {
-    const segment = raw.split('/').filter(Boolean).pop() || ''
-    const normalized = toSubcategorySlug(segment)
-    if (normalized) return `/stickers/${normalized}`
-  }
-  const fallback = toSubcategorySlug(item.title)
-  return fallback ? `/stickers/${fallback}` : '/stickers'
-}
+import { getStickersSubcategoryHref } from '@/lib/stickersSubcategoryHref'
 
 const SubcategoryImageDisplay = ({ src, emoji, alt }: { src: string, emoji?: string, alt: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)

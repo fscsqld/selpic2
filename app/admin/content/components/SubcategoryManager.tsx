@@ -5,6 +5,11 @@ import { Plus, Edit, Trash2, Eye, EyeOff, GripVertical, Package, ImageIcon, X } 
 import { SubcategoryItem } from '@/lib/contentStore'
 import { useStore } from '@/lib/store'
 import MediaUpload from '@/components/MediaUpload'
+import {
+  buildCategorySubcategoryPath,
+  normalizeSubcategoryLinkUrl,
+  type SubcategoryParent,
+} from '@/lib/subcategoryLinkUrl'
 
 const SubcategoryImage = ({ src, emoji, alt, className = '', wrapperClassName = '' }: { src?: string, emoji?: string, alt: string, className?: string, wrapperClassName?: string }) => {
   const [imageError, setImageError] = useState(false)
@@ -43,7 +48,7 @@ const SubcategoryImage = ({ src, emoji, alt, className = '', wrapperClassName = 
 
 interface SubcategoryManagerProps {
   subcategoryItems: SubcategoryItem[]
-  category: 'stickers' | 'stamps' | 'phone-cases' | 'hot-goods'
+  category: SubcategoryParent
   onAddSubcategory: (subcategory: Omit<SubcategoryItem, 'id' | 'createdAt' | 'updatedAt'>) => void
   onUpdateSubcategory: (id: string, updates: Partial<SubcategoryItem>) => void
   onDeleteSubcategory: (id: string) => void
@@ -52,33 +57,11 @@ interface SubcategoryManagerProps {
   showNotification: (type: 'success' | 'error', message: string) => void
 }
 
-const CATEGORY_LABELS = {
-  'stickers': 'Stickers',
-  'stamps': 'Stamps',
+const CATEGORY_LABELS: Record<SubcategoryParent, string> = {
+  stickers: 'Stickers',
+  stamps: 'Stamps',
   'phone-cases': 'Phone Cases',
-  'hot-goods': 'Market S'
-}
-
-function toSlug(value: string): string {
-  return (value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function buildCategorySubcategoryPath(
-  category: 'stickers' | 'stamps' | 'phone-cases' | 'hot-goods',
-  title: string
-): string {
-  const slug = toSlug(title)
-  if (!slug) return ''
-  if (category === 'stickers') return `/stickers/${slug}`
-  if (category === 'stamps') return `/stamps/${slug}`
-  if (category === 'phone-cases') return `/phone-cases/${slug}`
-  if (category === 'hot-goods') return `/hot-goods/${slug}`
-  return `/${category}/${slug}`
+  'hot-goods': 'Market S',
 }
 
 export default function SubcategoryManager({
@@ -151,8 +134,11 @@ export default function SubcategoryManager({
       showNotification('error', 'Please fill in title')
       return
     }
-    const normalizedLinkUrl =
-      newSubcategory.linkUrl.trim() || buildCategorySubcategoryPath(category, newSubcategory.title)
+    const normalizedLinkUrl = normalizeSubcategoryLinkUrl(
+      category,
+      newSubcategory.title,
+      newSubcategory.linkUrl
+    )
     if (!normalizedLinkUrl) {
       showNotification('error', 'Could not generate a valid link URL from title')
       return
@@ -202,8 +188,11 @@ export default function SubcategoryManager({
       showNotification('error', 'Please fill in title')
       return
     }
-    const normalizedLinkUrl =
-      editForm.linkUrl.trim() || buildCategorySubcategoryPath(category, editForm.title)
+    const normalizedLinkUrl = normalizeSubcategoryLinkUrl(
+      category,
+      editForm.title,
+      editForm.linkUrl
+    )
     if (!normalizedLinkUrl) {
       showNotification('error', 'Could not generate a valid link URL from title')
       return
