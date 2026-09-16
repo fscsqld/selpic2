@@ -167,7 +167,7 @@ export default function ManualOrderCreateModal({ open, onClose, products, onCrea
           price: unitLine,
           baseUnitPrice: selected.price,
           customizationSurchargePerUnit: surchargePerUnit,
-          image: selected.image || '/placeholder-product.png',
+          image: selected.image || '/images/logo.png',
           quantity: qty,
           customizations: { ...stickerCustomizations },
           buyerPersonalization: stickerText.trim() || undefined,

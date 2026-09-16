@@ -2846,7 +2846,7 @@ const defaultHeroSlideTemplates: HeroSlideTemplate[] = [
       title: 'New Product Launch',
       subtitle: 'Discover our latest collection',
       color: 'blue',
-      linkUrl: '/products',
+      linkUrl: '/stickers',
       isEventBanner: false
     },
     createdAt: new Date(),
@@ -4013,6 +4013,9 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
   if (state.categoryItems) {
     state.categoryItems = state.categoryItems.map(item => ({
       ...item,
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      // Legacy CMS default had no list route; keep existing good hubs.
+      linkUrl: item.linkUrl === '/products' ? '/stickers' : item.linkUrl,
       createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
       updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
     }))

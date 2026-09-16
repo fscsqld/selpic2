@@ -8,6 +8,15 @@ import {
 } from '@/lib/shipping/orderDeclaredWeightKg'
 import { getShippingLabelBarcodePayload } from '@/lib/shipping/shippingLabelBarcodePayload'
 import { resolveShippingLabelFromPrint } from '@/lib/shipping/shippingLabelFrom'
+import {
+  normalizeShippingLabelOrientation,
+  resolveShippingLabelOrientation,
+  type ShippingLabelOrientation,
+} from '@/lib/shipping/shippingLabelOrientation'
+import {
+  landscapeFormBBoxPoints,
+  landscapeFormStampMatrix,
+} from '@/lib/shipping/shippingLabelLandscapeForm'
 
 /** Service line on internal labels until live API selects a product. */
 const INTERNAL_SERVICE_DISPLAY = 'Standard Letter'
@@ -29,6 +38,7 @@ function hasPersonalizationForLabel(pers: string): boolean {
 
 export type AdminShippingLabelLayout = 'avery-l7169'
 export type AdminShippingLabelSlot = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+export type { ShippingLabelOrientation }
 
 /** Fill order on each Avery L7169 sheet (2×2). */
 export const AVERY_L7169_SLOT_ORDER: readonly AdminShippingLabelSlot[] = [
@@ -140,6 +150,8 @@ type LabelBox = {
 type BuildOptions = {
   layout?: AdminShippingLabelLayout
   slot?: AdminShippingLabelSlot
+  /** Default portrait — existing draw path. Landscape rotates content in the same Avery cell. */
+  orientation?: ShippingLabelOrientation
 }
 
 function drawLabelFrame(doc: jsPDF, box: LabelBox): void {
@@ -148,6 +160,10 @@ function drawLabelFrame(doc: jsPDF, box: LabelBox): void {
   doc.rect(box.x, box.y, box.width, box.height, 'S')
 }
 
+/**
+ * Portrait content (unchanged layout). Also reused for landscape after a CTM rotate
+ * into a virtual 139×99.1 mm box.
+ */
 async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox): Promise<void> {
   const innerL = box.x + LABEL_INNER_MARGIN_MM
   const innerR = box.x + box.width - LABEL_INNER_MARGIN_MM
@@ -291,6 +307,48 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
 }
 
 /**
+ * Draw into an Avery L7169 cell. Portrait = existing path (unchanged).
+ * Landscape = draw into a Form XObject (139×99.1 mm content), then stamp with rotation.
+ * Do NOT apply setCurrentTransformationMatrix around text in compat mode —
+ * that sends content off-page (empty label on print).
+ */
+async function drawShippingLabelInSlot(
+  doc: jsPDF,
+  order: OrderRecord,
+  physicalBox: LabelBox,
+  orientation: ShippingLabelOrientation
+): Promise<void> {
+  if (orientation !== 'landscape') {
+    await drawShippingLabel(doc, order, physicalBox)
+    return
+  }
+
+  const vw = AVERY_LABEL_HEIGHT_MM // 139 — long edge of cell
+  const vh = AVERY_LABEL_WIDTH_MM // 99.1 — short edge of cell
+  const formKey = `ship-label-ls-${order.id}-${Math.random().toString(36).slice(2, 9)}`
+  const scaleFactor = doc.internal.scaleFactor
+  const { widthPt, heightPt } = landscapeFormBBoxPoints(vw, vh, scaleFactor)
+
+  // BBox must be PDF points so clip matches scaled content (see orientation rule).
+  doc.beginFormObject(0, 0, widthPt, heightPt, new doc.Matrix(1, 0, 0, 1, 0, 0))
+  await drawShippingLabel(doc, order, { x: 0, y: 0, width: vw, height: vh })
+  doc.endFormObject(formKey)
+
+  // 90° CCW into the cell — NOT Matrix(0,1,1,0) which mirrors glyphs.
+  const m = landscapeFormStampMatrix({
+    cellXMm: physicalBox.x,
+    cellYMm: physicalBox.y,
+    cellWidthMm: physicalBox.width,
+    cellHeightMm: physicalBox.height,
+    formWidthMm: vw,
+    formHeightMm: vh,
+    pageHeightMm: doc.internal.pageSize.getHeight(),
+    scaleFactor,
+  })
+  doc.doFormObject(formKey, new doc.Matrix(m.a, m.b, m.c, m.d, m.e, m.f))
+}
+
+/**
  * Production shipping label PDF — Avery L7169 / AV959020 A4 4-up.
  * Code 128 encodes {@link getShippingLabelBarcodePayload}
  * (order id until AusPost tracking is stored).
@@ -301,18 +359,25 @@ export async function buildAdminShippingLabelPdfBase64(
 ): Promise<string> {
   const layout = options?.layout ?? 'avery-l7169'
   const slot = options?.slot ?? 'top-left'
+  const orientation =
+    options?.orientation ?? resolveShippingLabelOrientation(order)
   const doc = new jsPDF({
     unit: 'mm',
     format: layout === 'avery-l7169' ? 'a4' : [A4_WIDTH_MM, A4_HEIGHT_MM],
     orientation: 'portrait',
   })
   const origin = SLOT_ORIGIN_MM[slot]
-  await drawShippingLabel(doc, order, {
-    x: origin.x,
-    y: origin.y,
-    width: AVERY_LABEL_WIDTH_MM,
-    height: AVERY_LABEL_HEIGHT_MM,
-  })
+  await drawShippingLabelInSlot(
+    doc,
+    order,
+    {
+      x: origin.x,
+      y: origin.y,
+      width: AVERY_LABEL_WIDTH_MM,
+      height: AVERY_LABEL_HEIGHT_MM,
+    },
+    normalizeShippingLabelOrientation(orientation)
+  )
 
   return pdfBase64FromDoc(doc)
 }
@@ -320,6 +385,7 @@ export async function buildAdminShippingLabelPdfBase64(
 /**
  * Batch Avery L7169 PDF: up to 4 labels per A4 page in 2×2 fill order.
  * Partial last page leaves remaining slots blank.
+ * Per-order orientation from {@link OrderRecord.shippingLabelOrientation} (default portrait).
  */
 export async function buildAdminShippingLabelsBatchPdfBase64(orders: OrderRecord[]): Promise<{
   pdfBase64: string
@@ -345,12 +411,18 @@ export async function buildAdminShippingLabelsBatchPdfBase64(orders: OrderRecord
     for (let j = 0; j < chunk.length; j++) {
       const slot = AVERY_L7169_SLOT_ORDER[j]
       const origin = SLOT_ORIGIN_MM[slot]
-      await drawShippingLabel(doc, chunk[j], {
-        x: origin.x,
-        y: origin.y,
-        width: AVERY_LABEL_WIDTH_MM,
-        height: AVERY_LABEL_HEIGHT_MM,
-      })
+      const order = chunk[j]
+      await drawShippingLabelInSlot(
+        doc,
+        order,
+        {
+          x: origin.x,
+          y: origin.y,
+          width: AVERY_LABEL_WIDTH_MM,
+          height: AVERY_LABEL_HEIGHT_MM,
+        },
+        resolveShippingLabelOrientation(order)
+      )
     }
     pageIndex += 1
   }

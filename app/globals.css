@@ -7,6 +7,12 @@
   --font-poppins: 'Segoe UI', system-ui, sans-serif;
   /** Selpic logo blue — header hovers, chrome theme, links where brand accent is intended */
   --color-brand-blue: #34aadc;
+  /* Brand glow helpers (used by .selpic-glow-* / pulseGlow) */
+  --selpic-pink-500: #ec4899;
+  --selpic-pink-transparent: rgba(236, 72, 153, 0.35);
+  --selpic-blue-transparent: rgba(52, 170, 220, 0.35);
+  --selpic-yellow-transparent: rgba(234, 179, 8, 0.35);
+  --selpic-gradient-primary: linear-gradient(135deg, #34aadc 0%, #a855f7 50%, #ec4899 100%);
 }
 
 /* Tablet / iPad (768–1024px): reduce Safari font-scale surprises; aligns with Tailwind md→lg range */
@@ -21,41 +27,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Malgun Gothic', '맑은 고딕', sans-serif;
 }
 
-/* ✅ 한글 폰트 로드 최적화 - font-display: swap 적용 */
-@font-face {
-  font-family: 'Jua';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Do Hyeon';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Nanum Gothic';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Nanum Brush Script';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Black Han Sans';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Sans KR';
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Noto Serif KR';
-  font-display: swap;
-}
+/* Korean / decorative fonts load via GoogleFontsLinks where needed — do not declare empty @font-face (invalid CSS). */
 
 .font-playfair {
   font-family: 'Playfair Display', 'Georgia', 'Times New Roman', serif;

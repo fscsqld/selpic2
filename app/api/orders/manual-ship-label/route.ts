@@ -9,6 +9,10 @@ import {
   validateShippingLabelFromOverrideInput,
   type ShippingLabelFromOverride,
 } from '@/lib/shipping/shippingLabelFrom'
+import {
+  normalizeShippingLabelOrientation,
+  type ShippingLabelOrientation,
+} from '@/lib/shipping/shippingLabelOrientation'
 
 const MAX_KG = 22
 
@@ -31,6 +35,8 @@ export type ManualShipLabelBody = {
   /** When true, require and persist factory / direct-ship FROM. */
   useCustomFrom?: boolean
   fromOverride?: ShippingLabelFromOverride
+  /** Avery content orientation; default portrait. */
+  orientation?: ShippingLabelOrientation
 }
 
 function buildAsSingleLine(a: {
@@ -175,6 +181,7 @@ export async function POST(req: Request) {
       status: 'processing',
       declaredShippingWeightKg: w,
       shippingLabelFromOverride,
+      shippingLabelOrientation: normalizeShippingLabelOrientation(body.orientation),
       auditLog: [
         {
           id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,

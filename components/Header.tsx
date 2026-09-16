@@ -142,7 +142,7 @@ export function HeaderLogoPlaceholder({ className }: { className: string }) {
 
 /**
  * Never puts invalid schemes on <img src>`. Uses http(s)/data/blob/relative URLs or falls back to
- * `HEADER_LOGO_STATIC_FALLBACKS` (PNG if present, then `/images/logo.svg`, `/logo.svg`).
+ * `HEADER_LOGO_STATIC_FALLBACKS` (webp/png under `public/images` and `public/`).
  * Legacy `indexeddb://` values are treated as missing and use fallbacks.
  */
 export function HeaderLogoImage({

@@ -5,21 +5,27 @@ import { X, Loader2, Printer } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
+import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
+import ShippingLabelFromOverrideFields, {
+  EMPTY_SHIPPING_LABEL_FROM_FORM,
+} from '@/components/admin/ShippingLabelFromOverrideFields'
 import {
   QUICK_SHIP_PARCEL_PRESETS,
   resolveQuickShipParcelNote,
   type QuickShipParcelPresetId,
 } from '@/lib/shipping/quickShipParcelPresets'
-import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
-import ShippingLabelFromOverrideFields, {
-  EMPTY_SHIPPING_LABEL_FROM_FORM,
-} from '@/components/admin/ShippingLabelFromOverrideFields'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
   { value: 'top-right', label: 'Top right' },
   { value: 'bottom-left', label: 'Bottom left' },
   { value: 'bottom-right', label: 'Bottom right' },
+]
+
+const ORIENTATION_OPTIONS: Array<{ value: ShippingLabelOrientation; label: string }> = [
+  { value: 'portrait', label: 'Portrait (default)' },
+  { value: 'landscape', label: 'Landscape' },
 ]
 
 type Props = {
@@ -52,6 +58,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
   const [createdOrder, setCreatedOrder] = useState<OrderRecord | null>(null)
   const [printBusy, setPrintBusy] = useState(false)
   const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
+  const [labelOrientation, setLabelOrientation] = useState<ShippingLabelOrientation>('portrait')
 
   const reset = () => {
     setRecipientName('')
@@ -70,6 +77,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setError('')
     setCreatedOrder(null)
     setLabelSlot('top-left')
+    setLabelOrientation('portrait')
   }
 
   const handleClose = () => {
@@ -101,6 +109,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           labelNotes: resolveQuickShipParcelNote(parcelPreset, customParcelNote),
           useCustomFrom,
           fromOverride: useCustomFrom ? fromOverride : undefined,
+          orientation: labelOrientation,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { order?: OrderRecord; error?: string }
@@ -126,6 +135,7 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     try {
       const r = await openInternalShippingLabelPdf(createdOrder.id, {
         slot: labelSlot,
+        orientation: labelOrientation,
         onOrderMerged: (o) => mergeOrdersFromServer([o]),
       })
       if (!r.ok) window.alert(r.error || 'Failed to open label PDF.')
@@ -161,20 +171,39 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
               Saved order <span className="font-mono">{createdOrder.id}</span>. You can print the label now or find this
               order in the list.
             </p>
-            <div className="max-w-xs">
-              <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
-              <select
-                value={labelSlot}
-                onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
-                {LABEL_SLOT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
+                <select
+                  value={labelSlot}
+                  onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  {LABEL_SLOT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Orientation</label>
+                <select
+                  value={labelOrientation}
+                  onChange={(e) => setLabelOrientation(e.target.value as ShippingLabelOrientation)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  {ORIENTATION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+            <p className="text-xs text-gray-500">
+              Same Avery L7169 sheet. Landscape rotates content in the cell — Portrait stays the current layout.
+            </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -303,6 +332,24 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
               <p className="text-xs text-gray-500">
                 Printed on the PDF when selected. Not emailed to the customer. Contents / weight stay at defaults
                 (Standard Letter).
+              </p>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500">Label orientation</legend>
+              <select
+                value={labelOrientation}
+                onChange={(e) => setLabelOrientation(e.target.value as ShippingLabelOrientation)}
+                className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                {ORIENTATION_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">
+                Same Avery paper. Portrait is unchanged; Landscape only rotates content in the label cell.
               </p>
             </fieldset>
 

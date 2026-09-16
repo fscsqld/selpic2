@@ -1,0 +1,107 @@
+---
+description: Postal label landscape bugs — Form XObject unit mismatch, clipping, weird text (learned 2026-09-16)
+alwaysApply: false
+---
+
+# Postal label orientation — landscape defects (precision learning)
+
+Owner PDF inspected: `Pictures/test/571e8046-103c-4ba7-a9ef-f1fc5b03944b.pdf` (Landscape, ORD-mu41iw5w).
+
+## Symptoms (confirmed)
+
+1. **Wrong position** on the Avery cell / A4 sheet  
+2. **Only part of the label visible** (rest clipped)  
+3. **Text looks wrong** (cut off, odd layout / sideways fragment)
+
+Portrait path is **not** implicated — still direct `drawShippingLabel` into the 99.1×139 mm slot.
+
+## What Landscape does today
+
+```
+beginFormObject(0, 0, 139, 99.1, identity)   // numbers treated as form BBox
+drawShippingLabel(..., box 139×99.1 mm)      // jsPDF writes content in PDF points
+endFormObject
+doFormObject(key, Matrix(0,1,1,0, pdfX_mm, pdfY_mm))  // raw mm into PDF `cm`
+```
+
+## Root causes (precision)
+
+### A) Form **BBox units ≠ content units** → heavy clipping
+
+| Piece | Value in PDF | True meaning |
+|-------|--------------|--------------|
+| `/BBox [0 0 139 99.1]` | PDF user units (points) | Intended **mm**, but stored as if points |
+| Content stream coords | e.g. text `Td` y≈83…16 pt; frame width **394 pt** (=139 mm) | Correct **point** space after jsPDF scale (×72/25.4) |
+
+So the clip window is only **~139×99 pt ≈ 49×35 mm**, while the drawn label is **~394×281 pt ≈ 139×99 mm**.
+
+**Visible fraction ≈ 35% width × 35% height** → “일부만 표시”.
+
+Text Y in the inspected file:
+
+| String | y (pt from form bottom) | Inside BBox y∈[0,99]? |
+|--------|-------------------------|------------------------|
+| DELIVER TO … Ph | ~83 → 16 | Yes (only this band survives) |
+| PERSONALIZATION / Service / Order | **negative** (−17…−54) | **Clipped** |
+| FROM / SELPIC | **−122…−138** | **Clipped** |
+
+That matches the extract: address block shows; lower blocks vanish or look broken.
+
+### B) **doFormObject matrix in mm, PDF expects points** → wrong position
+
+Stamp line in file:
+
+`0 1 1 0 5.01 150.94 cm`
+
+Intended: place at Avery top-left cell in **mm** (x=5.01, PDF y from bottom ≈150.94 mm).  
+PDF `cm` uses **points**: placement is ~**2.83× too small** (5.01 pt ≈ 1.8 mm, not 5.01 mm).
+
+Correct stamp translation would be about:
+
+- `tx ≈ 5.01 × (72/25.4) ≈ 14.2 pt`  
+- `ty ≈ 150.94 × (72/25.4) ≈ 428 pt`
+
+Until scaled, the Form lands in the **wrong place** on the A4.
+
+### C) “Weird text” is a consequence of A+B
+
+- Only a **clipped strip** of a **rotated** form is shown  
+- Line/`re` geometry spans outside BBox (`re` height ≈ −281 pt while BBox height 99)  
+- Viewer shows a partial, rotated fragment → looks garbled / incomplete  
+
+Not a font encoding bug — **layout + clip + unit bug**.
+
+### D) Prior blank-label bug (related history)
+
+Earlier `setCurrentTransformationMatrix` in **compat** mode around `text` drew off-page (fully blank). Form XObject avoided that blanking but introduced **A/B**.
+
+## What must stay true for a correct fix
+
+1. **Portrait:** keep calling `drawShippingLabel` on the page slot — no Form, no CTM.  
+2. **Landscape on same Avery stock:** content must end up inside the **same** 99.1×139 mm die-cut.  
+3. Any Form / matrix path must use **one unit system** end-to-end (prefer letting jsPDF scale everything, or convert mm→pt consistently for BBox + `doFormObject` matrix).  
+4. Virtual draw size 139×99.1 mm must not be clipped to a 139×99 **point** box.  
+5. Do not “fix” by switching A4 to landscape page orientation (breaks L7169 registration).
+
+## Fix directions (when implementing — choose one)
+
+**Preferred (safer):** Avoid Form XObject. Draw landscape by **coordinate remap + `text`/`addImage` angle** inside the physical box, or draw on a **temp jsPDF page in mm**, rasterize (e.g. sharp/pdf pipeline), `addImage` with rotation into the slot — all sizes through APIs that apply scaleFactor.
+
+**If keeping Form XObject:**
+
+1. Pass BBox in **points**: `beginFormObject(0, 0, 139*k, 99.1*k, …)` with `k=72/25.4`, **or** use jsPDF helpers that scale BBox.  
+2. Pass `doFormObject` matrix translations in **points** (`pdfX*k`, `pdfY*k`).  
+3. Verify corners of stamped form fall on the Avery slot; verify FROM/barcode Y ≥ 0 inside form before clip.
+
+## Status
+
+## Status
+
+**Fixed 2026-09-16 (units):** Form BBox + stamp translations use PDF points.  
+**Fixed 2026-09-16 (mirror):** Old stamp `Matrix(0,1,1,0,…)` had det=−1 (reflection) → glyphs looked upside-down / mirrored. Now `landscapeFormStampMatrix` uses 90° CCW `Matrix(0,1,-1,0, pdfX+vh, pdfY)` (det=+1). Portrait unchanged. Tests: `shippingLabelLandscapeForm.test.ts`.
+
+## Cousins
+
+- `lib/shipping/buildAdminShippingLabelPdf.ts` → `drawShippingLabelInSlot`  
+- User sample: `571e8046-103c-4ba7-a9ef-f1fc5b03944b.pdf`  
+- Prior blank fix note still valid: do not revive raw CTM around compat `text`

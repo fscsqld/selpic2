@@ -1,6 +1,7 @@
 import type { OrderRecord } from '@/lib/store'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
 import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
+import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 
 export function openPdfBase64(b64: string): void {
   if (typeof window === 'undefined') return
@@ -26,20 +27,27 @@ export async function openInternalShippingLabelPdf(
   options?: {
     force?: boolean
     slot?: AdminShippingLabelSlot
+    orientation?: ShippingLabelOrientation
     /** When set, updates order FROM override (true = factory, false = clear to company). */
     useCustomFrom?: boolean
     fromOverride?: ShippingLabelFromOverride
     onOrderMerged?: (order: OrderRecord) => void
   }
 ): Promise<{ ok: boolean; error?: string }> {
+  const orientationTouched =
+    options?.orientation === 'portrait' || options?.orientation === 'landscape'
   const res = await fetch('/api/admin/shipping/auspost/label', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       orderId,
-      force: Boolean(options?.force) || typeof options?.useCustomFrom === 'boolean',
+      force:
+        Boolean(options?.force) ||
+        typeof options?.useCustomFrom === 'boolean' ||
+        orientationTouched,
       slot: options?.slot ?? 'top-left',
+      ...(orientationTouched ? { orientation: options?.orientation } : {}),
       ...(typeof options?.useCustomFrom === 'boolean'
         ? {
             useCustomFrom: options.useCustomFrom,

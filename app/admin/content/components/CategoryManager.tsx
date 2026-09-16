@@ -141,7 +141,7 @@ export default function CategoryManager({
     gradientFrom: 'from-blue-500',
     gradientTo: 'to-purple-600',
     backgroundImage: '',
-    linkUrl: '/products',
+    linkUrl: '/stickers',
     tags: ['New', 'Custom'],
     order: categoryItems.length + 1,
     isActive: true
@@ -198,7 +198,7 @@ export default function CategoryManager({
       gradientFrom: 'from-blue-500',
       gradientTo: 'to-purple-600',
       backgroundImage: '',
-      linkUrl: '/products',
+      linkUrl: '/stickers',
       tags: ['New', 'Custom'],
       order: categoryItems.length + 1,
       isActive: true
@@ -249,7 +249,7 @@ export default function CategoryManager({
       gradientTo: category.gradientTo,
       backgroundImage: category.backgroundImage || '',
       linkUrl: category.linkUrl,
-      tags: [...category.tags],
+      tags: [...(Array.isArray(category.tags) ? category.tags : [])],
       isActive: category.isActive
     })
   }
@@ -396,7 +396,7 @@ export default function CategoryManager({
                 value={newCategory.linkUrl}
                 onChange={(e) => setNewCategory({ ...newCategory, linkUrl: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="/products"
+                placeholder="/stickers"
               />
             </div>
             <div className="md:col-span-2">
@@ -550,7 +550,7 @@ export default function CategoryManager({
                 </div>
 
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {category.tags.map((tag, tagIndex) => (
+                  {(Array.isArray(category.tags) ? category.tags : []).map((tag, tagIndex) => (
                     <span key={tagIndex} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                       {tag}
                     </span>

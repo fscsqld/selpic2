@@ -1002,6 +1002,9 @@ export default function HomePage() {
       targetUrl = '/hot-goods'
     } else if (category.title === 'Stickers') {
       targetUrl = '/stickers'
+    } else if (targetUrl === '/products') {
+      // No storefront list at /products (404) — Stickers hub is the safe default.
+      targetUrl = '/stickers'
     }
     return targetUrl || '/'
   }, [])
@@ -1994,7 +1997,7 @@ export default function HomePage() {
                         {category.description || ''}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {category.tags.map((tag, index) => (
+                        {(Array.isArray(category.tags) ? category.tags : []).map((tag, index) => (
                           <span 
                             key={`${category.id}-tag-${index}-${String(tag)}`} 
                             className={`px-3 py-1 rounded-full text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${

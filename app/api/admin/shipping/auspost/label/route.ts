@@ -18,6 +18,10 @@ import {
   validateShippingLabelFromOverrideInput,
   type ShippingLabelFromOverride,
 } from '@/lib/shipping/shippingLabelFrom'
+import {
+  normalizeShippingLabelOrientation,
+  type ShippingLabelOrientation,
+} from '@/lib/shipping/shippingLabelOrientation'
 
 /** Barcode + PDF generation require Node APIs (`bwip-js/node`, `Buffer`). */
 export const runtime = 'nodejs'
@@ -108,7 +112,10 @@ export async function GET(request: Request) {
     }
 
     const slot = normalizeSlot(new URL(request.url).searchParams.get('slot')?.trim() || undefined)
-    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order, { slot })
+    const orientation = normalizeShippingLabelOrientation(
+      new URL(request.url).searchParams.get('orientation')?.trim() || order.shippingLabelOrientation
+    )
+    const pdfBase64 = await buildAdminShippingLabelPdfBase64(order, { slot, orientation })
     const buf = Buffer.from(pdfBase64, 'base64')
     const safeId = orderId.replace(/[^a-zA-Z0-9_-]+/g, '')
     return new NextResponse(buf, {
@@ -143,6 +150,7 @@ export async function POST(request: Request) {
     orderId?: string
     force?: boolean
     slot?: string
+    orientation?: ShippingLabelOrientation
     /** When provided, update or clear order.shippingLabelFromOverride before PDF. */
     useCustomFrom?: boolean
     fromOverride?: ShippingLabelFromOverride
@@ -152,6 +160,7 @@ export async function POST(request: Request) {
       orderId?: string
       force?: boolean
       slot?: string
+      orientation?: ShippingLabelOrientation
       useCustomFrom?: boolean
       fromOverride?: ShippingLabelFromOverride
     }
@@ -191,18 +200,31 @@ export async function POST(request: Request) {
       }
     }
 
+    let nextOrientation: ShippingLabelOrientation | undefined
+    let orientationTouched = false
+    if (body.orientation === 'portrait' || body.orientation === 'landscape') {
+      orientationTouched = true
+      nextOrientation = body.orientation
+    }
+
     const orderForPdf: OrderRecord = {
       ...order,
       shippingLabelFromOverride: nextFrom === undefined ? order.shippingLabelFromOverride : nextFrom,
+      shippingLabelOrientation:
+        nextOrientation === undefined ? order.shippingLabelOrientation : nextOrientation,
     }
 
     const isCached =
       !force &&
       !fromTouched &&
+      !orientationTouched &&
       existing?.status === 'created' &&
       isInternalLabelMode(existing.mode)
 
-    const pdfBase64 = await buildAdminShippingLabelPdfBase64(orderForPdf, { slot })
+    const pdfBase64 = await buildAdminShippingLabelPdfBase64(orderForPdf, {
+      slot,
+      orientation: normalizeShippingLabelOrientation(orderForPdf.shippingLabelOrientation),
+    })
 
     if (isCached) {
       return NextResponse.json({
@@ -219,19 +241,23 @@ export async function POST(request: Request) {
         ? 'Shipping label (PDF) regenerated'
         : 'Shipping label (PDF) generated'
 
+    const extras: string[] = []
+    if (fromTouched) extras.push(nextFrom ? 'custom FROM' : 'company FROM')
+    if (orientationTouched) extras.push(nextOrientation === 'landscape' ? 'landscape' : 'portrait')
+
     const auditEntry = {
       id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       timestamp: now,
       action: 'shipping_updated' as const,
       performedBy,
-      description: fromTouched
-        ? `${auditDescription}${nextFrom ? ' (custom FROM)' : ' (company FROM)'}`
-        : auditDescription,
+      description: extras.length ? `${auditDescription} (${extras.join(', ')})` : auditDescription,
     }
 
     const updated: OrderRecord = normalizeLedgerOrder({
       ...orderForPdf,
       shippingLabelFromOverride: nextFrom === undefined ? order.shippingLabelFromOverride : nextFrom,
+      shippingLabelOrientation:
+        nextOrientation === undefined ? order.shippingLabelOrientation : nextOrientation,
       ausPostShippingLabel: {
         status: 'created',
         mode: 'internal',

@@ -109,8 +109,8 @@ export default function HeroSlideManager({
       }
     }, [slide.src, slide.fallbackImage, slide.type])
 
-    const safeFallback = useMemo(() => 
-      (fallbackSrc && fallbackSrc.trim() !== '') ? fallbackSrc : '/logo.svg', 
+    const safeFallback = useMemo(
+      () => (fallbackSrc && fallbackSrc.trim() !== '' ? fallbackSrc : '/images/logo.webp'),
       [fallbackSrc]
     )
 
@@ -2046,7 +2046,7 @@ export default function HeroSlideManager({
                         slideData: { ...editTemplateFormData.slideData, linkUrl: e.target.value }
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="/products"
+                      placeholder="/stickers"
                     />
                   </div>
                 </div>

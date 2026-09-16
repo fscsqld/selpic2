@@ -127,7 +127,8 @@ export default function HeaderNavDrawer({ menuItems, brandHref, brandSlot, onClo
                       url = url.replace('/page.tsx', '')
                     }
 
-                    if (menuItem.title === '스티커' && url === '/products') {
+                    // Legacy CMS default `/products` has no list page (404) — send to Stickers hub.
+                    if (url === '/products') {
                       url = '/stickers'
                     }
 

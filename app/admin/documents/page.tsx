@@ -800,7 +800,7 @@ If you have any questions, please contact us.`
               product: {
                 name: it.name,
                 price: it.price,
-                image: it.image || '/placeholder-product.jpg',
+                image: it.image || '/images/logo.png',
               },
               quantity: it.quantity,
               customizations: it.customizations || {},
@@ -1468,7 +1468,7 @@ If you have any questions, please contact us.`
                           items: [{
                             name: 'Sample Product',
                             price: 50.00,
-                            image: '/placeholder-product.jpg',
+                            image: '/images/logo.png',
                             quantity: 1,
                             customizations: {}
                           }],
@@ -1571,7 +1571,7 @@ If you have any questions, please contact us.`
                             product: {
                               name: 'Sample Product',
                               price: 50.00,
-                              image: '/placeholder-product.jpg'
+                              image: '/images/logo.png'
                             },
                             quantity: 1,
                             customizations: {}
@@ -1706,7 +1706,7 @@ If you have any questions, please contact us.`
                             product: {
                               name: 'Sample Product',
                               price: 50.00,
-                              image: '/placeholder-product.jpg'
+                              image: '/images/logo.png'
                             },
                             quantity: 1,
                             customizations: {}
@@ -1744,7 +1744,7 @@ If you have any questions, please contact us.`
                                     product: {
                                       name: item.name || item.product?.name,
                                       price: item.price || item.product?.price,
-                                      image: item.image || item.product?.image || '/placeholder-product.jpg'
+                                      image: item.image || item.product?.image || '/images/logo.png'
                                     },
                                     quantity: item.quantity,
                                     customizations: item.customizations || {}

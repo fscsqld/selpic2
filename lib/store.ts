@@ -13,6 +13,7 @@ import {
 } from '@/lib/orderConfirmationEmail'
 import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
 import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
+import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 
 export interface Product {
   id: string
@@ -292,6 +293,11 @@ export interface OrderRecord {
    * Clear / omit to use company default. Does not change COMPANY_CONTACT.
    */
   shippingLabelFromOverride?: ShippingLabelFromOverride | null
+  /**
+   * Avery L7169 content orientation. Omit / portrait = existing vertical layout.
+   * Landscape rotates content in the same die-cut cell (same paper).
+   */
+  shippingLabelOrientation?: ShippingLabelOrientation | null
   // 이메일 확인 관련
   emailConfirmation?: {
     sent: boolean
@@ -1655,7 +1661,7 @@ export const useStore = create<Store>()(
                 product: {
                   name: it.name,
                   price: it.price,
-                  image: it.image || '/placeholder-product.jpg'
+                  image: it.image || '/images/logo.png'
                 },
                 quantity: it.quantity,
                 customizations: it.customizations || {}

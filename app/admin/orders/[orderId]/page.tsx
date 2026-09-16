@@ -19,6 +19,7 @@ import Link from 'next/link'
 import { recordOrderToAccountingAsyncWithRetry } from '@/lib/admin/recordOrderToAccountingBridge'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
 import ShippingLabelFromOverrideFields, {
   EMPTY_SHIPPING_LABEL_FROM_FORM,
@@ -31,6 +32,11 @@ const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }
   { value: 'top-right', label: 'Top right' },
   { value: 'bottom-left', label: 'Bottom left' },
   { value: 'bottom-right', label: 'Bottom right' },
+]
+
+const ORIENTATION_OPTIONS: Array<{ value: ShippingLabelOrientation; label: string }> = [
+  { value: 'portrait', label: 'Portrait (default)' },
+  { value: 'landscape', label: 'Landscape' },
 ]
 
 export default function AdminOrderDetailPage() {
@@ -61,6 +67,7 @@ export default function AdminOrderDetailPage() {
   const [isSendingReceipt, setIsSendingReceipt] = useState(false)
   const [ausPostLabelBusy, setAusPostLabelBusy] = useState(false)
   const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
+  const [labelOrientation, setLabelOrientation] = useState<ShippingLabelOrientation>('portrait')
   const [useCustomFrom, setUseCustomFrom] = useState(false)
   const [fromOverride, setFromOverride] = useState<ShippingLabelFromOverride>(EMPTY_SHIPPING_LABEL_FROM_FORM)
   const [ledgerReady, setLedgerReady] = useState(false)
@@ -149,10 +156,12 @@ export default function AdminOrderDetailPage() {
       setUseCustomFrom(false)
       setFromOverride(EMPTY_SHIPPING_LABEL_FROM_FORM)
     }
-    // Hydrate when order id or persisted FROM snapshot changes (not on every order object identity).
+    setLabelOrientation(order.shippingLabelOrientation === 'landscape' ? 'landscape' : 'portrait')
+    // Hydrate when order id or persisted FROM / orientation snapshot changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional snapshot key
   }, [
     order?.id,
+    order?.shippingLabelOrientation ?? '',
     order?.shippingLabelFromOverride
       ? `${order.shippingLabelFromOverride.name}|${order.shippingLabelFromOverride.streetAddress}|${order.shippingLabelFromOverride.suburb}|${order.shippingLabelFromOverride.state}|${order.shippingLabelFromOverride.postcode}|${order.shippingLabelFromOverride.country || ''}`
       : '',
@@ -919,20 +928,39 @@ Selpic Team`
                     ) : (
                       <p className="text-sm text-amber-800 mb-3">Not generated yet.</p>
                     )}
-                    <div className="mb-3 max-w-xs">
-                      <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
-                      <select
-                        value={labelSlot}
-                        onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      >
-                        {LABEL_SLOT_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="mb-3 grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">Sheet position</label>
+                        <select
+                          value={labelSlot}
+                          onChange={(e) => setLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {LABEL_SLOT_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">Orientation</label>
+                        <select
+                          value={labelOrientation}
+                          onChange={(e) => setLabelOrientation(e.target.value as ShippingLabelOrientation)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {ORIENTATION_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
+                    <p className="mb-3 text-xs text-gray-500">
+                      Same Avery L7169 paper. Portrait is the existing layout; Landscape rotates content in the cell.
+                    </p>
                     <div className="mb-4">
                       <ShippingLabelFromOverrideFields
                         enabled={useCustomFrom}
@@ -952,6 +980,7 @@ Selpic Team`
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: false,
                               slot: labelSlot,
+                              orientation: labelOrientation,
                               useCustomFrom,
                               fromOverride: useCustomFrom ? fromOverride : undefined,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
@@ -975,6 +1004,7 @@ Selpic Team`
                             const r = await openInternalShippingLabelPdf(order.id, {
                               force: true,
                               slot: labelSlot,
+                              orientation: labelOrientation,
                               useCustomFrom,
                               fromOverride: useCustomFrom ? fromOverride : undefined,
                               onOrderMerged: (o) => mergeOrdersFromServer([o]),
@@ -996,7 +1026,7 @@ Selpic Team`
                           setAusPostLabelBusy(true)
                           try {
                             const res = await fetch(
-                              `/api/admin/shipping/auspost/label?orderId=${encodeURIComponent(order.id)}&slot=${encodeURIComponent(labelSlot)}`,
+                              `/api/admin/shipping/auspost/label?orderId=${encodeURIComponent(order.id)}&slot=${encodeURIComponent(labelSlot)}&orientation=${encodeURIComponent(labelOrientation)}`,
                               { credentials: 'same-origin' }
                             )
                             if (!res.ok) {

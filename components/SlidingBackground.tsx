@@ -78,14 +78,15 @@ const VideoSlide = ({
   )
   const videoElementRef = useRef<HTMLVideoElement | null>(null)
   
-  const safeFallback = fallbackImage && fallbackImage.trim() !== '' ? fallbackImage : '/logo.svg'
-  
-  // videoRef 콜백 호출
+  const safeFallback =
+    fallbackImage && fallbackImage.trim() !== '' ? fallbackImage : '/images/logo.webp'
+
+  // videoRef is notified from the <video ref> callback; keep this as a mount/update sync only.
   useEffect(() => {
     if (videoRef && videoElementRef.current) {
       videoRef(videoElementRef.current)
     }
-  }, [videoRef, videoElementRef.current])
+  }, [videoRef])
 
   useEffect(() => {
     const trimmedSrc = (src || '').trim()

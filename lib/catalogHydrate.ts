@@ -14,7 +14,7 @@ export type CatalogProductSnapshot = {
   hasDetailPage?: boolean
 }
 
-const PLACEHOLDER_IMAGE = '/logo.svg'
+const PLACEHOLDER_IMAGE = '/images/logo.png'
 
 export function catalogSnapshotsToProducts(records: CatalogProductSnapshot[]): Product[] {
   return records.map((r) => {
