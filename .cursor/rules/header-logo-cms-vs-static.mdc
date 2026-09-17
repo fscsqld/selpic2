@@ -25,19 +25,17 @@ alwaysApply: false
 
 Sticky **Header** + home **footer** brand image use `pickLogoImageItem` → this `mediaUrl` after storefront CMS sync. **Not** the 91 KB static PNG for the visible header mark when CMS is healthy.
 
-### Where **old** `/images/logo.png` (~91 KB) still loads
-
-These paths are **hardcoded / rewrite**, independent of Logo Image Management:
+### Where static logos still load (tab / OG — not sticky header)
 
 | Path | Role |
 |------|------|
-| `app/layout.tsx` `icons.icon` / `shortcut` | Browser tab favicon metadata → `/images/logo.png` |
-| `next.config.js` rewrite `/favicon.ico` → `/images/logo.png` | Default favicon request |
-| `/apple-touch-icon.png` | iOS home-screen icon (same ~91 KB file in `public/`) |
-| OG / Twitter `defaultOgImage` | Social share preview (`/images/logo.png`) |
-| `HEADER_LOGO_STATIC_FALLBACKS` | Only if CMS `mediaUrl` empty/fails (`indexeddb://`, network error) |
+| `app/layout.tsx` `icons.icon` | **One** tab icon: `/favicon.ico` only (rewrite → `/images/logo.webp`) |
+| `next.config.js` rewrite | `/favicon.ico` → `/images/logo.webp` |
+| `/apple-touch-icon.png` | iOS home-screen icon |
+| OG / Twitter `defaultOgImage` | `/images/logo.webp` (share preview; not a homepage document request) |
+| `HEADER_LOGO_STATIC_FALLBACKS` | Only if CMS `mediaUrl` empty/fails |
 
-SSR HTML often lists `/images/logo.png` in `<link rel="icon">` etc.; **Supabase header-logo URL may be absent from first HTML** until client hydrates `content-store` from `/api/site-config/public`. That does **not** mean the header keeps showing the old PNG after sync — Header reads Zustand CMS `mediaUrl`.
+Do **not** list webp + png + shortcut together in `metadata.icons` — Pingdom HAR (2026-09-17) showed 3× webp + 2× png duplicate fetches.
 
 ### How to verify (owner)
 

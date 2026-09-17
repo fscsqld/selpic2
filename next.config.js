@@ -194,6 +194,16 @@ const nextConfig = {
         ],
       },
       {
+        // Same bytes as /images/logo.webp via rewrite — allow browser cache (catch-all was no-store).
+        source: '/favicon.ico',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
         source: '/logo.png',
         headers: [
           {

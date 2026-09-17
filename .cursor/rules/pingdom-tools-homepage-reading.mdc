@@ -1,0 +1,99 @@
+---
+description: Pingdom Tools homepage report reading (learned 2026-09-17)
+alwaysApply: false
+---
+
+# Pingdom Website Speed Test — SELPIC homepage learning
+
+Fixture: Pingdom Tools on **`http://www.selpic.com.au/`** (report pasted 2026-09-17).
+
+## Snapshot (as reported)
+
+| Metric | Value |
+|--------|------:|
+| Performance grade | **C 73** |
+| Page size | **489.7 KB** |
+| Load time | **187 ms** |
+| Requests | **31** |
+| 200 OK | 30 |
+| 308 redirect | 1 |
+| “Error” type | **5** (~60.9 KB) |
+
+Top Pingdom suggestions: **F0 gzip**, **F0 Expires**, **F32 fewer HTTP requests**. A100 on empty src, JS at bottom, DOM, favicon.
+
+## How to read this tool (vs PSI)
+
+| Pingdom | Reality for SELPIC |
+|---------|-------------------|
+| ~490 KB / 187 ms | **Synthetic / shallow** — often misses heavy hero MP4, CMS images, post-load catalog. Not comparable to PSI mobile ~**3.2 MiB** / LCP ~4s. |
+| Grade C73 | YSlow-era rules, not Core Web Vitals. |
+| Tested **`http://`** | Forces **308 → https** (seen in report). Prefer **`https://www.selpic.com.au/`** for retests. |
+
+**Do not** chase Pingdom C→A as the storefront KPI. Keep **PageSpeed Insights mobile** as the primary lab score (see `storefront-mobile-performance.mdc`).
+
+## F0 “Compress with gzip” — usually false positive
+
+Live HTML responds with **`Content-Encoding: br`** (Brotli) on Vercel when `Accept-Encoding` allows it.
+
+Pingdom historically grades only **gzip** and under-credits Brotli → **F0** even when compression is on and better than gzip.
+
+**Do not** force `Content-Encoding: gzip` in `vercel.json` / Next headers (double-compress risk).
+
+## F0 “Add Expires headers” — outdated rule + our Expires: 0
+
+Modern caching uses **`Cache-Control`**, not `Expires`.
+
+Verified:
+
+- `/_next/static/…` → `Cache-Control: public, max-age=31536000, immutable` (**correct**)
+- `/images/…` → `max-age=86400, stale-while-revalidate=…` (**correct**)
+- Catch-all in `next.config.js` also sets **`Expires: 0`** (and HTML `no-store` by design for CMS-driven home)
+
+Pingdom still wants far-future **Expires** on static files. Optional later: stop emitting `Expires: 0` on `/_next/static` / `/images` only (leave HTML no-store). **Not required** for browsers that honor Cache-Control.
+
+## Error bucket (5 × ~404 HTML ≈ 60.9 KB)
+
+Each Next 404 page is ~**15–16 KB** (br). Five of them ≈ Pingdom’s **Error 60.9 KB**.
+
+Likely leftover probes (code paths mostly cleaned 2026-09-16; verify HAR for exact URLs):
+
+- `/logo.svg`, `/images/logo.svg` (old fallbacks)
+- `/manifest.json`, `/site.webmanifest` (not shipped)
+- possibly one more stale chunk / icon
+
+**Action when owner asks:** download Pingdom HAR → list the five Error URLs → remove references or add assets. Do not invent a PWA manifest only to silence Pingdom.
+
+## F32 “Fewer HTTP requests”
+
+~**20 script** chunks is normal for Next App Router code-split. Further merging can hurt caching. Prefer existing `dynamic()` / no new whole-route client weight on `/`.
+
+## Redirect
+
+`http://` → `https://` **308** is correct (HSTS / Vercel). Always share **https** URLs in marketing and speed tests.
+
+## Favicon / logo in this run
+
+Report shows **`/images/logo.webp` ~12.5 KB** and Inter woff2 ~49.5 KB — aligns with current icon/font setup. Fine.
+
+## HAR verification (2026-09-17 owner download)
+
+File: `Downloads/har.json` (Pingdom creator, **31** entries).
+
+| Finding | Detail |
+|---------|--------|
+| HTTP errors | **None** — statuses are **30× 200** + **1× 308** only |
+| “Error 5 / 60.9 KB” in UI | **Not present as 4xx/5xx in HAR** — Pingdom content-type bucket mislabel or UI quirk; do not chase ghost 404s from that chart alone |
+| Redirect | `http://www.selpic.com.au/` → **308** → `https://www.selpic.com.au/` |
+| Compression | Almost all JS/CSS/HTML have **`Content-Encoding: br`** — confirms gzip F0 false positive |
+| Uncompressed tiny JS | `main-app-*.js` (~529 B) may omit CE (normal for tiny files) |
+| Font / images | woff2 + webp/png correctly uncompressed (already compressed formats) |
+| Duplicate icons | Was `/images/logo.webp` **×3** + `/images/logo.png` **×2** + favicon — **cleaned 2026-09-17**: `metadata.icons` → single `/favicon.ico` (+ apple-touch only) |
+| Heaviest JS (uncompressed) | `3794-*.js` ~222 KB, `4bd1b696-*.js` ~200 KB, `5428-*.js` ~152 KB (wire much smaller via br) |
+
+**Do not** treat Pingdom “Error” pie slice as proof of five failed URLs when HAR shows all 200s.
+
+## Cousins
+
+- `storefront-mobile-performance.mdc`, `docs/storefront-mobile-lighthouse-2026-09-09.md`
+- Broken asset cleanup (SVG/placeholders/`/products`) — prior shipping
+- `next.config.js` headers: HTML `no-store` intentional; static immutable intentional

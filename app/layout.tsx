@@ -81,13 +81,10 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [
-      { url: '/images/logo.webp', type: 'image/webp' },
-      { url: '/images/logo.png', type: 'image/png' },
-      { url: '/favicon.ico', sizes: 'any' },
-    ],
+    // Single tab icon — `/favicon.ico` rewrites to `/images/logo.webp` (next.config).
+    // Do not also list webp/png/shortcut here: Pingdom HAR showed 3× webp + 2× png duplicates.
+    icon: [{ url: '/favicon.ico', sizes: 'any' }],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: ['/images/logo.webp', '/images/logo.png'],
   },
   appleWebApp: {
     capable: true,
