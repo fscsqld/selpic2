@@ -56,6 +56,9 @@ export async function fetchPublicCatalogAndApplyIfEmpty(): Promise<void> {
   if (products.length > 0) return
 
   try {
+    const { isBrowserLikelyOffline } = await import('@/lib/siteConfigNetworkError')
+    if (isBrowserLikelyOffline()) return
+
     const res = await fetch('/api/catalog/public', { cache: 'no-store' })
     if (!res.ok) return
     let data: unknown
@@ -70,6 +73,6 @@ export async function fetchPublicCatalogAndApplyIfEmpty(): Promise<void> {
 
     useStore.setState({ products: mapped })
   } catch {
-    /* non-fatal */
+    /* non-fatal — offline / tab-suspend keeps empty or later hydrator fill */
   }
 }

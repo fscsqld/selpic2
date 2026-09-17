@@ -9,7 +9,7 @@ import { createSupabaseBrowserClientNoStore } from '@/lib/supabase/browser'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
-import { isTransientSiteConfigNetworkError } from '@/lib/siteConfigNetworkError'
+import { isTransientSiteConfigNetworkError, isBrowserLikelyOffline } from '@/lib/siteConfigNetworkError'
 
 export { isTransientSiteConfigNetworkError } from '@/lib/siteConfigNetworkError'
 
@@ -297,6 +297,13 @@ export async function fetchSiteConfigValue(opts?: {
   /** Bypass short CDN/browser cache (admin preview / forced remount). */
   forceRefresh?: boolean
 }): Promise<Record<string, unknown> | null> {
+  // Tab sleep / offline: do not hit API or Supabase — local CMS cache stays until online.
+  if (typeof window !== 'undefined' && isBrowserLikelyOffline()) {
+    return null
+  }
+
+  let publicRouteTransientFailure = false
+
   // Primary path: same-origin server route (service-role read). This is most stable on iPad Safari.
   if (typeof window !== 'undefined') {
     try {
@@ -326,15 +333,20 @@ export async function fetchSiteConfigValue(opts?: {
         }
       }
     } catch (e) {
-      // Abort = timeout or React Strict Mode / navigation cancelled a prior fetch — not a real outage.
-      const name = e && typeof e === 'object' && 'name' in e ? String((e as { name?: string }).name) : ''
-      if (name !== 'AbortError') {
+      // Abort / tab-suspend / offline: skip Supabase fallback (same outage → ERR_ADDRESS_UNREACHABLE spam).
+      if (isTransientSiteConfigNetworkError(e)) {
+        publicRouteTransientFailure = true
+      } else {
         console.warn('[siteConfig] public route fetch error', e)
       }
     }
   }
 
-  // Fallback: direct browser Supabase read.
+  if (publicRouteTransientFailure || (typeof window !== 'undefined' && isBrowserLikelyOffline())) {
+    return null
+  }
+
+  // Fallback: direct browser Supabase read (only when public route failed for a non-network reason).
   try {
     const supabase = siteConfigSupabase()
     const { data, error } = await supabase
@@ -344,14 +356,18 @@ export async function fetchSiteConfigValue(opts?: {
       .maybeSingle()
 
     if (error) {
-      console.warn('[siteConfig] direct fetch:', error.message)
+      if (!isTransientSiteConfigNetworkError(error)) {
+        console.warn('[siteConfig] direct fetch:', error.message)
+      }
       return null
     }
     const rawValue = data?.value
     if (!rawValue) return {}
     return unwrapSiteConfigValue(rawValue)
   } catch (e) {
-    console.warn('[siteConfig] direct fetch error', e)
+    if (!isTransientSiteConfigNetworkError(e)) {
+      console.warn('[siteConfig] direct fetch error', e)
+    }
   }
 
   return null

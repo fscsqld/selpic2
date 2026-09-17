@@ -11,6 +11,10 @@ import {
 } from '@/lib/contentStore'
 import { markSiteConfigRemoteFetchSettled } from '@/components/SiteConfigStoreAutosave'
 import { SELPIC_CMS_BUILD_APPLIED_SESSION_KEY } from '@/lib/siteConfigConstants'
+import {
+  isBrowserLikelyOffline,
+  waitForNetworkWake,
+} from '@/lib/siteConfigNetworkError'
 
 /** After initial retries, periodic merge with Supabase. Realtime + visibility handle most updates; this is a safety net (not every 8s — saves battery and server load on tablets). */
 const BACKGROUND_SITE_CONFIG_POLL_MS = 120_000
@@ -64,6 +68,7 @@ export default function ContentStoreSupabaseSync() {
     }
 
     const applyRemoteIfChanged = async (): Promise<boolean> => {
+      if (isBrowserLikelyOffline()) return false
       const remote = await fetchSiteConfigValue()
       if (!remote) return false
       const signature = JSON.stringify(remote)
@@ -116,7 +121,12 @@ export default function ContentStoreSupabaseSync() {
 
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
-      void applyRemoteIfChanged()
+      // After tab freeze / laptop sleep, wait for sockets to unsuspend (avoids ERR_NETWORK_IO_SUSPENDED).
+      void (async () => {
+        await waitForNetworkWake(400)
+        if (document.visibilityState !== 'visible' || isBrowserLikelyOffline()) return
+        await applyRemoteIfChanged()
+      })()
     }
 
     /** iOS Safari back-forward cache: restore old JS + localStorage; force a fresh CMS merge. */
@@ -131,7 +141,11 @@ export default function ContentStoreSupabaseSync() {
       } catch {
         // ignore
       }
-      void applyRemoteIfChanged()
+      void (async () => {
+        await waitForNetworkWake(e.persisted ? 500 : 200)
+        if (isBrowserLikelyOffline()) return
+        await applyRemoteIfChanged()
+      })()
     }
 
     // Register immediately so bfcache restore and tab switches refetch without waiting on network.
@@ -140,7 +154,10 @@ export default function ContentStoreSupabaseSync() {
 
     /** Slow mobile / flaky networks: retry until success or budget elapses (avoid stale localStorage as "the site"). */
     const onOnline = () => {
-      void applyRemoteIfChanged()
+      void (async () => {
+        await waitForNetworkWake(300)
+        await applyRemoteIfChanged()
+      })()
     }
     window.addEventListener('online', onOnline)
 
@@ -152,6 +169,10 @@ export default function ContentStoreSupabaseSync() {
         const deadline = Date.now() + INITIAL_FETCH_BUDGET_MS
         let attempt = 0
         while (Date.now() < deadline) {
+          if (isBrowserLikelyOffline()) {
+            // Wait for `online` event instead of burning the budget on suspended I/O.
+            break
+          }
           attempt += 1
           const ok = await applyRemoteIfChanged()
           if (ok) break

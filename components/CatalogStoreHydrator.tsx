@@ -3,6 +3,10 @@
 import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { type Product, useStore } from '@/lib/store'
+import {
+  isBrowserLikelyOffline,
+  waitForNetworkWake,
+} from '@/lib/siteConfigNetworkError'
 
 type CatalogPublicResponse = {
   success?: boolean
@@ -64,6 +68,7 @@ export default function CatalogStoreHydrator() {
 
     const syncFromPublicCatalog = async () => {
       if (inFlight.current) return
+      if (isBrowserLikelyOffline()) return
       inFlight.current = true
       try {
         const res = await fetch('/api/catalog/public', { cache: 'no-store' })
@@ -89,19 +94,25 @@ export default function CatalogStoreHydrator() {
         useStore.setState({ products: remoteProducts })
         lastRemoteVersion.current = version
       } catch {
-        // silent: storefront should continue with existing local cache when offline
+        // silent: storefront should continue with existing local cache when offline / tab-suspended
       } finally {
         inFlight.current = false
       }
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        void syncFromPublicCatalog()
-      }
+      if (document.visibilityState !== 'visible') return
+      void (async () => {
+        await waitForNetworkWake(400)
+        if (document.visibilityState !== 'visible' || isBrowserLikelyOffline()) return
+        await syncFromPublicCatalog()
+      })()
     }
     const onOnline = () => {
-      void syncFromPublicCatalog()
+      void (async () => {
+        await waitForNetworkWake(300)
+        await syncFromPublicCatalog()
+      })()
     }
 
     void syncFromPublicCatalog()

@@ -1,0 +1,40 @@
+---
+description: Storefront CMS/catalog ERR_NETWORK_IO_SUSPENDED / ADDRESS_UNREACHABLE (learned 2026-09-17)
+alwaysApply: false
+---
+
+# Storefront network-suspend CMS sync
+
+## Symptoms (Chrome/Edge console)
+
+```
+GET /api/site-config/public net::ERR_NETWORK_IO_SUSPENDED
+GET /api/catalog/public net::ERR_NETWORK_IO_SUSPENDED
+GET …supabase.co/rest/v1/site_configs… net::ERR_ADDRESS_UNREACHABLE
+```
+
+## Root cause (not a dead API)
+
+1. Tab backgrounded / laptop sleep / page freeze → Chromium **suspends** socket I/O.
+2. On wake, `visibilitychange` / poll / mount retry fires `fetch` too early → `ERR_NETWORK_IO_SUSPENDED`.
+3. `fetchSiteConfigValue` used to **always** fall back to browser Supabase REST after public-route failure → second failure `ERR_ADDRESS_UNREACHABLE` (same outage).
+
+Site and Supabase are usually fine when the tab is active and online.
+
+## Invariant
+
+- Prefer same-origin `/api/site-config/public` and `/api/catalog/public`.
+- On **transient** network failure (offline, suspend, AbortError, Failed to fetch): **do not** hit Supabase REST fallback.
+- Keep localStorage / Zustand cache; retry on `online` + delayed `visibilitychange`.
+
+## Guards (shipped)
+
+- `lib/siteConfigNetworkError.ts` — `isBrowserLikelyOffline`, `waitForNetworkWake`, expanded transient matchers
+- `fetchSiteConfigValue` — skip fallback after transient public failure
+- `ContentStoreSupabaseSync` / `CatalogStoreHydrator` — wake delay + offline short-circuit
+
+## Do not
+
+- Treat these console lines as proof that production CMS is down
+- Remove visibility/online refetch entirely (needed for multi-device CMS freshness)
+- Console.error transient network noise (hurts Lighthouse BP / overlays)
