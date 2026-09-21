@@ -45,7 +45,7 @@ Learned **2026-09-16**. Owner asked to inspect admin “manual label writing” 
 
 | Text | Where | Why |
 |------|-------|-----|
-| **`Form UX v5`** + hard-refresh hint | `app/stickers/custom/page.tsx` footer | Customer-facing; HMR/dev note |
+| **`Form UX v5`** + hard-refresh hint | `app/stickers/custom/page.tsx` | **Removed from customer UI** (2026-09-21). QA marker is `data-bespoke-ux="revision-v5"` on the admin-review sentence only. |
 | Legacy **Custom Stickers** strings | CMS migrate + invoice sample lines | Rebranded to Bespoke; leftovers elsewhere |
 | `NAME_LABEL_PREVIEW.md` | under customize | Learning doc only — not runtime |
 

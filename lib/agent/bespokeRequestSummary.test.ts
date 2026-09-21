@@ -59,6 +59,13 @@ describe('bespokePayloadDetailLines', () => {
     expect(lines.some((l) => l.label === 'Character product name' && l.value === 'Pikachu roll')).toBe(true)
   })
 
+  it('shows corrected Type E spelling for legacy Iron-onl requests', () => {
+    const lines = bespokePayloadDetailLines({
+      roll: { preset: 'Type E (Slim White Iron-onl)' },
+    })
+    expect(lines.some((l) => l.label === 'Roll' && l.value === 'Type E (Slim White Iron-on)')).toBe(true)
+  })
+
   it('builds reply subject from roll variant', () => {
     expect(bespokeInboundSubject(JINSOO_PAYLOAD)).toBe(
       'Re: Your Hologram Medium (30mm×13mm) request'

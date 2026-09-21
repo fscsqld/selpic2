@@ -15,13 +15,13 @@ import {
   ComposedChart,
   Legend,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
+import SafeResponsiveChart from '@/components/admin/SafeResponsiveChart'
 import { useStore } from '@/lib/store'
 import { listSydneyDaysInclusive, toSydneyDay } from '@/lib/analytics/sydney-day'
 
@@ -263,39 +263,37 @@ function AdminTrafficPageContent() {
               No traffic data yet for this range.
             </div>
           ) : (
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartRows}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    allowDecimals={false}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="uniqueVisitors"
-                    name="Unique visitors"
-                    fill="#6366f1"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="orders"
-                    name="Orders"
-                    stroke="#059669"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
+            <SafeResponsiveChart>
+              <ComposedChart data={chartRows}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  allowDecimals={false}
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip />
+                <Legend />
+                <Bar
+                  yAxisId="left"
+                  dataKey="uniqueVisitors"
+                  name="Unique visitors"
+                  fill="#6366f1"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="orders"
+                  name="Orders"
+                  stroke="#059669"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </ComposedChart>
+            </SafeResponsiveChart>
           )}
         </div>
 

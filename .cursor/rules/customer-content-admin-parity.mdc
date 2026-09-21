@@ -89,7 +89,7 @@ From `app/stickers/custom/page.tsx` submit payload:
 **Local “changes not reflecting” checklist:**
 
 1. URL must be `http://localhost:3005/stickers/custom` (not www.selpic.com.au, not :3000).
-2. Look for footer note **Form UX v4** under Submit — if missing, hard-refresh Ctrl+F5 or restart `npm run dev`.
+2. Confirm `[data-bespoke-ux="revision-v5"]` on the customer “saved for admin review” note (DOM attribute only — **never** show “Form UX v5” / HMR / Ctrl+F5 copy on the storefront). If submit UX looks stale, hard-refresh Ctrl+F5 or restart `npm run dev`.
 3. Long-lived Next process + webpack HMR can serve a stale tab; restart storefront when UX edits seem ignored.
 4. If Submit fails with toast/error, read the message — upload/save failure explains missing company email.
 
@@ -137,9 +137,9 @@ From `app/stickers/custom/page.tsx` submit payload:
 1. Fields were cleared in state but the **full form grid stayed visible** — looked unchanged at Submit scroll position.
 2. Banner at section top was easy to miss on a long two-column layout.
 3. Production still served old bundle without reset code.
-4. Logo upload fail → no clear (correct); stale HMR tab → no Form UX v4 marker.
+4. Logo upload fail → no clear (correct); stale HMR tab → missing `data-bespoke-ux="revision-v5"` on the admin-review note.
 
-**Marker:** footer note **Form UX v4** under Submit (or thank-you panel after send).
+**Marker:** `data-bespoke-ux="revision-v5"` on the customer admin-review note; thank-you panel `data-bespoke-ux="success-panel-v5"`. Do **not** put version/HMR text in the customer UI.
 
 ### Sister channels (do not regress)
 

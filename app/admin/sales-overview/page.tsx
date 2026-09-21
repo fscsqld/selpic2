@@ -6,7 +6,13 @@ import { useStore } from '@/lib/store'
 import { useState, useMemo } from 'react'
 import { ArrowLeft, DollarSign, TrendingUp, BarChart3, Calendar, ArrowRight, Download, FileText, Package, Tag, Award, FileDown, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import SafeResponsiveChart from '@/components/admin/SafeResponsiveChart'
+import {
+  formatAdminChartDay,
+  formatAdminWeekRangeLabel,
+  listRecentSundayWeeks,
+} from '@/lib/adminSalesPeriod'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
 
@@ -150,16 +156,11 @@ function SalesOverviewPageContent() {
     const yesterdayOrders = getOrdersInRange(yesterday, today)
     const yesterdayRevenue = yesterdayOrders.reduce((sum, o) => sum + (o.total || 0), 0)
     
-    // This Week
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
-    const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-    const thisWeekOrders = getOrdersInRange(weekStart, weekEnd)
+    // This Week / Last Week — Sunday–Saturday, same bounds as the weekly chart
+    const [lastWeekBounds, thisWeekBounds] = listRecentSundayWeeks(2, now)
+    const thisWeekOrders = getOrdersInRange(thisWeekBounds.start, thisWeekBounds.endInclusive)
     const thisWeekRevenue = thisWeekOrders.reduce((sum, o) => sum + (o.total || 0), 0)
-    
-    // Last Week
-    const lastWeekStart = new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const lastWeekEnd = new Date(weekStart.getTime() - 24 * 60 * 60 * 1000)
-    const lastWeekOrders = getOrdersInRange(lastWeekStart, lastWeekEnd)
+    const lastWeekOrders = getOrdersInRange(lastWeekBounds.start, lastWeekBounds.endInclusive)
     const lastWeekRevenue = lastWeekOrders.reduce((sum, o) => sum + (o.total || 0), 0)
     
     // This Month
@@ -231,20 +232,17 @@ function SalesOverviewPageContent() {
         const periodOrders = getOrdersInRange(date, nextDate)
         const revenue = periodOrders.reduce((sum, o) => sum + (o.total || 0), 0)
         data.push({
-          period: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          period: formatAdminChartDay(date),
           revenue,
           orders: periodOrders.length
         })
       }
     } else if (selectedPeriod === 'weekly') {
-      const now = new Date()
-      for (let i = 11; i >= 0; i--) {
-        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + i * 7))
-        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)
-        const periodOrders = getOrdersInRange(weekStart, weekEnd)
+      for (const week of listRecentSundayWeeks(12)) {
+        const periodOrders = getOrdersInRange(week.start, week.endInclusive)
         const revenue = periodOrders.reduce((sum, o) => sum + (o.total || 0), 0)
         data.push({
-          period: `Week ${i + 1}`,
+          period: formatAdminWeekRangeLabel(week.start, week.endInclusive),
           revenue,
           orders: periodOrders.length
         })
@@ -579,10 +577,17 @@ function SalesOverviewPageContent() {
               </div>
               
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
+                <SafeResponsiveChart height={300}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
+                    <XAxis
+                      dataKey="period"
+                      interval={0}
+                      angle={selectedPeriod === 'daily' || selectedPeriod === 'yearly' ? 0 : -35}
+                      textAnchor={selectedPeriod === 'daily' || selectedPeriod === 'yearly' ? 'middle' : 'end'}
+                      height={selectedPeriod === 'daily' || selectedPeriod === 'yearly' ? 30 : 72}
+                      tick={{ fontSize: 11 }}
+                    />
                     <YAxis />
                     <Tooltip
                       formatter={(value) =>
@@ -592,7 +597,7 @@ function SalesOverviewPageContent() {
                     <Legend />
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name={T.revenue} />
                   </LineChart>
-                </ResponsiveContainer>
+                </SafeResponsiveChart>
               ) : (
                 <div className="text-center py-12 text-gray-500">{T.noData}</div>
               )}
@@ -661,7 +666,7 @@ function SalesOverviewPageContent() {
                     </table>
                   </div>
                   <div>
-                    <ResponsiveContainer width="100%" height={300}>
+                    <SafeResponsiveChart height={300}>
                       <PieChart>
                         <Pie
                           data={categoryAnalysis.map(c => ({ name: c.category, value: c.revenue }))}
@@ -685,7 +690,7 @@ function SalesOverviewPageContent() {
                       }
                     />
                       </PieChart>
-                    </ResponsiveContainer>
+                    </SafeResponsiveChart>
                   </div>
                 </div>
               ) : (
@@ -724,7 +729,7 @@ function SalesOverviewPageContent() {
                     </table>
                   </div>
                   <div>
-                    <ResponsiveContainer width="100%" height={300}>
+                    <SafeResponsiveChart height={300}>
                       <BarChart data={vipAnalysis}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="grade" />
@@ -737,7 +742,7 @@ function SalesOverviewPageContent() {
                         <Legend />
                         <Bar dataKey="revenue" fill="#3b82f6" name={T.sales} />
                       </BarChart>
-                    </ResponsiveContainer>
+                    </SafeResponsiveChart>
                   </div>
                 </div>
               ) : (

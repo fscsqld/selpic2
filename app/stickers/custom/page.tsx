@@ -9,6 +9,12 @@ import { Type, Image as ImageIcon, Ruler, Send, ChevronDown, ChevronUp, Loader2,
 import { getStickerFonts, type FontConfig } from '@/lib/fontList'
 import { sortProductsByCatalogPrice } from '@/lib/storefrontProductSort'
 import { isAllowedBespokeLogoFile } from '@/lib/bespokeLogoFile'
+import {
+  BESPOKE_ROLL_TYPES,
+  bespokePageSubtitle,
+  fontButtonSecondaryLine,
+  isTypeERoll,
+} from '@/lib/bespokeCustomerCopy'
 
 const BESPOKE_SUBMITTED_SESSION_KEY = 'selpic-bespoke-submitted'
 const BESPOKE_SUBMITTED_QUERY = 'submitted'
@@ -100,7 +106,7 @@ function PresetFontGrid({
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span className="text-xs font-medium text-gray-700">Preview: click letters</span>
           <span className="text-[11px] text-gray-500">
-            Hover a preset to preview its font
+            Hover or tap a preset to preview its font
           </span>
         </div>
         <div className="flex flex-wrap gap-2 mb-2">
@@ -160,6 +166,7 @@ function PresetFontGrid({
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
         {fonts.map((f) => {
           const label = STICKER_FONT_PRESET_LABELS[f.id] ?? f.displayName
+          const secondary = fontButtonSecondaryLine(label, f.displayName)
           const active = selectedId === f.id
           return (
             <button
@@ -176,9 +183,11 @@ function PresetFontGrid({
               style={{ fontFamily: f.fontFamily }}
             >
               <span className="block text-xs font-semibold text-gray-900">{label}</span>
-              <span className="mt-0.5 block text-[10px] leading-tight text-gray-500 line-clamp-2">
-                {f.displayName}
-              </span>
+              {secondary ? (
+                <span className="mt-0.5 block text-[10px] leading-tight text-gray-500 line-clamp-2">
+                  {secondary}
+                </span>
+              ) : null}
             </button>
           )
         })}
@@ -418,11 +427,11 @@ export default function CustomStickersPage() {
       ? 'Bespoke Labels'
       : subcategoryInfo.pageTitle
 
-  const pageSubtitle =
-    !subcategoryInfo?.pageSubtitle ||
-    subcategoryInfo.pageSubtitle.includes(LEGACY_SUBTITLE_NEEDLE)
-      ? `The Ultimate Tailor-Made Sticker Experience. (${customStickers.length} ready-made products, plus bespoke requests below.)`
-      : subcategoryInfo.pageSubtitle
+  const pageSubtitle = bespokePageSubtitle(
+    subcategoryInfo?.pageSubtitle,
+    customStickers.length,
+    LEGACY_SUBTITLE_NEEDLE
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -503,14 +512,7 @@ export default function CustomStickersPage() {
                   1. Roll Type
                 </label>
                 <div className="grid grid-cols-3 gap-2 mb-3">
-                  {[
-                    'Type A (Hologram)',
-                    'Type B (9-Color Pearl)',
-                    'Type C (Pearl White Plain)',
-                    'Type D (Crystal Clear)',
-                    'Type E (Slim White Iron-onl)',
-                    'Type F (Additional Character Rolls)'
-                  ].map((roll) => (
+                  {BESPOKE_ROLL_TYPES.map((roll) => (
                     <button
                       key={roll}
                       type="button"
@@ -652,9 +654,9 @@ export default function CustomStickersPage() {
                   </div>
                 )}
 
-                {selectedRoll === 'Type E (Slim White Iron-onl)' && (
+                {isTypeERoll(selectedRoll) && (
                   <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Type E (Slim White Iron-onl) - size</p>
+                    <p className="text-xs font-medium text-gray-700 mb-2">Type E (Slim White Iron-on) - size</p>
                     <div className="flex flex-wrap gap-2">
                       {[
                         { value: 'Slim White Iron-on Medium (30mm×15mm)', label: 'Slim White Iron-on Medium (30mm×15mm)' }
@@ -909,7 +911,7 @@ export default function CustomStickersPage() {
                 </label>
                 <div className="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center bg-gray-50 text-xs md:text-sm text-gray-500 mb-3">
                   <p className="mb-2">
-                    Upload PNG or SVG here. Drag-and-drop placement on a canvas editor will be added in a future update.
+                    Upload a PNG or SVG. Use the notes below to describe placement.
                   </p>
                   <label className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer transition-colors">
                     <input
@@ -1189,12 +1191,8 @@ export default function CustomStickersPage() {
                     <p className="mt-1 text-xs md:text-sm opacity-95">{submitFeedback.message}</p>
                   </div>
                 ) : null}
-                <p className="mt-3 text-[11px] text-slate-400">
+                <p className="mt-3 text-[11px] text-slate-400" data-bespoke-ux="revision-v5">
                   * After submission, your file and request details are saved for admin review.
-                </p>
-                <p className="mt-1 text-[10px] text-slate-500" data-bespoke-ux="revision-v5">
-                  Form UX v5 — success uses URL + session backup so filled fields cannot “stick” after HMR or
-                  slow Resend. Hard-refresh (Ctrl+F5) if you do not see “Form UX v5” here.
                 </p>
               </div>
 
@@ -1212,18 +1210,13 @@ export default function CustomStickersPage() {
           )}
         </section>
 
-        {/* Ready-made custom sticker products — ProductCard (max 240×240px) */}
+        {customStickers.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {customStickers.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
-
-        {customStickers.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No custom stickers available.</p>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

@@ -6,8 +6,9 @@
  * Storefront payload schema: app/stickers/custom/page.tsx (~L879)
  */
 
-export type BespokeStickerPayloadLike = Record<string, unknown>
+import { displayBespokeRollType } from '../bespokeCustomerCopy'
 
+export type BespokeStickerPayloadLike = Record<string, unknown>
 export type BespokePayloadDetailLine = { label: string; value: string }
 
 function str(v: unknown): string {
@@ -34,7 +35,7 @@ export function bespokePayloadDetailLines(
 
   const lines: BespokePayloadDetailLine[] = []
 
-  const rollPreset = str(roll.preset)
+  const rollPreset = displayBespokeRollType(str(roll.preset))
   const rollVariant = str(roll.variant)
   if (rollPreset || rollVariant) {
     lines.push({
