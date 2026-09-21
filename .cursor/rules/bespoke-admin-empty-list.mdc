@@ -1,0 +1,30 @@
+---
+description: Empty Bespoke admin list is not automatically a Supabase timeout — distinguish 0 rows vs fetch error vs search miss
+globs: app/admin/bespoke-requests/**,lib/server/bespokeStickerRequests.ts,app/api/bespoke-requests/**,lib/server/adminInboundSummary.ts
+alwaysApply: true
+---
+
+# Bespoke admin empty list
+
+**Invariant:** `No requests found.` means the API returned **200 + `records: []`** (Supabase table is empty). It is not proof of a timeout.
+
+Learned **2026-09-21**. Live `bespoke_sticker_requests` was `content-range */0` while `contact_messages` had rows. Local `data/bespoke-requests/stickers-custom/requests.json` is also `[]` (Vercel disk is not the source of truth).
+
+## How to read the screen
+
+| What you see | Meaning |
+|---|---|
+| `No requests found.` and **no** red error | Successful empty DB. Normal if nobody submitted. |
+| Red error (`Failed to fetch` / 401 / 503) | Load failed. Do **not** treat as zero requests. |
+| `No matching requests.` | Search filter; rows may still exist. |
+| Inbound badge 0 for Bespoke | Same empty table, or the item omitted after a thrown read. |
+
+## Do not
+
+- “Fix” empty by falling back to the empty local JSON (that was the timeout fake-zero).
+- Assume production emails mean rows still exist — table can be 0.
+- Confuse Customer Messages (other table) with Bespoke Label Requests.
+
+## Cousins
+
+Contact / newsletter / community / orders inbound counts; Agent inbound queue; search-filtered empty lists.

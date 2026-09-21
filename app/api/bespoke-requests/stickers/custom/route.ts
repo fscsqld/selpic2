@@ -29,9 +29,14 @@ export async function GET() {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
   }
 
-  const records = await readBespokeStickerRequests()
-  records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  return NextResponse.json({ records })
+  try {
+    const records = await readBespokeStickerRequests()
+    records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return NextResponse.json({ records })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load requests'
+    return NextResponse.json({ success: false, message }, { status: 503 })
+  }
 }
 
 export async function POST(req: Request) {

@@ -2,6 +2,7 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_MEDIA_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import type { MediaSyncRecord } from '@/lib/mediaSync'
 
@@ -33,9 +34,7 @@ function getSupabaseMediaClient(): { client: SupabaseClient; source: 'service' |
   // site_configs RLS is open in this project; anon fallback prevents split-brain when service key is missing.
   if (url && anon) {
     return {
-      client: createClient(url, anon, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      }),
+      client: createClient(url, anon, supabaseNoSessionClientOptions()),
       source: 'anon',
     }
   }

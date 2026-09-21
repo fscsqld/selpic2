@@ -31,6 +31,18 @@ describe('isTransientSiteConfigNetworkError', () => {
       )
     ).toBe(false)
   })
+
+  it('treats undici ConnectTimeoutError (including nested cause) as transient', () => {
+    const timeout = Object.assign(new Error('Connect Timeout Error (attempted address: 172.64.149.246:443, timeout: 10000ms)'), {
+      name: 'ConnectTimeoutError',
+      code: 'UND_ERR_CONNECT_TIMEOUT',
+    })
+    expect(isTransientSiteConfigNetworkError(timeout)).toBe(true)
+
+    const wrapped = new TypeError('fetch failed')
+    ;(wrapped as Error & { cause: unknown }).cause = timeout
+    expect(isTransientSiteConfigNetworkError(wrapped)).toBe(true)
+  })
 })
 
 describe('isBrowserLikelyOffline', () => {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { buildAgentInboundDraftHref } from '@/lib/agent/inboundLinks'
+import { bespokeAdminListEmptyCopy } from '@/lib/bespokeAdminListEmptyCopy'
 
 type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'replied' | 'approved' | 'rejected'
 
@@ -316,6 +317,13 @@ function AdminBespokeRequestsContent() {
     }
   }
 
+  const emptyListCopy = bespokeAdminListEmptyCopy({
+    loading,
+    error,
+    search,
+    count: filteredRecords.length,
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminPageHeader
@@ -414,8 +422,8 @@ function AdminBespokeRequestsContent() {
               </div>
             )
           })}
-          {filteredRecords.length === 0 && !loading ? (
-            <div className="text-sm text-gray-500 lg:col-span-2">No requests found.</div>
+          {emptyListCopy ? (
+            <div className="text-sm text-gray-500 lg:col-span-2">{emptyListCopy}</div>
           ) : null}
         </div>
 

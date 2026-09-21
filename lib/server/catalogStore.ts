@@ -2,6 +2,7 @@ import path from 'path'
 import fs from 'fs/promises'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_CATALOG_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
 
@@ -28,9 +29,7 @@ function getCatalogSupabaseClient(): SupabaseClient | null {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
   if (!url || !anon) return null
   if (!catalogSupabaseAnonClient) {
-    catalogSupabaseAnonClient = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
+    catalogSupabaseAnonClient = createClient(url, anon, supabaseNoSessionClientOptions())
   }
   return catalogSupabaseAnonClient
 }

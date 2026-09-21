@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
+import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 import {
@@ -20,9 +21,7 @@ function getSiteConfigClient(): SupabaseClient | null {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
   if (!url || !anon) return null
   if (!anonClient) {
-    anonClient = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
+    anonClient = createClient(url, anon, supabaseNoSessionClientOptions())
   }
   return anonClient
 }

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 
 let singleton: SupabaseClient | null = null
 
@@ -12,9 +13,7 @@ export function getSupabaseAdmin(): SupabaseClient {
     throw new Error('Supabase is not configured (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).')
   }
   if (!singleton) {
-    singleton = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
+    singleton = createClient(url, key, supabaseNoSessionClientOptions())
   }
   return singleton
 }

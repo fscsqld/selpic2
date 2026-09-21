@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SELPIC_CONTENTS_BUCKET } from '@/lib/selpicStorageBucket'
+import { localCopyAfterRemoteFailure } from '@/lib/server/localCopyAfterRemoteFailure'
 
 export type BespokeStickerRequestStatus = 'new' | 'reviewed' | 'replied' | 'approved' | 'rejected'
 
@@ -104,7 +105,17 @@ export async function readBespokeStickerRequests(): Promise<BespokeStickerReques
     try {
       return await readBespokeStickerRequestsFromSupabase()
     } catch (err) {
-      console.warn('[bespokeStickerRequests] Supabase read failed, falling back to file:', err)
+      const fileRecords = await readBespokeStickerRequestsFromFile()
+      const localCopy = localCopyAfterRemoteFailure(fileRecords)
+      if (localCopy) {
+        console.warn('[bespokeStickerRequests] Supabase read failed, using local file copy:', err)
+        return localCopy
+      }
+      console.error(
+        '[bespokeStickerRequests] Supabase read failed with no local copy; not treating empty file as source of truth:',
+        err
+      )
+      throw err
     }
   }
   return readBespokeStickerRequestsFromFile()
