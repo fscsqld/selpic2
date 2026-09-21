@@ -11,7 +11,8 @@ alwaysApply: true
 **Prior lab** (Sep 11 **3:29** PM GMT+10): Perf **78**, FCP **1.1s**, LCP **4.4s**, TBT **30ms**, SI **7.3s**, CLS 0.002, payload **~4.8 MiB**, A11y **92**.  
 **Prior lab** (Sep 12 **9:42** PM GMT+10): Perf **75**, FCP **1.1s**, LCP **4.8s**, TBT **80ms**, SI **7.1s**, CLS **0.03**, payload **~3.2 MiB**, A11y **100**.  
 **Prior lab** (Sep 12 **10:11** PM GMT+10): Perf **69**, FCP **1.1s**, LCP **6.1s**, TBT **120ms**, SI **8.5s**, CLS **0.002**, payload **~3.2 MiB**, A11y **100**.  
-**Latest lab** (Sep 16 **10:01** AM GMT+10): Perf **77**, FCP **1.1s**, LCP **4.4s**, TBT **40ms**, SI **7.8s**, CLS **0.002**, payload **~3.2 MiB** (3,264 KiB). A11y **100**, BP **100**, SEO **100**, Agentic **2/2**. CrUX **No Data**. Weights: FCP +10, LCP +10, TBT +30, CLS +25, SI +2.  
+**Prior lab** (Sep 16 **10:01** AM GMT+10): Perf **77**, FCP **1.1s**, LCP **4.4s**, TBT **40ms**, SI **7.8s**, CLS **0.002**, payload **~3.2 MiB**. A11y/BP/SEO/Agentic **100**/100/100/2/2.  
+**Latest lab** (Sep 17 **5:01** PM GMT+10): Perf **81**, FCP **1.1s**, LCP **4.4s**, TBT **60ms**, SI **5.4s**, CLS **0.002**. A11y **100**, BP **100**, SEO **100**, Agentic **2/2**. CrUX **No Data**. Weights: FCP +10, LCP +10, TBT +30, CLS +25, SI +6.  
 Full mapping: `docs/storefront-mobile-lighthouse-2026-09-09.md`. Goal: LCP ≤2.5–4s lab without Hero redesign.
 
 ## Invariant
@@ -35,22 +36,22 @@ Do **not** remove these scrims without owner OK — photos will look brighter bu
 
 **External “defer hero video + prioritize LCP image” brief (learned 2026-09-12):** Diagnosis partly right (MP4 can contend on Slow 4G). **Already shipped:** mobile poster-first (~2.8s/idle), `preload="metadata"`, LCP = fallback WebP + `fetchPriority="high"` + `<link rel="preload" as="image">`. Do **not** re-do as Next `<Image fill>` refactor. **>85** needs **smaller admin MP4**, not this brief alone. See doc § defer video brief.
 
-## Top remaining lab insights (after 10:01 Sep 16)
+## Top remaining lab insights (after **5:01 Sep 17**)
 
 | Insight | Notes |
 |---------|--------|
-| Image delivery (~**608 KiB**) | Up vs ~407 @ 10:11 PM claim — residual CMS/hero assets |
-| Cache lifetimes (~**2,006 KiB**) | Mostly **3rd-party** TTL (Supabase/CDN) |
-| Render-blocking (~**670 ms**) | Similar class to prior ~610–720ms |
-| LCP **4.4s** | Back to best lab class (was 6.1s @ 10:11 PM) — LCP weight **+10** again |
-| SI **7.8s** | Better than 8.5s @ 10:11 PM; still above “good” |
-| TBT **40ms** | Strong (was 120ms) |
+| Image delivery (~**141 KiB** est. savings) | Much smaller claim than ~608 @ Sep 16 — residual CMS/hero sizing |
+| Cache lifetimes (~**1,056 KiB**) | Better than ~2,006 @ Sep 16; still mostly **3rd-party** / CDN TTL |
+| Render-blocking (~**650 ms**) | Flat vs prior ~670ms class |
+| LCP **4.4s** | Held best lab class (weight **+10**) — still the score ceiling vs 90+ |
+| SI **5.4s** | **Big win** vs 7.8s @ Sep 16 (SI weight **+6** this run) |
+| TBT **60ms** | Slightly up vs 40ms; still strong (weight +30) |
 | CLS **0.002** | Held |
-| Payload **~3.2 MiB** | Flat vs Sep 12 |
-| A11y **100** | Hold |
-| Perf **77** | Recovered from 69; near prior peak 78 — confirms 69 was lab noise, not logo |
+| Unused JS / CSS | ~**56** / ~**20** KiB est. |
+| Long tasks | **4** (was often 2) — watch but not the headline |
+| A11y / BP / SEO / Agentic | **100 / 100 / 100 / 2/2** — hold |
 
-**PSI image delivery ~608 KiB / Supabase list (learned 2026-09-16):** Flags are mostly **full-resolution CMS WebP served into smaller CSS boxes** (category ~400px display vs ~800–1000px files; header logo 584×172 vs ~136×40). Supabase URLs are **pass-through** (Unsplash-only downsize in `optimizeStorefrontImageUrl`). `/images/logo.png` ~89 KiB is **favicon/static**, not the CMS header WebP. See `.cursor/rules/psi-image-delivery-oversized-cms.mdc`.
+**PSI image delivery ~608 KiB / Supabase list (learned 2026-09-16):** Flags are mostly **full-resolution CMS WebP served into smaller CSS boxes** (category ~400px display vs ~800–1000px files; header logo 584×172 vs ~136×40). Supabase URLs are **pass-through** (Unsplash-only downsize in `optimizeStorefrontImageUrl`). `/images/logo.png` ~89 KiB is **favicon/static**, not the CMS header WebP. See `.cursor/rules/psi-image-delivery-oversized-cms.mdc`. Sep 17 run claims only ~**141 KiB** savings — do not re-inflate priority from the old 608 figure without a fresh treemap.
 
 **Header CMS logo asset (learned 2026-09-12 evening):** Owner’s preferred company logo for Admin → Logo Image Management is the transparent-bg SELPIC mark (~**16.5 KB** WebP, **584×172**, **has alpha**). Re-upload fixes opaque-plate “box”. Prefer PNG/WebP **with transparency** (or SVG). Cloud `usage=header-logo` required for multi-device sync.
 
@@ -73,9 +74,9 @@ Do **not** remove these scrims without owner OK — photos will look brighter bu
 - Treat generic “Hero must use next/image + delete logo.png + add Supabase preconnect” briefs as the LCP root cause — **learned false** for SELPIC (video hero; see doc).
 - Pull accounting-sandbox into storefront webpack.
 - Treat only desktop; assume Moto G / Slow 4G.
-- Claim wins from older baselines — use latest PSI time (**10:01** Sep 16).
+- Claim wins from older baselines — use latest PSI time (**5:01** Sep 17).
 
 ## When touching `/` or root layout / next.config headers
 
 1. Re-read this rule + `homepage-protection.mdc`.
-2. After meaningful perf work: PSI mobile — note vs **10:01** (77 / 4.4s LCP / TBT 40ms / SI 7.8s / ~3.2 MiB / A11y 100). Expect some LCP noise; primary lever remains smaller hero MP4.
+2. After meaningful perf work: PSI mobile — note vs **5:01 Sep 17** (81 / 4.4s LCP / TBT 60ms / SI 5.4s / A11y 100). Expect some LCP noise; primary lever for 85+ remains smaller hero MP4.

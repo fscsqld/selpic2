@@ -1,6 +1,6 @@
 # Storefront mobile performance — Lighthouse learning
 
-## Latest lab report — Sep 16, 2026, **10:01:56 AM** GMT+10
+## Latest lab report — Sep 17, 2026, **5:01:05 PM** GMT+10
 
 | Field | Value |
 |-------|--------|
@@ -8,34 +8,44 @@
 | Tool | PageSpeed Insights / Lighthouse **13.4.1** |
 | Device | Emulated **Moto G Power**, Mobile, Slow 4G |
 | Field CrUX | **No Data** |
-| Weights | FCP +10, LCP +10, TBT +30, CLS +25, SI +2 |
+| Weights | FCP +10, LCP +10, TBT +30, CLS +25, SI +6 |
 
 ### Score trail
 
-| Metric | 3:29 | 9:42 PM | 10:11 PM | **Latest 10:01 AM (Sep 16)** |
-|--------|-----:|--------:|---------:|-----------------------------:|
-| Performance | 78 | 75 | 69 | **77** |
-| FCP | 1.1 s | 1.1 s | 1.1 s | **1.1 s** |
-| LCP | 4.4 s | 4.8 s | 6.1 s | **4.4 s** |
-| TBT | 30 ms | 80 ms | 120 ms | **40 ms** |
-| SI | 7.3 s | 7.1 s | 8.5 s | **7.8 s** |
-| CLS | 0.002 | 0.03 | 0.002 | **0.002** |
-| Payload | ~4.8 | ~3.2 | ~3.2 | **~3.2 MiB** (3,264 KiB) |
-| Image delivery (claimed) | ~393 | ~592 | ~407 | **~608 KiB** |
-| Accessibility | 92 | 100 | 100 | **100** |
-| Best Practices | 100 | 100 | 100 | **100** |
-| SEO | 100 | 100 | 100 | **100** |
-| Agentic | 2/2 | 2/2 | 2/2 | **2/2** |
+| Metric | 10:11 PM Sep 12 | 10:01 AM Sep 16 | **Latest 5:01 PM Sep 17** |
+|--------|----------------:|----------------:|--------------------------:|
+| Performance | 69 | 77 | **81** |
+| FCP | 1.1 s | 1.1 s | **1.1 s** |
+| LCP | 6.1 s | 4.4 s | **4.4 s** |
+| TBT | 120 ms | 40 ms | **60 ms** |
+| SI | 8.5 s | 7.8 s | **5.4 s** |
+| CLS | 0.002 | 0.002 | **0.002** |
+| Image delivery (claimed savings) | ~407–608 KiB | ~608 KiB | **~141 KiB** |
+| Cache lifetimes (claimed) | — | ~2,006 KiB | **~1,056 KiB** |
+| Render-blocking | — | ~670 ms | **~650 ms** |
+| Accessibility | 100 | 100 | **100** |
+| Best Practices | 100 | 100 | **100** |
+| SEO | 100 | 100 | **100** |
+| Agentic | 2/2 | 2/2 | **2/2** |
 
-**Read (10:01 Sep 16):** Strong recovery — Perf **69 → 77**, LCP **6.1 → 4.4s** (weight +3 → **+10**), TBT **120 → 40ms**, SI **8.5 → 7.8s**. Payload still ~**3.2 MiB**. Confirms Sep 12 evening **69** was **lab/Slow-4G hero timing noise**, not the header-logo upload. A11y/BP/SEO/Agentic held at 100. Remaining: image delivery ~**608 KiB**, 3rd-party cache ~**2.0 MiB**, render-blocking ~**670 ms**, unused JS/CSS, 2 long tasks. Primary CWV lever if chasing 85+ / LCP ≤4s: **admin smaller hero MP4**.
+**Read (5:01 Sep 17):** New peak Perf **81** (was 77). **SI 7.8 → 5.4s** is the headline (SI weight +6 this run). LCP **held 4.4s** (still the ceiling vs 90). TBT **40 → 60ms** (noise / still fine). Image-delivery and cache insights **improved a lot** vs Sep 16 claims (141 / 1056 KiB). Favicon metadata dedupe shipped same day — may shave icon duplicates but does **not** explain LCP; primary remaining lever remains **smaller hero MP4**. Do not treat Pingdom C73 as this run’s twin — different tool.
 
-### What changed (10:01 Sep 16 vs 10:11 PM Sep 12)
+### Insights called out (5:01 Sep 17)
 
-- Perf **69 → 77**; LCP **6.1 → 4.4s**; TBT **120 → 40ms**; SI **8.5 → 7.8s**
-- FCP / CLS / payload / A11y held
-- Insights: render-blocking ~**670 ms**, cache ~**2,006 KiB**, image delivery ~**608 KiB**
+- Improve image delivery (~141 KiB)
+- Legacy JavaScript (~12 KiB)
+- Render-blocking (~650 ms)
+- Forced reflow / LCP request discovery / network dependency tree
+- Efficient cache lifetimes (~1,056 KiB)
+- Unused JS (~56 KiB) / unused CSS (~20 KiB)
+- Images missing explicit width/height
+- 4 long main-thread tasks
 
-### Prior note (10:11 PM — logo ≠ score drop)
+### Prior note (10:01 Sep 16)
+
+Strong recovery — Perf **69 → 77**, LCP **6.1 → 4.4s**, TBT **120 → 40ms**, SI **8.5 → 7.8s**. Confirmed Sep 12 **69** was lab noise, not header-logo upload.
+
+### Prior note (10:11 PM Sep 12 — logo ≠ score drop)
 
 Header logo ~16.5 KB did not move payload; LCP swing drove the 75→69 dip.
 
