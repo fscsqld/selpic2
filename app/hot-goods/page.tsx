@@ -7,8 +7,15 @@ import { useContentStore } from '@/lib/contentStore'
 import { Filter, Search, Star, Shield, Award, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import Header from '@/components/Header'
-import SlidingBackground from '@/components/SlidingBackground'
+import MarketSLandingHero from '@/components/MarketSLandingHero'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
+import { resolveMarketSHeroCopy } from '@/lib/marketSHeroCopy'
+import { isMarketSCatalogProduct, marketSSubcategoryIcon } from '@/lib/marketSSubcategory'
+import {
+  MARKET_S_HUB_FILTER_ALL,
+  marketSHubFilterOptions,
+  productMatchesMarketSHubFilter,
+} from '@/lib/marketSHubFilter'
 
 // Market S 상품 타입 정의
 interface MarketSProduct {
@@ -18,7 +25,7 @@ interface MarketSProduct {
   price: number
   originalPrice?: number
   image: string
-  category: 'sunscreen' | 'coolpatch' | 'beauty' | 'lifestyle' | 'other'
+  category: string
   subcategory?: string
   size?: string
   brand?: string
@@ -47,7 +54,7 @@ export default function HotGoodsPage() {
   const [marketSProducts, setMarketSProducts] = useState<MarketSProduct[]>([])
   const [filteredProducts, setFilteredProducts] = useState<MarketSProduct[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedCategory, setSelectedCategory] = useState<string>(MARKET_S_HUB_FILTER_ALL)
   const [sortBy, setSortBy] = useState<string>('price-low')
   const [showFilters, setShowFilters] = useState(false)
   
@@ -78,43 +85,29 @@ export default function HotGoodsPage() {
     if (!isMounted || !contentHydrated) {
       return {
         title: 'Market S',
-        description: 'Korea\'s trending hot items - UV protection, cool patches, and more!',
-        emoji: '🔥'
+        description: '',
       }
     }
     const activeCategories = getActiveCategoryItems()
     const marketSCategory = activeCategories.find(cat => cat.linkUrl === '/hot-goods' || cat.title === 'Market S')
     return {
-      title: marketSCategory ? `${marketSCategory.emoji} ${marketSCategory.title}` : 'Market S',
-      description: marketSCategory?.description || 'Korea\'s trending hot items - UV protection, cool patches, and more!',
-      emoji: marketSCategory?.emoji || '🔥'
+      title: (marketSCategory?.title || '').trim() || 'Market S',
+      description: (marketSCategory?.description || '').trim(),
     }
   }, [isMounted, contentHydrated, categoryItems, getActiveCategoryItems])
   
   // 🆕 현재 슬라이드 인덱스 상태 관리
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
 
-  // 🆕 슬라이드별 텍스트 가져오기 (현재 활성 슬라이드의 텍스트 사용)
   const slideText = React.useMemo(() => {
-    if (!isMounted) {
-      return {
-        title: 'Market S',
-        subtitle: 'Korea\'s trending hot items'
-      }
-    }
-    if (categoryHeroSlides && categoryHeroSlides.length > 0) {
-      // 🆕 현재 슬라이드 인덱스에 해당하는 슬라이드의 텍스트 사용
-      const currentSlide = categoryHeroSlides[currentSlideIndex] || categoryHeroSlides[0]
-      return {
-        title: currentSlide.title ?? '',
-        subtitle: currentSlide.subtitle ?? ''
-      }
-    }
-    return {
-      title: categoryInfo.title,
-      subtitle: categoryInfo.description
-    }
-  }, [isMounted, categoryHeroSlides, categoryInfo, currentSlideIndex])
+    const currentSlide = categoryHeroSlides[currentSlideIndex] || categoryHeroSlides[0]
+    return resolveMarketSHeroCopy({
+      slideTitle: currentSlide?.title,
+      slideSubtitle: currentSlide?.subtitle,
+      categoryTitle: categoryInfo.title,
+      categoryDescription: categoryInfo.description,
+    })
+  }, [categoryHeroSlides, categoryInfo, currentSlideIndex])
 
   // 🆕 슬라이드 변경 핸들러
   const handleSlideChange = React.useCallback((index: number) => {
@@ -167,10 +160,7 @@ export default function HotGoodsPage() {
     const generateMarketSProducts = () => {
       // Market S 노출 조건: isHotGoods가 true이거나 카테고리가 HotGoods인 상품
       // 재고가 0인 상품도 표시 (Sold Out으로 표시됨)
-      const baseProducts = products.filter(product => {
-        const matchesCategory = product.isHotGoods === true || product.category === 'HotGoods'
-        return matchesCategory
-      })
+      const baseProducts = products.filter((product) => isMarketSCatalogProduct(product))
       
       // 디버깅: 필터링된 상품 확인
       console.log('🔍 Market S - Total products:', products.length)
@@ -207,7 +197,7 @@ export default function HotGoodsPage() {
           price: product.price,
           originalPrice: product.originalPrice,
           image: product.image,
-          category: 'other', // 기본값, 필요시 상품 정보에서 매핑 가능
+          category: String(product.category || 'HotGoods'),
           subcategory: product.subcategory,
           size: (product as any).size,
           brand: (product as any).brand,
@@ -257,45 +247,18 @@ export default function HotGoodsPage() {
     return () => window.clearInterval(t)
   }, [hasMarketSProducts, typingText])
 
-  // 실제 등록된 상품의 카테고리 목록 동적 생성
-  const availableCategories = React.useMemo(() => {
-    const categories = new Set<string>()
-    marketSProducts.forEach(product => {
-      if (product.category) {
-        categories.add(product.category)
-      }
-    })
-    return Array.from(categories).sort()
-  }, [marketSProducts])
-
-  // 실제 등록된 상품의 서브카테고리 목록 동적 생성
   const availableSubcategories = React.useMemo(() => {
     const subcategories = new Set<string>()
-    marketSProducts.forEach(product => {
-      if (product.subcategory) {
-        subcategories.add(product.subcategory)
-      }
+    marketSProducts.forEach((product) => {
+      if (product.subcategory) subcategories.add(product.subcategory)
     })
-    return Array.from(subcategories).sort()
+    return Array.from(subcategories)
   }, [marketSProducts])
 
-  // 서브카테고리 아이콘 및 라벨 매핑 (Add New Market S 페이지와 동일한 형식)
-  const getSubcategoryIcon = (subcategory: string) => {
-    const icons: Record<string, string> = {
-      'Sunscreen': '☀️',
-      'Sunstick': '🧴',
-      'Cool Patch': '❄️',
-      'Lifestyle': '🌟',
-      'Other': '🔥'
-    }
-    return icons[subcategory] || '📦'
-  }
-
-  // 서브카테고리 라벨 매핑 (Add New Market S 페이지와 동일한 형식)
-  const getSubcategoryLabel = (subcategory: string) => {
-    // Add New Market S 페이지와 동일한 형식으로 표시
-    return subcategory
-  }
+  const hubSubcategoryFilters = React.useMemo(
+    () => marketSHubFilterOptions(availableSubcategories),
+    [availableSubcategories]
+  )
 
   // 필터링 및 검색 로직
   useEffect(() => {
@@ -307,22 +270,17 @@ export default function HotGoodsPage() {
       filtered = filtered.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(product.subcategory || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(product.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.features && product.features.some(feature => feature.toLowerCase().includes(searchTerm.toLowerCase())))
       )
     }
 
     // 카테고리 및 서브카테고리 필터링 (통합)
-    if (selectedCategory !== 'all') {
-      // 카테고리와 서브카테고리가 함께 선택된 경우 (예: "other-Sunscreen")
-      if (selectedCategory.includes('-')) {
-        const [category, subcategory] = selectedCategory.split('-')
-        filtered = filtered.filter(product => 
-          product.category === category && product.subcategory === subcategory
-        )
-      } else {
-        // 카테고리만 선택된 경우
-        filtered = filtered.filter(product => product.category === selectedCategory)
-      }
+    if (selectedCategory !== MARKET_S_HUB_FILTER_ALL) {
+      filtered = filtered.filter((product) =>
+        productMatchesMarketSHubFilter(product, selectedCategory)
+      )
     }
 
     // 정렬
@@ -352,8 +310,9 @@ export default function HotGoodsPage() {
   }, [marketSProducts, searchTerm, selectedCategory, sortBy])
 
   const handleAddToCart = (product: MarketSProduct) => {
+    const catalogProduct = products.find((item) => item.id === product.id)
     const cartItem = {
-      product: product,
+      product: catalogProduct || product,
       quantity: 1,
       customizations: {}
     }
@@ -384,37 +343,42 @@ export default function HotGoodsPage() {
     return labels[category] || category.charAt(0).toUpperCase() + category.slice(1)
   }
 
-  const getCategoryIcon = (category: string) => {
-    const icons: Record<string, string> = {
-      sunscreen: '☀️',
-      coolpatch: '❄️',
-      beauty: '✨',
-      lifestyle: '🌟',
-      other: '🔥',
-      HotGoods: '🔥',
-      Stickers: '🎨',
-      Stamps: '✍️',
-      PhoneCases: '📱'
-    }
-    return icons[category] || '🔥'
-  }
-
   if (!hasMarketSProducts) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50">
         <Header />
 
+        {categoryHeroSlides.length > 0 ? (
+          <MarketSLandingHero
+            slides={categoryHeroSlides}
+            title={slideText.title}
+            subtitle={slideText.subtitle}
+            onSlideChange={handleSlideChange}
+          />
+        ) : null}
+
         <section className="relative py-16 sm:py-20 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,rgba(112,0,255,0.12),transparent_60%)]" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="mt-6 text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-700 to-fuchsia-600">
-                {typed}
-              </span>
-              <span className="inline-block w-[0.6ch] align-baseline animate-pulse text-slate-500" aria-hidden>
-                |
-              </span>
-            </h1>
+            {categoryHeroSlides.length > 0 ? (
+              <h2 className="mt-2 text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-700 to-fuchsia-600">
+                  {typed}
+                </span>
+                <span className="inline-block w-[0.6ch] align-baseline animate-pulse text-slate-500" aria-hidden>
+                  |
+                </span>
+              </h2>
+            ) : (
+              <h1 className="mt-6 text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-700 to-fuchsia-600">
+                  {typed}
+                </span>
+                <span className="inline-block w-[0.6ch] align-baseline animate-pulse text-slate-500" aria-hidden>
+                  |
+                </span>
+              </h1>
+            )}
             <p className="mt-4 text-base sm:text-lg text-slate-600">
               We’re curating only the hottest items—coming soon.
             </p>
@@ -485,24 +449,20 @@ export default function HotGoodsPage() {
         }))}
       />
 
-      {/* Hero Section with Sliding Background — 반응형: 모바일 짧게, 데스크톱에서 더 크게 */}
-      <div className="relative min-h-[273px] sm:min-h-[315px] lg:min-h-[357px] flex items-center justify-center overflow-hidden">
-        <SlidingBackground 
-          slides={categoryHeroSlides} 
-          onSlideChange={handleSlideChange}
-        />
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 drop-shadow-lg">{slideText.title}</h1>
-          <p className="text-xl text-white drop-shadow-md">{slideText.subtitle}</p>
-        </div>
-      </div>
+      {/* Hero — left wall / charcoal overlay (Market S only; not homepage or Stickers) */}
+      <MarketSLandingHero
+        slides={categoryHeroSlides}
+        title={slideText.title}
+        subtitle={slideText.subtitle}
+        onSlideChange={handleSlideChange}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 페이지 헤더 */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{pageTitle}</h1>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">{pageTitle}</h2>
               <p className="text-gray-600">Korea's trending hot items - UV protection, cool patches, beauty essentials, and lifestyle products</p>
             </div>
           </div>
@@ -539,23 +499,16 @@ export default function HotGoodsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 카테고리 필터 - 서브카테고리 포함 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pack type</label>
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   >
-                    <option value="all">All Categories</option>
-                    {/* 서브카테고리 옵션 - All Categories 아래에 표시 */}
-                    <option value="other-Sunscreen">☀️ Sunscreen</option>
-                    <option value="other-Sunstick">🧴 Sunstick</option>
-                    <option value="other-Cool Patch">❄️ Cool Patch</option>
-                    <option value="other-Lifestyle">🌟 Lifestyle</option>
-                    <option value="other-Other">🔥 Other</option>
-                    {/* 카테고리 옵션 - other 제외 (서브카테고리 옵션과 중복 방지) */}
-                    {availableCategories.filter(category => category !== 'other').map(category => (
-                      <option key={category} value={category}>
-                        {getCategoryIcon(category)} {getCategoryLabel(category)}
+                    <option value={MARKET_S_HUB_FILTER_ALL}>All pack types</option>
+                    {hubSubcategoryFilters.map((row) => (
+                      <option key={row.value} value={row.value}>
+                        {row.icon} {row.label}
                       </option>
                     ))}
                   </select>
@@ -649,7 +602,7 @@ export default function HotGoodsPage() {
                   {/* 서브카테고리가 있으면 서브카테고리 표시, 없으면 카테고리 표시 */}
                   {product.subcategory ? (
                     <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
-                      {getSubcategoryIcon(product.subcategory)} {product.subcategory}
+                      {marketSSubcategoryIcon(product.subcategory)} {product.subcategory}
                     </span>
                   ) : (
                     <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">

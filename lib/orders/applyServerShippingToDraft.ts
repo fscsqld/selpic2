@@ -33,17 +33,22 @@ export async function applyServerShippingToDraft(orderDraft: OrderDraft): Promis
     (orderDraft.items || []).map((item) => ({
       product: {
         category: item.category,
+        subcategory: item.subcategory,
+        isHotGoods: item.isHotGoods,
         shippingClass: item.shippingClass,
         shippingWeightGrams:
           item.shippingWeightGrams ||
           (Number(item.weightKg) > 0 ? Number(item.weightKg) * 1000 : undefined),
+        shippingThicknessMm: item.shippingThicknessMm,
       },
       quantity: item.quantity,
     }))
   )
-  if (!isShippingOptionCompatible(option, shippingRequirement.requiresParcel)) {
+  if (!isShippingOptionCompatible(option, shippingRequirement)) {
     throw new Error(
-      `Selected shipping option is not suitable for this cart. Parcel service is required (estimated packed weight: ${shippingRequirement.totalWeightGrams} g).`
+      shippingRequirement.requiresParcel
+        ? `Selected shipping option is not suitable for this cart. Parcel service is required (estimated packed weight: ${shippingRequirement.totalWeightGrams} g).`
+        : 'Selected shipping option is not suitable for this cart.'
     )
   }
 

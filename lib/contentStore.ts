@@ -2703,6 +2703,41 @@ const defaultContent: ContentItem[] = [
     updatedAt: new Date()
   },
   {
+    id: 'refund-16',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 4 Title',
+    content: '4. Market S personal-care products (hygiene)',
+    order: 16,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'refund-16a',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 4 Content',
+    content:
+      'Market S cosmetics and personal-care items cannot be returned for change of mind once opened, for hygiene reasons. This does not limit your rights under the Australian Consumer Law (ACL) for faulty, damaged, or incorrectly supplied goods.',
+    order: 16.5,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'refund-17',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 4 List',
+    content:
+      'Opened or used personal-care items are not accepted for change of mind | Unopened change-of-mind returns may be declined where hygiene or safety rules apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL | Contact us with your order ID before sending anything back',
+    order: 17,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
     id: 'refund-21',
     type: 'text',
     section: 'refund',

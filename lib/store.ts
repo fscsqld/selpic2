@@ -14,6 +14,7 @@ import {
 import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
 import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
 import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
+import type { MarketSSubcategory } from '@/lib/marketSSubcategory'
 
 export interface Product {
   id: string
@@ -24,9 +25,12 @@ export interface Product {
   shippingClass?: 'letter' | 'parcel'
   /** Packed weight per sellable unit. Used for the Australia Post 500 g letter limit. */
   shippingWeightGrams?: number
+  /** Packed thickness per sellable unit (mm). Market S singles default to 5 mm. */
+  shippingThicknessMm?: number
   image: string
   category: string
-  subcategory?: string
+  /** Stickers/Stamps keep free-text values. HotGoods uses MarketSSubcategory (plus any legacy string). */
+  subcategory?: MarketSSubcategory | string
   description: string
   customizationOptions?: CustomizationOption[]
   inStock: boolean
@@ -166,12 +170,15 @@ export interface OrderItemSnapshot {
   shippingClass?: 'letter' | 'parcel'
   /** Packed mass per sellable unit captured from the catalogue. */
   shippingWeightGrams?: number
+  /** Packed thickness per sellable unit captured from the catalogue. */
+  shippingThicknessMm?: number
+  isHotGoods?: boolean
   /** Etsy / marketplace buyer-entered personalization (merged text). */
   buyerPersonalization?: string
   /** Structured prompts → answers when the marketplace provides them. */
   personalizationResponses?: Array<{ label: string; value: string; promptId?: string }>
   category?: string
-  subcategory?: string
+  subcategory?: MarketSSubcategory | string
   brand?: string
   size?: string
   color?: string

@@ -7,6 +7,7 @@ import ProductImageUpload from '@/components/ProductImageUpload'
 import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
+import { defaultMarketSShippingWeightGrams, marketSProductSubcategoryOptions } from '@/lib/marketSSubcategory'
 
 interface CategoryProductManagerProps {
   categoryName: string
@@ -50,6 +51,8 @@ interface ProductFormData {
   stockQuantity?: number
   safetyStock?: number
   incomingStock?: number
+  shippingClass?: 'letter' | 'parcel'
+  shippingWeightGrams?: number
   features?: string[]
   tags?: string[]
   hasDetailPage?: boolean // 상세 페이지 표시 여부
@@ -106,6 +109,8 @@ export default function CategoryProductManager({
     stockQuantity: 0,
     safetyStock: 5,
     incomingStock: 0,
+    shippingClass: categoryValue === 'HotGoods' ? 'parcel' : undefined,
+    shippingWeightGrams: categoryValue === 'HotGoods' ? 250 : undefined,
     features: [],
     tags: [],
     hasDetailPage: true, // 기본값: 상세 페이지 표시
@@ -145,6 +150,13 @@ export default function CategoryProductManager({
         stockQuantity: (product as any).stockQuantity ?? 0,
         safetyStock: (product as any).safetyStock ?? 5,
         incomingStock: (product as any).incomingStock ?? 0,
+        shippingClass: categoryValue === 'HotGoods' ? 'parcel' : product.shippingClass,
+        shippingWeightGrams:
+          categoryValue === 'HotGoods'
+            ? Number(product.shippingWeightGrams) > 0
+              ? Number(product.shippingWeightGrams)
+              : defaultMarketSShippingWeightGrams(product.subcategory)
+            : product.shippingWeightGrams,
         features: product.features || [],
         tags: product.tags || [],
         hasDetailPage: (product as any).hasDetailPage ?? true,
@@ -179,6 +191,8 @@ export default function CategoryProductManager({
         stockQuantity: 0,
         safetyStock: 5,
         incomingStock: 0,
+        shippingClass: categoryValue === 'HotGoods' ? 'parcel' : undefined,
+        shippingWeightGrams: categoryValue === 'HotGoods' ? 250 : undefined,
         features: [],
         tags: [],
         hasDetailPage: true,
@@ -210,7 +224,14 @@ export default function CategoryProductManager({
         isHotGoods:
           categoryValue === 'HotGoods'
             ? true
-            : (formData.isHotGoods || false)
+            : (formData.isHotGoods || false),
+        ...(categoryValue === 'HotGoods'
+          ? {
+              shippingClass: 'parcel' as const,
+              shippingWeightGrams: defaultMarketSShippingWeightGrams(formData.subcategory),
+              customizationOptions: [],
+            }
+          : {}),
       }
       
       console.log('💾 CategoryProductManager - Saving product:', {
@@ -224,7 +245,8 @@ export default function CategoryProductManager({
         // 상품 수정
         const updatedProduct = {
           ...finalFormData,
-          customizationOptions: editingProduct.customizationOptions || [],
+          customizationOptions:
+            categoryValue === 'HotGoods' ? [] : editingProduct.customizationOptions || [],
           updatedAt: new Date().toISOString()
         }
         console.log('💾 Updating product:', updatedProduct)
@@ -263,11 +285,26 @@ export default function CategoryProductManager({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : 
-                type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-    }))
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) || 0 : 
+                  type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      }
+      if (name === 'subcategory' && categoryValue === 'HotGoods') {
+        const nextWeight = defaultMarketSShippingWeightGrams(value)
+        const currentWeight = Number(newData.shippingWeightGrams)
+        if (
+          !Number.isFinite(currentWeight) ||
+          currentWeight === 20 ||
+          currentWeight === 40 ||
+          currentWeight === 250
+        ) {
+          newData.shippingWeightGrams = nextWeight
+        }
+      }
+      return newData
+    })
   }
 
   // 체크박스 변경 처리
@@ -581,14 +618,21 @@ export default function CategoryProductManager({
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Select Subcategory</option>
-                      {specialFields.subcategories.map(sub => (
+                      {(categoryValue === 'HotGoods'
+                        ? marketSProductSubcategoryOptions(undefined, formData.subcategory)
+                        : specialFields.subcategories
+                      ).map(sub => (
                         <option key={sub.value} value={sub.value}>
                           {sub.icon} {sub.label}
                         </option>
                       ))}
                     </select>
                     {categoryValue === 'HotGoods' && (
-                      <p className="mt-1 text-sm text-gray-500">Please select a subcategory to classify your Market S product.</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Use <strong>Single Item</strong> for mask singles (1–3 can ship as an untracked $3.20 letter)
+                        or <strong>Family Bundle</strong> for a tracked parcel SKU. Checkout applies that rule
+                        automatically.
+                      </p>
                     )}
                   </div>
                 )}
@@ -729,8 +773,8 @@ export default function CategoryProductManager({
                   </div>
                 </div>
 
-                {/* Material */}
-                {specialFields.materials && (
+                {/* Material — not used for Market S */}
+                {categoryValue !== 'HotGoods' && specialFields.materials && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Material
@@ -751,8 +795,8 @@ export default function CategoryProductManager({
                   </div>
                 )}
 
-                {/* Color */}
-                {specialFields.colors && (
+                {/* Color — leftover merch for stickers/phone cases, not Market S */}
+                {categoryValue !== 'HotGoods' && specialFields.colors && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Color
@@ -773,8 +817,8 @@ export default function CategoryProductManager({
                   </div>
                 )}
 
-                {/* Usage */}
-                {specialFields.usages && (
+                {/* Usage — stamps only */}
+                {categoryValue !== 'HotGoods' && specialFields.usages && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Usage

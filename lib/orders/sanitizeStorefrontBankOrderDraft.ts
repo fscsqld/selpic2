@@ -59,12 +59,18 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
       quantity: qty,
       category: (catalogProduct as { category?: string }).category ?? item.category,
       subcategory: (catalogProduct as { subcategory?: string }).subcategory ?? item.subcategory,
+      isHotGoods: Boolean(
+        (catalogProduct as { isHotGoods?: boolean }).isHotGoods ?? item.isHotGoods
+      ),
       shippingClass: (
         catalogProduct as { shippingClass?: 'letter' | 'parcel' }
       ).shippingClass,
       shippingWeightGrams: (
         catalogProduct as { shippingWeightGrams?: number }
       ).shippingWeightGrams,
+      shippingThicknessMm: (
+        catalogProduct as { shippingThicknessMm?: number }
+      ).shippingThicknessMm,
       weightKg:
         Number((catalogProduct as { shippingWeightGrams?: number }).shippingWeightGrams) > 0
           ? Number(

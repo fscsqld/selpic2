@@ -31,6 +31,7 @@ import {
   sanitizeStickerSheetBundles,
   type StickerSheetBundle,
 } from '@/lib/stickerSheetBundles'
+import { MARKET_S_SUBCATEGORY_VALUES, defaultMarketSShippingWeightGrams, marketSProductSubcategoryOptions } from '@/lib/marketSSubcategory'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -234,7 +235,7 @@ function AdminProductsPageContent() {
     { value: 'Stickers', label: t('admin.products.categories.stickers'), icon: '🏷️', subcategories: ['Basic', 'Set', 'Premium', 'Office', 'Kids', 'Custom', 'Mixed Labels', 'Others'] },
     { value: 'Stamps', label: t('admin.products.categories.stamps'), icon: '📮', subcategories: ['Set', 'Basic', 'Self-Inking', 'Traditional', 'Embosser', 'Wax Seal', 'Others'] },
     { value: 'PhoneCases', label: t('admin.products.categories.phoneCases'), icon: '📱', subcategories: ['Samsung', 'iPhone', 'Others'] },
-    { value: 'HotGoods', label: t('admin.products.categories.hotGoods'), icon: '🔥', subcategories: ['Sunscreen', 'Sunstick', 'Cool Patch', 'Lifestyle', 'Other'] }
+    { value: 'HotGoods', label: t('admin.products.categories.hotGoods'), icon: '🔥', subcategories: [...MARKET_S_SUBCATEGORY_VALUES] }
   ]
 
   // 알림 표시 함수
@@ -638,12 +639,25 @@ function AdminProductsPageContent() {
       ...stickerPackPayload,
       ...limitedEditionPayload,
       ...(formData.category === 'Stickers' ? { color: STICKER_PRODUCT_COLOR } : {}),
-      // Stationery Essentials uses file-based stationery products, not 3-sheet name-sticker pricing.
-      stickerSheetQuantity: isStationeryEssentials
-        ? undefined
-        : isMixedLabelsProduct
-          ? Math.max(1, Number(formData.stickerSheetQuantity) || 1)
-          : Math.max(3, Number(formData.stickerSheetQuantity) || 3)
+      ...(formData.category === 'HotGoods'
+        ? {
+            isHotGoods: true,
+            shippingClass: 'parcel' as const,
+            shippingWeightGrams: defaultMarketSShippingWeightGrams(formData.subcategory),
+            enableStickerPackOptions: false,
+            stickerSheetBundles: undefined,
+            stickerSheetQuantity: undefined,
+            customizationOptions: [],
+          }
+        : {}),
+      stickerSheetQuantity:
+        formData.category === 'HotGoods'
+          ? undefined
+          : isStationeryEssentials
+            ? undefined
+            : isMixedLabelsProduct
+              ? Math.max(1, Number(formData.stickerSheetQuantity) || 1)
+              : Math.max(3, Number(formData.stickerSheetQuantity) || 3),
     }
 
     const productPayload: ProductFormData = normalizedFormData
@@ -811,13 +825,34 @@ function AdminProductsPageContent() {
         newData.subcategory = ''
         newData.isHotGoods = value === 'HotGoods'
         newData.shippingClass = value === 'Stickers' ? 'letter' : 'parcel'
-        newData.shippingWeightGrams = value === 'Stickers' ? 20 : 250
+        newData.shippingWeightGrams =
+          value === 'Stickers' ? 20 : value === 'HotGoods' ? defaultMarketSShippingWeightGrams('') : 250
         if (value === 'Stickers') {
           newData.stickerSheetQuantity = 3
           newData.color = STICKER_PRODUCT_COLOR
         } else {
           newData.enableStickerPackOptions = false
           newData.stickerSheetBundles = undefined
+        }
+        if (value === 'HotGoods') {
+          newData.customizationOptions = []
+          newData.color = ''
+          newData.material = ''
+          newData.usage = ''
+          newData.shippingClass = 'parcel'
+        }
+      }
+
+      if (name === 'subcategory' && newData.category === 'HotGoods') {
+        const nextWeight = defaultMarketSShippingWeightGrams(value)
+        const currentWeight = Number(newData.shippingWeightGrams)
+        if (
+          !Number.isFinite(currentWeight) ||
+          currentWeight === 20 ||
+          currentWeight === 40 ||
+          currentWeight === 250
+        ) {
+          newData.shippingWeightGrams = nextWeight
         }
       }
 
@@ -1738,11 +1773,11 @@ function AdminProductsPageContent() {
                    </select>
                  </div>
 
+                {formData.category !== 'HotGoods' && (
                 <div className="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-4">
                   <h4 className="font-semibold text-sky-950">Shipping eligibility</h4>
                   <p className="mt-1 text-xs text-sky-800">
-                    Parcel products cannot use Standard Letter or Tracked Letter at checkout.
-                    Packed weight is per sellable unit; carts over 500 g also require parcel service.
+                    Parcel products cannot use Standard Letter or Tracked Letter at checkout. Packed weight is per sellable unit; carts over 500 g also require parcel service.
                   </p>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
@@ -1777,27 +1812,38 @@ function AdminProductsPageContent() {
                     </div>
                   </div>
                 </div>
+                )}
 
                  {/* {t('admin.products.subcategory')} */}
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                     {formData.category === 'Stickers' ? t('admin.products.subcategoryRequiredMark') : t('admin.products.subcategoryRequired')}
+                     {formData.category === 'Stickers' || formData.category === 'HotGoods'
+                       ? t('admin.products.subcategoryRequiredMark')
+                       : t('admin.products.subcategoryRequired')}
                    </label>
                    <select
                      name="subcategory"
                      value={formData.subcategory || ''}
                      onChange={handleInputChange}
                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                     required={formData.category === 'HotGoods' || formData.category === 'Stickers'}
                      disabled={!categories.find(cat => cat.value === formData.category)?.subcategories?.length}
                    >
                      <option value="">{t('admin.products.selectSubcategory')}</option>
                      {(() => {
+                       if (formData.category === 'HotGoods') {
+                         return marketSProductSubcategoryOptions(undefined, formData.subcategory).map((row) => (
+                           <option key={row.value} value={row.value}>
+                             {row.icon} {row.label}
+                           </option>
+                         ))
+                       }
+
                        // 카테고리 매핑: ProductFormData의 category → SubcategoryItem의 category
-                       const categoryMap: Record<string, 'stickers' | 'stamps' | 'phone-cases' | 'hot-goods'> = {
+                       const categoryMap: Record<string, 'stickers' | 'stamps' | 'phone-cases'> = {
                          'Stickers': 'stickers',
                          'Stamps': 'stamps',
                          'PhoneCases': 'phone-cases',
-                         'HotGoods': 'hot-goods'
                        }
                        
                        const mappedCategory = categoryMap[formData.category]
@@ -1866,20 +1912,16 @@ function AdminProductsPageContent() {
                            </>
                          )
                        }
-                       if (formData.category === 'HotGoods') {
-                         return (
-                           <>
-                             <option value="Sunscreen">☀️ Sunscreen</option>
-                             <option value="Sunstick">🧴 Sunstick</option>
-                             <option value="Cool Patch">❄️ Cool Patch</option>
-                             <option value="Lifestyle">🌟 Lifestyle</option>
-                             <option value="Other">🔥 Other</option>
-                           </>
-                         )
-                       }
                        return null
                      })()}
                    </select>
+                   {formData.category === 'HotGoods' && (
+                     <p className="mt-1 text-sm text-gray-500">
+                       Use <strong>Single Item</strong> for mask singles (1–3 can ship as an untracked $3.20 letter)
+                       or <strong>Family Bundle</strong> for a tracked parcel SKU. Checkout applies that rule
+                       automatically.
+                     </p>
+                   )}
                    {formData.category === 'Stickers' && (
                      <p className="mt-1 text-sm text-gray-500">
                        {t('admin.products.stickerSubcategoryNote')}
@@ -2065,7 +2107,8 @@ function AdminProductsPageContent() {
                   />
                 </div>
 
-                {/* 🆕 Fallback Image 업로드 (동영상 로딩 전 표시) */}
+                {/* Fallback Image — video poster. Market S SKUs are still photos. */}
+                {formData.category !== 'HotGoods' && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {t('admin.products.fallbackImageLabel')}
@@ -2083,6 +2126,7 @@ function AdminProductsPageContent() {
                     onRemove={() => setFormData(prev => ({ ...prev, fallbackImage: '' }))}
                   />
                 </div>
+                )}
 
                 {/* 브랜드 필드 */}
                 {formData.category === 'HotGoods' ? (
@@ -2274,7 +2318,8 @@ function AdminProductsPageContent() {
                   </div>
                 )}
 
-                {/* Color — Stickers: black only; other categories keep full list */}
+                {/* Color — Stickers: black only. Market S does not use a color SKU option. */}
+                {formData.category !== 'HotGoods' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {t('admin.products.colorLabel')}
@@ -2314,6 +2359,7 @@ function AdminProductsPageContent() {
                     </select>
                   )}
                 </div>
+                )}
 
                 {/* 스티커 시트지 수량: Stickers 카테고리일 때 Color 오른쪽에 표시. 가격 3장 기준, 기본 3장, 이벤트 시 3장 이상. */}
                 {formData.category === 'Stickers' &&
@@ -2529,7 +2575,8 @@ function AdminProductsPageContent() {
                   />
                 </div>
 
-                {/* 커스터마이징 옵션 관리 */}
+                {/* Customization options (stickers / stamps / phone cases) */}
+                {formData.category !== 'HotGoods' && (
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-sm font-medium text-gray-700">
@@ -2735,6 +2782,8 @@ function AdminProductsPageContent() {
                     </div>
                   )}
                 </div>
+                )}
+
               </div>
 
                 {/* SET 상품 아이템 개수 (Stickers 또는 Stamps 카테고리이고 subcategory가 Set인 경우) */}

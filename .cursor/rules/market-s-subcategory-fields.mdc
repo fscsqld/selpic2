@@ -1,0 +1,58 @@
+---
+description: Market S subcategory is shipping class only — Single Item / Family Bundle
+alwaysApply: true
+---
+
+# Market S subcategory fields (learned 2026-09-22)
+
+`Product.subcategory` is **one string**. Admin dropdown is **only** `Single Item` and `Family Bundle`.
+
+## Required (keep)
+
+| Value | What it drives |
+|----|----|
+| **Single Item** | Mask singles. Qty 1–3 + pack ≤20 mm → untracked letter $3.20. Default 40 g. |
+| **Family Bundle** | Tracked parcel. One SKU + one price, not sticker `BundleManager`. |
+
+## Not required (removed from Add Product)
+
+Sunscreen, Sunstick, Cool Patch, Lifestyle, Other were old `/hot-goods` merch filters. They are **not** a shipping class. Picking them made a mask miss letter rates.
+
+- Do **not** put them back in `MARKET_S_SUBCATEGORIES`.
+- CMS `subcategoryItems` for `hot-goods` are storefront cards (hub `/hot-goods` only). Do not merge them into the product form.
+- Legacy SKUs that still say `Sunscreen` stay parcel; do not auto-rewrite to Single Item.
+- Hub filter chips may still show a leftover merch name if an old SKU has that string.
+- Hub filters match **subcategory** (`Single Item` / `Family Bundle`), not a fake `other-` parent. See `lib/marketSHubFilter.ts`.
+- Editing a leftover SKU may show `Sunscreen (legacy)` so the select does not snap to Single Item.
+
+Register product type in **name / brand / size** (e.g. Mediheel, 15ml), not a third subcategory.
+
+## Future products (learned 2026-09-22)
+
+Do **not** add a new product subcategory for every new Market S SKU. The two values are **shipping pack classes**, not merch types.
+
+| New SKU | Subcategory to pick | Why |
+|----|---|---|
+| Another mask brand / size (single) | **Single Item** | Same letter rule (1–3, pack ≤20 mm, default 40 g) |
+| Another multi-pack / family SKU | **Family Bundle** | Same tracked parcel (one SKU + one price) |
+| Sunscreen, serum, cream, gadget that is still a **thin light single** | **Single Item** | Checkout only looks at this string, not the product name |
+| Anything bulky / liquid-heavy / cannot go untracked letter | **Family Bundle** today (parcel). A third value is only needed if we want a parcel-single that must not look like a family pack |
+| Want a hub chip named “Sunscreen” | **Do not** add `Sunscreen` to the SKU dropdown | Put it in **name / brand**. CMS Market S cards are hub links to `/hot-goods` only — they are not product subcategories and have no `/hot-goods/[slug]` pages |
+
+Add a **new** dropdown value only when checkout needs a **third shipping behavior** (not letter-single, not tracked-parcel). That is a code change in `MARKET_S_SUBCATEGORIES` + `productShippingEligibility.ts`, not a CMS Subcategory Manager row.
+
+Stickers cousin: Basic / Premium / Bespoke **do** need CMS subcategories because they have real `/stickers/[slug]` pages. Market S does not.
+
+## Product form fields
+
+**Keep:** subcategory (those two), name, price, image, description, stock, brand, free-text size.
+
+**Removed from Market S Add Product (not needed for K-Beauty):** color dropdown, Small/Medium/Large size options, material, usage, sticker customization, video fallback image, Shipping eligibility box (class + grams). Checkout still auto-applies parcel + 40 g Single Item / 250 g Family Bundle. SPF/scent fields stay off the form. CMS pageTitle/linkUrl stay on Content, not the SKU form.
+
+**Still on the form (shared merchandising, not Market S-specific leftover):** original price, stock/safety/incoming, rating/reviews, new/bestseller/popular/limited, detail-page copy.
+
+## Do not
+
+- Re-add merch labels to the SKU dropdown “for hub filters”.
+- Treat Stickers CMS Basic/Premium the same — those have real `/stickers/[slug]` pages.
+- Point CMS Market S cards at `/hot-goods/sunscreen`.

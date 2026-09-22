@@ -1333,7 +1333,7 @@ export default function ContentManagementPage() {
             <div className="bg-white rounded-xl border shadow-sm p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Subcategories Management</h2>
               <p className="text-gray-600 mb-6">
-                Manage subcategory cards displayed on category pages (e.g., Basic, Premium, Custom on Stickers page, or Sunscreen, Sunstick on Market S page).
+                Manage subcategory cards on category pages (e.g. Basic, Premium, Custom on Stickers). Market S product shipping class is Single Item / Family Bundle in Add Product — these CMS cards still only link to the /hot-goods hub.
               </p>
               
               <div className="space-y-8">
@@ -2593,6 +2593,57 @@ export default function ContentManagementPage() {
                       section="refund"
                       onSave={handleQuickEditSave}
                       existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 3 목록')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 4: Market S hygiene */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-900 mb-4">4. Market S personal-care products (hygiene)</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <QuickEditCard
+                      title="Section 4 Title"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 Title')?.content || '4. Market S personal-care products (hygiene)'}
+                      placeholder="Enter section title"
+                      type="text"
+                      description="Section 4 title"
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 Title')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                    <QuickEditCard
+                      title="Section 4 Content"
+                      label="Section 4 content"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 Content')?.content || ''}
+                      placeholder="Enter section description"
+                      type="text"
+                      description="Section 4 description/content"
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 Content')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                    <QuickEditCard
+                      title="Section 4 List"
+                      label="Section 4 list"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 List')?.content || ''}
+                      placeholder="Enter list items (one per line, or separated by commas)"
+                      type="textarea"
+                      description="List of items for Section 4. Press Enter to create a new line for each item. You can also use commas to separate items. Items with commas or periods inside will be handled correctly."
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 4 List')}
                       showNotification={(type, message) => {
                         if (type === 'success') alert(message)
                         else if (type === 'error') alert(`Error: ${message}`)

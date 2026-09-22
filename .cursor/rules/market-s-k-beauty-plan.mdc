@@ -1,0 +1,22 @@
+---
+description: Market S K-Beauty apply order — HotGoods catalog, admin subcats, shipping qty rules, no Shopify
+alwaysApply: true
+---
+
+# Market S / K-Beauty apply order (2026-09-21)
+
+Display **Market S**; URL **`/hot-goods`**; catalog **`HotGoods`**. Not Shopify. Admin: `/admin/products/hotgoods`. Family Bundle = **one SKU + price**, not sticker `BundleManager`.
+
+**Do not sell 1–3 mask singles until shipping qty rules ship** (today HotGoods = parcel ~$10.90, not $3.20 letter).
+
+## Apply sequence
+
+0. Lock names + AusPost quotes ($3.20 letter vs CMS $2.40; parcel $8.60–$9.60 vs CMS $10.90); VIP/free-ship vs letter.
+1. **Done (dropdown):** `lib/marketSSubcategory.ts` — **only** `Single Item` and `Family Bundle`. Sunscreen/Sunstick/Cool Patch/Lifestyle/Other are **not required** and were removed from Add Product (legacy SKUs still parcel). See `market-s-subcategory-fields.mdc`.
+2. Owner registers 5 singles + 4 bundles + Mediheel $2.50 bait (`isHotGoods` auto). Subcategory required. **Owner action — not code.**
+3. **Done:** qty 1–3 singles (≤20 mm pack) untracked letter $3.20; 4+ or any Family Bundle tracked parcel; stickers+mask parcel. Same helper checkout + `applyServerShippingToDraft`. Tests.
+4. **Done:** hub filters include Single Item / Family Bundle; PDP/cart/customize Mediheel widget (hidden until SKU exists); `/cart` not a drawer.
+5. **Done:** hygiene copy + checkout ack; ACL fault/damage stays. Refund section 4 (CMS + page fallback).
+6. AICIS B2B later only.
+
+Homepage Hero and accounting-sandbox stay out. Do not rename `HotGoods`.

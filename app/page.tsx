@@ -7,6 +7,11 @@ import Header, { HeaderLogoImage } from '@/components/Header'
 import {
   resolveStorefrontImageSrc,
 } from '@/lib/optimizeStorefrontImageUrl'
+import {
+  homepageCategoryCardEmoji,
+  homepageCategoryCardTags,
+  shouldShowHomepageCategoryProductCount,
+} from '@/lib/homepageCategoryCard'
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
 
@@ -1940,6 +1945,9 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {(canRenderCmsVisualSections ? categoryItems : []).map((category) => {
               const productCount = getProductCountForCategory(category)
+              const cardEmoji = homepageCategoryCardEmoji(category.emoji)
+              const cardTags = homepageCategoryCardTags(category.tags)
+              const showProductCount = shouldShowHomepageCategoryProductCount(category.title, productCount)
               const rawBg = (resolvedCategoryBackgrounds[category.id] || category.backgroundImage || '').trim()
               const safeCategoryBg =
                 rawBg && !rawBg.startsWith('indexeddb://') ? withAssetVersion(rawBg) : ''
@@ -1981,9 +1989,11 @@ export default function HomePage() {
                   
                   <div className="relative z-10 p-8 h-full flex flex-col justify-between text-white">
                     <div className={category.title === 'SELPIC N' ? 'mt-[-8px]' : ''}>
-                      <div className={`text-6xl mb-4 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] ${category.title === 'SELPIC N' ? 'transform group-hover:scale-110 transition-transform duration-300' : ''}`}>
-                        {category.emoji}
-                      </div>
+                      {cardEmoji ? (
+                        <div className={`text-6xl mb-4 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] ${category.title === 'SELPIC N' ? 'transform group-hover:scale-110 transition-transform duration-300' : ''}`}>
+                          {cardEmoji}
+                        </div>
+                      ) : null}
                       <h3
                         className={`text-3xl font-bold mb-2 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] ${
                           category.title === 'SELPIC N'
@@ -1996,8 +2006,9 @@ export default function HomePage() {
                       <p className="text-lg text-white mb-4 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
                         {category.description || ''}
                       </p>
+                      {cardTags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {(Array.isArray(category.tags) ? category.tags : []).map((tag, index) => (
+                        {cardTags.map((tag, index) => (
                           <span 
                             key={`${category.id}-tag-${index}-${String(tag)}`} 
                             className={`px-3 py-1 rounded-full text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
@@ -2010,9 +2021,10 @@ export default function HomePage() {
                           </span>
                         ))}
                       </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      {category.title !== 'Custom Design' && category.title !== 'SELPIC N' && (
+                    <div className={`flex items-center ${showProductCount ? 'justify-between' : 'justify-end'}`}>
+                      {showProductCount && (
                         <span className="text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {`${productCount} products`}
                         </span>

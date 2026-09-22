@@ -51,6 +51,7 @@ export function buildOrderShippingSnapshot(
 /** Known storefront ids when legacy orders lack snapshot flags. */
 const LEGACY_TRACKING_BY_ID: Record<string, boolean> = {
   'standard-letter': false,
+  'market-s-untracked-letter': false,
   'tracked-letter': true,
   'express-post': true,
   'parcel-post': true,

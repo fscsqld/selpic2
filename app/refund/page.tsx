@@ -93,6 +93,21 @@ export default function RefundPage() {
 						)}
 					</div>
 
+					<div>
+						<h2 className="text-xl font-semibold text-slate-900 mb-2">{getContent('Section 4 Title') || '4. Market S personal-care products (hygiene)'}</h2>
+						<p className="text-slate-700 mb-3">
+							{getContent('Section 4 내용') || 'Market S cosmetics and personal-care items cannot be returned for change of mind once opened, for hygiene reasons. This does not limit your rights under the Australian Consumer Law (ACL) for faulty, damaged, or incorrectly supplied goods.'}
+						</p>
+						<ul className="list-disc pl-6 space-y-1">
+							{splitPolicyList(
+								getContent('Section 4 목록') ||
+									'Opened or used personal-care items are not accepted for change of mind | Unopened change-of-mind returns may be declined where hygiene or safety rules apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL | Contact us with your order ID before sending anything back'
+							).map((item, index) => (
+								<li key={index}>{item}</li>
+							))}
+						</ul>
+					</div>
+
 				</section>
 				<div className="rounded-lg border border-gray-200 p-4 bg-gray-50 text-sm text-slate-700">
 					<h2 className="font-semibold text-slate-900 mb-2">{getContent('Contact Title') || 'Contact'}</h2>

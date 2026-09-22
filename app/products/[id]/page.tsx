@@ -17,6 +17,9 @@ import {
 } from '@/lib/mediaGalleryLocal'
 import ProductDetailJsonLd from '@/components/ProductDetailJsonLd'
 import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
+import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
+import { isMarketSCatalogProduct } from '@/lib/marketSSubcategory'
+import { MARKET_S_HYGIENE_PDP } from '@/lib/marketSHygieneCopy'
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
@@ -362,6 +365,11 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
               )}
+              {isMarketSCatalogProduct(product) && (
+                <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950">
+                  {MARKET_S_HYGIENE_PDP}
+                </p>
+              )}
             </div>
 
             {/* 상품 속성 */}
@@ -520,6 +528,7 @@ export default function ProductDetailPage() {
                   )}
                 </p>
               )}
+              {product.category === 'Stickers' && <MarketSBaitCrossSell />}
             </div>
 
           </div>

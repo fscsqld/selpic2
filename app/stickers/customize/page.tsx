@@ -21,6 +21,7 @@ import {
   type StickerSheetBundle,
 } from '@/lib/stickerSheetBundles'
 import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
+import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -2236,6 +2237,9 @@ function StickerCustomizeContent() {
             </div>
           </div>
         )}
+        <div className="mt-6 max-w-2xl mx-auto">
+          <MarketSBaitCrossSell />
+        </div>
       </div>
       </div>
 

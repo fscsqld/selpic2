@@ -24,8 +24,10 @@ import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
 import {
   getCartShippingRequirement,
   isShippingOptionCompatible,
+  mergeShippingOptionsForCart,
 } from '@/lib/shipping/productShippingEligibility'
 import type { OrderRecord } from '@/lib/store'
+import { cartContainsMarketSGoods, MARKET_S_HYGIENE_CHECKOUT } from '@/lib/marketSHygieneCopy'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -136,18 +138,22 @@ export default function CheckoutPage() {
       quantity: item.quantity,
     }))
   )
-  const shippingOptions = allShippingOptions.filter((option) =>
-    isShippingOptionCompatible(option, shippingRequirement.requiresParcel)
+  const cartHasMarketS = cartContainsMarketSGoods(
+    cart.map((item) => products.find((product) => product.id === item.product.id) || item.product)
   )
+  const shippingOptions = mergeShippingOptionsForCart(
+    allShippingOptions,
+    shippingRequirement
+  ) as ShippingOption[]
   const configuredDefaultShippingOption = getDefaultShippingOption()
   const defaultShippingOption =
-    configuredDefaultShippingOption &&
-    isShippingOptionCompatible(
-      configuredDefaultShippingOption,
-      shippingRequirement.requiresParcel
-    )
-      ? configuredDefaultShippingOption
-      : shippingOptions.find((option) => option.id === 'parcel-post') || shippingOptions[0]
+    shippingRequirement.allowUntrackedMaskLetter
+      ? shippingOptions.find((option) => option.id === 'market-s-untracked-letter') ||
+        shippingOptions[0]
+      : configuredDefaultShippingOption &&
+          isShippingOptionCompatible(configuredDefaultShippingOption, shippingRequirement)
+        ? configuredDefaultShippingOption
+        : shippingOptions.find((option) => option.id === 'parcel-post') || shippingOptions[0]
   
   // CRITICAL: Check cart length first before any other hooks to prevent hooks mismatch
   const hasCartItems = cart.length > 0
@@ -198,6 +204,7 @@ export default function CheckoutPage() {
     }
   }, [defaultShippingOption, selectedShipping, shippingOptions])
   const [showShippingOptions, setShowShippingOptions] = useState(false)
+  const [marketSHygieneAck, setMarketSHygieneAck] = useState(false)
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [appliedPromoCode, setAppliedPromoCode] = useState<{ code: string; discount: number } | null>(null)
   const [promoCodeError, setPromoCodeError] = useState<string | null>(null)
@@ -723,6 +730,10 @@ export default function CheckoutPage() {
         customizations: item.customizations,
         category: (sourceProduct as any).category,
         subcategory: (sourceProduct as any).subcategory,
+        isHotGoods: Boolean((sourceProduct as any).isHotGoods),
+        shippingClass: (sourceProduct as any).shippingClass,
+        shippingWeightGrams: (sourceProduct as any).shippingWeightGrams,
+        shippingThicknessMm: (sourceProduct as any).shippingThicknessMm,
         brand: (sourceProduct as any).brand,
         size: (sourceProduct as any).size,
         color: (sourceProduct as any).color,
@@ -904,6 +915,10 @@ export default function CheckoutPage() {
         })
         router.push('/cart')
         return
+      }
+
+      if (cartHasMarketS && !marketSHygieneAck) {
+        throw new Error('Please confirm the Market S personal-care notice before placing your order.')
       }
 
       if (paymentMethod === 'bank') {
@@ -1171,6 +1186,17 @@ export default function CheckoutPage() {
                   <li>• Eligible VIP free-shipping benefits are applied automatically to the price shown.</li>
                 </ul>
               </div>
+
+              {shippingRequirement.allowUntrackedMaskLetter && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                  <p className="font-semibold">Untracked letter available for this cart</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    1–3 Market S Single Item packs at 20 mm or under can ship as an untracked
+                    letter for $3.20. Tracking is not included. Choose Parcel Post if you need
+                    tracking.
+                  </p>
+                </div>
+              )}
 
               {shippingRequirement.requiresParcel && (
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -1857,9 +1883,21 @@ export default function CheckoutPage() {
                 </div>
               </div>
               
+              {cartHasMarketS && (
+                <label className="mt-6 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-950">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                    checked={marketSHygieneAck}
+                    onChange={(e) => setMarketSHygieneAck(e.target.checked)}
+                  />
+                  <span>{MARKET_S_HYGIENE_CHECKOUT}</span>
+                </label>
+              )}
+              
               <button
                 type="submit"
-                disabled={isProcessing || insufficientItems.length > 0}
+                disabled={isProcessing || insufficientItems.length > 0 || (cartHasMarketS && !marketSHygieneAck)}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-medium py-5 px-8 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed disabled:shadow-none mt-8 flex items-center justify-center space-x-3 text-lg"
               >
                 {isProcessing ? (

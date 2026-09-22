@@ -23,8 +23,9 @@ import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcha
 import { isStickerPackCartCustomizations } from '@/lib/stickerSheetBundles'
 import {
   getCartShippingRequirement,
-  isShippingOptionCompatible,
+  mergeShippingOptionsForCart,
 } from '@/lib/shipping/productShippingEligibility'
+import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 
 export default function CartPage() {
   const router = useRouter()
@@ -54,12 +55,17 @@ export default function CartPage() {
     }))
   )
   const allShippingOptions = getActiveShippingOptions()
-  const shippingOptions = allShippingOptions.filter((option) =>
-    isShippingOptionCompatible(option, shippingRequirement.requiresParcel)
+  const shippingOptions = mergeShippingOptionsForCart(
+    allShippingOptions,
+    shippingRequirement
   )
   const estimatedShippingOption =
     shippingOptions.find((option) =>
-      shippingRequirement.requiresParcel ? option.id === 'parcel-post' : option.isDefault
+      shippingRequirement.allowUntrackedMaskLetter
+        ? option.id === 'market-s-untracked-letter'
+        : shippingRequirement.requiresParcel
+          ? option.id === 'parcel-post'
+          : (option as { isDefault?: boolean }).isDefault
     ) || shippingOptions[0]
 
   const getStockMeta = (productId: string) => {
@@ -663,6 +669,7 @@ export default function CartPage() {
                 </div>
               )
             })}
+            <MarketSBaitCrossSell />
           </div>
 
           {/* Order Summary */}
@@ -732,8 +739,10 @@ export default function CartPage() {
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900">
                   <p className="font-semibold">Shipping estimate</p>
                   <p className="mt-1">
-                    {shippingRequirement.requiresParcel
-                      ? `Parcel service is required because this cart contains parcel-class goods or exceeds the 500 g letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
+                    {shippingRequirement.allowUntrackedMaskLetter
+                      ? 'Untracked letter ($3.20) is the default estimate for 1–3 Market S Single Item packs at 20 mm or under. Tracking is not included. Parcel Post is available at checkout if you need tracking.'
+                      : shippingRequirement.requiresParcel
+                      ? `Parcel service is required because this cart contains parcel-class goods, a Family Bundle, 4+ mask singles, mixed sticker + Market S items, or exceeds the 500 g letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
                       : 'Standard Letter is the default estimate and does not include tracking.'}{' '}
                     You can choose from the compatible delivery or Click &amp; Collect options at
                     checkout. Tracking and insurance are included only where shown.

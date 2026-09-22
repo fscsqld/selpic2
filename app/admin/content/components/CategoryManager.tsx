@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2, Eye, EyeOff, GripVertical, ArrowRight, Package } fr
 import { CategoryItem } from '@/lib/contentStore'
 import MediaUpload from '@/components/MediaUpload'
 import { useStore } from '@/lib/store'
+import { homepageCategoryCardEmoji, homepageCategoryCardTags, newParentCategoryChrome } from '@/lib/homepageCategoryCard'
 
 interface CategoryManagerProps {
   categoryItems: CategoryItem[]
@@ -137,12 +138,11 @@ export default function CategoryManager({
   const [newCategory, setNewCategory] = useState({
     title: '',
     description: '',
-    emoji: '🎨',
+    ...newParentCategoryChrome(),
     gradientFrom: 'from-blue-500',
     gradientTo: 'to-purple-600',
     backgroundImage: '',
     linkUrl: '/stickers',
-    tags: ['New', 'Custom'],
     order: categoryItems.length + 1,
     isActive: true
   })
@@ -185,21 +185,17 @@ export default function CategoryManager({
     { from: 'from-pink-500', to: 'to-rose-600', name: 'Pink to Rose' }
   ]
 
-  // 이모지 옵션들
-  const emojiOptions = ['🏷️', '📮', '📱', '🔥', '🎁', '🎨', '⭐', '💎', '🚀', '🎯', '🎪', '🎭']
-
   const handleAddCategory = () => {
     // title은 선택사항으로 변경 (공란 허용)
     onAddCategory(newCategory)
     setNewCategory({
       title: '',
       description: '',
-      emoji: '🎨',
+      ...newParentCategoryChrome(),
       gradientFrom: 'from-blue-500',
       gradientTo: 'to-purple-600',
       backgroundImage: '',
       linkUrl: '/stickers',
-      tags: ['New', 'Custom'],
       order: categoryItems.length + 1,
       isActive: true
     })
@@ -296,7 +292,7 @@ export default function CategoryManager({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h4 className="text-lg font-medium text-blue-900 mb-4">Add New Category</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Title (Optional)</label>
               <input
                 type="text"
@@ -305,32 +301,6 @@ export default function CategoryManager({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Category title"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setNewCategory({ ...newCategory, emoji: '' })}
-                  className={`px-3 py-2 text-sm rounded-md border-2 ${
-                    !newCategory.emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'
-                  }`}
-                >
-                  No emoji
-                </button>
-                {emojiOptions.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setNewCategory({ ...newCategory, emoji })}
-                    className={`p-2 text-2xl rounded-md border-2 ${
-                      newCategory.emoji === emoji ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -399,68 +369,6 @@ export default function CategoryManager({
                 placeholder="/stickers"
               />
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    id="tagInput"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter tags and press Enter or comma to add"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ',') {
-                        e.preventDefault()
-                        const input = e.currentTarget
-                        const tagValue = input.value.trim()
-                        if (tagValue && !newCategory.tags.includes(tagValue)) {
-                          setNewCategory({ 
-                            ...newCategory, 
-                            tags: [...newCategory.tags, tagValue] 
-                          })
-                        }
-                        input.value = ''
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = document.getElementById('tagInput') as HTMLInputElement
-                      const tagValue = input.value.trim()
-                      if (tagValue && !newCategory.tags.includes(tagValue)) {
-                        setNewCategory({ 
-                          ...newCategory, 
-                          tags: [...newCategory.tags, tagValue] 
-                        })
-                        input.value = ''
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {newCategory.tags.map((tag, index) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded flex items-center gap-1">
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => setNewCategory({ ...newCategory, tags: newCategory.tags.filter((_, i) => i !== index) })}
-                        className="text-blue-600 hover:text-blue-800 ml-1"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500">
-                  You can add tags by pressing Enter, comma(,) or clicking the "Add" button. 
-                  Click individual tags to delete them.
-                </p>
-              </div>
-            </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
@@ -483,7 +391,10 @@ export default function CategoryManager({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {categoryItems
           .sort((a, b) => a.order - b.order)
-          .map((category, index) => (
+          .map((category, index) => {
+            const previewEmoji = homepageCategoryCardEmoji(category.emoji)
+            const previewTags = homepageCategoryCardTags(category.tags)
+            return (
                          <div
                key={category.id}
                draggable
@@ -510,8 +421,10 @@ export default function CategoryManager({
               >
                 <div className="absolute inset-0 bg-black/20"></div>
                 <div className="relative z-10 p-4 h-full flex flex-col justify-between text-white">
-                  <div className="flex items-start justify-between">
-                    <div className="text-4xl">{category.emoji}</div>
+                  <div className={`flex items-start ${previewEmoji ? 'justify-between' : 'justify-end'}`}>
+                    {previewEmoji ? (
+                      <div className="text-4xl">{previewEmoji}</div>
+                    ) : null}
                     {/* 상품 개수 배지 */}
                     <div className="flex items-center gap-1 px-2 py-1 bg-white/20 backdrop-blur-sm rounded-full">
                       <Package className="w-3 h-3" />
@@ -549,13 +462,15 @@ export default function CategoryManager({
                   </div>
                 </div>
 
+                {previewTags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {(Array.isArray(category.tags) ? category.tags : []).map((tag, tagIndex) => (
+                  {previewTags.map((tag, tagIndex) => (
                     <span key={tagIndex} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                       {tag}
                     </span>
                   ))}
                 </div>
+                )}
 
                 <div className="text-xs text-gray-500 mb-3">
                   <div>Link: {category.linkUrl}</div>
@@ -590,7 +505,8 @@ export default function CategoryManager({
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
       </div>
 
       {/* 카테고리가 없을 때 */}
@@ -608,7 +524,7 @@ export default function CategoryManager({
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h4 className="text-lg font-medium text-gray-900 mb-4">Edit Category</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title (Optional)</label>
                 <input
                   type="text"
@@ -616,32 +532,6 @@ export default function CategoryManager({
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setEditForm({ ...editForm, emoji: '' })}
-                    className={`px-3 py-2 text-sm rounded-md border-2 ${
-                      !editForm.emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    No emoji
-                  </button>
-                  {emojiOptions.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setEditForm({ ...editForm, emoji })}
-                      className={`p-2 text-2xl rounded-md border-2 ${
-                        editForm.emoji === emoji ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -707,68 +597,6 @@ export default function CategoryManager({
                   onChange={(e) => setEditForm({ ...editForm, linkUrl: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      id="editTagInput"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter tags and press Enter or comma to add"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                          e.preventDefault()
-                          const input = e.currentTarget
-                          const tagValue = input.value.trim()
-                          if (tagValue && !editForm.tags.includes(tagValue)) {
-                            setEditForm({ 
-                              ...editForm, 
-                              tags: [...editForm.tags, tagValue] 
-                            })
-                          }
-                          input.value = ''
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById('editTagInput') as HTMLInputElement
-                        const tagValue = input.value.trim()
-                        if (tagValue && !editForm.tags.includes(tagValue)) {
-                          setEditForm({ 
-                            ...editForm, 
-                            tags: [...editForm.tags, tagValue] 
-                          })
-                          input.value = ''
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {editForm.tags.map((tag, index) => (
-                      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded flex items-center gap-1">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => setEditForm({ ...editForm, tags: editForm.tags.filter((_, i) => i !== index) })}
-                          className="text-blue-600 hover:text-blue-800 ml-1"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    You can add tags by pressing Enter, comma(,) or clicking the "Add" button. 
-                    Click individual tags to delete them.
-                  </p>
-                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="flex items-center">

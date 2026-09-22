@@ -1,0 +1,53 @@
+---
+description: Homepage Shop by Category cards — Inter/white/drop-shadow; do not restyle for Market S charcoal hero
+alwaysApply: true
+---
+
+# Homepage category cards (learned 2026-09-22)
+
+Shop by Category tiles in `app/page.tsx` are **one shared overlay**. Market S 1:1 CMS photo must use that spec — do **not** give Market S charcoal, Playfair, or left-2/3 banner CSS on the home card.
+
+## Locked CSS (do not change for one category)
+
+| Element | Live class |
+|---|---|
+| Title | `h3` `text-3xl font-bold` Inter (root) `text-white` `drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]` |
+| Description | `p` `text-lg text-white` + drop-shadow |
+| Scrim | `from-black/28 via-black/10 to-transparent` (bottom-up; white copy) |
+| Layout | `p-8` `flex-col justify-between` — copy **top**, count/arrow **bottom** |
+
+SELPIC N only: `font-playfair` `text-4xl`. Do not copy that to Market S / Stickers / Custom Design.
+
+`/hot-goods` left-2/3 charcoal H1 is a **different surface** (Hero Background Slides). Category Management Title/Description feed **this card only**.
+
+## Market S 1:1 photo
+
+Model sits **center–right**. Card copy should stay **short** (`Market S` + one-line benefit e.g. `K-Beauty & Family Gifts`) so it sits in the left window/plant area. Do **not** paste the long hub H1 on this Title field.
+
+## Emoji & unused Category Manager chrome (learned 2026-09-22)
+
+Parent-tile emoji is leftover from gradient-only cards. Live active rows have **empty** emoji; tags are **[]**. Storefront already skips empty emoji and `0 products`.
+
+**Delete (admin UI, next change):** Category Manager Add/Edit **Emoji picker** (incl. default `🎨`) and **Tags** (Add defaults `New`/`Custom`). They do not earn the photo card and can put chrome back on `/`. Keep TypeScript/CMS keys so old JSON still hydrates; new rows save `emoji: ''`, `tags: []`. Admin list preview should stop showing a blank emoji slot.
+
+**Keep:** Title, Description, Background Image, Link URL, Active/order. **Gradient** is the no-photo fallback (inactive Stamps/Phone Cases have no image). Admin product-count badge (incl. 0) is ops, not storefront.
+
+**Do not delete:** sticker **subcategory** emoji; community chip emoji; Hero slide “insert emoji into title”.
+
+Hub pages may prefix `categoryInfo.title` with emoji — unused on Market S `pageTitle` today.
+
+## Product count (learned 2026-09-22)
+
+Home card shows `{n} products` except Custom Design / SELPIC N. Count = catalog SKUs (`getProductCountForCategory`), not “items in the photo”.
+
+| Tile | Count today | Pre-click |
+|---|---|---|
+| Stickers | real SKU n | useful assortment proof |
+| Market S | 0 until SKUs | **hurts** — reads as empty shop |
+| Custom Design / SELPIC N | already hidden | correct (not a catalog) |
+
+**Conclusion:** keep the counter for shopping tiles **only when n > 0**. Hide 0. Do not remove the helper — Admin Category Manager preview uses it. After Market S SKUs exist, showing the count is fine.
+
+## Other active tiles
+
+Stickers / Custom Design already share Inter/white/shadow. Same recipe: short title + one-line benefit + photo with left clear space. Inactive Stamps / Phone Cases stay off the grid (`isActive: false`).

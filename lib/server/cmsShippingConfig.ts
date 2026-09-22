@@ -4,6 +4,7 @@ import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 import { shippingOptions as staticShippingOptions } from '@/lib/shippingOptions'
+import { MARKET_S_UNTRACKED_LETTER_OPTION, MARKET_S_UNTRACKED_LETTER_OPTION_ID } from '@/lib/shipping/marketSLetterOption'
 import type { ShippingOptionForPricing, FreeShippingSettingsLike } from '@/lib/shipping/computeChargedShippingPrice'
 import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
 
@@ -139,6 +140,13 @@ export async function findActiveShippingOption(optionId: string): Promise<{
   const id = String(optionId || '').trim()
   if (!id) return null
   const cfg = await readCmsShippingConfig()
+  if (id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) {
+    return {
+      option: MARKET_S_UNTRACKED_LETTER_OPTION,
+      freeShippingSettings: cfg.freeShippingSettings,
+      vipFreeShippingByGrade: cfg.vipFreeShippingByGrade,
+    }
+  }
   const option = cfg.shippingOptions.find((o) => o.id === id && o.isActive !== false)
   if (!option) return null
   return {

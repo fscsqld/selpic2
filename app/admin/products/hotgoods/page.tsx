@@ -2,6 +2,7 @@
 
 import AdminProductHeader from '@/components/AdminProductHeader'
 import CategoryProductManager from '@/components/CategoryProductManager'
+import { MARKET_S_SUBCATEGORIES } from '@/lib/marketSSubcategory'
 
 export default function HotGoodsPage() {
 
@@ -27,28 +28,11 @@ export default function HotGoodsPage() {
           categoryIcon="🔥"
           categoryColor="bg-red-600"
           specialFields={{
-            subcategories: [
-              { value: 'Sunscreen', label: 'Sunscreen', icon: '☀️' },
-              { value: 'Sunstick', label: 'Sunstick', icon: '🧴' },
-              { value: 'Cool Patch', label: 'Cool Patch', icon: '❄️' },
-              { value: 'Lifestyle', label: 'Lifestyle', icon: '🌟' },
-              { value: 'Other', label: 'Other', icon: '🔥' }
-            ],
-            sizes: [
-              { value: 'Small', label: 'Small' },
-              { value: 'Medium', label: 'Medium' },
-              { value: 'Large', label: 'Large' },
-              { value: 'Custom', label: 'Custom' }
-            ],
-            colors: [
-              { value: 'Red', label: 'Red' },
-              { value: 'Orange', label: 'Orange' },
-              { value: 'Yellow', label: 'Yellow' },
-              { value: 'Pink', label: 'Pink' },
-              { value: 'Transparent', label: 'Transparent' },
-              { value: 'Multi', label: 'Multi Color' },
-              { value: 'Custom', label: 'Custom' }
-            ]
+            subcategories: MARKET_S_SUBCATEGORIES.map((row) => ({
+              value: row.value,
+              label: row.label,
+              icon: row.icon,
+            })),
           }}
         />
       </div>

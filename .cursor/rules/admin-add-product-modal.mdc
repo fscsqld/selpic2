@@ -1,0 +1,50 @@
+---
+description: All Products Add Product modal — Stickers vs Market S fields (learned 2026-09-22)
+alwaysApply: true
+---
+
+# All Products Add Product modal
+
+One modal (`app/admin/products/page.tsx`). **Category** switches the field set. A paste that shows Stickers, Letter 20 g, label pack, Black color, sheet quantity **is Stickers**, not Market S.
+
+New product starts with **empty** category. Shipping box still shows (anything except HotGoods). Pick **Market S** to hide sticker-only blocks.
+
+## Stickers (the dump you saw)
+
+| Field | Needed? | What it drives |
+|----|---|---|
+| Name, price, original price, image, in stock, descriptions | Yes | Catalog / listing / PDP |
+| Category = Stickers | Yes | Unlocks sticker fields |
+| Shipping class Letter + ~20 g | **Yes for stickers** | Checkout letter vs parcel. Unlike Market S, this is not auto from subcategory |
+| Subcategory * | **Yes** | CMS active `subcategoryItems` (Basic, Premium, Bespoke, Stationery, Mixed Labels, …). Real `/stickers/[slug]` pages — **not** shipping class |
+| Enable label pack options | Yes for **grid name labels** | Customize-page pack sizes; list price = lowest pack. Hidden for Set / Mixed Labels / Stationery |
+| Size (Small / Medium mm / Round / Custom) | Yes for name labels | Sheet grid via `stickerPresetForAdminForm` (“24 labels per sheet”) |
+| Material (Vinyl / Paper / PP) | Optional merch | Stored on SKU; not a Market S field |
+| Color = Black only | Locked | Always saved as `Black`; dropdown is not a real choice |
+| Sticker sheet quantity = 3 | Yes when pack options **off** | Default 3-sheet price. Hidden if pack options on, Mixed Labels, or Stationery |
+| Customization Options | Yes for name / custom stickers | Customer text/color/size/image on customize |
+| Fallback image | Only if the primary file is a **video** | ProductGallery poster. Still photos do not need it |
+| Stock / safety / incoming, rating, reviews, New / Best Seller / Limited, detail page | Shared merchandising | Same as other categories |
+| AI image / AI copy | Optional HITL | Apply then Save; does not auto-publish |
+
+**Subcategory empty still counts as grid name label** (`subcategory !== 'Set'`), so pack-options UI can appear before Basic/Premium is chosen.
+
+### Sticker subcategory cousins (do not mix with Market S)
+
+| Subcategory | Extra UI |
+|----|---|
+| Basic / Premium / Kids / Office / Custom (grid name) | Size + pack options + sheet qty or packs |
+| Set | Set item count; no pack options |
+| Mixed Labels | Sheet bundles + name length; no pack options |
+| Stationery Essentials | Free-text size; image customization; no sheet qty |
+
+## Market S (HotGoods) — different modal state
+
+After Category = Market S: **no** shipping box, **no** pack options, **no** color/material/fallback/customization. Subcategory is only **Single Item / Family Bundle** (shipping pack class). See `market-s-subcategory-fields.mdc`.
+
+## Do not
+
+- Treat this Stickers dump as proof Market S fields came back.
+- Delete sticker shipping / size / pack / customization “because Market S hid them”.
+- Add Sunscreen-style merch rows to Market S because Stickers CMS subcategories exist.
+- Assume empty Category + shipping box means Stickers is the default save target — category is still required.

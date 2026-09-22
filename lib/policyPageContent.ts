@@ -104,4 +104,6 @@ export const REFUND_TITLE_ALIASES: Record<string, string> = {
   'Section 2 목록': 'Section 2 List',
   'Section 3 내용': 'Section 3 Content',
   'Section 3 목록': 'Section 3 List',
+  'Section 4 내용': 'Section 4 Content',
+  'Section 4 목록': 'Section 4 List',
 }
