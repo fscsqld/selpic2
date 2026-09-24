@@ -35,15 +35,16 @@ export function isHomeHeroCharcoalLeft(slide: {
 /**
  * How the homepage *image* fills the full-viewport hero.
  *
- * Charcoal slides (live `hero-3`): `object-contain` below `lg` so the whole
- * 16:9 family photo is visible on phones — same idea as slide 1 video.
- * `lg+` stays `object-cover` so laptops keep the current full-bleed crop.
+ * Always `cover` (including charcoal `hero-3`). Option A (`object-contain` on
+ * phones) left side letterbox bars that read as broken margins on laptop and
+ * on any viewport under `lg`. Owner rejected those bars (2026-09-25) — full
+ * bleed wins over showing the uncropped 16:9 family photo.
  *
  * White-center slides (1 video is not this helper; 2 is 1:1 cover) stay cover.
  */
-export function homeHeroImageFit(slide: {
+export function homeHeroImageFit(_slide: {
   id?: string | null
   textOverlay?: string | null
 }): 'contain-mobile' | 'cover' {
-  return isHomeHeroCharcoalLeft(slide) ? 'contain-mobile' : 'cover'
+  return 'cover'
 }

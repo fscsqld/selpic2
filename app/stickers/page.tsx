@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Search, Filter, Grid, List, ArrowRight } from 'lucide-react'
+import { Search, Filter, ArrowRight } from 'lucide-react'
 import { useStore, Product } from '@/lib/store'
 import { useContentStore } from '@/lib/contentStore'
 import ProductCard from '@/components/ProductCard'
@@ -126,7 +126,7 @@ export default function StickersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSubcategory, setSelectedSubcategory] = useState('All')
   const [sortBy, setSortBy] = useState<StorefrontPriceSort>('price-low')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showFilters, setShowFilters] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
@@ -360,30 +360,39 @@ export default function StickersPage() {
           </div>
         )}
 
-        {/* Filter 및 검색 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-            {/* 검색 */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+        {/* Search + Filter — same shell as Market S /hot-goods (Stickers subcategory options kept) */}
+        <div className="mb-8">
+          <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search stickers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
-            {/* 서브카테고리 Filter */}
-            <div className="flex items-center space-x-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center space-x-2">
-                  <Filter size={20} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center px-4 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <Filter className="w-5 h-5 mr-2" />
+              Filter
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Subcategory</label>
                   <select
                     value={selectedSubcategory}
                     onChange={(e) => setSelectedSubcategory(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     {subcategories.map((subcategory) => (
                       <option key={subcategory} value={subcategory}>
@@ -392,38 +401,22 @@ export default function StickersPage() {
                     ))}
                   </select>
                 </div>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as StorefrontPriceSort)}
-                  aria-label="Sort products"
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                </select>
-              </div>
 
-              {/* 뷰 모드 토글 */}
-              <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'grid' ? 'bg-white shadow-sm' : 'text-gray-500'
-                  }`}
-                >
-                  <Grid size={16} />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'list' ? 'bg-white shadow-sm' : 'text-gray-500'
-                  }`}
-                >
-                  <List size={16} />
-                </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as StorefrontPriceSort)}
+                    aria-label="Sort products"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 스티커 목록 */}
@@ -442,16 +435,13 @@ export default function StickersPage() {
               </p>
             </div>
           ) : (
-            <div className={
-              viewMode === 'grid' 
-                ? 'grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
-                : 'space-y-4'
-            }>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredStickers.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   onCustomize={handleCustomize}
+                  imageLayout="full"
                 />
               ))}
             </div>

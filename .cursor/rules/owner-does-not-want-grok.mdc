@@ -1,0 +1,36 @@
+---
+description: Owner opted out of Grok (2026-08-19). Chat text cannot lock the picker; Cursor Default / Auto / Ctrl+N can still switch to Grok.
+alwaysApply: true
+---
+
+# Owner does not want Grok (learned 2026-09-25)
+
+Owner said **2026-08-19** (accounting chat): **“Grok을 사용하고 싶지 않아.”** After Grok broke accounting (IndexedDB date folds, 500s). That was a model-picker preference, not only a coding-style note (`accounting-stable-edits.mdc`).
+
+## Why this chat can still be Grok
+
+A Korean/English sentence in chat **does not** change Cursor Settings. The Agent cannot switch or lock the picker.
+
+Cursor can put Grok on a later turn without the owner clicking it:
+
+| Mechanism | What happens |
+|-----------|----------------|
+| **Cursor Default** | App open / new chat uses the **recommended** model (Grok 4.6/4.7 class). Staff: this is a product nudge. |
+| **Default Model reverts** | “Last Used” can reset to “Cursor Default” after an update (forum, Sep 2026). |
+| **Auto** | Auto may **route** to Grok even after leaving Grok in the picker. |
+| **Ctrl+N** | New Agent chat via Ctrl+N has jumped to Grok while the **+** button kept Auto. |
+
+This long thread continuing after a compact does **not** mean the owner chose Grok. Do not treat “current model is Grok” as consent.
+
+## Do
+
+- If this session is Grok: say so once, then tell them to switch the **chat model picker** (and Settings below). Keep working only if they stay.
+- Pin: **Cursor Settings → Agents → Conversation → Default Model → Last Used**, then pick Claude / Composer / GPT — not Auto if they want Grok fully out.
+- Also **Settings → Models**: disable Grok. Disabled models should not be selected.
+- New chat: use the Agent **+** button, not Ctrl+N, until that bug is gone.
+
+## Do not
+
+- Assume the owner switched to Grok on purpose.
+- Claim a project rule can stop Cursor routing to Grok — only the picker + Last Used + disable Grok can.
+- Re-enable Grok “to try the new default.”

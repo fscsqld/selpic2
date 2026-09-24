@@ -1,0 +1,78 @@
+---
+description: Stickers vs Market S mobile alignment — hero same; listing/card logic differs (left vs center feel)
+alwaysApply: false
+globs: app/stickers/page.tsx,app/hot-goods/page.tsx,components/ProductCard.tsx,components/CategoryCharcoalHero.tsx,components/CharcoalLeftHeroCopy.tsx,components/MarketSLandingHero.tsx
+---
+
+# Stickers “slightly left” vs Market S “centered” on mobile (learned 2026-09-25)
+
+**Owner meaning:** On a phone, Stickers hub feels a bit **left-aligned**; Market S feels more **center**. Laptop looks the same. Question: same logic or not?
+
+## Precision audit — what is identical
+
+| Layer | Stickers `/stickers` | Market S `/hot-goods` | Same? |
+|-------|----------------------|------------------------|-------|
+| Hero wrapper | `CategoryCharcoalHero` | `MarketSLandingHero` → **same** `CategoryCharcoalHero` | **Yes** |
+| Hero copy | `CharcoalLeftHeroCopy` `text-left`, wash left→clear, `max-w-[18.5rem]` on xs when title ≤32 | Same component | **Yes** |
+| Live titles | `Bright Names…` (28) | `Pure K-Beauty…` (28) | Both one-line rules |
+| Listing shell (Market S **with** SKUs) | `max-w-7xl mx-auto px-4…` | Same | **Yes** |
+
+Hero alignment logic is **the same** (`text-left` charcoal column). It is not “Stickers left / Market S center” in the banner code.
+
+## Precision audit — what is **not** the same
+
+| Layer | Stickers | Market S |
+|-------|----------|----------|
+| Product UI | Shared `ProductCard` | **Inline** cards in `hot-goods/page.tsx` |
+| Product image | `max-w-[240px] mx-auto` (narrow, centered in cell) | `w-full h-48` (fills cell) |
+| Product title | `text-center` | default **left** |
+| Description / price / actions | default **left** (no `text-center`) | **left** |
+| Above the grid | Subcategory **2-col** cards + filter/view row | Search + Filter stack only |
+| Zero SKUs | Still listing chrome | **Different page**: `text-center` coming-soon (`!hasMarketSProducts`) |
+
+So the “left vs center” feel is **not** from two hero implementations. It comes from **different body/listing logic**, especially `ProductCard` vs Market S cards (and Market S empty-state centering when there are no SKUs).
+
+## Why mobile only
+
+Phone ≈ 390px → content ≈ 358px after `px-4`.
+
+- Stickers: image capped at **240px** + title centered, but price/description/buttons stay **left** → mixed weights read as **slightly left of center**.
+- Market S (with products): image spans the full content width → equal left/right gutter only from `px-4` → reads as a **centered full-width block**.
+- Market S (no products): explicit `text-center` section → clearly centered.
+- Laptop: multi-column / wider cells; 240px cap and left text matter less, so hubs look alike.
+
+## Do not
+
+- Treat this as Stickers hero CSS drifting from Market S (hero path is shared).
+- “Fix” by changing charcoal `text-left` alone — that would break both hubs’ left title design.
+
+## Feasible to look like Market S? (learned 2026-09-25)
+
+**Yes.** Hero already matches. Change the **listing card** only.
+
+| Approach | What to do | Risk |
+|----------|------------|------|
+| **A. Prop on `ProductCard`** (preferred) | e.g. `imageLayout="full"` → drop `max-w-[240px] mx-auto`, use `w-full` (+ optional `h-48` or keep square), title `text-left` like Market S. Hub `/stickers` passes full; subcategory pages keep compact 240 if desired | Low — scoped |
+| **B. Global ProductCard change** | Always full-width | Hits `/stickers/basic` etc. that documented 240×240 on purpose |
+| **C. Duplicate Market S markup on `/stickers`** | Copy inline cards from `hot-goods/page.tsx` | Works but two card UIs to maintain |
+
+Do **not** change `CharcoalLeftHeroCopy` to `text-center` — that would break charcoal-left on both hubs.
+
+Keep Stickers-only chrome (subcategory tiles, filter/view toggles). Matching Market S means **product row alignment**, not deleting Stickers hub features.
+
+## Stickers listing image crop vs PDP (learned 2026-09-25)
+
+**Listing zoom (hub `imageLayout="full"`):** Was `h-48` + forced `object-cover` (and `ProductImage` ignored contain). Sticker sheets are often square/tall → cover crops to a landscape band and looks “zoomed”. **Fix:** `object-contain` on gray bg (not `aspect-square` oversized, not `inset-3` undersized).
+
+**Sticker hub horizontal size (owner 2026-09-25):** Prefer artwork a bit **wider** than Market S parity. Portrait Mixed Labels under `object-contain` only grow horizontally when the shell is taller — use **`h-52`** (not `h-48`) + light **`inset-1`**. Do not jump back to full `aspect-square` without asking (felt too large). Keep contain so the whole sheet stays visible.
+
+**PDP “zoomed” / wrong size on some SKUs (esp. Mixed Labels):** Same `ProductGallery` for Stickers and Market S — not a separate mixed-labels gallery. Live Mixed Labels catalog art is often **portrait** (e.g. Kitten **769×1095**, DINO **3703×5529**); Market S pack shots are typically **landscape**, so the same CSS looked “full” on Market S and “cropped/zoomed” on stickers.
+
+| Cause | Notes |
+|-------|--------|
+| `w-full` + container `maxHeight` + `overflow-hidden` | Tall sheet fills column width; height is clipped → cannot see full artwork |
+| Tap zoom | Click zooms ~2.5× then pan — intentional; only clip when zoomed |
+| Uploaded file is a close-up | CMS asset itself cropped; contain cannot invent pixels |
+| Thumbnails | Thumbs use `object-cover` (small squares only) |
+
+**Fix (2026-09-25):** `ProductImageZoomPan` uses `max-w-full w-auto h-auto mx-auto object-contain` + `maxHeight: 600px` on the **img only**; `overflow-hidden` only while zoomed. Do not put `w-full` / `h-full` / container `minHeight` on the main slide image.

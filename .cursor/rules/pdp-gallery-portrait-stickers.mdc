@@ -1,0 +1,37 @@
+---
+description: PDP gallery crops portrait sticker sheets (Mixed Labels) vs landscape Market S (learned 2026-09-25)
+globs: components/ProductGallery.tsx, components/ProductImageZoomPan.tsx, app/products/**/*.tsx
+alwaysApply: false
+---
+
+# PDP gallery: Stickers portrait vs Market S landscape (learned 2026-09-25)
+
+## Symptom
+
+Market S detail gallery looks almost like the uploaded file. Stickers — especially **Mixed Labels** — look heavily zoomed; full sheet not visible.
+
+## Not the cause
+
+- Separate Stickers vs HotGoods gallery components (both use `ProductGallery` → `ProductImageZoomPan`)
+- Wrong thumbnail URL as main slide (main uses `webpUrl` → `url`; thumbs may `object-cover`)
+- Mixed-labels-only PDP route (customize is separate; PDP is still `/products/[id]`)
+
+## Real cause
+
+| | Mixed Labels (example) | Market S (typical) |
+|--|------------------------|--------------------|
+| Aspect | Portrait (e.g. 769×1095, some 3703×5529) | Landscape pack shot |
+| Same CSS `w-full` + box `maxHeight` + `overflow-hidden` | Fills width, **clips** top/bottom | Fills width, full art still in view |
+
+So Market S “looks correct” and Stickers “look zoomed” on **identical** gallery code — asset shape differs.
+
+## Invariant
+
+Main PDP slide must show **full artwork** with `object-contain`, sizing by **`max-height` + `width: auto`** (not `width: 100%` inside a height-clipped overflow box). Clip with `overflow-hidden` **only while click-zoom is active**.
+
+## Do not
+
+- Switch main slide to `object-cover` to “match Market S fullness”
+- Re-add container `minHeight: 400` + img `h-full` on the zoom wrapper
+- Assume Mixed Labels needs a different gallery component — fix shared zoom-pan sizing instead
+---

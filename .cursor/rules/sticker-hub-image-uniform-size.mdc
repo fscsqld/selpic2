@@ -1,0 +1,41 @@
+---
+description: Why Stickers hub product images look different sizes + how to unify (learned 2026-09-25)
+globs: components/ProductCard.tsx, app/stickers/**/*.tsx, lib/productCardImageLayout.ts
+alwaysApply: false
+---
+
+# Stickers hub: why product images look different sizes (learned 2026-09-25)
+
+## Symptom
+
+On `/stickers`, some SKUs look larger/wider than others in the same grid (especially Mixed Labels portrait vs square Basic sheets). Owner may ask for “same size on laptop too.”
+
+## Why (not a per-SKU CSS bug)
+
+Hub cards share one shell (`imageLayout="full"` → fixed height e.g. `h-52`, `object-contain`, light inset). **Contain preserves aspect ratio** inside that shell:
+
+| Upload shape | What you see |
+|--------------|--------------|
+| Landscape / near-square | Art fills more of the shell width |
+| Tall portrait (Mixed Labels) | Art is a narrower strip with gray letterboxing |
+
+Same CSS, different **intrinsic aspect ratios** → different **drawn** width/height. Laptop feels smaller overall because the **grid has more columns** (narrower cards), not because desktop uses different image classes.
+
+## Ways to make them “the same size”
+
+| Approach | Same what? | Tradeoff |
+|----------|------------|----------|
+| **A. Same shell + contain** (current) | Same outer box | Art size still varies by aspect — full artwork visible |
+| **B. Same shell + `object-cover`** | Art always fills the box | Crops portrait sheets (looked “zoomed” before — avoid for stickers) |
+| **C. Fixed draw box + contain + centered** | Same as A, emphasize gray pad | Clear that size difference is letterbox, not random zoom |
+| **D. Admin upload square/normalized assets** | Art fills similarly under contain | Ops cost; best long-term for Mixed + Basic parity |
+| **E. Force `aspect-square` shell again** | Larger equal frame | Owner found full-card square too big; only with OK |
+
+**Recommended if owner wants equal visual weight without crop:** keep contain; optionally tighten Mixed uploads to a shared aspect, or accept letterboxing. Do **not** switch hub stickers back to cover just for equal fill.
+
+## Do not
+
+- Add per-subcategory image CSS (“Mixed only bigger”) without documenting
+- Blame mobile-only CSS when laptop looks different — check column count first
+- Use cover to fake equal size on name-label sheets
+---

@@ -39,8 +39,8 @@ describe('resolveHomeHeroTextOverlay', () => {
 })
 
 describe('homeHeroImageFit', () => {
-  it('uses contain-mobile for charcoal slide 3 so phones show the whole family photo', () => {
-    expect(homeHeroImageFit({ id: 'hero-3' })).toBe('contain-mobile')
+  it('uses cover for charcoal slide 3 (no side letterbox)', () => {
+    expect(homeHeroImageFit({ id: 'hero-3' })).toBe('cover')
   })
 
   it('keeps cover for white-center slides 1 and 2', () => {
@@ -48,13 +48,11 @@ describe('homeHeroImageFit', () => {
     expect(homeHeroImageFit({ id: 'hero-2' })).toBe('cover')
   })
 
-  it('does not contain-mobile when hero-3 is explicitly white-center', () => {
+  it('stays cover when hero-3 is explicitly white-center', () => {
     expect(homeHeroImageFit({ id: 'hero-3', textOverlay: 'white-center' })).toBe('cover')
   })
 
-  it('contain-mobile follows charcoal overlay, not only the hero-3 id', () => {
-    expect(homeHeroImageFit({ id: 'hero-2', textOverlay: 'charcoal-left' })).toBe(
-      'contain-mobile'
-    )
+  it('stays cover for charcoal on any slide id (no contain-mobile)', () => {
+    expect(homeHeroImageFit({ id: 'hero-2', textOverlay: 'charcoal-left' })).toBe('cover')
   })
 })

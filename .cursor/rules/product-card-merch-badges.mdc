@@ -1,0 +1,77 @@
+---
+description: Stickers ProductCard must show admin New/Best Seller/Popular/Limited badges (learned 2026-09-25)
+globs: components/ProductCard.tsx, app/stickers/**/*.tsx, app/hot-goods/**/*.tsx, app/products/**/*.tsx, lib/productCardMerchBadges.ts
+alwaysApply: false
+---
+
+# Product listing merchandising badges (learned 2026-09-25)
+
+## Symptom
+
+Admin checks **New Arrival / Best Seller / Popular Item / Limited Edition** on a Stickers SKU, but `/stickers` (and subcategory `ProductCard` grids) only showed **discount %** (and sometimes Limited). PDP already showed all four.
+
+## Why
+
+Two different card UIs:
+
+| Surface | Component | What it painted |
+|---------|-----------|-----------------|
+| Stickers hub / subcategory | `ProductCard` | Only `originalPrice > price` → discount %, plus `isLimitedEdition` |
+| Market S `/hot-goods` | Inline card in `app/hot-goods/page.tsx` | `isNew` / `isBestSeller` / `isPopular` (+ trending) |
+| PDP `/products/[id]` | Badges on gallery | All four flags |
+
+Admin checkboxes write `product.isNew`, `isBestSeller`, `isPopular`, `isLimitedEdition` into the catalog. Stickers was not a CMS sync bug — **`ProductCard` never read New/Best Seller/Popular**.
+
+Discount % is **not** those checkboxes; it is computed from `originalPrice` vs `price`, so it still appeared.
+
+## Invariant
+
+If admin can tick a merchandising flag that customers should see on listings, **every listing card path that uses that catalog product must render it** (or intentionally omit with a documented reason). Shared helper: `lib/productCardMerchBadges.ts` → `resolveProductCardMerchBadges`.
+
+| Flag | Listing label (English) |
+|------|-------------------------|
+| `isNew` | NEW ARRIVAL |
+| `isBestSeller` | BEST SELLER |
+| `isPopular` | POPULAR |
+| `isLimitedEdition` | LIMITED EDITION |
+| `originalPrice > price` | `N%` discount |
+
+## Mixed Labels badges look larger than other Stickers (learned 2026-09-25)
+
+**Confirmed:** Not a Mixed-only CSS override. Same `ProductCard` + same font classes.
+
+| Real driver | Detail |
+|-------------|--------|
+| **Relative size** | Mixed catalog art is **portrait** inside hub `h-52` + `object-contain` → artwork is a smaller strip; absolute badges stay the same px → look huge vs Basic sheets that fill more of the frame |
+| **Default Limited** | Admin stickers form sets `isLimitedEdition = true` when subcategory → Mixed Labels (see `mixedLabelsFormDefaults` / subcategory change). Most Mixed SKUs show the long **LIMITED EDITION** pill |
+| **Often + discount** | Many Mixed also have `originalPrice > price` → discount % + Limited stacked |
+
+**Tune:** Hub `imageLayout="full"` badges use slightly smaller `text-[10px] px-1.5 py-0.5`; compact subcategory grids keep `text-xs px-2 py-1`.
+
+## Badge size looks different per product (learned 2026-09-25)
+
+**Not** different CSS per SKU category. Same `ProductCard` stack; perceived size differs because:
+
+| Factor | Effect |
+|--------|--------|
+| **Which flags are on** | 1 badge vs 4 stacked (`flex-col gap-1`) — denser stack reads “smaller” |
+| **Label length** | `POPULAR` (short) vs `NEW ARRIVAL` / `LIMITED EDITION` / `15% Off` (longer pills) |
+| **Hub vs compact** | Full hub uses slightly smaller type (Mixed letterbox); subcategory compact stays `text-xs` |
+| **Discount shape** | `%` badge uses `rounded` (slightly squarer); merch flags use `rounded-full` |
+| **Listing vs PDP** | PDP uses `px-3`; listing hub uses tighter padding |
+
+**Invariant:** Merch flag pills on one layout share one size token. Do not special-case Mixed with a second badge stylesheet — fix relative size via hub token or image shell, not per-subcategory badge CSS.
+
+## Cousins
+
+- Subcategory pages (`/stickers/basic`, …) also use `ProductCard` — same fix.
+- Market S hub is a separate inline card — keep badges in sync when adding a fifth flag.
+- Homepage “HOT ITEM” / hero badges are unrelated CMS/hero chrome.
+- Catalog sync must keep these booleans on `/api/catalog/public` (do not strip on serialize).
+
+## Do not
+
+- Assume “checkbox works because PDP shows it” — listing is a different renderer.
+- Treat missing New badge as proof the catalog flag was not saved — check `ProductCard` first.
+- Treat “Mixed badge looks bigger” as a Mixed-only font bug before checking portrait letterbox + default Limited.
+---

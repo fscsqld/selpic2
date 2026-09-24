@@ -604,8 +604,8 @@ export default function ProductGallery({
               <ProductImageZoomPan
                 src={item.original}
                 alt={safeAlt}
-                className="w-full h-full object-contain"
-                style={{ maxHeight: '600px', minHeight: '400px' }}
+                className="object-contain"
+                style={{ maxHeight: '600px' }}
                 loading="lazy"
                 onError={handleImageError}
               />
@@ -679,11 +679,8 @@ export default function ProductGallery({
           align-items: center;
           justify-content: center;
           background: #f9fafb;
-          min-height: 400px;
-        }
-
-        .product-gallery-wrapper .product-image-zoom-pan {
-          min-height: 400px;
+          /* Shell only — do not force the img to fill this height (crops portrait stickers). */
+          min-height: 280px;
         }
         
         .product-gallery-wrapper .image-gallery-thumbnail {

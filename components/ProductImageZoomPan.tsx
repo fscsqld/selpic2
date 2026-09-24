@@ -13,9 +13,14 @@ type ProductImageZoomPanProps = {
 }
 
 const TAP_MOVE_THRESHOLD_PX = 8
+const DEFAULT_MAX_HEIGHT = '600px'
 
 /**
  * Click/tap to zoom, then move pointer to pan across areas hidden in the preview (eBay-style).
+ *
+ * Portrait sticker sheets (esp. Mixed Labels) must use width:auto + max-height so the full
+ * artwork fits. Forcing w-full inside overflow-hidden + maxHeight crops tall uploads and
+ * looks “zoomed” vs landscape Market S pack shots in the same gallery.
  */
 export default function ProductImageZoomPan({
   src,
@@ -31,6 +36,8 @@ export default function ProductImageZoomPan({
   const didPanRef = useRef(false)
   const [isZoomed, setIsZoomed] = useState(false)
   const [origin, setOrigin] = useState({ x: 50, y: 50 })
+
+  const maxHeight = style?.maxHeight ?? DEFAULT_MAX_HEIGHT
 
   const updateOriginFromEvent = useCallback((clientX: number, clientY: number) => {
     const el = containerRef.current
@@ -102,10 +109,9 @@ export default function ProductImageZoomPan({
           ? 'Zoomed product image. Move to explore. Click to exit zoom.'
           : 'Product image. Click to zoom.'
       }
-      className={`product-image-zoom-pan relative w-full overflow-hidden bg-gray-50 select-none touch-none ${
-        isZoomed ? 'cursor-move' : 'cursor-zoom-in'
+      className={`product-image-zoom-pan relative w-full bg-transparent select-none touch-none ${
+        isZoomed ? 'cursor-move overflow-hidden' : 'cursor-zoom-in overflow-visible'
       }`}
-      style={style}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -117,9 +123,13 @@ export default function ProductImageZoomPan({
         alt={alt}
         draggable={false}
         loading={loading}
-        className={`block w-full h-full object-contain pointer-events-none ${className}`}
+        // Ignore caller width utilities (e.g. w-full) — they crop portrait sticker sheets.
+        className={`block max-w-full w-auto h-auto mx-auto object-contain pointer-events-none ${className
+          .split(/\s+/)
+          .filter((c) => c && !/^w-/.test(c) && c !== 'h-full')
+          .join(' ')}`}
         style={{
-          maxHeight: style?.maxHeight,
+          maxHeight,
           transform: isZoomed ? `scale(${zoomScale})` : 'scale(1)',
           transformOrigin: `${origin.x}% ${origin.y}%`,
           transition: isZoomed ? 'transform 0.08s ease-out' : 'transform 0.2s ease-out',

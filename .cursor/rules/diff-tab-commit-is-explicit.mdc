@@ -1,0 +1,12 @@
+---
+description: Diff-tab Commit in Cursor is an explicit owner action — not a surprise agent commit
+alwaysApply: true
+---
+
+# Diff-tab create-branch-and-commit (learned 2026-09-25)
+
+If the user message is **Execute the selected diff-tab create-branch-and-commit action** (new `cursor/…` branch, stage, commit, **do not push**), that came from Cursor’s **Commit** control on the diff tab. It is an explicit request. It will **not** always say “커밋해줘” in chat first.
+
+Do **not** treat a later “why did you commit?” as proof the agent committed unprompted — point at this UI action vs a chat-only “커밋, 푸시, 배포”.
+
+Unrelated: still never commit from ordinary coding turns unless the user asks in chat (or this diff-tab action fires).

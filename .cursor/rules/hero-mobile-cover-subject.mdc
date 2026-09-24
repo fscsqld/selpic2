@@ -10,16 +10,60 @@ globs: app/page.tsx,app/stickers/page.tsx,app/hot-goods/page.tsx,components/Slid
 
 Owner “still not correct on the phone” is this class, not a missing CMS file.
 
-## Shipped (option A, 2026-09-24)
+## Shipped (2026-09-25) — always cover
 
-Homepage charcoal **image** slides (`hero-3` today): `object-contain object-center` below `lg`, `lg:object-cover`. White-center images and slide 1 video are unchanged. Stickers / Market S banners unchanged. Letterbox bars appear on phones (same class as slide 1 contain).
+Homepage charcoal **image** slides (`hero-3` today): **always `object-cover`**. Option A (`max-lg:object-contain` / contain-first) was rolled back — owner still saw left/right bars locally (any window &lt; 1024, or stale contain-first). Full-bleed wins over uncropped 16:9. White-center images and slide 1 video are unchanged. Stickers / Market S banners unchanged.
+
+## Why local still looked letterboxed (2026-09-25)
+
+1. **Dev server hung** (~4.5 GiB Node from Sep 22) — API/home timed out; HMR/CMS gate stuck on bootstrap spinner in some tabs. Restart `npm run dev` + Ctrl+F5.
+2. **Option A contain** below 1024px — DevTools docked / split window / zoom often sits under `lg`, so laptop *looks* still letterboxed.
+3. **Photo wall** — left ~30% empty wall in the WebP is not CSS; cover will not invent people there.
+
+**Re-uploading the same `Hero_Background_Slides6.webp` does not fix this.**
+
+## Laptop still has side gaps (historical)
+
+**Live `origin/main` may still be older contain-first** until cover-always is committed/deployed.
+
+Two layers on laptop:
+
+| Layer | What it is | Same-file re-upload? |
+|---|---|---|
+| CSS letterbox | `contain` on a wide screen | **No** — needs cover-always code **committed and deployed** |
+| Empty wall in the WebP | Left ~30% leaf shadow, people on the right | **No** — needs a **tighter crop**, not the same file |
+| Charcoal HTML wash | White fog on the **viewport** left | **No** — not in the image |
+
+After cover is actually on production, leftover “여백” next to the people is the photo composition, not missing CSS.
+
+### Deprecated: Option A letterbox notes
+
+Option A **did not crop**, so two kinds of “margin” showed up. They were not a broken upload.
+
+**1. CSS letterbox (the contain box)**
+
+`object-contain` fits the **whole** 1280×714 file inside `h-screen` without cutting.
+
+| Viewport | Viewport AR vs photo 1.79 | Letterbox |
+|---|---|---|
+| Phone **portrait** (~0.46) | Photo is much **wider** | **Top and bottom** (cream gradient behind). Photo still **touches left and right** of the screen |
+| Phone **landscape** or wide window still &lt; 1024 | Viewport **wider** than 1.79 | **Left and right** true CSS bars |
+| Laptop with cover | `object-cover` | **No** contain bars |
+
+On a typical upright phone under Option A, CSS did **not** add left/right bars. A short landscape band sat in the middle of the tall hero.
+
+**2. Empty space **inside** the photo (looks like side margins)**
+
+The file’s left ~30% is the leaf-shadow **wall** (no people). Mum/child sit center-right. `contain` showed the full frame, so the wall read as “여백”. Charcoal white wash (`from-white/78` on the **viewport** left) made the left feel even more empty.
+
+Cousins: slide 1 video already letterboxes; charcoal wash is HTML, not baked into the WebP.
 
 ## What the phone is actually running
 
 | Layer | Reality |
 |---|---|
-| Live production until this ships | Slide 3 charcoal + **`object-left`** (wall only) |
-| After option A | Whole 16:9 file visible below `lg`; laptop `lg+` still full-bleed cover |
+| Live production (`2b16cc2`) | Slide 3 charcoal + **`object-contain` then `lg:object-cover`**. Landscape laptops can still letterbox **left/right** |
+| Local uncommitted | Cover by default; `max-lg:object-contain` phones only |
 | CMS file | `Hero_Background_Slides6.webp` **1280×714** |
 
 Same Swiper: **slide 1 video is `object-contain`** (whole frame). **Slide 3 image is `object-cover`** (fill + crop). That is why slide 1 feels “complete” and slide 3 feels “wrong” on the same phone.

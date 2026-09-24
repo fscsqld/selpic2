@@ -280,9 +280,11 @@ const ImageSlide = React.memo(
       />
     )
   }
+  // Always cover — contain-mobile letterbox caused left/right pastel bars on
+  // laptop and any <lg window; owner wants full-bleed slide 3 (2026-09-25).
   const coverClass =
     imageFit === 'contain-mobile'
-      ? 'absolute inset-0 z-0 h-full w-full object-contain object-center lg:object-cover'
+      ? 'absolute inset-0 z-0 h-full w-full object-cover object-center'
       : 'absolute inset-0 z-0 h-full w-full object-cover'
   return (
     <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
