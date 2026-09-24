@@ -115,17 +115,7 @@ export default function HotGoodsPage() {
   }, [])
 
   // Content Store에서 동적 콘텐츠 가져오기
-  const headerContent = getActiveContentBySection('header')
   const hotGoodsContent = getActiveContentBySection('hot-goods')
-  const companyName = headerContent.find(item => item.title === 'Company Name')?.content || 'Selpic'
-  
-  // Market S 페이지 콘텐츠
-  const pageTitle = React.useMemo(() => {
-    if (!isMounted || !contentHydrated) {
-      return 'Market S'
-    }
-    return hotGoodsContent.find(item => item.title === 'Page Title')?.content || 'Market S'
-  }, [isMounted, contentHydrated, hotGoodsContent])
   
   const searchPlaceholder = React.useMemo(() => {
     if (!isMounted || !contentHydrated) {
@@ -458,16 +448,6 @@ export default function HotGoodsPage() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 페이지 헤더 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">{pageTitle}</h2>
-              <p className="text-gray-600">Korea's trending hot items - UV protection, cool patches, beauty essentials, and lifestyle products</p>
-            </div>
-          </div>
-        </div>
-
         {/* 검색 및 필터 */}
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row gap-4 mb-6">

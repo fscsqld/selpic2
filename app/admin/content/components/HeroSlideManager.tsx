@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit, Trash2, GripVertical, Eye, EyeOff, Play, Image as ImageIcon, X, Monitor, FileText, Save, Copy, AlertCircle } from 'lucide-react'
 import { HeroSlide } from '@/lib/contentStore'
+import CharcoalLeftHeroCopy from '@/components/CharcoalLeftHeroCopy'
+import { isHomeHeroCharcoalLeft, resolveHomeHeroTextOverlay } from '@/lib/homeHeroTextOverlay'
 import MediaUpload from '@/components/MediaUpload'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { EffectFade, Autoplay, Navigation, Pagination } from 'swiper/modules'
@@ -207,6 +209,8 @@ export default function HeroSlideManager({
                 )
               )}
               
+              {isHomeHeroCharcoalLeft(slide) ? null : (
+                <>
               {/* Color Overlay */}
               <div className={`absolute inset-0 ${
                 slide.color === 'pink' ? 'bg-pink-500/20' :
@@ -220,9 +224,19 @@ export default function HeroSlideManager({
               {/* Dark Overlay for Text Readability */}
               <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/30 to-black/40"></div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/50"></div>
+                </>
+              )}
             </div>
             
-            {/* Content */}
+            {isHomeHeroCharcoalLeft(slide) ? (
+              <CharcoalLeftHeroCopy
+                title={slide.title}
+                subtitle={slide.subtitle}
+                headingLevel="h2"
+                overlayZClassName="z-[5]"
+                copyZClassName="z-10"
+              />
+            ) : (
             <div className="relative z-10 flex items-center justify-center h-full">
               <div className="text-center text-white max-w-4xl mx-auto px-4">
                 <div className="space-y-8">
@@ -251,6 +265,7 @@ export default function HeroSlideManager({
                 </div>
               </div>
             </div>
+            )}
           </SwiperSlide>
         </Swiper>
       </div>
@@ -263,6 +278,7 @@ export default function HeroSlideManager({
     fallbackImage: '',
     title: '',
     subtitle: '',
+    textOverlay: 'white-center' as 'white-center' | 'charcoal-left',
     color: 'blue' as 'pink' | 'blue' | 'yellow' | 'purple' | 'green',
     order: 1,
     isActive: true,
@@ -301,6 +317,9 @@ export default function HeroSlideManager({
         fallbackImage: template.slideData.fallbackImage,
         title: template.slideData.title || '',
         subtitle: template.slideData.subtitle || '',
+        textOverlay: resolveHomeHeroTextOverlay({
+          textOverlay: template.slideData.textOverlay,
+        }),
         color: template.slideData.color || 'blue',
         order: heroSlides.length + 1,
         isActive: true,
@@ -319,6 +338,9 @@ export default function HeroSlideManager({
         fallbackImage: templateFallbackImage,
         title: template.slideData.title || '',
         subtitle: template.slideData.subtitle || '',
+        textOverlay: resolveHomeHeroTextOverlay({
+          textOverlay: template.slideData.textOverlay,
+        }),
         color: template.slideData.color || 'blue',
         order: heroSlides.length + 1,
         isActive: true,
@@ -345,6 +367,7 @@ export default function HeroSlideManager({
         fallbackImage: slideFallbackImage,
         title: slide.title,
         subtitle: slide.subtitle,
+        textOverlay: resolveHomeHeroTextOverlay(slide),
         color: slide.color,
         order: slide.order,
         isActive: slide.isActive,
@@ -370,6 +393,7 @@ export default function HeroSlideManager({
         fallbackImage: '',
         title: '',
         subtitle: '',
+        textOverlay: 'white-center',
         color: 'pink',
         order: heroSlides.length + 1,
         isActive: true,
@@ -396,6 +420,7 @@ export default function HeroSlideManager({
       fallbackImage: '',
       title: '',
       subtitle: '',
+      textOverlay: 'white-center',
       color: 'blue',
       order: 1,
       isActive: true,
@@ -1168,6 +1193,28 @@ export default function HeroSlideManager({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Slide subtitle"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Title overlay
+                </label>
+                <select
+                  value={formData.textOverlay}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      textOverlay: e.target.value as 'white-center' | 'charcoal-left',
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="white-center">White, centered (slides 1–2 / video)</option>
+                  <option value="charcoal-left">Charcoal, left (Market S style)</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  White centered is required for the hero video. Use charcoal left on bright photos with empty wall space.
+                </p>
               </div>
 
               {/* Link URL (모든 슬라이드에 사용 가능) - Event Banner가 체크되지 않았을 때만 표시 */}

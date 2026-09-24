@@ -14,6 +14,8 @@ import {
 } from '@/lib/homepageCategoryCard'
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
+import CharcoalLeftHeroCopy from '@/components/CharcoalLeftHeroCopy'
+import { isHomeHeroCharcoalLeft, homeHeroCoverObjectPosition } from '@/lib/homeHeroTextOverlay'
 
 type CategoryItemWithType = CategoryItem & { categoryType?: string }
 
@@ -260,7 +262,15 @@ const isValidVideoUrl = (url: string): boolean => {
 }
 
 const ImageSlide = React.memo(
-  ({ src, fetchPriority = 'auto' }: { src: string; fetchPriority?: 'high' | 'low' | 'auto' }) => {
+  ({
+    src,
+    fetchPriority = 'auto',
+    objectPosition = 'center',
+  }: {
+    src: string
+    fetchPriority?: 'high' | 'low' | 'auto'
+    objectPosition?: 'left' | 'center'
+  }) => {
   const s = (src || '').trim()
   if (!s || s.startsWith('indexeddb://')) {
     return (
@@ -270,9 +280,13 @@ const ImageSlide = React.memo(
       />
     )
   }
+  const coverClass =
+    objectPosition === 'left'
+      ? 'absolute inset-0 z-0 h-full w-full object-cover object-left lg:object-center'
+      : 'absolute inset-0 z-0 h-full w-full object-cover'
   return (
     <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
-      <HeroCoverImage primarySrc={s} fetchPriority={fetchPriority} />
+      <HeroCoverImage primarySrc={s} fetchPriority={fetchPriority} className={coverClass} />
     </div>
   )
 })
@@ -1795,6 +1809,7 @@ export default function HomePage() {
             // ✅ Stable unique key per list position (duplicate slide.id + React list reconciliation)
             const uniqueKey = `hero-slide-${slide.id}-${index}`
             const mediaKey = `${slide.type || 'image'}-${slide.id}-${index}`
+            const charcoalLeft = isHomeHeroCharcoalLeft(slide)
             
             return (
               <lazySwiper.SwiperSlide key={uniqueKey} className={`relative ${hasLink ? 'cursor-pointer' : ''}`}>
@@ -1815,26 +1830,49 @@ export default function HomePage() {
                       key={mediaKey}
                       src={slide.src || ''}
                       fetchPriority={index === 0 ? 'high' : 'auto'}
+                      objectPosition={homeHeroCoverObjectPosition(slide)}
                     />
                   )}
                   
-                  {/* Color Overlay — visual only; must not intercept touches (iPad Safari / Swiper) */}
-                  <div
-                    className={`pointer-events-none absolute inset-0 z-20 ${
-                    slide.color === 'pink' ? 'bg-pink-500/20' :
-                    slide.color === 'blue' ? 'bg-blue-500/20' :
-                    slide.color === 'yellow' ? 'bg-yellow-500/20' :
-                    slide.color === 'purple' ? 'bg-purple-500/20' :
-                    slide.color === 'green' ? 'bg-green-500/20' :
-                    'bg-gray-500/20'
-                  }`}
-                  />
-                  
-                  {/* 선명도 유지: 얕은 그라데이션만 (텍스트 가독용) */}
-                  <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                  {charcoalLeft ? null : (
+                    <>
+                      {/* Color Overlay — visual only; must not intercept touches (iPad Safari / Swiper) */}
+                      <div
+                        className={`pointer-events-none absolute inset-0 z-20 ${
+                        slide.color === 'pink' ? 'bg-pink-500/20' :
+                        slide.color === 'blue' ? 'bg-blue-500/20' :
+                        slide.color === 'yellow' ? 'bg-yellow-500/20' :
+                        slide.color === 'purple' ? 'bg-purple-500/20' :
+                        slide.color === 'green' ? 'bg-green-500/20' :
+                        'bg-gray-500/20'
+                      }`}
+                      />
+                      {/* 선명도 유지: 얕은 그라데이션만 (텍스트 가독용) */}
+                      <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                    </>
+                  )}
                 </div>
                 
-                {/* Content */}
+                {charcoalLeft ? (
+                  <CharcoalLeftHeroCopy
+                    title={slide.title}
+                    subtitle={slide.subtitle}
+                    headingLevel="h2"
+                    overlayZClassName="z-[25]"
+                    copyZClassName="z-30"
+                    layout="fullscreen"
+                    extra={
+                      hasLink ? (
+                        <Link
+                          href={slide.linkUrl!}
+                          className="mt-4 inline-flex items-center rounded-full border border-[#1A1A1A] bg-white/80 px-5 py-2.5 text-sm font-semibold text-[#1A1A1A] hover:bg-white"
+                        >
+                          {isEventBanner ? 'Buy Now →' : 'Learn More →'}
+                        </Link>
+                      ) : null
+                    }
+                  />
+                ) : (
                 <div className="relative z-30 flex items-center justify-center h-full">
                   <div className="text-center text-white max-w-4xl mx-auto px-4">
                     <div className="space-y-8">
@@ -1866,6 +1904,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
+                )}
               </lazySwiper.SwiperSlide>
             )
               }).filter(Boolean) : null}
