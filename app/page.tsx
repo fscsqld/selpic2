@@ -15,7 +15,7 @@ import {
 import NewsletterForm from '@/components/NewsletterForm'
 import type { CategoryItem } from '@/lib/contentStore'
 import CharcoalLeftHeroCopy from '@/components/CharcoalLeftHeroCopy'
-import { isHomeHeroCharcoalLeft, homeHeroCoverObjectPosition } from '@/lib/homeHeroTextOverlay'
+import { isHomeHeroCharcoalLeft, homeHeroImageFit } from '@/lib/homeHeroTextOverlay'
 
 type CategoryItemWithType = CategoryItem & { categoryType?: string }
 
@@ -265,11 +265,11 @@ const ImageSlide = React.memo(
   ({
     src,
     fetchPriority = 'auto',
-    objectPosition = 'center',
+    imageFit = 'cover',
   }: {
     src: string
     fetchPriority?: 'high' | 'low' | 'auto'
-    objectPosition?: 'left' | 'center'
+    imageFit?: 'contain-mobile' | 'cover'
   }) => {
   const s = (src || '').trim()
   if (!s || s.startsWith('indexeddb://')) {
@@ -281,8 +281,8 @@ const ImageSlide = React.memo(
     )
   }
   const coverClass =
-    objectPosition === 'left'
-      ? 'absolute inset-0 z-0 h-full w-full object-cover object-left lg:object-center'
+    imageFit === 'contain-mobile'
+      ? 'absolute inset-0 z-0 h-full w-full object-contain object-center lg:object-cover'
       : 'absolute inset-0 z-0 h-full w-full object-cover'
   return (
     <div className="relative h-full w-full bg-gradient-to-br from-slate-50 via-white to-sky-50">
@@ -1830,7 +1830,7 @@ export default function HomePage() {
                       key={mediaKey}
                       src={slide.src || ''}
                       fetchPriority={index === 0 ? 'high' : 'auto'}
-                      objectPosition={homeHeroCoverObjectPosition(slide)}
+                      imageFit={homeHeroImageFit(slide)}
                     />
                   )}
                   

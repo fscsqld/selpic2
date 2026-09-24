@@ -33,13 +33,17 @@ export function isHomeHeroCharcoalLeft(slide: {
 }
 
 /**
- * Full-viewport homepage hero uses `object-cover`. Portrait phones crop the
- * left wall (charcoal slot) unless we pin cover to the left; landscape
- * desktops keep center so the family stays in frame.
+ * How the homepage *image* fills the full-viewport hero.
+ *
+ * Charcoal slides (live `hero-3`): `object-contain` below `lg` so the whole
+ * 16:9 family photo is visible on phones — same idea as slide 1 video.
+ * `lg+` stays `object-cover` so laptops keep the current full-bleed crop.
+ *
+ * White-center slides (1 video is not this helper; 2 is 1:1 cover) stay cover.
  */
-export function homeHeroCoverObjectPosition(slide: {
+export function homeHeroImageFit(slide: {
   id?: string | null
   textOverlay?: string | null
-}): 'left' | 'center' {
-  return isHomeHeroCharcoalLeft(slide) ? 'left' : 'center'
+}): 'contain-mobile' | 'cover' {
+  return isHomeHeroCharcoalLeft(slide) ? 'contain-mobile' : 'cover'
 }
