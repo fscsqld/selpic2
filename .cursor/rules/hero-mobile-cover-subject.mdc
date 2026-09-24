@@ -1,0 +1,56 @@
+---
+description: Mobile hero crop — keep faces/child in frame on homepage slide 3, Market S, Stickers
+alwaysApply: false
+globs: app/page.tsx,app/stickers/page.tsx,app/hot-goods/page.tsx,app/stamp/page.tsx,app/phone-cases/page.tsx,components/SlidingBackground.tsx,components/MarketSLandingHero.tsx,components/CategoryCharcoalHero.tsx,components/CharcoalLeftHeroCopy.tsx,lib/homeHeroTextOverlay.ts,lib/marketSHeroCopy.ts,app/admin/content/components/HeroSlideManager.tsx,app/admin/content/components/CategoryHeroSlideManager.tsx
+---
+
+# Hero mobile cover — subject must stay in frame (learned 2026-09-24)
+
+Charcoal left copy and “show the child/family” fight on **one** 16:9 file when the box is portrait `object-cover`. Fix the **class** (shared cover focus + photo safe-zone), not only homepage `hero-3`.
+
+## Two boxes (do not treat as one)
+
+| Surface | Box | Crop today | Text |
+|---|---|---|---|
+| Homepage Swiper (`app/page.tsx`) | `min-h-screen` / `h-screen` | `object-cover` + charcoal → `object-left` below `lg` (1024) | Slide 3 charcoal; 1–2 white-center |
+| Market S / Stickers / Stamp / Phone Cases | Short banner ~300–420px | `SlidingBackground` `bg-cover` **`bg-center` always** | **Charcoal left** (`CategoryCharcoalHero`) |
+
+Live family file ~**1280×714** (1.79:1). Child sits **right**. Phone portrait home left-pin shows ~25–31% **left wall only**. Market S banner still center-crops ~15% each side, so a far-right child can vanish there too.
+
+Do **not** lower homepage Swiper height to “fix” slide 3 — slides 1–2 share that height (hero video protected).
+
+## Invariant
+
+On phones, the **subject** (child / faces / product in the photo) must remain inside the visible crop. Charcoal is an HTML wash; it does **not** require the left wall to be the only thing on screen.
+
+## What to change (when owner asks to apply)
+
+1. **Shared cover focus** — one helper (e.g. `lib/heroCoverFocus.ts`): percentage `object-position` / `background-position` (default `70% 50%` for family/right-subject; `50% 50%` for centered product shots). Use on homepage `ImageSlide` **and** `SlidingBackground` `ImageSlide`. Do not hardcode `object-left` only because overlay is charcoal.
+2. **Homepage charcoal** — stop `homeHeroCoverObjectPosition` → `'left'` for this class of photo. Wash still darkens the left for type. Optional CMS `coverFocus` later; until then right-subject slides use ~70% not 0%.
+3. **Category heroes** — Stickers / Market S / Stamp / Phone Cases storefront overlay is charcoal (`CategoryCharcoalHero`). New admin rows default **Effect = fade**. `slide` pan/tile still hides subjects if someone picks it.
+4. **Do not** add `srcMobile` unless homepage must stay full-viewport **and** one landscape file still fails after focus ~70%. Portrait second asset is the fallback, not the first patch.
+
+## Owner photo spec (Stickers upload + Market S / home slide 3)
+
+Landscape **1920×800** (~2.4:1) or **1920×1080**. Keep faces/child in the **safe zone**:
+
+| Overlay | Horizontal (from left) | Vertical |
+|---|---|---|
+| Charcoal (Market S, Stickers hub, home slide 3, Stamp/Phone Cases when active) | **40–80%** (left 0–35% empty wall/negative space) | Middle ~60% |
+
+Avoid 1:1. Avoid putting the only subject on the far right edge. Admin list preview is a small 16:9 tile — **not** a phone crop; check a 390px-wide viewport. Stickers hub is charcoal like Market S — uploading a photo does **not** by itself switch overlay; `CategoryCharcoalHero` is the storefront overlay.
+
+## Cousins (same class)
+
+- iPad portrait width **&lt; 1024** still uses homepage left-pin today
+- Stickers / Stamp / Phone Cases share `SlidingBackground` — a Stickers-only `bg-right` fork would miss Market S and future Stamp re-enable
+- Effect `zoom` scales 1.2 → extra crop; `rotate` unusable for people
+- Homepage slide 1 video is `object-contain` (different); slide 2 1:1 is worse cover
+- `/stickers/[slug]` listing has **no** category hero — hub `/stickers` only
+- `responsive.mobile` on category slides is speed/opacity only, **not** a second image
+
+## Do not
+
+- Pin `object-left` to “save charcoal” when the subject is on the right
+- Redesign Hero slides 1–2 / Framer / HOT ITEM to fix slide 3 crop
+- Expect one far-right subject to survive both full-viewport portrait cover and banner center-cover without a focus field or a recrop

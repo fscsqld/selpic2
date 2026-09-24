@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMarketSHeroCopy } from './marketSHeroCopy'
+import { resolveCategoryHubHeroCopy, resolveMarketSHeroCopy } from './marketSHeroCopy'
 
 describe('resolveMarketSHeroCopy', () => {
   it('uses slide title and subtitle when set', () => {
@@ -40,6 +40,38 @@ describe('resolveMarketSHeroCopy', () => {
       })
     ).toEqual({
       title: 'Market S',
+      subtitle: '',
+    })
+  })
+})
+
+describe('resolveCategoryHubHeroCopy', () => {
+  it('uses Stickers slide copy when set (same charcoal hub as Market S)', () => {
+    expect(
+      resolveCategoryHubHeroCopy({
+        slideTitle: 'Bright Names for Bright Days',
+        slideSubtitle: 'Durable, 100% waterproof custom stickers for school, daycare & everyday fun.',
+        categoryTitle: 'Stickers',
+        categoryDescription: 'Express yourself with our premium sticker collection',
+        fallbackTitle: 'Stickers',
+      })
+    ).toEqual({
+      title: 'Bright Names for Bright Days',
+      subtitle: 'Durable, 100% waterproof custom stickers for school, daycare & everyday fun.',
+    })
+  })
+
+  it('falls back to the hub name when slide title is empty', () => {
+    expect(
+      resolveCategoryHubHeroCopy({
+        slideTitle: '  ',
+        slideSubtitle: '',
+        categoryTitle: '',
+        categoryDescription: '',
+        fallbackTitle: 'Stickers',
+      })
+    ).toEqual({
+      title: 'Stickers',
       subtitle: '',
     })
   })

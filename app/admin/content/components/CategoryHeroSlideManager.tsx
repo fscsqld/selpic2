@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Edit, Trash2, GripVertical, Eye, EyeOff, Play, Image as ImageIcon, Video } from 'lucide-react'
 import { CategoryHeroSlide } from '@/lib/contentStore'
 import MediaUpload from '@/components/MediaUpload'
+import CharcoalLeftHeroCopy from '@/components/CharcoalLeftHeroCopy'
 
 interface CategoryHeroSlideManagerProps {
   categoryHeroSlides: CategoryHeroSlide[]
@@ -72,7 +73,7 @@ export default function CategoryHeroSlideManager({
     subtitle: '', // 슬라이드별 부제목
     speed: 5,
     direction: 'left' as 'left' | 'right' | 'up' | 'down',
-    effect: 'slide' as 'slide' | 'fade' | 'zoom' | 'rotate' | 'blend',
+    effect: 'fade' as 'slide' | 'fade' | 'zoom' | 'rotate' | 'blend',
     opacity: 1,
     responsive: {
       mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
@@ -128,7 +129,7 @@ export default function CategoryHeroSlideManager({
         subtitle: '',
         speed: 5,
         direction: 'left',
-        effect: 'slide',
+        effect: 'fade',
         opacity: 1,
         responsive: {
           mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
@@ -155,7 +156,7 @@ export default function CategoryHeroSlideManager({
       subtitle: '',
       speed: 5,
       direction: 'left',
-      effect: 'slide',
+      effect: 'fade',
       opacity: 1,
       responsive: {
         mobile: { speed: 5, opacity: 1, pauseVideoOnMobile: false },
@@ -273,7 +274,8 @@ export default function CategoryHeroSlideManager({
             {categoryNames[category]} Hero Background Slides
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            Manage sliding background for {categoryNames[category]} category page
+            Manage sliding background for {categoryNames[category]} category page.
+            Storefront always shows charcoal left title (same as Market S) — Title and Subtitle sit on the left wash, not centered white type.
           </p>
         </div>
         <button
@@ -650,6 +652,35 @@ export default function CategoryHeroSlideManager({
                   Leave empty to use category default description
                 </p>
               </div>
+
+              {(formData.src || formData.title || formData.subtitle) && (
+                <div className="relative min-h-[180px] overflow-hidden rounded-lg border border-gray-200">
+                  {formData.src ? (
+                    formData.type === 'video' ? (
+                      <video
+                        src={formData.src}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        muted
+                        playsInline
+                        autoPlay
+                        loop
+                      />
+                    ) : (
+                      <div
+                        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                        style={{ backgroundImage: `url('${formData.src}')` }}
+                      />
+                    )
+                  ) : (
+                    <div className="absolute inset-0 bg-gray-200" />
+                  )}
+                  <CharcoalLeftHeroCopy
+                    title={formData.title}
+                    subtitle={formData.subtitle}
+                    headingLevel="h2"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

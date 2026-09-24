@@ -7,10 +7,11 @@ import { useUserAuth } from '@/lib/userAuth'
 import { useContentStore } from '@/lib/contentStore'
 import { Filter, Search, Star, Clock, Shield, Award, Palette } from 'lucide-react'
 import Header from '@/components/Header'
-import SlidingBackground from '@/components/SlidingBackground'
+import CategoryCharcoalHero from '@/components/CategoryCharcoalHero'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import Link from 'next/link'
 import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
+import { resolveCategoryHubHeroCopy } from '@/lib/marketSHeroCopy'
 
 const StampProductImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -200,27 +201,16 @@ export default function StampPage() {
   // 🆕 현재 슬라이드 인덱스 상태 관리
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
 
-  // 🆕 슬라이드별 텍스트 가져오기 (현재 활성 슬라이드의 텍스트 사용)
   const slideText = React.useMemo(() => {
-    if (!isMounted) {
-      return {
-        title: '📮 Stamps',
-        subtitle: 'Professional quality stamps for every occasion'
-      }
-    }
-    if (categoryHeroSlides && categoryHeroSlides.length > 0) {
-      // 🆕 현재 슬라이드 인덱스에 해당하는 슬라이드의 텍스트 사용
-      const currentSlide = categoryHeroSlides[currentSlideIndex] || categoryHeroSlides[0]
-      return {
-        title: currentSlide.title ?? '',
-        subtitle: currentSlide.subtitle ?? ''
-      }
-    }
-    return {
-      title: categoryInfo.title,
-      subtitle: categoryInfo.description
-    }
-  }, [isMounted, categoryHeroSlides, categoryInfo, currentSlideIndex])
+    const currentSlide = categoryHeroSlides[currentSlideIndex] || categoryHeroSlides[0]
+    return resolveCategoryHubHeroCopy({
+      slideTitle: currentSlide?.title,
+      slideSubtitle: currentSlide?.subtitle,
+      categoryTitle: categoryInfo.title,
+      categoryDescription: categoryInfo.description,
+      fallbackTitle: 'Stamps',
+    })
+  }, [categoryHeroSlides, categoryInfo, currentSlideIndex])
 
   // 🆕 슬라이드 변경 핸들러
   const handleSlideChange = React.useCallback((index: number) => {
@@ -414,17 +404,12 @@ export default function StampPage() {
         }))}
       />
 
-      {/* Hero Section with Sliding Background — 반응형: 모바일 짧게, 데스크톱에서 더 크게 */}
-      <div className="relative min-h-[273px] sm:min-h-[315px] lg:min-h-[357px] flex items-center justify-center overflow-hidden">
-        <SlidingBackground 
-          slides={categoryHeroSlides} 
-          onSlideChange={handleSlideChange}
-        />
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 drop-shadow-lg">{slideText.title}</h1>
-          <p className="text-xl text-white drop-shadow-md">{slideText.subtitle}</p>
-        </div>
-      </div>
+      <CategoryCharcoalHero
+        slides={categoryHeroSlides}
+        title={slideText.title}
+        subtitle={slideText.subtitle}
+        onSlideChange={handleSlideChange}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 페이지 헤더 */}
