@@ -76,7 +76,7 @@ Likes are **never** typed in Admin Products. No manual “like count” field. C
 1. PDP heart + live count (customer click only) — **implemented** (`ProductLikeButton` on `/products/[id]`)
 2. Listing cards — **implemented** (Stickers `ProductCard` full + Market S hub)
 3. Account list (optional) — not in v1
-4. **Admin: liked-products report** — **implemented** (`AdminProductLikesPanel` on `/admin/dashboard`)
+4. **Admin: liked-products report** — **implemented** (`AdminProductLikesPanel` on `/admin/products` only)
 
 **Ops:** run `docs/product-likes-supabase.sql` (or migration `20260925120000_product_likes.sql`) on Supabase before likes work in production.
 
@@ -99,7 +99,11 @@ Likes are **never** typed in Admin Products. No manual “like count” field. C
 | **Row join** | Like count next to stock / safety / incoming / sold qty | “High likes + low stock → reorder”; “High likes + zero sales → check price/customize friction” |
 | **Export / sort** | Sort products by likes | Buying / print planning |
 
-API: admin-only `GET /api/admin/products/likes-summary` (aggregate from `product_likes`, permission e.g. `products:read`). Show in `/admin/dashboard` card + link into `/admin/products`.
+API: admin-only `GET /api/admin/products/likes-summary` (aggregate from `product_likes`, permission e.g. `products:read`).
+
+**Primary UI (2026-09-25):** `/admin/products` only — collapsible **Customer likes** with category chips (All / Stickers / Market S / …).  
+Do **not** duplicate on dashboard or Sales Management.  
+Dashboard sections use `AdminCollapsibleSection` (Bank transfer, Etsy, Unified orders, Quick Actions, Recent Activities).
 
 ### Expert caveat (important)
 

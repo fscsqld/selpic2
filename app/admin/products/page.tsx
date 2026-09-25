@@ -25,6 +25,7 @@ import MixedLabelsSheetBundlesEditor from '@/components/admin/MixedLabelsSheetBu
 import StickerPackOptionsEditor from '@/components/admin/StickerPackOptionsEditor'
 import ProductDescriptionAiAssist from '@/components/admin/ProductDescriptionAiAssist'
 import ProductImageryAiAssist from '@/components/admin/ProductImageryAiAssist'
+import AdminProductLikesPanel from '@/components/admin/AdminProductLikesPanel'
 import { stickerPresetForAdminForm } from '@/lib/stickerSheetLayout'
 import {
   buildSuggestedStickerPacks,
@@ -1128,6 +1129,14 @@ function AdminProductsPageContent() {
               Read-only access — you can view products but cannot add, edit, or delete them.
             </p>
           )}
+        </div>
+
+        <div className="mb-6">
+          <AdminProductLikesPanel
+            storageKey="admin.section.product-likes.products"
+            defaultOpen={true}
+            showProductsLink={false}
+          />
         </div>
 
         {/* 상품 관리 버튼들 */}

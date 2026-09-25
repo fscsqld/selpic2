@@ -249,22 +249,16 @@ export default function ProductLikeButton({
           <span className={`text-gray-600 ${countClass}`}>{state.count}</span>
         </button>
       ) : (
-        <p className="text-sm text-gray-600">
-          <Link
-            href={loginHref}
-            className="relative inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2.5 font-medium text-rose-800 hover:border-red-400 hover:bg-red-50"
-          >
-            {heart}
-            <span>Like</span>
-            <span className={`text-gray-600 ${countClass}`}>{state.count}</span>
-          </Link>
-          <span className="ml-2 text-gray-500">
-            <Link href={loginHref} className="text-red-600 hover:underline">
-              Log in
-            </Link>{' '}
-            to like this product.
-          </span>
-        </p>
+        <Link
+          href={loginHref}
+          className="relative inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-800 hover:border-red-400 hover:bg-red-50 w-fit"
+          title="Log in to like"
+          aria-label="Log in to like"
+        >
+          {heart}
+          <span>Like</span>
+          <span className={`text-gray-600 ${countClass}`}>{state.count}</span>
+        </Link>
       )}
     </div>
   )

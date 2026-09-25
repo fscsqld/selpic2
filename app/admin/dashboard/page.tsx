@@ -38,7 +38,7 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
-import AdminProductLikesPanel from '@/components/admin/AdminProductLikesPanel'
+import AdminCollapsibleSection from '@/components/admin/AdminCollapsibleSection'
 import type { OrderRecord, OrderStatus } from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { formatCurrency } from '@/lib/formatUtils'
@@ -755,27 +755,30 @@ export default function AdminDashboard() {
           </div>
 
           {/* Bank transfer orders need explicit visibility (status stays pending until admin marks paid) */}
-          <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-6 mb-8">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
+          <AdminCollapsibleSection
+            storageKey="admin.section.dashboard.bank-transfer"
+            defaultOpen={true}
+            className="mb-8"
+            cardClassName="border-amber-200"
+            title={
+              <span className="inline-flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-amber-700" aria-hidden />
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Bank transfer — awaiting payment
-                </h3>
+                Bank transfer — awaiting payment
                 <span className="text-sm font-medium text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
                   {pendingBankOrders.length}
                 </span>
-              </div>
+              </span>
+            }
+            description="Bank transfer orders stay «pending» until you confirm payment. Open an order to mark it paid or send the receipt."
+            headerRight={
               <Link
                 href="/admin/orders"
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
               >
                 View all orders →
               </Link>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Bank transfer orders stay «pending» until you confirm payment. Open an order to mark it paid or send the receipt.
-            </p>
+            }
+          >
             {pendingBankOrders.length === 0 ? (
               <p className="text-sm text-gray-500">
                 No bank transfer orders awaiting payment.
@@ -815,29 +818,38 @@ export default function AdminDashboard() {
                 </table>
               </div>
             )}
-          </div>
+          </AdminCollapsibleSection>
 
           {hasPermission('orders:read') && (
-            <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6 mb-8">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
+            <AdminCollapsibleSection
+              storageKey="admin.section.dashboard.etsy"
+              defaultOpen={true}
+              className="mb-8"
+              cardClassName="border-orange-200"
+              title={
+                <span className="inline-flex items-center gap-2">
                   <Plug className="h-5 w-5 text-orange-600" aria-hidden />
-                  <h3 className="text-lg font-semibold text-gray-900">Etsy shop</h3>
-                </div>
+                  Etsy shop
+                </span>
+              }
+              description={
+                <>
+                  Pull Etsy orders into the same ledger as your website. Connection and env setup live in{' '}
+                  <Link href="/admin/integrations" className="font-medium text-orange-700 hover:text-orange-900">
+                    Integrations
+                  </Link>
+                  .
+                </>
+              }
+              headerRight={
                 <Link
                   href="/admin/integrations"
                   className="text-sm font-medium text-orange-700 hover:text-orange-900 shrink-0"
                 >
                   Integration details →
                 </Link>
-              </div>
-              <p className="text-sm text-gray-600 mb-3">
-                Pull Etsy orders into the same ledger as your website. Connection and env setup live in{' '}
-                <Link href="/admin/integrations" className="font-medium text-orange-700 hover:text-orange-900">
-                  Integrations
-                </Link>
-                .
-              </p>
+              }
+            >
               {etsyBanner && (
                 <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
                   {etsyBanner}
@@ -893,24 +905,26 @@ export default function AdminDashboard() {
                   </button>
                 )}
               </div>
-            </div>
+            </AdminCollapsibleSection>
           )}
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5 text-indigo-600" aria-hidden />
-                  Unified orders
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Website and Etsy (and future channels) in one list. Click a row for a quick summary, or open the full order page.
-                </p>
-              </div>
+          <AdminCollapsibleSection
+            storageKey="admin.section.dashboard.unified-orders"
+            defaultOpen={true}
+            className="mb-8"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-indigo-600" aria-hidden />
+                Unified orders
+              </span>
+            }
+            description="Website and Etsy (and future channels) in one list. Click a row for a quick summary, or open the full order page."
+            headerRight={
               <Link href="/admin/orders" className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0">
                 Full orders page →
               </Link>
-            </div>
+            }
+          >
             {dashboardRecentSlice.length === 0 ? (
               <p className="text-sm text-gray-500">No orders in the ledger yet.</p>
             ) : (
@@ -1048,11 +1062,15 @@ export default function AdminDashboard() {
               ) : null}
               </>
             )}
-          </div>
+          </AdminCollapsibleSection>
 
           {/* 빠른 액션 */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.sections.quickActions')}</h3>
+          <AdminCollapsibleSection
+            storageKey="admin.section.dashboard.quick-actions"
+            defaultOpen={true}
+            className="mb-8"
+            title={t('admin.dashboard.sections.quickActions')}
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {quickActions.map((action, index) => {
                   // Selpic A 카드 - 클릭 시 모달 표시
@@ -1159,34 +1177,25 @@ export default function AdminDashboard() {
                   )
                 })}
             </div>
-          </div>
-
-          {hasPermission('products:read') && (
-            <div className="mb-6">
-              <AdminProductLikesPanel />
-            </div>
-          )}
+          </AdminCollapsibleSection>
 
           {/* Recent Activities — curated high-signal admin events only */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {t('admin.dashboard.sections.recentActivities')}
-                </h3>
-                <p className="mt-1 text-xs text-gray-500">
-                  Important account, product, CMS, promo, media, and fundraising changes. Routine sign-ins stay in the full Activity Log.
-                </p>
-              </div>
-              {adminUser?.role === 'super_admin' && (
+          <AdminCollapsibleSection
+            storageKey="admin.section.dashboard.recent-activities"
+            defaultOpen={false}
+            title={t('admin.dashboard.sections.recentActivities')}
+            description="Important account, product, CMS, promo, media, and fundraising changes. Routine sign-ins stay in the full Activity Log."
+            headerRight={
+              adminUser?.role === 'super_admin' ? (
                 <Link
                   href="/admin/settings?tab=activity-log"
                   className="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800"
                 >
                   View full log →
                 </Link>
-              )}
-            </div>
+              ) : undefined
+            }
+          >
             <div className="space-y-4">
               {recentActivities.length === 0 ? (
                 <p className="text-sm text-gray-500">
@@ -1228,7 +1237,7 @@ export default function AdminDashboard() {
                 ))
               )}
             </div>
-          </div>
+          </AdminCollapsibleSection>
 
         {dashboardDetailOrder && (
           <div
