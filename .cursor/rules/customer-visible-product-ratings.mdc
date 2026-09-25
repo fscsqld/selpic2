@@ -1,0 +1,52 @@
+---
+description: Customer-facing product ratings — what exists, marketing value, trust risks (learned 2026-09-25)
+globs: components/ProductCard.tsx, app/products/**/*.tsx, app/admin/products/**/*.tsx, lib/productCardImageLayout.ts
+alwaysApply: false
+---
+
+# Customer-visible product ratings (learned 2026-09-25)
+
+## Owner ask
+
+Can customers see product ratings (stars) for marketing? Expert view + what SELPIC can do today.
+
+## What customers can see today
+
+| Surface | Behavior |
+|---------|----------|
+| **PDP** `/products/[id]` | Stars + `rating (N reviews)` if `product.rating` is set |
+| **Stickers hub** `ProductCard` `full` | Stars + count **only if** `productCardHasCatalogRating` (finite `rating > 0`) — no invented 4.8 |
+| **ProductCard** `compact` | Still shows a star number; missing rating falls back to **4.8** (legacy — avoid relying on this) |
+| **Market S hub** | Own card UI with stars when data present |
+
+**Source of truth today:** Admin Product form fields `rating` + `reviews` — **manual merchandising**, not verified purchase reviews. No customer “write a review” flow, no photo reviews, no moderation queue.
+
+## Expert / marketing view
+
+| Approach | Marketing upside | Risk |
+|----------|------------------|------|
+| **A. Show admin-entered stars** (already wired on PDP / hub full) | Social proof on listing + detail; quick | If numbers look fake (always 4.9 / 0 reviews / invented counts) → trust hit, ACCC-style misleading issues in AU |
+| **B. Hide until real reviews exist** | Honest empty state | Less proof early on |
+| **C. Real review system** (post-purchase email, moderate, aggregate) | Strong long-term proof | Build + ops cost |
+| **D. Confuse with product “likes”** | Vanity metric | Not a star rating; don’t mix labels |
+
+**Recommendation for SELPIC now:**
+
+1. **Yes, customers can already see ratings** where admin filled `rating` (and ideally `reviews`) — PDP + Stickers hub full cards.  
+2. For marketing: use **honest** values (or leave blank so hub hides stars). Prefer real `reviews` count only when you have a story (even “early customers” offline tally) — don’t invent thousands.  
+3. Compact-card **4.8 default** is marketing-hostile long term — treat as tech debt; don’t expand that pattern.  
+4. “Like” button (`product-like-one-per-customer.mdc`) is a **separate** signal — hearts ≠ star reviews.  
+5. If owner wants **true** customer reviews later → new feature (auth/order-gated submit + store + moderate), not just toggling admin fields.
+
+## Apply without new product work
+
+- Admin → Products → set **Rating** + **Reviews** → save/sync catalog → storefront shows stars.  
+- Hub full already gates on real rating; PDP shows when `product.rating` truthy.
+
+## Do not
+
+- Invent high review counts for empty stores  
+- Pipe live like-counts into the “reviews” label  
+- Put fake stars on homepage Hero / category tiles  
+- Assume customers can leave reviews today — they cannot
+---

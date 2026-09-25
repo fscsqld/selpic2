@@ -1,0 +1,49 @@
+---
+description: Product like heart — visibility + click delight UX (learned 2026-09-25)
+globs: components/ProductLikeButton.tsx, components/ProductCard.tsx, app/products/**/*.tsx, app/hot-goods/**/*.tsx
+alwaysApply: false
+---
+
+# Product like: stand-out heart + click delight (learned 2026-09-25)
+
+## Shipped (2026-09-25)
+
+- Unliked: rose outline / rose pill (not gray). Compact heart `w-5`.
+- On successful like only: scale pop + fill + count bounce; PDP micro heart burst.
+- `prefers-reduced-motion`: no pop/burst.
+- Unlike: no delight animation.
+
+## Visibility (customer eye)
+
+| Idea | Effect | Fit for SELPIC |
+|------|--------|----------------|
+| **Always soft-red outline** (not gray) before like | Reads as “like” not “settings” | **Do** |
+| **Slightly larger** compact heart (`w-5`) + pink/rose pill tint | Pops on photo without fighting NEW badges | **Do** |
+| Soft pulse / glow idle on PDP only | Draws eye once | Optional, keep subtle |
+| Neon / rainbow / huge floating heart always on | Noise vs merch badges | **Avoid** |
+
+Liked state: filled `red-500` / rose — keep. Unliked: `text-rose-500` stroke, never gray/black.
+
+## Click delight (희열) — research summary
+
+Industry pattern (IG / Shopify wishlist / TikTok): **short feedback loop** on successful like only (not unlike).
+
+| Effect | Delight | Cost / risk |
+|--------|---------|-------------|
+| **A. Scale pop** `scale 1 → 1.35 → 1` ~200–300ms | Instant “it registered” | Low — CSS only — **ship first** |
+| **B. Fill morph** outline → solid mid-pop | Satisfying commit | Low — with A |
+| **C. Micro burst** 4–6 tiny hearts / dots fly out | High joy | Medium — CSS/span, no new lib |
+| **D. Confetti / canvas party** | Overkill on every SKU card | High noise / perf — **avoid** on listings |
+| **E. Count +1 bounce** | Reinforces social proof | Low — pair with A |
+| **F. Sound / strong haptic** | Polarizing; a11y | Skip unless owner asks |
+| **`prefers-reduced-motion`** | Respect accessibility | **Required** if any motion |
+
+**Recommended package:** A + B + E on PDP and cards; optional light C on **PDP only**. Fire animation **after** successful POST (or optimistic with rollback) so failed likes don’t fake joy.
+
+## Do not
+
+- Animate on every card hover forever (exhausting)
+- Confetti on listing grids (LCP / clutter)
+- Gray “default icon” color for unliked heart
+- Tie delight to admin rating stars
+---

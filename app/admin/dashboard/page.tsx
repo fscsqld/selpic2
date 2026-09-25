@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 
 import { useStore } from '@/lib/store'
+import AdminProductLikesPanel from '@/components/admin/AdminProductLikesPanel'
 import type { OrderRecord, OrderStatus } from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { formatCurrency } from '@/lib/formatUtils'
@@ -1159,6 +1160,12 @@ export default function AdminDashboard() {
                 })}
             </div>
           </div>
+
+          {hasPermission('products:read') && (
+            <div className="mb-6">
+              <AdminProductLikesPanel />
+            </div>
+          )}
 
           {/* Recent Activities — curated high-signal admin events only */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

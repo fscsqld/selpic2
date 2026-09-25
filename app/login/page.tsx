@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Lock, Mail, Eye, EyeOff, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import Header from '@/components/Header'
 import { useUserAuth } from '@/lib/userAuth'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { useStore } from '@/lib/store'
+import { sanitizeStorefrontLoginNext } from '@/lib/storefrontLoginNext'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,25 +24,44 @@ export default function LoginPage() {
   const [resetSuccess, setResetSuccess] = useState(false)
   const [registeredBanner, setRegisteredBanner] = useState(false)
   const [formError, setFormError] = useState('')
+  const [nextPath, setNextPath] = useState<string | null>(null)
+  const [adminBlocksCustomerLogin, setAdminBlocksCustomerLogin] = useState(false)
+  const [switchingToCustomer, setSwitchingToCustomer] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
+    const safeNext = sanitizeStorefrontLoginNext(params.get('next'))
+    setNextPath(safeNext)
+
+    let stripReset = false
+    let stripRegistered = false
     if (params.get('reset') === 'success') {
       setResetSuccess(true)
-      window.history.replaceState({}, '', window.location.pathname)
+      stripReset = true
     }
     if (params.get('registered') === '1') {
       setRegisteredBanner(true)
-      window.history.replaceState({}, '', window.location.pathname)
+      stripRegistered = true
+    }
+    if (stripReset || stripRegistered) {
+      const keep = new URLSearchParams()
+      if (safeNext) keep.set('next', safeNext)
+      const qs = keep.toString()
+      window.history.replaceState({}, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname)
     }
   }, [])
 
-  /** Send already-authenticated users away; keep fields empty (no default credentials in source). */
+  /** Send already-authenticated users away — except admin + storefront `next` (likes / return path). */
   useEffect(() => {
     let cancelled = false
 
     const redirectIfAuthenticated = async () => {
+      const params =
+        typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      const safeNext = sanitizeStorefrontLoginNext(params?.get('next') ?? nextPath)
+      const hasStorefrontNext = safeNext != null
+
       const hasSupabase =
         Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
         Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
@@ -54,6 +74,10 @@ export default function LoginPage() {
           const resolved = await resolveAdminBrowserSession(supabase)
           if (cancelled) return
           if (resolved.ok) {
+            if (hasStorefrontNext) {
+              setAdminBlocksCustomerLogin(true)
+              return
+            }
             router.replace('/admin/dashboard')
             return
           }
@@ -61,13 +85,17 @@ export default function LoginPage() {
           /* ignore */
         }
       } else if (useAdminAuth.getState().isLoggedIn) {
+        if (hasStorefrontNext) {
+          setAdminBlocksCustomerLogin(true)
+          return
+        }
         router.replace('/admin/dashboard')
         return
       }
 
       if (cancelled) return
       if (useUserAuth.getState().isLoggedIn) {
-        router.replace('/')
+        router.replace(safeNext || '/')
       }
     }
 
@@ -75,7 +103,29 @@ export default function LoginPage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, nextPath])
+
+  const continueAsCustomer = useCallback(async () => {
+    setSwitchingToCustomer(true)
+    setFormError('')
+    try {
+      useAdminAuth.getState().logout()
+      const hasSupabase =
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+      if (hasSupabase) {
+        try {
+          const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+          await createSupabaseBrowserClient().auth.signOut()
+        } catch {
+          /* logout() already best-effort signs out */
+        }
+      }
+      setAdminBlocksCustomerLogin(false)
+    } finally {
+      setSwitchingToCustomer(false)
+    }
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -89,6 +139,12 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (adminBlocksCustomerLogin) {
+      setFormError(
+        'Sign out of the admin session first (Continue as customer), then sign in with a customer account.'
+      )
+      return
+    }
     setIsLoading(true)
     setFormError('')
 
@@ -97,6 +153,13 @@ export default function LoginPage() {
       setIsLoading(false)
       return
     }
+
+    const safeNext =
+      nextPath ||
+      (typeof window !== 'undefined'
+        ? sanitizeStorefrontLoginNext(new URLSearchParams(window.location.search).get('next'))
+        : null)
+    const afterLogin = safeNext || '/'
 
     try {
       const hasSupabase =
@@ -129,7 +192,7 @@ export default function LoginPage() {
             } catch {
               /* non-fatal */
             }
-            router.replace('/')
+            router.replace(afterLogin)
             return
           }
           if (error) {
@@ -144,7 +207,9 @@ export default function LoginPage() {
                 'No account was found for this email in our sign-in system. Check for typos or create an account.'
               )
             } else if (msg.includes('email not confirmed')) {
-              setFormError('Please confirm your email address before signing in. Check your inbox for the verification link.')
+              setFormError(
+                'Please confirm your email address before signing in. Check your inbox for the verification link.'
+              )
             } else {
               setFormError(error.message || 'Sign-in failed. Please try again.')
             }
@@ -166,7 +231,7 @@ export default function LoginPage() {
         } catch {
           /* non-fatal */
         }
-        router.replace('/')
+        router.replace(afterLogin)
       } else {
         setFormError('Invalid email address or password. Please try again.')
       }
@@ -208,6 +273,37 @@ export default function LoginPage() {
               <span className="block">to continue shopping.</span>
             </p>
           </div>
+
+          {adminBlocksCustomerLogin && (
+            <div
+              className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left"
+              role="status"
+            >
+              <p className="text-sm font-medium text-amber-950">
+                You are signed in as an administrator.
+              </p>
+              <p className="mt-1 text-sm text-amber-900/90">
+                Product likes need a customer account. Continue as a customer to sign in here, or open the admin
+                dashboard.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={switchingToCustomer}
+                  onClick={() => void continueAsCustomer()}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {switchingToCustomer ? 'Switching…' : 'Continue as customer'}
+                </button>
+                <Link
+                  href="/admin/dashboard"
+                  className="inline-flex flex-1 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100/80"
+                >
+                  Admin dashboard
+                </Link>
+              </div>
+            </div>
+          )}
 
           {registeredBanner && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6">
@@ -252,7 +348,8 @@ export default function LoginPage() {
                   onChange={handleInputChange}
                   required
                   autoComplete="username"
-                  className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
+                  disabled={adminBlocksCustomerLogin}
+                  className="w-full px-5 py-4 pl-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all duration-300 placeholder-slate-400 disabled:opacity-50"
                   placeholder="name@example.com"
                 />
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -275,7 +372,8 @@ export default function LoginPage() {
                   onChange={handleInputChange}
                   required
                   autoComplete="current-password"
-                  className="w-full px-5 py-4 pl-12 pr-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all duration-300 placeholder-slate-400"
+                  disabled={adminBlocksCustomerLogin}
+                  className="w-full px-5 py-4 pl-12 pr-12 border border-slate-200 rounded-xl bg-slate-50/50 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all duration-300 placeholder-slate-400 disabled:opacity-50"
                   placeholder="Enter your password"
                 />
                 <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -296,6 +394,7 @@ export default function LoginPage() {
                   type="checkbox"
                   checked={keepLoggedIn}
                   onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                  disabled={adminBlocksCustomerLogin}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                 />
                 <span className="ml-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors">
@@ -312,7 +411,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || adminBlocksCustomerLogin}
               className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-medium py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
             >
               {isLoading ? (
@@ -333,7 +432,7 @@ export default function LoginPage() {
             <p className="mx-auto max-w-[min(100%,20rem)] text-sm sm:text-[15px] leading-relaxed text-balance text-slate-500">
               <span className="text-slate-500">New to Selpic? </span>
               <Link
-                href="/register"
+                href={nextPath ? `/register?next=${encodeURIComponent(nextPath)}` : '/register'}
                 className="font-bold text-emerald-600 decoration-emerald-600/40 underline-offset-4 transition-colors duration-200 hover:text-teal-700 hover:underline hover:decoration-teal-600/60"
               >
                 Create an account for a better shopping experience.

@@ -18,6 +18,7 @@ import {
 import ProductDetailJsonLd from '@/components/ProductDetailJsonLd'
 import { getCustomizationPath, isCustomizationRequired } from '@/lib/productCustomization'
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
+import ProductLikeButton from '@/components/ProductLikeButton'
 import { isMarketSCatalogProduct } from '@/lib/marketSSubcategory'
 import { MARKET_S_HYGIENE_PDP } from '@/lib/marketSHygieneCopy'
 
@@ -346,6 +347,9 @@ export default function ProductDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* Customer like (not rating) — one per logged-in account */}
+            <ProductLikeButton productId={productId} />
 
             {/* 상품 설명 */}
             <div className="mb-6">

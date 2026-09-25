@@ -1,0 +1,135 @@
+---
+description: Product like button feasibility — one like per customer (learned 2026-09-25)
+globs: components/ProductCard.tsx, app/products/**/*.tsx, lib/userAuth.ts, app/api/**/*
+alwaysApply: false
+---
+
+# Product “like” button (one per customer) — feasibility (learned 2026-09-25)
+
+## Owner ask
+
+Add a like-style control on products: count increments on click, but **not** unlimited spam — **one customer → one like per product** (normal logic).
+
+## Verdict
+
+**Feasible on SELPIC storefront** (medium effort). Fits existing Next API + Supabase + login patterns. **Not built today.**
+
+## What exists today
+
+| Piece | Status |
+|-------|--------|
+| Wishlist / product favorite / heart UI | **None** |
+| `Product.rating` / `reviews` | Admin merchandising only — **not** live customer likes |
+| Community `likes` | Integer counter on posts — **no** per-user UNIQUE — **do not reuse** for products |
+| Cart / checkout actions | **Login required** (`useUserAuth` + server Supabase session) |
+| Guest `selpic_vid` | Anonymous analytics — **not** a stable “customer” for one-like |
+
+## Like ≠ rating ≠ admin field (reconfirmed 2026-09-25)
+
+| Signal | Who sets it | Customer action |
+|--------|-------------|-----------------|
+| **Rating / reviews** | Admin form today (optional later: real reviews) | Mostly **read-only** social proof |
+| **Like** | **Only** logged-in customer click → server insert | **Write** — heart button |
+
+Likes are **never** typed in Admin Products. No manual “like count” field. Count = real `product_likes` rows (UNIQUE user×product).
+
+## Where customers see and use it (placement)
+
+**Discover + act on the product itself** — same journey as viewing a SKU, not admin CMS.
+
+### 1) Primary — Product detail page (`/products/[id]`)
+
+```
+[ Gallery ]
+
+[ Product name ]
+[ Stars / reviews ]     ← rating (read) — keep separate
+[ Price ]
+[ ♡ Like  12 ]          ← REAL click (write) — HERE
+[ Qty ] [ Customize / Add to Cart ]
+[ Description … ]
+```
+
+- **Why here:** Customer opened one product; clear intent; space for “Like” label + count; login prompt sits next to purchase CTAs.  
+- **Not** inside the star row.  
+- **Not** an admin-editable number on this screen.
+
+### 2) Secondary — Listing cards (`/stickers`, `/hot-goods`)
+
+- Heart on image **top-right** (merch badges stay top-left) **or** under price as ♡ + count.  
+- Same API: one click per logged-in user per product.  
+- Guests see count; click → login.
+
+### 3) Optional later — Account “Liked products”
+
+- Read-only list of SKUs they liked — does not replace PDP/card buttons.
+
+### Do not place
+
+- Admin product form as a manual counter  
+- Homepage Hero / category tiles  
+- Checkout / customize canvas  
+- Star/rating row (looks like reviews)
+
+## Ship order
+
+1. PDP heart + live count (customer click only) — **implemented** (`ProductLikeButton` on `/products/[id]`)
+2. Listing cards — **implemented** (Stickers `ProductCard` full + Market S hub)
+3. Account list (optional) — not in v1
+4. **Admin: liked-products report** — **implemented** (`AdminProductLikesPanel` on `/admin/dashboard`)
+
+**Ops:** run `docs/product-likes-supabase.sql` (or migration `20260925120000_product_likes.sql`) on Supabase before likes work in production.
+
+## Admin dashboard — help stock & purchase volume? (reviewed 2026-09-25)
+
+**Yes, feasible and useful as a demand signal** — not as a replacement for sales.
+
+### What exists today (no likes yet)
+
+- Dashboard: product count, inbound, activity — **no** “most liked” widget  
+- Products admin: `stockQuantity` / `safetyStock` / `incomingStock` — **manual**  
+- Orders: real purchase demand  
+- Admin `isPopular` / `isBestSeller` — merchandising flags, not live customer likes  
+
+### What to add (after `product_likes` exists)
+
+| Admin surface | Content | Ops use |
+|---------------|---------|---------|
+| **Dashboard widget** or **Products → “Customer likes”** | Top N SKUs by like count (7d / 30d / all-time) | Spot rising interest before (or without) matching sales |
+| **Row join** | Like count next to stock / safety / incoming / sold qty | “High likes + low stock → reorder”; “High likes + zero sales → check price/customize friction” |
+| **Export / sort** | Sort products by likes | Buying / print planning |
+
+API: admin-only `GET /api/admin/products/likes-summary` (aggregate from `product_likes`, permission e.g. `products:read`). Show in `/admin/dashboard` card + link into `/admin/products`.
+
+### Expert caveat (important)
+
+| Signal | Means |
+|--------|--------|
+| **Likes** | Interest / preference (logged-in customers) |
+| **Orders / units sold** | Actual demand you must stock for |
+| **Stock fields** | What you already committed to hold |
+
+Use likes to **prioritize attention** (which SKUs to watch, promote, or prep materials for). **Buy quantity** should still weight **sales velocity + safety stock**, with likes as a secondary leading indicator. Do not auto-set `stockQuantity` from like count alone.
+
+### Do not (admin)
+
+- Manual “seed” like counts in the product form  
+- Treat likes as equal to Best Seller checkbox  
+- Hide stock decisions behind likes only when order history exists
+
+## Effort
+
+| Scope | Difficulty |
+|-------|------------|
+| Login + UNIQUE + PDP + count | Low–medium (newsletter / pageviews class) |
+| + listing cards batch counts | Medium |
+| + admin likes ranking + stock columns | Medium (after storefront) |
+| Guest cookie + merge on login | Higher — avoid unless product asks |
+
+## Do not
+
+- Increment a number only in `localStorage` / client state (spoofable, multi-tab spam)
+- Stuff like counts into `storefront_catalog` snapshot as source of truth
+- Reuse community post `likes` column for SKUs
+- Treat admin `reviews` field as live like count
+---

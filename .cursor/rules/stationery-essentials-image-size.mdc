@@ -1,0 +1,47 @@
+---
+description: Why Stationery Essentials hub images look relatively small (learned 2026-09-25)
+globs: components/ProductCard.tsx, app/stickers/**/*.tsx, lib/productCardImageLayout.ts
+alwaysApply: false
+---
+
+# Stationery Essentials images look relatively small (learned 2026-09-25)
+
+## Clarification
+
+Owner meant **Stationery Essentials** SKUs looking smaller than other Stickers on the hub — not a generic “random SKUs” note, and not Mixed-only.
+
+## Not the cause
+
+- No Stationery-specific `ProductCard` / image CSS branch (same `imageLayout="full"` → `h-56` + `object-contain` + `inset-1`)
+- Not mobile-only styling
+
+## Why they look smaller
+
+Live catalog samples (2026-09-25):
+
+| SKU | Approx pixels | Aspect |
+|-----|---------------|--------|
+| Happy Bear (Stationery) | 500×500 | 1.0 (square) |
+| Just for You / Flower Cat (Stationery) | ~900×1150–1200 | ~0.75–0.80 (portrait) |
+| Typical Basic name-label sheets | ~864×1184 | ~0.73 (also portrait) |
+
+So **contain + portrait** alone does not uniquely single out Stationery vs Basic. The usual Stationery “small” read is:
+
+1. **Subject padding in the file** — Stationery Essentials are **file-based stationery** photos (admin free-text size), often with **large empty / white margin** around a smaller product. Name-label sheet mockups usually **fill the canvas**. Same shell + contain → Stationery **subject** looks tiny even when the bitmap is large.
+2. **Portrait letterboxing** — tall files still sit as a narrower strip in the landscape `h-56` shell (same class of issue as Mixed Labels).
+3. **Low-res square** (e.g. Happy Bear 500×500) can look soft/small on wide laptop cards even though aspect fills better.
+
+## What to do
+
+| Goal | Action |
+|------|--------|
+| Keep full product visible | Keep contain (do not switch Stationery to cover) |
+| Make Stationery look as large as name labels | **Re-upload** tighter crops (less margin, subject fills frame) or nearer-square exports |
+| Code-only equal fill | Cover crops — wrong for stickers; avoid |
+
+## Do not
+
+- Add `if (Stationery) scale(1.2)` hacks in `ProductCard`
+- Blame missing subcategory CSS before checking the **uploaded file’s subject vs margin**
+- Confuse this with Combo Pack description wrapping (`combo-pack-sheet-spec-one-line.mdc`)
+---

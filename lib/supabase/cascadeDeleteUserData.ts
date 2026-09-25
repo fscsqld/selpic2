@@ -47,6 +47,7 @@ export async function deletePublicDataForAuthUser(
     { table: 'user_carts', column: 'user_id' },
     { table: 'shopping_cart_items', column: 'user_id' },
     { table: 'carts', column: 'user_id' },
+    { table: 'product_likes', column: 'user_id' },
   ]
   for (const { table, column } of optionalCartTables) {
     await tryDeleteWhere(sb, table, column, userId)

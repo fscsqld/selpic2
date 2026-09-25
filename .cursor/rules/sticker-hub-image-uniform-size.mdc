@@ -1,41 +1,75 @@
 ---
-description: Why Stickers hub product images look different sizes + how to unify (learned 2026-09-25)
+description: Why Stickers hub product images look different sizes + how to fix / re-upload (learned 2026-09-25)
 globs: components/ProductCard.tsx, app/stickers/**/*.tsx, lib/productCardImageLayout.ts
 alwaysApply: false
 ---
 
-# Stickers hub: why product images look different sizes (learned 2026-09-25)
+# Stickers hub: why some product images look relatively smaller (learned 2026-09-25)
 
 ## Symptom
 
-On `/stickers`, some SKUs look larger/wider than others in the same grid (especially Mixed Labels portrait vs square Basic sheets). Owner may ask for “same size on laptop too.”
+On `/stickers`, **some** product images look smaller than neighbours after `h-56` + contain. Confirmed SKUs include:
+
+- **Basic / Premium sheets:** Cute Animal Friends Name label, Wise Owl Extra-Large Name label, 9-Color Pastel Pearl Name Label, Premium Holographic Name label, …
+- **Stationery Essentials** (also subject padding — `stationery-essentials-image-size.mdc`)
+- **Mixed Labels** tall sheets
+
+**Square** uploads (Happy Bear 500×500, some Mixed 1024×1024) look **larger** in the same card.
 
 ## Why (not a per-SKU CSS bug)
 
-Hub cards share one shell (`imageLayout="full"` → fixed height e.g. `h-56`, `object-contain`, light inset). **Contain preserves aspect ratio** inside that shell:
+Hub: same `imageLayout="full"` → `h-56` + `object-contain` + `inset-1`. Contain keeps full art; landscape shell + **portrait file** → narrow centered column + gray sides.
 
-| Upload shape | What you see |
-|--------------|--------------|
-| Landscape / near-square | Art fills more of the shell width |
-| Tall portrait (Mixed Labels) | Art is a narrower strip with gray letterboxing |
+Live fit estimate (laptop ~4-col, inner ~272×216):
 
-Same CSS, different **intrinsic aspect ratios** → different **drawn** width/height. Laptop feels smaller overall because the **grid has more columns** (narrower cards), not because desktop uses different image classes.
+| SKU | File | AR | Drawn | Area fill |
+|-----|------|-----|-------|-----------|
+| Cute Animal Friends | 864×1184 | 0.73 | ~158×216 | ~58% |
+| Wise Owl Extra-Large | 864×1184 | 0.73 | ~158×216 | ~58% |
+| 9-Color Pastel Pearl | 896×1195 | 0.75 | ~162×216 | ~60% |
+| Happy Bear (square) | 500×500 | 1.0 | ~216×216 | ~79% |
+| Holographic Mixed (square) | 1024×1024 | 1.0 | ~216×216 | ~79% |
+
+Most **name-label sheet mockups** are ~3:4 portrait PNGs — that is why those Basics/Premiums look “small” next to square assets. Laptop worse: more columns → narrower cards.
+
+Related: badges look oversized on the same cards (`product-card-merch-badges.mdc`).
+
+## How to fix — does admin need to re-upload?
+
+**Short answer:**  
+- **Must re-make / re-upload?** Only if the goal is **equal visual fill** while **keeping full sheet visible** (`object-contain`). Then yes: export nearer-**square** (or less empty margin) listing images and replace in Admin → Products.  
+- **Code-only “make all fill the box”?** Possible with `object-cover`, but **do not** — crops sticker sheets (owner already rejected that zoom look).  
+- **Optional small code tweaks** (`h-60`, fewer laptop columns): make **all** cards a bit larger; portrait SKUs stay **relatively** smaller than square ones. Does **not** remove the gap without new assets.
+
+### Recommended path (ops)
+
+1. Keep storefront **contain** (full artwork).
+2. For listing/primary image, prefer **~1:1** (e.g. 1000×1000) or soft pad the portrait sheet onto a square canvas (sheet centered, light/white/gray margins **in the file** so contain fills the hub shell).
+3. Re-upload that file as the product image (and gallery lead if used).
+4. Stationery: tighter crop of the product (less empty margin in the photo).
+
+Admin does **not** need to redesign the physical sticker — only the **catalog listing image canvas**.
+
+### If owner declines re-upload
+
+Accept letterboxing, or only bump shell/grid slightly — document that relative size difference remains.
 
 ## Ways to make them “the same size”
 
-| Approach | Same what? | Tradeoff |
-|----------|------------|----------|
-| **A. Same shell + contain** (current) | Same outer box | Art size still varies by aspect — full artwork visible |
-| **B. Same shell + `object-cover`** | Art always fills the box | Crops portrait sheets (looked “zoomed” before — avoid for stickers) |
-| **C. Fixed draw box + contain + centered** | Same as A, emphasize gray pad | Clear that size difference is letterbox, not random zoom |
-| **D. Admin upload square/normalized assets** | Art fills similarly under contain | Ops cost; best long-term for Mixed + Basic parity |
-| **E. Force `aspect-square` shell again** | Larger equal frame | Owner found full-card square too big; only with OK |
+| Approach | Same what? | Admin re-upload? | Tradeoff |
+|----------|------------|------------------|----------|
+| **A. Keep contain** (current) | Same outer box | No | Drawn size still varies |
+| **B. `object-cover`** | Fills box | No | Crops — **avoid** |
+| **D. Normalize uploads** (preferred for parity) | Art fills similarly under contain | **Yes** (square / padded canvas) | Best quality |
+| **E. Taller shell** | Slightly wider portrait | No | Relative gap remains |
+| **F. Fewer desktop columns** | All larger in px | No | Relative gap remains |
 
-**Recommended if owner wants equal visual weight without crop:** keep contain; optionally tighten Mixed uploads to a shared aspect, or accept letterboxing. Do **not** switch hub stickers back to cover just for equal fill.
+**Default:** keep **A** until owner wants parity → then **D** (re-upload), not cover.
 
 ## Do not
 
-- Add per-subcategory image CSS (“Mixed only bigger”) without documenting
-- Blame mobile-only CSS when laptop looks different — check column count first
-- Use cover to fake equal size on name-label sheets
+- Treat Cute Animal / Wise Owl / Pastel Pearl as special broken CSS — they share the portrait+contain class
+- Tell admin “rebuild the whole product” — only **listing image canvas**
+- Per-product scale hacks in `ProductCard`
+- Switch hub stickers to `object-cover` to fake equal fill
 ---

@@ -9,6 +9,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import MarketSLandingHero from '@/components/MarketSLandingHero'
 import SeoProductJsonLd from '@/components/SeoProductJsonLd'
+import ProductLikeButton from '@/components/ProductLikeButton'
 import { resolveMarketSHeroCopy } from '@/lib/marketSHeroCopy'
 import { isMarketSCatalogProduct, marketSSubcategoryIcon } from '@/lib/marketSSubcategory'
 import {
@@ -569,6 +570,9 @@ export default function HotGoodsPage() {
                       Only {stockQty} left
                     </span>
                   )}
+                </div>
+                <div className="absolute bottom-2 right-2 z-10">
+                  <ProductLikeButton productId={product.id} variant="compact" />
                 </div>
               </div>
 

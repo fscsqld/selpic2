@@ -18,6 +18,7 @@ import {
   resolveProductCardMerchBadges,
 } from '@/lib/productCardMerchBadges'
 import { isStickerSheetSpecDescription } from '@/lib/stickerSheetSpecDescription'
+import ProductLikeButton from '@/components/ProductLikeButton'
 
 export type { ProductCardImageLayout }
 
@@ -281,6 +282,11 @@ export default function ProductCard({
             Only {stockQuantity} left
           </div>
         )}
+        {fullBleed ? (
+          <div className="absolute bottom-2 right-2 z-10">
+            <ProductLikeButton productId={product.id} variant="compact" />
+          </div>
+        ) : null}
         {!product.inStock && (
           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
             <span className="text-white font-medium">{t('product.outOfStock')}</span>

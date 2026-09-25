@@ -1,0 +1,25 @@
+---
+description: Customer /login + admin session + storefront next (likes) — learned 2026-09-25
+globs: app/login/page.tsx, components/ProductLikeButton.tsx, lib/storefrontLoginNext.ts
+alwaysApply: false
+---
+
+# Customer login vs admin session (likes / next)
+
+## Invariant
+
+Storefront guest actions that need a **customer** account (e.g. product likes) must open `/login?next=<safe storefront path>`. If an **admin** Supabase session is already present, do **not** auto-`replace` to `/admin/dashboard` when `next` is a sanitized storefront path.
+
+## Do
+
+- Sanitize with `sanitizeStorefrontLoginNext` / `customerLoginHrefWithNext` (`lib/storefrontLoginNext.ts`)
+- Show amber choice: Continue as customer (admin logout + form) | Admin dashboard
+- After customer sign-in success, `router.replace(next || '/')`
+- Bare `/login` with no storefront `next`: keep admin → dashboard redirect
+
+## Do not
+
+- Let admin session count as customer `useUserAuth` likes
+- Open-redirect via `next` (`//`, `https:`, `/admin`, `/api`, `/auth`)
+- Strip `next` when clearing `reset` / `registered` query flags
+---
