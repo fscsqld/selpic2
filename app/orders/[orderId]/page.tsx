@@ -1,5 +1,7 @@
 'use client'
 
+import { useMemo } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import OrderTracking from '@/components/OrderTracking'
@@ -12,17 +14,26 @@ import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
+import { resolveOrderItemBuyAgain } from '@/lib/orderItemBuyAgain'
 
 export default function OrderDetailPage() {
   const params = useParams<{ orderId: string }>()
   const router = useRouter()
   const { t } = useTranslation()
-  const { orders, _hasHydrated } = useStore()
+  const { orders, products, _hasHydrated } = useStore()
   const { isLoggedIn, user } = useUserAuth()
   const { ledgerSyncDone } = useCustomerOrdersLedgerSync()
 
   const orderId = Array.isArray(params?.orderId) ? params.orderId[0] : params?.orderId
   const order = orders.find(o => o.id === orderId)
+
+  const productById = useMemo(() => {
+    const m = new Map<string, (typeof products)[number]>()
+    for (const p of products) {
+      m.set(String(p.id), p)
+    }
+    return m
+  }, [products])
 
   const getBundleCategoryLabel = (category?: string) => {
     switch (category) {
@@ -104,15 +115,47 @@ export default function OrderDetailPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('ordersPage.items')}</h2>
               <div className="divide-y divide-gray-100">
-                {order.items.map((item) => (
+                {order.items.map((item) => {
+                  const liveProduct = productById.get(String(item.productId)) ?? null
+                  const buyAgain = resolveOrderItemBuyAgain(liveProduct)
+                  return (
                   <div key={item.productId + item.name} className="py-4">
                     <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
                           <p className="font-medium text-gray-900">{item.name}</p>
                           <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                buyAgain.status === 'in_stock'
+                                  ? 'bg-emerald-50 text-emerald-800'
+                                  : buyAgain.status === 'out_of_stock'
+                                    ? 'bg-amber-50 text-amber-900'
+                                    : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {buyAgain.statusLabel}
+                            </span>
+                            {buyAgain.href && buyAgain.ctaLabel ? (
+                              <Link
+                                href={buyAgain.href}
+                                className={`text-sm font-medium ${
+                                  buyAgain.status === 'in_stock'
+                                    ? 'text-purple-700 hover:text-purple-900'
+                                    : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                              >
+                                {buyAgain.ctaLabel}
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-gray-500">
+                                This product is no longer in the shop.
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           {(() => {
                             const { baseUnit, surchargeUnit, lineTotal } = getOrderItemLineMoney(item)
                             const qty = item.quantity
@@ -314,7 +357,8 @@ export default function OrderDetailPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
