@@ -64,7 +64,7 @@ Keep Stickers-only chrome (subcategory tiles, filter/view toggles). Matching Mar
 
 **Listing zoom (hub `imageLayout="full"`):** Was `h-48` + forced `object-cover` (and `ProductImage` ignored contain). Sticker sheets are often square/tall → cover crops to a landscape band and looks “zoomed”. **Fix:** `object-contain` on gray bg (not `aspect-square` oversized, not `inset-3` undersized).
 
-**Sticker hub horizontal size (owner 2026-09-25):** Prefer artwork a bit **wider** than Market S parity. Portrait Mixed Labels under `object-contain` only grow horizontally when the shell is taller — use **`h-52`** (not `h-48`) + light **`inset-1`**. Do not jump back to full `aspect-square` without asking (felt too large). Keep contain so the whole sheet stays visible.
+**Sticker hub horizontal size (owner 2026-09-25):** Prefer artwork a bit **wider** than Market S parity. Portrait Mixed Labels under `object-contain` only grow horizontally when the shell is taller — use **`h-56`** (was `h-52`, not `h-48`) + light **`inset-1`**. Do not jump back to full `aspect-square` without asking (felt too large). Keep contain so the whole sheet stays visible.
 
 **PDP “zoomed” / wrong size on some SKUs (esp. Mixed Labels):** Same `ProductGallery` for Stickers and Market S — not a separate mixed-labels gallery. Live Mixed Labels catalog art is often **portrait** (e.g. Kitten **769×1095**, DINO **3703×5529**); Market S pack shots are typically **landscape**, so the same CSS looked “full” on Market S and “cropped/zoomed” on stickers.
 

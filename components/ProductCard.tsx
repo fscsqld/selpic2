@@ -17,6 +17,7 @@ import {
   productCardHasAnyMerchBadge,
   resolveProductCardMerchBadges,
 } from '@/lib/productCardMerchBadges'
+import { isStickerSheetSpecDescription } from '@/lib/stickerSheetSpecDescription'
 
 export type { ProductCardImageLayout }
 
@@ -161,8 +162,8 @@ export default function ProductCard({
   const showMerchBadges = productCardHasAnyMerchBadge(merchBadges)
 
   const imageShellClass = fullBleed
-    ? // Slightly taller than Market S h-48 so portrait sticker sheets read a bit wider (owner 2026-09-25).
-      'relative h-52 w-full overflow-hidden bg-gray-50'
+    ? // Slightly taller than Market S h-48 so portrait sticker sheets read a bit wider (owner: h-56).
+      'relative h-56 w-full overflow-hidden bg-gray-50'
     : 'relative aspect-square w-full max-w-[240px] mx-auto mb-4 overflow-hidden rounded-lg'
   const imageFitClass = fullBleed
     ? 'object-contain group-hover:opacity-95 transition-opacity duration-300'
@@ -183,7 +184,7 @@ export default function ProductCard({
       : 0
   const chipLabel = (product.subcategory || '').trim() || product.category
   const badgeSizeClass = fullBleed
-    ? // Full hub: Mixed Labels art is portrait inside h-52+contain — same text-xs reads huge vs filled Basic sheets.
+    ? // Full hub: Mixed Labels art is portrait inside h-56+contain — same text-xs reads huge vs filled Basic sheets.
       'text-[10px] leading-tight px-1.5 py-0.5'
     : 'text-xs px-2 py-1'
   const merchBadgeClass = `text-white ${badgeSizeClass} rounded-full font-semibold shadow-sm`
@@ -293,7 +294,19 @@ export default function ProductCard({
         </h3>
 
         {productInfo.description ? (
-          <p className="text-gray-600 text-sm line-clamp-2 mb-1">
+          <p
+            className={
+              isStickerSheetSpecDescription(productInfo.description)
+                ? // Combo / sheet-spec lines: one row on laptop — smaller type + truncate (owner 2026-09-25).
+                  'text-gray-600 text-[11px] leading-snug truncate mb-1'
+                : 'text-gray-600 text-sm line-clamp-2 mb-1'
+            }
+            title={
+              isStickerSheetSpecDescription(productInfo.description)
+                ? productInfo.description
+                : undefined
+            }
+          >
             {productInfo.description}
           </p>
         ) : null}

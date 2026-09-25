@@ -1,0 +1,30 @@
+---
+description: Combo Pack sheet-spec description should stay one line on laptop cards (learned 2026-09-25)
+globs: components/ProductCard.tsx, lib/stickerSheetSpecDescription.ts, app/stickers/**/*.tsx
+alwaysApply: false
+---
+
+# Combo Pack / sheet-spec card description (learned 2026-09-25)
+
+## Symptom
+
+Dual-size Combo Pack (and similar) catalog **description** like  
+`30×15mm | 24 Labels per Sheet + 46×15mm | 16 Labels per Sheet`  
+wraps to **two lines** on laptop Stickers hub cards.
+
+## Why
+
+That string is stored in `product.description` (not a separate size field). `ProductCard` rendered all descriptions as `text-sm line-clamp-2`, so long sheet specs wrapped instead of staying a single spec row.
+
+## Invariant
+
+If description matches sheet-spec copy (`Labels per Sheet`), listing cards use **one line** + **smaller type** (`text-[11px] truncate`) and put the full string in `title` for hover. Marketing blurbs keep `text-sm line-clamp-2`.
+
+Helper: `lib/stickerSheetSpecDescription.ts` → `isStickerSheetSpecDescription`.
+
+## Do not
+
+- Put dual-size specs only in `detailDescription` and leave card description empty without updating the card — hub reads `description`.
+- Force all product descriptions to one line — only sheet-spec pattern.
+- Use `object-cover` / image CSS to “fix” text wrap.
+---

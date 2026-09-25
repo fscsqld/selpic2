@@ -42,7 +42,7 @@ If admin can tick a merchandising flag that customers should see on listings, **
 
 | Real driver | Detail |
 |-------------|--------|
-| **Relative size** | Mixed catalog art is **portrait** inside hub `h-52` + `object-contain` → artwork is a smaller strip; absolute badges stay the same px → look huge vs Basic sheets that fill more of the frame |
+| **Relative size** | Mixed catalog art is **portrait** inside hub `h-56` + `object-contain` → artwork is a smaller strip; absolute badges stay the same px → look huge vs Basic sheets that fill more of the frame |
 | **Default Limited** | Admin stickers form sets `isLimitedEdition = true` when subcategory → Mixed Labels (see `mixedLabelsFormDefaults` / subcategory change). Most Mixed SKUs show the long **LIMITED EDITION** pill |
 | **Often + discount** | Many Mixed also have `originalPrice > price` → discount % + Limited stacked |
 

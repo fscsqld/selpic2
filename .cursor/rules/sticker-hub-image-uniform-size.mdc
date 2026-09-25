@@ -12,7 +12,7 @@ On `/stickers`, some SKUs look larger/wider than others in the same grid (especi
 
 ## Why (not a per-SKU CSS bug)
 
-Hub cards share one shell (`imageLayout="full"` → fixed height e.g. `h-52`, `object-contain`, light inset). **Contain preserves aspect ratio** inside that shell:
+Hub cards share one shell (`imageLayout="full"` → fixed height e.g. `h-56`, `object-contain`, light inset). **Contain preserves aspect ratio** inside that shell:
 
 | Upload shape | What you see |
 |--------------|--------------|
