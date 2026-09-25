@@ -77,6 +77,7 @@ Likes are **never** typed in Admin Products. No manual “like count” field. C
 2. Listing cards — **implemented** (Stickers `ProductCard` full + Market S hub)
 3. Account list (optional) — not in v1
 4. **Admin: liked-products report** — **implemented** (`AdminProductLikesPanel` on `/admin/products` only)
+5. **Customer profile: Liked products** — **implemented** (`ProfileLikedProducts` on `/profile`; shows Out of stock / No longer available; Remove unlike)
 
 **Ops:** run `docs/product-likes-supabase.sql` (or migration `20260925120000_product_likes.sql`) on Supabase before likes work in production.
 

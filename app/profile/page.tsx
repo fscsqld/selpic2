@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
+import ProfileLikedProducts from '@/components/ProfileLikedProducts'
 import { calculateUserTotalSales } from '@/lib/userGradeUtils'
 import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
 
@@ -323,6 +324,8 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.name}</h1>
           <p className="text-gray-600">Selpic Member</p>
         </div>
+
+        <ProfileLikedProducts />
 
         {/* VIP 등급 정보 카드 */}
         {vipGradeInfo && (
