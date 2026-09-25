@@ -6,6 +6,8 @@ import { useStore } from '@/lib/store'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { getColorName } from '@/lib/colorUtils'
 import { formatPackingSlipShipToLines } from '@/lib/shipping/formatPackingSlipAddress'
+import CustomizationDisplayLines from '@/components/CustomizationDisplayLines'
+import { getOrderItemCustomizationDisplayLines } from '@/lib/mixedLabelsCartDisplay'
 
 export default function PackingSlipPage() {
   const params = useParams()
@@ -249,29 +251,11 @@ export default function PackingSlipPage() {
                                   })}
                               </div>
                             ) : (
-                              // 일반 상품 커스터마이징 정보 표시
-                              Object.entries(it.customizations)
-                                .filter(([k]) => k !== 'customizedImage')
-                                .map(([k, v]) => {
-                                  const isColor = k.toLowerCase() === 'color' && String(v).startsWith('#')
-                                  return (
-                                    <div key={k} className="flex items-center gap-2">
-                                      <span className="font-medium capitalize">{k}:</span>
-                                      {isColor ? (
-                                        <div className="flex items-center gap-1">
-                                          <div 
-                                            className="w-4 h-4 rounded border border-gray-300"
-                                            style={{ backgroundColor: String(v) }}
-                                            title={String(v)}
-                                          />
-                                          <span className="font-medium">{getColorName(String(v))}</span>
-                                        </div>
-                                      ) : (
-                                        <span>{String(v)}</span>
-                                      )}
-                                    </div>
-                                  )
-                                })
+                              <CustomizationDisplayLines
+                                lines={getOrderItemCustomizationDisplayLines(it.customizations, 'admin')}
+                                className="text-xs text-gray-600"
+                                dense
+                              />
                             )}
                           </div>
                         )}

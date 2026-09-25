@@ -6,6 +6,8 @@ import { useStore } from '@/lib/store'
 import { formatAuPhoneHyphen } from '@/lib/phone'
 import { getColorName } from '@/lib/colorUtils'
 import { formatPackingSlipShipToLines } from '@/lib/shipping/formatPackingSlipAddress'
+import CustomizationDisplayLines from '@/components/CustomizationDisplayLines'
+import { getOrderItemCustomizationDisplayLines } from '@/lib/mixedLabelsCartDisplay'
 
 // 단일 창에서 여러 패킹 슬립을 연속 렌더링하여 한 번에 인쇄
 function PackingSlipsBatchContent() {
@@ -194,12 +196,11 @@ function PackingSlipsBatchContent() {
                             <td className="py-2">
                               <div className="font-medium">{it.name}</div>
                               {it.customizations && (
-                                <div className="text-xs text-gray-600 mt-1 space-y-0.5">
-                                  {it.customizations.text && <div>Text: {it.customizations.text}</div>}
-                                  {it.customizations.font && <div>Font: {it.customizations.font}</div>}
-                                  {it.customizations.color && <div>Color: {getColorName(it.customizations.color)}</div>}
-                                  {it.customizations.size && <div>Size: {it.customizations.size}</div>}
-                                </div>
+                                <CustomizationDisplayLines
+                                  lines={getOrderItemCustomizationDisplayLines(it.customizations, 'admin')}
+                                  className="text-xs text-gray-600 mt-1"
+                                  dense
+                                />
                               )}
                             </td>
                             <td className="py-2">{it.quantity}</td>

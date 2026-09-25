@@ -6,6 +6,10 @@ import {
   formatOrderShippingSummaryLines,
   formatOrderShippingSummaryPlain,
 } from '@/lib/shipping/formatOrderShippingSummary'
+import {
+  formatOrderItemPersonalizationPlain,
+  getOrderItemCustomizationDisplayLines,
+} from '@/lib/mixedLabelsCartDisplay'
 
 /** @deprecated use getTransactionalEmailSiteOrigin */
 export const getEmailSiteOrigin = getTransactionalEmailSiteOrigin
@@ -48,6 +52,10 @@ function buildOrderItemsLines(order: OrderRecord): string[] {
     const optionsTotal = surchargeUnit * qty
     const label = optionsTotal > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
     lines.push(`${index + 1}. ${item.name} × ${qty} — ${formatMoney(baseTotal)}`)
+    const personalization = formatOrderItemPersonalizationPlain(item.customizations, 'customer', '   ')
+    if (personalization) {
+      lines.push(...personalization.split('\n'))
+    }
     if (optionsTotal > 0.001) {
       lines.push(`   + ${label} ${formatMoney(optionsTotal)}`)
     }
@@ -134,6 +142,12 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
       const optionsTotal = surchargeUnit * qty
       const label = optionsTotal > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
       let block = `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><strong>${index + 1}.</strong> ${escHtml(item.name)} <span style="color:#555;">× ${qty}</span> — <strong>${formatMoney(baseTotal)}</strong>`
+      const persLines = getOrderItemCustomizationDisplayLines(item.customizations, 'customer')
+      if (persLines.length) {
+        block += `<br/><span style="font-size:12px;color:#666;">${persLines
+          .map((l) => `${escHtml(l.label)}: ${escHtml(l.value)}`)
+          .join('<br/>')}</span>`
+      }
       if (optionsTotal > 0.001) {
         block += `<br/><span style="font-size:12px;color:#666;">+ ${escHtml(label)} ${formatMoney(optionsTotal)}</span>`
       }

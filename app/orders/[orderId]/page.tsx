@@ -15,6 +15,12 @@ import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import { resolveOrderItemBuyAgain } from '@/lib/orderItemBuyAgain'
+import CustomizationDisplayLines from '@/components/CustomizationDisplayLines'
+import {
+  getOrderItemCustomizationDisplayLines,
+  shouldSuppressOrderMerchColorChip,
+  shouldSuppressOrderMerchSizeChip,
+} from '@/lib/mixedLabelsCartDisplay'
 
 export default function OrderDetailPage() {
   const params = useParams<{ orderId: string }>()
@@ -140,10 +146,10 @@ export default function OrderDetailPage() {
                             {buyAgain.href && buyAgain.ctaLabel ? (
                               <Link
                                 href={buyAgain.href}
-                                className={`text-sm font-medium ${
+                                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold shadow-sm transition-colors ${
                                   buyAgain.status === 'in_stock'
-                                    ? 'text-purple-700 hover:text-purple-900'
-                                    : 'text-gray-600 hover:text-gray-900'
+                                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                                 }`}
                               >
                                 {buyAgain.ctaLabel}
@@ -190,12 +196,12 @@ export default function OrderDetailPage() {
                             {item.brand}
                           </span>
                         )}
-                        {item.size && (
+                        {item.size && !shouldSuppressOrderMerchSizeChip(item.customizations) && (
                           <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">
                             Size: {item.size}
                           </span>
                         )}
-                        {item.color && (
+                        {item.color && !shouldSuppressOrderMerchColorChip(item.customizations) && (
                           <span className="px-2 py-1 rounded-full bg-pink-100 text-pink-700">
                             Color: {item.color}
                           </span>
@@ -329,29 +335,10 @@ export default function OrderDetailPage() {
                               )
                             })()
                           ) : (
-                            // 일반 상품 커스터마이징 정보 표시
-                            Object.entries(item.customizations)
-                              .filter(([key]) => !key.includes('customizedImage'))
-                              .map(([key, value]) => {
-                                const isColor = key.toLowerCase() === 'color' && String(value).startsWith('#')
-                                return (
-                                  <div key={key} className="flex items-center gap-2">
-                                    <span className="font-medium capitalize">{key}:</span>
-                                    {isColor ? (
-                                      <div className="flex items-center gap-2">
-                                        <div 
-                                          className="w-6 h-6 rounded border border-gray-300"
-                                          style={{ backgroundColor: String(value) }}
-                                          title={String(value)}
-                                        />
-                                        <span className="font-medium">{getColorName(String(value))}</span>
-                                      </div>
-                                    ) : (
-                                      <span>{String(value)}</span>
-                                    )}
-                                  </div>
-                                )
-                              })
+                            <CustomizationDisplayLines
+                              lines={getOrderItemCustomizationDisplayLines(item.customizations, 'customer')}
+                              className="text-xs text-gray-500"
+                            />
                           )}
                         </div>
                       )}

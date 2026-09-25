@@ -3,6 +3,7 @@
 import { CheckCircle, Calendar, User, Package } from 'lucide-react'
 import { COMPANY_LEGAL, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import { getOrderConfirmationPaymentNotice } from '@/lib/orderConfirmationPaymentNotice'
+import { formatOrderItemPersonalizationPlain } from '@/lib/mixedLabelsCartDisplay'
 
 interface OrderConfirmationTemplateProps {
   order: {
@@ -104,21 +105,9 @@ export default function OrderConfirmationTemplate({
       return null
     }
 
-    const simpleKeys = ['text', 'font', 'color']
-    const customTexts: string[] = []
-
-    simpleKeys.forEach(key => {
-      if (customizations[key]) {
-        const value = customizations[key]
-        if (key === 'color' && String(value).startsWith('#')) {
-          customTexts.push(`${key}: ${String(value)}`)
-        } else {
-          customTexts.push(`${key}: ${String(value)}`)
-        }
-      }
-    })
-
-    return customTexts.length > 0 ? customTexts.join(', ') : null
+    const plain = formatOrderItemPersonalizationPlain(customizations, 'customer')
+    if (!plain) return null
+    return plain.split('\n').join(' · ')
   }
 
   return (

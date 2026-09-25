@@ -1,5 +1,9 @@
 import type { OrderPlatformSource, OrderRecord } from '@/lib/store'
 import { ORDER_PLATFORM_LABEL } from '@/lib/store'
+import {
+  getOrderItemCustomizationDisplayLines,
+  isMixedLabelsCartCustomizations,
+} from '@/lib/mixedLabelsCartDisplay'
 
 const BADGE_STYLE: Record<OrderPlatformSource, string> = {
   website: 'bg-slate-100 text-slate-800 border border-slate-200',
@@ -77,9 +81,20 @@ function pushLabeledValue(lines: string[], key: string, value: string) {
 
 /**
  * Storefront `customizations` → multi-line block: product name, then font/size/text/color, etc.
- * Only trim(); never change customer spelling/case.
+ * Only trim(); never change customer spelling/case (except Mixed Labels display helpers).
  */
 function collectStorefrontCustomizationBlock(name: string, cust: Record<string, unknown>): string | null {
+  const asStrings: Record<string, string> = {}
+  for (const [k, v] of Object.entries(cust)) {
+    if (typeof v === 'string') asStrings[k] = v
+  }
+
+  if (isMixedLabelsCartCustomizations(asStrings)) {
+    const display = getOrderItemCustomizationDisplayLines(asStrings, 'admin')
+    if (!display.length) return null
+    return [name, ...display.map((l) => `${l.label}: ${l.value}`)].join('\n')
+  }
+
   const lines: string[] = [name]
   let hasText = false
   for (const k of PRIMARY_DISPLAY_KEYS) {

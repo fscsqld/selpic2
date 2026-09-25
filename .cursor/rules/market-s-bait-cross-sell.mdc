@@ -1,0 +1,56 @@
+---
+description: Market S bait cross-sell (Mediheel ~$2.50) — quiet add-on, not clutter (learned 2026-09-25)
+globs: components/MarketSBaitCrossSell.tsx, lib/marketSBaitProduct.ts, app/products/**/*.tsx, app/cart/**/*.tsx, app/stickers/customize/**/*.tsx
+alwaysApply: false
+---
+
+# Market S bait cross-sell for sticker customers (learned 2026-09-25)
+
+## Intent
+
+Parents who buy **name-label stickers** may also want a small **Market S** add-on (Mediheel tea-tree style ~**$2.50** letter-friendly bait). Offer a **quiet, optional** path into Market S — not a campaign takeover.
+
+## What already ships
+
+| Piece | Behavior |
+|-------|----------|
+| `findMarketSBaitProduct` | Live HotGoods SKU, ~$2.50, name/brand/description matches Mediheel / tea tree, in stock |
+| `MarketSBaitCrossSell` | One compact card: image, price, Add to cart, View |
+| Surfaces | Sticker **PDP** only (when `category === 'Stickers'`), **cart**, sticker **customize** |
+| Hide when | No matching SKU, OOS, or bait **already in cart** |
+
+Owner still registers the bait SKU in Admin (`HotGoods` / Single Item). Widget stays **invisible** until that SKU exists — no empty banner.
+
+## Customer comfort (do not annoy)
+
+**Do**
+
+- One small card — not a modal, not full-bleed hero, not homepage takeover
+- Soft rose border / light fill — secondary to Customize / Add to cart / checkout
+- Skip if bait already in cart
+- Login note only when guest tries add-to-cart (same as rest of shop)
+- Prefer **letter-safe** cheap single so sticker + bait can stay a light parcel story when qty rules allow
+
+**Do not**
+
+- Popups, countdown, “limited offer!” spam, auto-add to cart
+- Show on Market S PDP / hub (they are already there)
+- Show on Profile Liked or Orders Buy again (wrong intent)
+- Stack multiple Market S promos on the same screen
+- Block checkout or customize if bait is missing
+- Put bait on homepage Hero (homepage-protection)
+
+## Placement hierarchy
+
+1. Sticker PDP — after purchase CTAs / near like (secondary)
+2. Customize — side/below flow, not covering the design canvas
+3. Cart — one slot in summary column
+
+If all three show the **same** card in one journey, that is OK only because each page is a different step; never open a fourth surface without product ask.
+
+## Cousins
+
+- Shipping: Single Item letter rules — `market-s-k-beauty-plan.mdc`
+- Subcategory: only Single Item / Family Bundle — `market-s-subcategory-fields.mdc`
+- Hygiene copy on Market S hub stays separate from this bait card
+---

@@ -3,6 +3,8 @@
 import { Receipt, CreditCard, Building2, DollarSign, Truck, Calendar, User, MapPin } from 'lucide-react'
 import { getColorName } from '@/lib/colorUtils'
 import { COMPANY_LEGAL, COMPANY_CONTACT } from '@/lib/companyLegal'
+import CustomizationDisplayLines from '@/components/CustomizationDisplayLines'
+import { getOrderItemCustomizationDisplayLines } from '@/lib/mixedLabelsCartDisplay'
 
 interface OrderReceiptProps {
   order: {
@@ -349,29 +351,11 @@ export default function OrderReceipt({ order }: OrderReceiptProps) {
                               )
                             })()
                           ) : (
-                            // 일반 상품 커스터마이징 정보 표시
-                            Object.entries(item.customizations)
-                              .filter(([key]) => key !== 'customizedImage')
-                              .map(([key, value]) => {
-                                const isColor = key.toLowerCase() === 'color' && String(value).startsWith('#')
-                                return (
-                                  <div key={key} className="ml-2 flex items-center gap-2">
-                                    <span>• {key}:</span>
-                                    {isColor ? (
-                                      <div className="flex items-center gap-2">
-                                        <div 
-                                          className="w-4 h-4 rounded border border-gray-300"
-                                          style={{ backgroundColor: String(value) }}
-                                          title={String(value)}
-                                        />
-                                        <span className="font-medium">{getColorName(String(value))}</span>
-                                      </div>
-                                    ) : (
-                                      <span>{String(value)}</span>
-                                    )}
-                                  </div>
-                                )
-                              })
+                            <CustomizationDisplayLines
+                              lines={getOrderItemCustomizationDisplayLines(item.customizations, 'customer')}
+                              className="ml-2 text-sm text-gray-600"
+                              dense
+                            />
                           )}
                         </div>
                       </div>

@@ -13,6 +13,8 @@ import { getColorName } from '@/lib/colorUtils'
 import { getOrderItemLineMoney } from '@/lib/orderItemLineTotals'
 import { getCustomizationSurchargeLabel } from '@/lib/orderCustomizationSurcharge'
 import { useContentStore } from '@/lib/contentStore'
+import CustomizationDisplayLines from '@/components/CustomizationDisplayLines'
+import { getOrderItemCustomizationDisplayLines } from '@/lib/mixedLabelsCartDisplay'
 import { ArrowLeft, Package, Truck, User, MapPin, CreditCard, Calendar, DollarSign, MessageSquare, Printer, Copy, X, Check } from 'lucide-react'
 import Link from 'next/link'
 // Accounting is an independent app — HTTP bridge only (never import sandbox modules).
@@ -811,32 +813,10 @@ Selpic Team`
                               )
                             })()
                           ) : (
-                            // 일반 상품 커스터마이징 정보 표시 (상품명과 동일한 값은 중복이므로 제외)
-                            Object.entries(item.customizations)
-                              .filter(([key, value]) => !key.includes('customizedImage') && String(value).trim() !== item.name)
-                              .map(([key, value]) => {
-                                const isColor = key.toLowerCase() === 'color' && String(value).startsWith('#')
-                                const isFont = key.toLowerCase() === 'font'
-                                return (
-                                  <div key={key} className={isFont ? 'space-y-1' : 'flex items-center gap-2'}>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium capitalize">{key}:</span>
-                                      {isColor ? (
-                                        <div className="flex items-center gap-2">
-                                          <div 
-                                            className="w-6 h-6 rounded border border-gray-300"
-                                            style={{ backgroundColor: String(value) }}
-                                            title={String(value)}
-                                          />
-                                          <span className="font-medium">{getColorName(String(value))}</span>
-                                        </div>
-                                      ) : (
-                                        <span>{String(value)}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })
+                            <CustomizationDisplayLines
+                              lines={getOrderItemCustomizationDisplayLines(item.customizations, 'admin')}
+                              className="text-xs text-gray-500"
+                            />
                           )}
                         </div>
                       )}

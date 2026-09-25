@@ -17,6 +17,7 @@ import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import {
   getCartCustomizationDisplayEntries,
+  isCustomizationColourLabel,
   isMixedLabelsCartCustomizations,
 } from '@/lib/mixedLabelsCartDisplay'
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
@@ -561,7 +562,7 @@ export default function CartPage() {
                               {getCartCustomizationDisplayEntries(item.customizations).map(
                                 ([key, value]) => {
                                   const isColor =
-                                    key.toLowerCase() === 'color' && String(value).startsWith('#')
+                                    isCustomizationColourLabel(key) && String(value).startsWith('#')
                                   return (
                                     <div key={key} className="text-sm text-gray-600 flex items-center gap-2">
                                       <span className="font-medium">{key}:</span>
