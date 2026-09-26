@@ -1,9 +1,9 @@
-import { isMarketSCatalogProduct } from '@/lib/marketSSubcategory'
+import { isMarketSCatalogProduct } from '../marketSSubcategory'
 import {
   MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION,
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
-} from '@/lib/shipping/marketSLetterOption'
-import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
+} from './marketSLetterOption'
+import type { ShippingServiceType } from './shippingSnapshot'
 
 export type ProductShippingClass = 'letter' | 'parcel'
 

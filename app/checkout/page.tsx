@@ -21,6 +21,7 @@ import AustralianAddressForm, { AddressData } from '@/components/AustralianAddre
 import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
 import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import { computeChargedShippingPrice } from '@/lib/shipping/computeChargedShippingPrice'
 import {
   getCartShippingRequirement,
   isShippingOptionCompatible,
@@ -307,36 +308,22 @@ export default function CheckoutPage() {
   const getShippingPrice = (option: ShippingOption | null) => {
     if (!option) return 0
     const subtotal = calculateSubtotal()
-    
-    // VIP 등급 무료 배송 확인
+
+    let vipFreeShipping = false
     if (currentUser && currentUser.currentGrade !== undefined) {
       const gradeCode = currentUser.currentGrade
       const cartItemsForDiscount = buildCartItemsForDiscount()
       const vipBenefit = getVIPGradeBenefitForCheckout(gradeCode, subtotal, cartItemsForDiscount)
-      if (vipBenefit && vipBenefit.freeShipping) {
-        return 0 // VIP 등급 무료 배송
-      }
-    }
-    
-    // 항상 무료 옵션 (Cash on Delivery 등)
-    if (option.alwaysFree) {
-      return 0
+      vipFreeShipping = Boolean(vipBenefit?.freeShipping)
     }
 
-    // 전역 무료 배송 설정이 활성화되어 있고 기준 금액을 달성한 경우
-    if (freeShippingSettings.enabled && subtotal >= freeShippingSettings.threshold) {
-      // 기준 금액 달성 시 완전 무료
-      if (option.freeShippingWhenThresholdMet) {
-        return 0
-      }
-      // 기준 금액 달성 시 할인 적용
-      if (option.discountWhenThresholdMet && option.discountWhenThresholdMet > 0) {
-        const discounted = option.price - option.discountWhenThresholdMet
-        return discounted > 0 ? Number(discounted.toFixed(2)) : 0
-      }
-    }
-    
-    return option.price
+    // Same helper as cart + server applyServerShippingToDraft (avoids checkout mismatch).
+    return computeChargedShippingPrice(
+      option,
+      subtotal,
+      freeShippingSettings,
+      vipFreeShipping
+    )
   }
 
   const calculateTotal = (): number => {

@@ -40,6 +40,14 @@ describe('Market S shipping dual-rate', () => {
       'parcel-post',
       'click-collect-mansfield',
     ])
+    const synthetic = options[0] as {
+      alwaysFree?: boolean
+      freeShippingWhenThresholdMet?: boolean
+      price: number
+    }
+    expect(synthetic.alwaysFree).toBe(false)
+    expect(synthetic.freeShippingWhenThresholdMet).toBe(false)
+    expect(synthetic.price).toBe(3.2)
     expect(isShippingOptionCompatible(letter, req)).toBe(false)
   })
 

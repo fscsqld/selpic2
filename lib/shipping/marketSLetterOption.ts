@@ -14,12 +14,19 @@ export const MARKET_S_UNTRACKED_LETTER_OPTION: ShippingOptionForPricing = {
   insurance: false,
   type: 'delivery',
   isActive: true,
+  alwaysFree: false,
+  freeShippingWhenThresholdMet: false,
+  discountWhenThresholdMet: undefined,
 }
 
 export const MARKET_S_UNTRACKED_LETTER_DESCRIPTION =
   'For 1–3 Single Item mask packs at 20 mm or under. Tracking is not included. Choose Parcel Post if you need tracking.'
 
-/** Client checkout/cart list row. Dates omitted so SSR markup stays stable. */
+/**
+ * Client checkout/cart list row. Dates omitted so SSR markup stays stable.
+ * Free-ship fields must match {@link ShippingOption} so cart/checkout pricing
+ * can read alwaysFree / threshold props without a cast-only workaround.
+ */
 export const MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION = {
   id: MARKET_S_UNTRACKED_LETTER_OPTION_ID,
   name: MARKET_S_UNTRACKED_LETTER_OPTION.name,
@@ -32,4 +39,7 @@ export const MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION = {
   isDefault: true,
   order: 0,
   isActive: true,
+  alwaysFree: false,
+  freeShippingWhenThresholdMet: false,
+  discountWhenThresholdMet: undefined as number | undefined,
 }

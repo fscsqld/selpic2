@@ -11,8 +11,10 @@ import { getColorName } from '@/lib/colorUtils'
 import {
   mergePersistedSiteConfig,
   normalizeRehydratedContentStoreState,
-  useContentStore
+  useContentStore,
+  type ShippingOption,
 } from '@/lib/contentStore'
+import { computeChargedShippingPrice } from '@/lib/shipping/computeChargedShippingPrice'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import {
@@ -63,17 +65,18 @@ export default function CartPage() {
     }))
   )
   const allShippingOptions = getActiveShippingOptions()
+  // Same cast as checkout: merge may inject Market S synthetic letter row.
   const shippingOptions = mergeShippingOptionsForCart(
     allShippingOptions,
     shippingRequirement
-  )
+  ) as ShippingOption[]
   const estimatedShippingOption =
     shippingOptions.find((option) =>
       shippingRequirement.allowUntrackedMaskLetter
         ? option.id === 'market-s-untracked-letter'
         : shippingRequirement.requiresParcel
           ? option.id === 'parcel-post'
-          : (option as { isDefault?: boolean }).isDefault
+          : option.isDefault
     ) || shippingOptions[0]
 
   const getStockMeta = (productId: string) => {
@@ -250,38 +253,15 @@ export default function CartPage() {
     }
   }
   
-  // 배송비 계산 (Checkout과 동일한 로직)
-  const getShippingPrice = () => {
-    if (!estimatedShippingOption) return 0
-    const option = estimatedShippingOption
-    
-    // VIP 무료 배송 확인
-    if (vipFreeShipping) {
-      return 0
-    }
-    
-    // 항상 무료 옵션
-    if (option.alwaysFree) {
-      return 0
-    }
-    
-    // 전역 무료 배송 설정이 활성화되어 있고 기준 금액을 달성한 경우
-    if (freeShippingSettings.enabled && subtotal >= freeShippingSettings.threshold) {
-      // 기준 금액 달성 시 완전 무료
-      if (option.freeShippingWhenThresholdMet) {
-        return 0
-      }
-      // 기준 금액 달성 시 할인 적용
-      if (option.discountWhenThresholdMet && option.discountWhenThresholdMet > 0) {
-        const discounted = option.price - option.discountWhenThresholdMet
-        return discounted > 0 ? Number(discounted.toFixed(2)) : 0
-      }
-    }
-    
-    return option.price
-  }
-  
-  const shipping = getShippingPrice()
+  // Same charged-price helper as server/checkout (threshold + always-free).
+  const shipping = estimatedShippingOption
+    ? computeChargedShippingPrice(
+        estimatedShippingOption,
+        subtotal,
+        freeShippingSettings,
+        vipFreeShipping
+      )
+    : 0
   
   // VIP 무료 배송이면 배송비 0
   const finalShipping = vipFreeShipping ? 0 : shipping

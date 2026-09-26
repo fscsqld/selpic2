@@ -330,7 +330,8 @@ async function drawShippingLabelInSlot(
   const { widthPt, heightPt } = landscapeFormBBoxPoints(vw, vh, scaleFactor)
 
   // BBox must be PDF points so clip matches scaled content (see orientation rule).
-  doc.beginFormObject(0, 0, widthPt, heightPt, new doc.Matrix(1, 0, 0, 1, 0, 0))
+  // jsPDF exposes Matrix as an instance factory method — not `new doc.Matrix`.
+  doc.beginFormObject(0, 0, widthPt, heightPt, doc.Matrix(1, 0, 0, 1, 0, 0))
   await drawShippingLabel(doc, order, { x: 0, y: 0, width: vw, height: vh })
   doc.endFormObject(formKey)
 
@@ -345,7 +346,7 @@ async function drawShippingLabelInSlot(
     pageHeightMm: doc.internal.pageSize.getHeight(),
     scaleFactor,
   })
-  doc.doFormObject(formKey, new doc.Matrix(m.a, m.b, m.c, m.d, m.e, m.f))
+  doc.doFormObject(formKey, doc.Matrix(m.a, m.b, m.c, m.d, m.e, m.f))
 }
 
 /**
