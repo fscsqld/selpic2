@@ -1965,7 +1965,8 @@ function AdminProductsPageContent() {
                    </select>
                    {formData.category === 'HotGoods' && (
                      <p className="mt-1 text-sm text-gray-500">
-                       Use <strong>Single Item</strong> for mask singles (1–3 can ship as an untracked $3.20 letter)
+                       Use <strong>Single Item</strong> for mask singles (1–3 can ship as an untracked large letter;
+                       up to 3 sticker sheets may share that letter when under 20 mm / 500 g)
                        or <strong>Family Bundle</strong> for a tracked parcel SKU. Checkout applies that rule
                        automatically.
                      </p>

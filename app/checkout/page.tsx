@@ -144,7 +144,11 @@ export default function CheckoutPage() {
   )
   const shippingOptions = mergeShippingOptionsForCart(
     allShippingOptions,
-    shippingRequirement
+    shippingRequirement,
+    {
+      marketSLetterFreeWhenThresholdMet:
+        freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet,
+    }
   ) as ShippingOption[]
   const configuredDefaultShippingOption = getDefaultShippingOption()
   const defaultShippingOption =
@@ -1178,9 +1182,9 @@ export default function CheckoutPage() {
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                   <p className="font-semibold">Untracked letter available for this cart</p>
                   <p className="mt-1 text-xs leading-relaxed">
-                    1–3 Market S Single Item packs at 20 mm or under can ship as an untracked
-                    letter for $3.20. Tracking is not included. Choose Parcel Post if you need
-                    tracking.
+                    1–3 Market S Single Item packs (and up to 3 sticker sheets in the same large
+                    letter) at 20 mm / 500 g or under can ship as an untracked letter. Tracking is
+                    not included. Choose Parcel Post if you need tracking.
                   </p>
                 </div>
               )}
@@ -1189,8 +1193,9 @@ export default function CheckoutPage() {
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                   <p className="font-semibold">Parcel service required for this cart</p>
                   <p className="mt-1 text-xs leading-relaxed">
-                    Letter options are hidden because this order contains parcel-class goods or
-                    exceeds the 500 g letter limit. Estimated packed weight:{' '}
+                    Letter options are hidden because this order contains parcel-class goods, a
+                    Family Bundle, too many sticker sheets with Market S, or exceeds the 500 g /
+                    20 mm letter limit. Estimated packed weight:{' '}
                     {shippingRequirement.totalWeightGrams} g.
                   </p>
                 </div>

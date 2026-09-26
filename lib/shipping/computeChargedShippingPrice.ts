@@ -3,6 +3,8 @@ import type { ShippingOptionLike, ShippingServiceType } from '@/lib/shipping/shi
 export type FreeShippingSettingsLike = {
   enabled: boolean
   threshold: number
+  /** Default true when omitted — Market S letter free at threshold. */
+  marketSUntrackedLetterFreeWhenThresholdMet?: boolean
 }
 
 export type ShippingOptionForPricing = ShippingOptionLike & {

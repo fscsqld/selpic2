@@ -238,6 +238,12 @@ export interface FreeShippingSettings {
   enabled: boolean // 무료 배송 활성화 여부
   threshold: number // 무료 배송 기준 금액
   message: string // 무료 배송 메시지
+  /**
+   * When true (default), Market S untracked letter is $0 once threshold is met
+   * (same idea as CMS Standard Letter “Free when threshold is met”).
+   * Admin can turn this off without a code deploy.
+   */
+  marketSUntrackedLetterFreeWhenThresholdMet?: boolean
 }
 
 // 은행 계좌 정보 타입 정의
@@ -3123,7 +3129,7 @@ const defaultShippingOptions: ShippingOption[] = [
     id: 'standard-letter',
     name: 'Standard Letter',
     description: 'Best for name stickers and flat custom sheets (2–8 business days, no tracking)',
-    price: 2.4,
+    price: 3.7,
     deliveryTime: '2–8 business days',
     tracking: false,
     insurance: false,
@@ -3139,7 +3145,7 @@ const defaultShippingOptions: ShippingOption[] = [
     id: 'tracked-letter',
     name: 'Tracked Letter',
     description: 'Tracked letter service — delivery with tracking (peace of mind)',
-    price: 5.5,
+    price: 5.55,
     deliveryTime: '2–8 business days',
     tracking: true,
     insurance: false,
@@ -3171,7 +3177,7 @@ const defaultShippingOptions: ShippingOption[] = [
     id: 'parcel-post',
     name: 'Parcel Post (Goods)',
     description: 'Australia Post parcel for merchandise and heavier goods (tracking)',
-    price: 10.9,
+    price: 11.7,
     deliveryTime: '3–10 business days',
     tracking: true,
     insurance: false,
@@ -3196,16 +3202,18 @@ const defaultShippingOptions: ShippingOption[] = [
     isDefault: false,
     order: 5,
     isActive: true,
+    alwaysFree: true,
     createdAt: new Date(),
     updatedAt: new Date()
   }
 ]
 
-// 기본 전역 무료 배송 설정
+// 기본 전역 무료 배송 설정 (AusPost Brisbane retail aligned defaults live in shipping options above)
 const defaultFreeShippingSettings: FreeShippingSettings = {
   enabled: true,
-  threshold: 50,
-  message: 'Free shipping on orders over $50'
+  threshold: 70,
+  message: 'Free shipping on orders over $70',
+  marketSUntrackedLetterFreeWhenThresholdMet: true,
 }
 
 // 기본 결제 옵션 데이터

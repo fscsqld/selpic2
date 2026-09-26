@@ -1,9 +1,14 @@
 import type { ShippingOptionForPricing } from '@/lib/shipping/computeChargedShippingPrice'
 
-/** Synthetic option: CMS still has $2.40 Standard Letter, not this AusPost mask-single rate. */
+/**
+ * Synthetic option: CMS Standard Letter stays for sticker-only carts.
+ * Market S (and eligible sticker+mask mixes) use this AusPost Large Letter ≤125g rate.
+ * Price aligned to AusPost regular Large letter up to 125g (own envelope) as published 2026.
+ */
 export const MARKET_S_UNTRACKED_LETTER_OPTION_ID = 'market-s-untracked-letter'
 
-export const MARKET_S_UNTRACKED_LETTER_PRICE = 3.2
+/** AusPost Large letter ≤125g (own envelope) — Brisbane / national letter rate. */
+export const MARKET_S_UNTRACKED_LETTER_PRICE = 3.7
 
 export const MARKET_S_UNTRACKED_LETTER_OPTION: ShippingOptionForPricing = {
   id: MARKET_S_UNTRACKED_LETTER_OPTION_ID,
@@ -15,17 +20,17 @@ export const MARKET_S_UNTRACKED_LETTER_OPTION: ShippingOptionForPricing = {
   type: 'delivery',
   isActive: true,
   alwaysFree: false,
-  freeShippingWhenThresholdMet: false,
+  /** Overridden at runtime from Free Shipping Settings (default ON). */
+  freeShippingWhenThresholdMet: true,
   discountWhenThresholdMet: undefined,
 }
 
 export const MARKET_S_UNTRACKED_LETTER_DESCRIPTION =
-  'For 1–3 Single Item mask packs at 20 mm or under. Tracking is not included. Choose Parcel Post if you need tracking.'
+  'For 1–3 Single Item packs (and up to 3 sticker sheets in the same large letter) at 20 mm / 500 g or under. Tracking is not included. Choose Parcel Post if you need tracking.'
 
 /**
  * Client checkout/cart list row. Dates omitted so SSR markup stays stable.
- * Free-ship fields must match {@link ShippingOption} so cart/checkout pricing
- * can read alwaysFree / threshold props without a cast-only workaround.
+ * Call {@link buildMarketSUntrackedLetterCheckoutOption} so threshold-free follows Admin.
  */
 export const MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION = {
   id: MARKET_S_UNTRACKED_LETTER_OPTION_ID,
@@ -40,6 +45,33 @@ export const MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION = {
   order: 0,
   isActive: true,
   alwaysFree: false,
-  freeShippingWhenThresholdMet: false,
+  freeShippingWhenThresholdMet: true,
   discountWhenThresholdMet: undefined as number | undefined,
+}
+
+export type MarketSUntrackedLetterCheckoutOption = typeof MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION
+
+/** Default true when unset — Admin Free Shipping Settings can turn this off. */
+export function resolveMarketSLetterFreeWhenThresholdMet(
+  setting: boolean | null | undefined
+): boolean {
+  return setting !== false
+}
+
+export function buildMarketSUntrackedLetterCheckoutOption(
+  freeWhenThresholdMet?: boolean | null
+): MarketSUntrackedLetterCheckoutOption {
+  return {
+    ...MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION,
+    freeShippingWhenThresholdMet: resolveMarketSLetterFreeWhenThresholdMet(freeWhenThresholdMet),
+  }
+}
+
+export function buildMarketSUntrackedLetterPricingOption(
+  freeWhenThresholdMet?: boolean | null
+): ShippingOptionForPricing {
+  return {
+    ...MARKET_S_UNTRACKED_LETTER_OPTION,
+    freeShippingWhenThresholdMet: resolveMarketSLetterFreeWhenThresholdMet(freeWhenThresholdMet),
+  }
 }

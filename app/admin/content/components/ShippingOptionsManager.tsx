@@ -134,9 +134,29 @@ export default function ShippingOptionsManager() {
                       value={freeShippingSettings.message}
                       onChange={(e) => updateFreeShippingSettings({ message: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                      placeholder="e.g., Free shipping on orders over $50"
+                      placeholder="e.g., Free shipping on orders over $70"
                     />
                   </div>
+
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet !== false}
+                      onChange={(e) =>
+                        updateFreeShippingSettings({
+                          marketSUntrackedLetterFreeWhenThresholdMet: e.target.checked,
+                        })
+                      }
+                      className="mt-1 rounded"
+                    />
+                    <span className="text-sm">
+                      <span className="font-medium">Market S untracked letter free when threshold is met</span>
+                      <span className="block text-gray-500 mt-0.5">
+                        Same idea as Standard Letter. Turn off to keep charging the Market S letter rate
+                        even when the cart reaches the free-shipping threshold.
+                      </span>
+                    </span>
+                  </label>
                 </>
               )}
             </div>

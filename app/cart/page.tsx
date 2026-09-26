@@ -68,7 +68,11 @@ export default function CartPage() {
   // Same cast as checkout: merge may inject Market S synthetic letter row.
   const shippingOptions = mergeShippingOptionsForCart(
     allShippingOptions,
-    shippingRequirement
+    shippingRequirement,
+    {
+      marketSLetterFreeWhenThresholdMet:
+        freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet,
+    }
   ) as ShippingOption[]
   const estimatedShippingOption =
     shippingOptions.find((option) =>
@@ -729,9 +733,9 @@ export default function CartPage() {
                   <p className="font-semibold">Shipping estimate</p>
                   <p className="mt-1">
                     {shippingRequirement.allowUntrackedMaskLetter
-                      ? 'Untracked letter ($3.20) is the default estimate for 1–3 Market S Single Item packs at 20 mm or under. Tracking is not included. Parcel Post is available at checkout if you need tracking.'
+                      ? 'Untracked letter is the default estimate for 1–3 Market S Single Item packs (and up to 3 sticker sheets) at 20 mm / 500 g or under. Tracking is not included. Parcel Post is available at checkout if you need tracking.'
                       : shippingRequirement.requiresParcel
-                      ? `Parcel service is required because this cart contains parcel-class goods, a Family Bundle, 4+ mask singles, mixed sticker + Market S items, or exceeds the 500 g letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
+                      ? `Parcel service is required because this cart contains parcel-class goods, a Family Bundle, 4+ mask singles, more than 3 sticker sheets with Market S, or exceeds the 500 g / 20 mm letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
                       : 'Standard Letter is the default estimate and does not include tracking.'}{' '}
                     You can choose from the compatible delivery or Click &amp; Collect options at
                     checkout. Tracking and insurance are included only where shown.

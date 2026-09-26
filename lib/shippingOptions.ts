@@ -9,12 +9,19 @@ export interface ShippingOption {
   insurance: boolean
 }
 
+/**
+ * Defaults aligned to AusPost retail (own packaging) as of 2026:
+ * - Standard / Market S letter → Large letter ≤125g $3.70
+ * - Tracked letter → Large letter ≤250g $5.55
+ * - Parcel Post ≤500g → $11.70 (Brisbane Q1 Parcel Post guide from 1 Jul 2026)
+ * Live CMS values in Admin → Shipping override these after hydrate/save.
+ */
 export const shippingOptions: ShippingOption[] = [
   {
     id: 'standard-letter',
     name: 'Standard Letter',
     description: 'Best for name stickers and flat custom sheets',
-    price: 2.4,
+    price: 3.7,
     deliveryTime: '2–8 business days',
     tracking: false,
     insurance: false
@@ -23,7 +30,7 @@ export const shippingOptions: ShippingOption[] = [
     id: 'tracked-letter',
     name: 'Tracked Letter',
     description: 'Tracked letter service',
-    price: 5.5,
+    price: 5.55,
     deliveryTime: '2–8 business days',
     tracking: true,
     insurance: false
@@ -41,7 +48,7 @@ export const shippingOptions: ShippingOption[] = [
     id: 'parcel-post',
     name: 'Parcel Post (Goods)',
     description: 'Parcel for merchandise and heavier goods',
-    price: 10.9,
+    price: 11.7,
     deliveryTime: '3–10 business days',
     tracking: true,
     insurance: false

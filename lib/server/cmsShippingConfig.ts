@@ -4,7 +4,7 @@ import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 import { shippingOptions as staticShippingOptions } from '@/lib/shippingOptions'
-import { MARKET_S_UNTRACKED_LETTER_OPTION, MARKET_S_UNTRACKED_LETTER_OPTION_ID } from '@/lib/shipping/marketSLetterOption'
+import { MARKET_S_UNTRACKED_LETTER_OPTION_ID, buildMarketSUntrackedLetterPricingOption } from '@/lib/shipping/marketSLetterOption'
 import type { ShippingOptionForPricing, FreeShippingSettingsLike } from '@/lib/shipping/computeChargedShippingPrice'
 import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
 
@@ -16,7 +16,8 @@ export type CmsShippingConfig = {
 
 const DEFAULT_FREE_SHIPPING: FreeShippingSettingsLike = {
   enabled: true,
-  threshold: 50,
+  threshold: 70,
+  marketSUntrackedLetterFreeWhenThresholdMet: true,
 }
 
 const STATIC_FALLBACK_OPTIONS: ShippingOptionForPricing[] = staticShippingOptions.map((o, index) => ({
@@ -94,6 +95,8 @@ export async function readCmsShippingConfig(): Promise<CmsShippingConfig> {
               ? {
                   enabled: Boolean((fsRaw as any).enabled),
                   threshold: Number((fsRaw as any).threshold) || DEFAULT_FREE_SHIPPING.threshold,
+                  marketSUntrackedLetterFreeWhenThresholdMet:
+                    (fsRaw as any).marketSUntrackedLetterFreeWhenThresholdMet !== false,
                 }
               : DEFAULT_FREE_SHIPPING
 
@@ -142,7 +145,9 @@ export async function findActiveShippingOption(optionId: string): Promise<{
   const cfg = await readCmsShippingConfig()
   if (id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) {
     return {
-      option: MARKET_S_UNTRACKED_LETTER_OPTION,
+      option: buildMarketSUntrackedLetterPricingOption(
+        cfg.freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet
+      ),
       freeShippingSettings: cfg.freeShippingSettings,
       vipFreeShippingByGrade: cfg.vipFreeShippingByGrade,
     }

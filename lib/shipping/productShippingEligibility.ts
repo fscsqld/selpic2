@@ -1,7 +1,8 @@
 import { isMarketSCatalogProduct } from '../marketSSubcategory'
 import {
-  MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION,
+  buildMarketSUntrackedLetterCheckoutOption,
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+  type MarketSUntrackedLetterCheckoutOption,
 } from './marketSLetterOption'
 import type { ShippingServiceType } from './shippingSnapshot'
 
@@ -33,6 +34,8 @@ export type CartShippingRequirement = {
   allowUntrackedMaskLetter: boolean
   totalWeightGrams: number
   maskSingleQuantity: number
+  /** Sticker sheet count (Stickers category qty) — mixed letter cap. */
+  stickerSheetQuantity: number
   packedThicknessMm: number
 }
 
@@ -40,6 +43,10 @@ const LETTER_MAX_GRAMS = 500
 const MASK_LETTER_MAX_QTY = 3
 const MASK_LETTER_MAX_PACK_MM = 20
 const DEFAULT_MASK_THICKNESS_MM = 5
+/** Mixed Market S + stickers: max sticker sheets in one large letter. */
+export const MIXED_LETTER_MAX_STICKER_SHEETS = 3
+/** Conservative pack height per name-label sheet when mixed with masks. */
+const DEFAULT_STICKER_SHEET_THICKNESS_MM = 1
 
 /**
  * Backward-compatible defaults for products created before shipping fields existed.
@@ -71,6 +78,10 @@ export function isMarketSFamilyBundle(product: ProductShippingLike): boolean {
   return isMarketSCatalogProduct(product) && subcategoryOf(product) === 'Family Bundle'
 }
 
+export function isStickersShippingProduct(product: ProductShippingLike): boolean {
+  return String(product.category || '').trim().toLowerCase() === 'stickers'
+}
+
 export function resolveMaskPackThicknessMm(product: ProductShippingLike): number {
   const configured = Number(product.shippingThicknessMm)
   if (Number.isFinite(configured) && configured > 0) return configured
@@ -84,18 +95,18 @@ function isCmsLetterOption(option: ShippingOptionEligibilityLike): boolean {
 }
 
 /**
- * Dual-rate for Market S mask singles:
- * 1–3 Single Item units packed at ≤20 mm → untracked $3.20 letter.
- * Qty 4+, any Family Bundle, mixed stickers+mask, or other parcel SKUs → tracked parcel.
- * Legacy HotGoods without those subcategories stay parcel.
+ * Dual-rate for Market S mask singles (+ optional small sticker add-on):
+ * 1–3 Single Item units, ≤3 sticker sheets, packed ≤20 mm / ≤500 g → untracked letter.
+ * Qty 4+, Family Bundle, other parcel SKUs, stamps/non-sticker letter, or over caps → parcel.
  */
 export function getCartShippingRequirement(lines: ShippingCartLine[]): CartShippingRequirement {
   let totalWeightGrams = 0
   let maskSingleQuantity = 0
+  let stickerSheetQuantity = 0
   let packedThicknessMm = 0
   let hasFamilyBundle = false
   let hasOtherParcel = false
-  let hasLetterProduct = false
+  let hasNonStickerLetterProduct = false
   let hasMaskSingle = false
 
   for (const line of lines) {
@@ -113,10 +124,15 @@ export function getCartShippingRequirement(lines: ShippingCartLine[]): CartShipp
       packedThicknessMm += resolveMaskPackThicknessMm(product) * quantity
       continue
     }
+    if (isStickersShippingProduct(product)) {
+      stickerSheetQuantity += quantity
+      packedThicknessMm += DEFAULT_STICKER_SHEET_THICKNESS_MM * quantity
+      continue
+    }
     if (resolveProductShippingClass(product) === 'parcel') {
       hasOtherParcel = true
     } else {
-      hasLetterProduct = true
+      hasNonStickerLetterProduct = true
     }
   }
 
@@ -124,7 +140,8 @@ export function getCartShippingRequirement(lines: ShippingCartLine[]): CartShipp
     hasMaskSingle &&
     !hasFamilyBundle &&
     !hasOtherParcel &&
-    !hasLetterProduct &&
+    !hasNonStickerLetterProduct &&
+    stickerSheetQuantity <= MIXED_LETTER_MAX_STICKER_SHEETS &&
     maskSingleQuantity >= 1 &&
     maskSingleQuantity <= MASK_LETTER_MAX_QTY &&
     packedThicknessMm <= MASK_LETTER_MAX_PACK_MM &&
@@ -132,13 +149,18 @@ export function getCartShippingRequirement(lines: ShippingCartLine[]): CartShipp
 
   const requiresParcel =
     !allowUntrackedMaskLetter &&
-    (hasFamilyBundle || hasOtherParcel || hasMaskSingle || totalWeightGrams > LETTER_MAX_GRAMS)
+    (hasFamilyBundle ||
+      hasOtherParcel ||
+      hasMaskSingle ||
+      hasNonStickerLetterProduct ||
+      totalWeightGrams > LETTER_MAX_GRAMS)
 
   return {
     requiresParcel,
     allowUntrackedMaskLetter,
     totalWeightGrams,
     maskSingleQuantity,
+    stickerSheetQuantity,
     packedThicknessMm,
   }
 }
@@ -167,15 +189,24 @@ export function isShippingOptionCompatible(
   return option.id !== MARKET_S_UNTRACKED_LETTER_OPTION_ID
 }
 
+export type MergeShippingOptionsParams = {
+  /** From Admin Free Shipping Settings; default true when omitted. */
+  marketSLetterFreeWhenThresholdMet?: boolean | null
+}
+
 export function mergeShippingOptionsForCart<T extends ShippingOptionEligibilityLike>(
   cmsOptions: T[],
-  requirement: CartShippingRequirement
-): Array<T | typeof MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION> {
+  requirement: CartShippingRequirement,
+  params?: MergeShippingOptionsParams
+): Array<T | MarketSUntrackedLetterCheckoutOption> {
   const withoutSynthetic = cmsOptions.filter(
     (option) => option.id !== MARKET_S_UNTRACKED_LETTER_OPTION_ID
   )
+  const synthetic = buildMarketSUntrackedLetterCheckoutOption(
+    params?.marketSLetterFreeWhenThresholdMet
+  )
   const merged = requirement.allowUntrackedMaskLetter
-    ? [MARKET_S_UNTRACKED_LETTER_CHECKOUT_OPTION, ...withoutSynthetic]
+    ? [synthetic, ...withoutSynthetic]
     : withoutSynthetic
   return merged.filter((option) => isShippingOptionCompatible(option, requirement))
 }
