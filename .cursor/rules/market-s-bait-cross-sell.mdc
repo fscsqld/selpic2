@@ -52,5 +52,6 @@ If all three show the **same** card in one journey, that is OK only because each
 
 - Shipping: Single Item letter rules — `market-s-k-beauty-plan.mdc`
 - Subcategory: only Single Item / Family Bundle — `market-s-subcategory-fields.mdc`
+- Cart Single→Family Bundle upsell (linked SKUs): `lib/marketSBundleUpsell.ts` + `MarketSBundleUpsell` — separate from this sticker bait
 - Hygiene copy on Market S hub stays separate from this bait card
 ---

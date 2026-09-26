@@ -33,6 +33,14 @@ import {
   type StickerSheetBundle,
 } from '@/lib/stickerSheetBundles'
 import { MARKET_S_SUBCATEGORY_VALUES, defaultMarketSShippingWeightGrams, marketSProductSubcategoryOptions } from '@/lib/marketSSubcategory'
+import {
+  familyBundleUnitCountForSave,
+  linkedFamilyBundleIdsForSave,
+  listMarketSFamilyBundleProducts,
+  resolveFamilyBundleUnitCount,
+  sanitizeFamilyBundleUnitCount,
+  sanitizeLinkedFamilyBundleIds,
+} from '@/lib/marketSBundleUpsell'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -120,6 +128,10 @@ interface ProductFormData {
   stickerSheetBundles?: StickerSheetBundle[]
   isLimitedEdition?: boolean
   limitedEditionText?: string
+  /** Market S Single Item → linked Family Bundle product ids (cart upsell). */
+  linkedFamilyBundleIds?: string[]
+  /** Market S Family Bundle → units in the pack (per-unit upsell math). */
+  familyBundleUnitCount?: number
 }
 
 const normalizeSubcategoryKey = (value?: string): string =>
@@ -208,6 +220,8 @@ function AdminProductsPageContent() {
     stickerSheetQuantity: 3, // 네임스티커 시트지 수량 (가격 3장 기준, 기본 3장)
     enableStickerPackOptions: false,
     stickerSheetBundles: [],
+    linkedFamilyBundleIds: [],
+    familyBundleUnitCount: undefined,
   })
 
   const isStationeryEssentialsProduct =
@@ -438,6 +452,8 @@ function AdminProductsPageContent() {
         ),
         enableStickerPackOptions: !!(product as any).enableStickerPackOptions,
         stickerSheetBundles: sanitizeStickerSheetBundles((product as any).stickerSheetBundles),
+        linkedFamilyBundleIds: sanitizeLinkedFamilyBundleIds((product as any).linkedFamilyBundleIds),
+        familyBundleUnitCount: sanitizeFamilyBundleUnitCount((product as any).familyBundleUnitCount),
         isLimitedEdition: (product as any).isLimitedEdition,
         limitedEditionText: (product as any).limitedEditionText || '',
         rating: typeof (product as any).rating === 'number' ? (product as any).rating : 4.5,
@@ -484,6 +500,8 @@ function AdminProductsPageContent() {
         stickerSheetQuantity: 3,
         enableStickerPackOptions: false,
         stickerSheetBundles: [],
+        linkedFamilyBundleIds: [],
+        familyBundleUnitCount: undefined,
       })
     }
     setIsModalOpen(true)
@@ -552,6 +570,8 @@ function AdminProductsPageContent() {
       stickerSheetQuantity: 3,
       enableStickerPackOptions: false,
       stickerSheetBundles: [],
+      linkedFamilyBundleIds: [],
+      familyBundleUnitCount: undefined,
     })
   }
 
@@ -649,8 +669,21 @@ function AdminProductsPageContent() {
             stickerSheetBundles: undefined,
             stickerSheetQuantity: undefined,
             customizationOptions: [],
+            linkedFamilyBundleIds: linkedFamilyBundleIdsForSave(
+              formData.category,
+              formData.subcategory,
+              formData.linkedFamilyBundleIds
+            ),
+            familyBundleUnitCount: familyBundleUnitCountForSave(
+              formData.category,
+              formData.subcategory,
+              formData.familyBundleUnitCount
+            ),
           }
-        : {}),
+        : {
+            linkedFamilyBundleIds: undefined,
+            familyBundleUnitCount: undefined,
+          }),
       stickerSheetQuantity:
         formData.category === 'HotGoods'
           ? undefined
@@ -854,6 +887,12 @@ function AdminProductsPageContent() {
           currentWeight === 250
         ) {
           newData.shippingWeightGrams = nextWeight
+        }
+        if (value !== 'Single Item') {
+          newData.linkedFamilyBundleIds = []
+        }
+        if (value !== 'Family Bundle') {
+          newData.familyBundleUnitCount = undefined
         }
       }
 
@@ -1930,6 +1969,91 @@ function AdminProductsPageContent() {
                        or <strong>Family Bundle</strong> for a tracked parcel SKU. Checkout applies that rule
                        automatically.
                      </p>
+                   )}
+                   {formData.category === 'HotGoods' && formData.subcategory === 'Family Bundle' && (
+                     <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/80 p-3 space-y-2">
+                       <label className="block text-sm font-medium text-violet-950">
+                         Units in this bundle (required for cart upsell)
+                       </label>
+                       <p className="text-xs text-violet-900 leading-relaxed">
+                         e.g. 5 or 10 mask sheets. Used to show per-sheet price vs Single Item in the cart.
+                       </p>
+                       <input
+                         type="number"
+                         min={2}
+                         max={99}
+                         name="familyBundleUnitCount"
+                         value={formData.familyBundleUnitCount ?? ''}
+                         onChange={(e) => {
+                           const n = sanitizeFamilyBundleUnitCount(e.target.value)
+                           setFormData((prev) => ({ ...prev, familyBundleUnitCount: n }))
+                         }}
+                         placeholder="5"
+                         className="w-28 px-3 py-2 border border-violet-200 rounded-lg focus:ring-2 focus:ring-violet-500 bg-white"
+                       />
+                     </div>
+                   )}
+                   {formData.category === 'HotGoods' && formData.subcategory === 'Single Item' && (
+                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3 space-y-2">
+                       <p className="text-sm font-medium text-amber-950">
+                         Cart upsell — link Family Bundle SKUs
+                       </p>
+                       <p className="text-xs text-amber-900 leading-relaxed">
+                         When a linked bundle&apos;s <strong>per-sheet</strong> price is lower than this
+                         Single Item, cart shows the offer from qty 1. Set each bundle&apos;s unit count
+                         first.
+                       </p>
+                       {listMarketSFamilyBundleProducts(
+                         products.filter((p) => p.id !== formData.id)
+                       ).length === 0 ? (
+                         <p className="text-xs text-amber-800">
+                           No Family Bundle products in the catalog yet.
+                         </p>
+                       ) : (
+                         <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                           {listMarketSFamilyBundleProducts(
+                             products.filter((p) => p.id !== formData.id)
+                           ).map((bundle) => {
+                             const checked = (formData.linkedFamilyBundleIds || []).includes(bundle.id)
+                             const units = resolveFamilyBundleUnitCount(bundle)
+                             const per =
+                               units && Number(bundle.price) > 0
+                                 ? (Number(bundle.price) / units).toFixed(2)
+                                 : null
+                             return (
+                               <li key={bundle.id}>
+                                 <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                                   <input
+                                     type="checkbox"
+                                     className="mt-0.5"
+                                     checked={checked}
+                                     onChange={() => {
+                                       setFormData((prev) => {
+                                         const current = sanitizeLinkedFamilyBundleIds(
+                                           prev.linkedFamilyBundleIds
+                                         )
+                                         const next = checked
+                                           ? current.filter((id) => id !== bundle.id)
+                                           : [...current, bundle.id]
+                                         return { ...prev, linkedFamilyBundleIds: next }
+                                       })
+                                     }}
+                                   />
+                                   <span>
+                                     {bundle.name}{' '}
+                                     <span className="text-gray-500">
+                                       ${Number(bundle.price).toFixed(2)}
+                                       {units ? ` · ${units} units` : ' · set unit count'}
+                                       {per ? ` · $${per}/ea` : ''}
+                                     </span>
+                                   </span>
+                                 </label>
+                               </li>
+                             )
+                           })}
+                         </ul>
+                       )}
+                     </div>
                    )}
                    {formData.category === 'Stickers' && (
                      <p className="mt-1 text-sm text-gray-500">

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Trash2, Minus, Plus, ShoppingBag, ArrowLeft } from 'lucide-react'
@@ -27,6 +27,8 @@ import {
   mergeShippingOptionsForCart,
 } from '@/lib/shipping/productShippingEligibility'
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
+import MarketSBundleUpsell from '@/components/MarketSBundleUpsell'
+import { getMarketSBundleUpsellOffers } from '@/lib/marketSBundleUpsell'
 
 export default function CartPage() {
   const router = useRouter()
@@ -47,6 +49,11 @@ export default function CartPage() {
     typeof item.product === 'object' && 
     item.product.id && 
     item.product.price !== undefined
+  )
+
+  const marketSBundleOffers = useMemo(
+    () => getMarketSBundleUpsellOffers(validCart, products),
+    [validCart, products]
   )
 
   const shippingRequirement = getCartShippingRequirement(
@@ -670,7 +677,8 @@ export default function CartPage() {
                 </div>
               )
             })}
-            <MarketSBaitCrossSell />
+            <MarketSBundleUpsell />
+            {marketSBundleOffers.length === 0 && <MarketSBaitCrossSell />}
           </div>
 
           {/* Order Summary */}

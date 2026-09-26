@@ -35,6 +35,16 @@ export interface Product {
   customizationOptions?: CustomizationOption[]
   inStock: boolean
   isHotGoods?: boolean
+  /**
+   * Market S Single Item only: Family Bundle product ids for cart “switch to bundle” upsell.
+   * Not sticker pack options — each id is a separate HotGoods SKU.
+   */
+  linkedFamilyBundleIds?: string[]
+  /**
+   * Market S Family Bundle only: how many units (e.g. mask sheets) are in this SKU.
+   * Used for per-unit cart upsell vs Single Item price.
+   */
+  familyBundleUnitCount?: number
   isPopular?: boolean
   stockQuantity?: number
   safetyStock?: number
