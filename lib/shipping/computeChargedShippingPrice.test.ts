@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { computeChargedShippingPrice } from './computeChargedShippingPrice'
 import {
-  buildMarketSUntrackedLetterCheckoutOption,
-  buildMarketSUntrackedLetterPricingOption,
+  resolveMarketSUntrackedLetterCheckoutOption,
+  resolveMarketSUntrackedLetterPricingOption,
   MARKET_S_UNTRACKED_LETTER_PRICE,
 } from './marketSLetterOption'
 
@@ -11,26 +11,34 @@ describe('computeChargedShippingPrice', () => {
   const freeOn = { enabled: true, threshold: 70 }
 
   it('charges Market S untracked letter at the AusPost large-letter ≤125g rate when free-ship is off', () => {
-    const option = buildMarketSUntrackedLetterPricingOption(true)
+    const option = resolveMarketSUntrackedLetterPricingOption(null, true)
     expect(computeChargedShippingPrice(option, 10, freeOff, false)).toBe(MARKET_S_UNTRACKED_LETTER_PRICE)
     expect(
-      computeChargedShippingPrice(buildMarketSUntrackedLetterCheckoutOption(true), 10, freeOff, false)
+      computeChargedShippingPrice(resolveMarketSUntrackedLetterCheckoutOption(null, true), 10, freeOff, false)
     ).toBe(MARKET_S_UNTRACKED_LETTER_PRICE)
   })
 
   it('makes Market S letter free at threshold when Admin flag is on (default)', () => {
-    const option = buildMarketSUntrackedLetterPricingOption(true)
+    const option = resolveMarketSUntrackedLetterPricingOption(null, true)
     expect(computeChargedShippingPrice(option, 80, freeOn, false)).toBe(0)
   })
 
   it('keeps Market S letter charged at threshold when Admin flag is off', () => {
-    const option = buildMarketSUntrackedLetterPricingOption(false)
+    const option = resolveMarketSUntrackedLetterPricingOption(null, false)
     expect(computeChargedShippingPrice(option, 80, freeOn, false)).toBe(MARKET_S_UNTRACKED_LETTER_PRICE)
+  })
+
+  it('charges the CMS-edited Market S letter price', () => {
+    const option = resolveMarketSUntrackedLetterPricingOption(
+      { id: 'market-s-untracked-letter', price: 4.2 },
+      false
+    )
+    expect(computeChargedShippingPrice(option, 10, freeOff, false)).toBe(4.2)
   })
 
   it('returns 0 for VIP free shipping and alwaysFree options', () => {
     expect(
-      computeChargedShippingPrice(buildMarketSUntrackedLetterPricingOption(true), 10, freeOff, true)
+      computeChargedShippingPrice(resolveMarketSUntrackedLetterPricingOption(null, true), 10, freeOff, true)
     ).toBe(0)
     expect(
       computeChargedShippingPrice(

@@ -5,6 +5,11 @@ import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
 import { scheduleLogAdminActivity, scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 import { migrateSubcategoryLinkUrls } from '@/lib/subcategoryLinkUrl'
+import {
+  createDefaultMarketSUntrackedLetterCmsRow,
+  ensureMarketSUntrackedLetterInShippingOptions,
+  MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+} from '@/lib/shipping/marketSLetterOption'
 
 const CONTENT_STORE_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -3126,6 +3131,23 @@ const defaultPickupLocations: PickupLocation[] = [
 // 기본 배송 옵션 — 맞춤 스티커(레터) + 굿즈(소포 1종) + 픽업
 const defaultShippingOptions: ShippingOption[] = [
   {
+    id: 'market-s-untracked-letter',
+    name: 'Untracked letter (Market S singles)',
+    description:
+      'For 1–3 Single Item packs (and up to 3 sticker sheets in the same large letter) at 20 mm / 500 g or under. Tracking is not included. Choose Parcel Post if you need tracking.',
+    price: 3.7,
+    deliveryTime: '2–8 business days',
+    tracking: false,
+    insurance: false,
+    type: 'delivery',
+    isDefault: false,
+    order: 0,
+    isActive: true,
+    freeShippingWhenThresholdMet: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
     id: 'standard-letter',
     name: 'Standard Letter',
     description: 'Best for name stickers and flat custom sheets (2–8 business days, no tracking)',
@@ -3912,11 +3934,17 @@ export function mergePersistedSiteConfig(
 
       return opts
     })(),
-    shippingOptions: fromRemoteSupabaseSync
-      ? mergeRecordArraysByLastWrite(persistedState?.shippingOptions, currentState.shippingOptions)
-      : persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0
-        ? persistedState.shippingOptions
-        : currentState.shippingOptions,
+    shippingOptions: (() => {
+      const raw = fromRemoteSupabaseSync
+        ? mergeRecordArraysByLastWrite(persistedState?.shippingOptions, currentState.shippingOptions)
+        : persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0
+          ? persistedState.shippingOptions
+          : currentState.shippingOptions
+      return ensureMarketSUntrackedLetterInShippingOptions(
+        Array.isArray(raw) ? raw : [],
+        () => createDefaultMarketSUntrackedLetterCmsRow()
+      )
+    })(),
     freeShippingSettings: fromRemoteSupabaseSync
       ? {
           ...defaultFreeShippingSettings,
@@ -4117,11 +4145,14 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
     )
   }
   if (state.shippingOptions) {
-    state.shippingOptions = state.shippingOptions.map((option: any) => ({
-      ...option,
-      createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
-      updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
-    }))
+    state.shippingOptions = ensureMarketSUntrackedLetterInShippingOptions(
+      state.shippingOptions.map((option: any) => ({
+        ...option,
+        createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
+        updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
+      })),
+      () => createDefaultMarketSUntrackedLetterCmsRow()
+    )
   }
   if (state.pickupLocations) {
     state.pickupLocations = state.pickupLocations.map((location: any) => ({
@@ -5273,6 +5304,10 @@ scheduleLogAdminActivity({
       },
 
       deleteShippingOption: (id: string) => {
+        if (id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) {
+          console.warn('Market S untracked letter cannot be deleted — edit the price instead.')
+          return
+        }
         set((state: ContentStore) => ({
           shippingOptions: state.shippingOptions.filter((opt: ShippingOption) => opt.id !== id)
         }))

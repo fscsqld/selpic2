@@ -11,6 +11,6 @@ Retail sources: [AusPost Regular letters](https://auspost.com.au/personal/sendin
 | Express Post | $14.50 | (left) | $14.50 |
 | Click & Collect | $0 | n/a | $0 |
 
-**Live CMS:** Admin → Shipping already overrides code defaults after hydrate. Saving Free Shipping / option prices in the dashboard applies them to checkout. New installs / empty CMS use the table above.
+**Live CMS:** Admin → Shipping edits **Standard Letter**, **Market S untracked letter**, Parcel, etc. All are CMS `shippingOptions` rows. Hydrate inserts Market S letter if missing; save persists to Supabase. See `.cursor/rules/market-s-letter-admin-editable-rate.mdc`.
 
 **Free shipping:** threshold default **$70**. Market S letter free-at-threshold defaults **ON**; Admin checkbox can turn it off.

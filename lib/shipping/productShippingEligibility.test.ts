@@ -123,6 +123,21 @@ describe('Market S shipping dual-rate', () => {
     ])
   })
 
+  it('uses Admin CMS price for Market S letter when the CMS row is present', () => {
+    const req = getCartShippingRequirement([{ product: maskSingle, quantity: 1 }])
+    const cmsRow = {
+      id: MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+      name: 'Untracked letter (Market S singles)',
+      price: 4.2,
+      type: 'delivery' as const,
+    }
+    const options = mergeShippingOptionsForCart([cmsRow, parcel, pickup], req, {
+      marketSLetterFreeWhenThresholdMet: true,
+    })
+    expect(options[0]?.id).toBe(MARKET_S_UNTRACKED_LETTER_OPTION_ID)
+    expect((options[0] as { price: number }).price).toBe(4.2)
+  })
+
   it('honours Admin toggle for Market S letter free-at-threshold on the synthetic row', () => {
     const req = getCartShippingRequirement([{ product: maskSingle, quantity: 1 }])
     const on = mergeShippingOptionsForCart([parcel, pickup], req, {

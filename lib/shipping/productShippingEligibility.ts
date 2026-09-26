@@ -1,7 +1,8 @@
 import { isMarketSCatalogProduct } from '../marketSSubcategory'
 import {
-  buildMarketSUntrackedLetterCheckoutOption,
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+  resolveMarketSUntrackedLetterCheckoutOption,
+  type MarketSLetterCmsFields,
   type MarketSUntrackedLetterCheckoutOption,
 } from './marketSLetterOption'
 import type { ShippingServiceType } from './shippingSnapshot'
@@ -199,14 +200,18 @@ export function mergeShippingOptionsForCart<T extends ShippingOptionEligibilityL
   requirement: CartShippingRequirement,
   params?: MergeShippingOptionsParams
 ): Array<T | MarketSUntrackedLetterCheckoutOption> {
-  const withoutSynthetic = cmsOptions.filter(
-    (option) => option.id !== MARKET_S_UNTRACKED_LETTER_OPTION_ID
+  const cmsMarketS = cmsOptions.find(
+    (option) => String(option.id || '').trim() === MARKET_S_UNTRACKED_LETTER_OPTION_ID
+  ) as (T & MarketSLetterCmsFields) | undefined
+  const withoutMarketS = cmsOptions.filter(
+    (option) => String(option.id || '').trim() !== MARKET_S_UNTRACKED_LETTER_OPTION_ID
   )
-  const synthetic = buildMarketSUntrackedLetterCheckoutOption(
+  const marketSRow = resolveMarketSUntrackedLetterCheckoutOption(
+    cmsMarketS,
     params?.marketSLetterFreeWhenThresholdMet
   )
   const merged = requirement.allowUntrackedMaskLetter
-    ? [synthetic, ...withoutSynthetic]
-    : withoutSynthetic
+    ? ([marketSRow, ...withoutMarketS] as Array<T | MarketSUntrackedLetterCheckoutOption>)
+    : withoutMarketS
   return merged.filter((option) => isShippingOptionCompatible(option, requirement))
 }

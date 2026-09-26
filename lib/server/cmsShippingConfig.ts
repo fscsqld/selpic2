@@ -4,7 +4,12 @@ import { supabaseNoSessionClientOptions } from '@/lib/supabase/adminFetch'
 import { STOREFRONT_CMS_CONFIG_KEY } from '@/lib/siteConfigConstants'
 import { unwrapSiteConfigValue } from '@/lib/siteConfigWritePayload'
 import { shippingOptions as staticShippingOptions } from '@/lib/shippingOptions'
-import { MARKET_S_UNTRACKED_LETTER_OPTION_ID, buildMarketSUntrackedLetterPricingOption } from '@/lib/shipping/marketSLetterOption'
+import {
+  ensureMarketSUntrackedLetterInShippingOptions,
+  MARKET_S_UNTRACKED_LETTER_OPTION,
+  MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+  resolveMarketSUntrackedLetterPricingOption,
+} from '@/lib/shipping/marketSLetterOption'
 import type { ShippingOptionForPricing, FreeShippingSettingsLike } from '@/lib/shipping/computeChargedShippingPrice'
 import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
 
@@ -20,15 +25,19 @@ const DEFAULT_FREE_SHIPPING: FreeShippingSettingsLike = {
   marketSUntrackedLetterFreeWhenThresholdMet: true,
 }
 
-const STATIC_FALLBACK_OPTIONS: ShippingOptionForPricing[] = staticShippingOptions.map((o, index) => ({
-  ...o,
-  type: (o.id === 'local-pickup' ? 'pickup' : 'delivery') as ShippingServiceType,
-  isActive: true,
-  freeShippingWhenThresholdMet: o.id === 'standard-letter',
-  discountWhenThresholdMet: ['tracked-letter', 'express-post', 'parcel-post'].includes(o.id) ? 2.4 : undefined,
-  alwaysFree: o.id === 'local-pickup',
-  order: index + 1,
-}))
+const STATIC_FALLBACK_OPTIONS: ShippingOptionForPricing[] = [
+  ...staticShippingOptions.map((o, index) => ({
+    ...o,
+    type: (o.id === 'local-pickup' ? 'pickup' : 'delivery') as ShippingServiceType,
+    isActive: true,
+    freeShippingWhenThresholdMet: o.id === 'standard-letter' || o.id === MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+    discountWhenThresholdMet: ['tracked-letter', 'express-post', 'parcel-post'].includes(o.id)
+      ? 2.4
+      : undefined,
+    alwaysFree: o.id === 'local-pickup',
+    order: index + 1,
+  })),
+]
 
 let cmsSupabaseAnonClient: SupabaseClient | null = null
 
@@ -112,7 +121,10 @@ export async function readCmsShippingConfig(): Promise<CmsShippingConfig> {
 
           if (options.length > 0) {
             return {
-              shippingOptions: options,
+              shippingOptions: ensureMarketSUntrackedLetterInShippingOptions(
+                options,
+                () => ({ ...MARKET_S_UNTRACKED_LETTER_OPTION })
+              ),
               freeShippingSettings,
               vipFreeShippingByGrade,
             }
@@ -144,8 +156,10 @@ export async function findActiveShippingOption(optionId: string): Promise<{
   if (!id) return null
   const cfg = await readCmsShippingConfig()
   if (id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) {
+    const cmsRow = cfg.shippingOptions.find((o) => o.id === MARKET_S_UNTRACKED_LETTER_OPTION_ID)
     return {
-      option: buildMarketSUntrackedLetterPricingOption(
+      option: resolveMarketSUntrackedLetterPricingOption(
+        cmsRow,
         cfg.freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet
       ),
       freeShippingSettings: cfg.freeShippingSettings,

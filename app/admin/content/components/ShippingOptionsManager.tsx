@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Edit, Trash2, Truck, MapPin, Clock, Package, X, Eye, EyeOff } from 'lucide-react'
 import { useContentStore, ShippingOption, PickupLocation } from '@/lib/contentStore'
+import { MARKET_S_UNTRACKED_LETTER_OPTION_ID } from '@/lib/shipping/marketSLetterOption'
 import PickupLocationManager from './PickupLocationManager'
 
 export default function ShippingOptionsManager() {
@@ -49,6 +50,10 @@ export default function ShippingOptionsManager() {
   }
 
   const handleDelete = (id: string) => {
+    if (id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) {
+      alert('Market S untracked letter cannot be deleted. Edit the price when AusPost rates change.')
+      return
+    }
     if (confirm('Are you sure you want to delete this shipping option?')) {
       deleteShippingOption(id)
     }
@@ -193,6 +198,11 @@ export default function ShippingOptionsManager() {
                           Default
                         </span>
                       )}
+                      {option.id === MARKET_S_UNTRACKED_LETTER_OPTION_ID && (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-900 text-xs font-medium rounded">
+                          Market S letter — edit price for AusPost changes
+                        </span>
+                      )}
                       <span
                         className={`px-2 py-1 text-xs font-medium rounded ${
                           option.type === 'pickup'
@@ -276,7 +286,7 @@ export default function ShippingOptionsManager() {
                     >
                       {option.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                    {!option.isDefault && (
+                    {!option.isDefault && option.id !== MARKET_S_UNTRACKED_LETTER_OPTION_ID && (
                       <button
                         onClick={() => handleDelete(option.id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

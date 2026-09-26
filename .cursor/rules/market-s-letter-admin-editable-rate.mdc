@@ -1,0 +1,32 @@
+---
+description: Market S letter shipping price must be Admin-editable like Stickers (learned 2026-09-26)
+alwaysApply: true
+---
+
+# Market S letter rate — Admin-editable like Stickers (learned 2026-09-26)
+
+**Invariant:** When AusPost raises postage, the owner updates **Admin → Shipping** and the new price applies on cart/checkout/server **without a code deploy**. That already works for Stickers **Standard Letter**. It must work the same way for **Market S untracked letter** (`market-s-untracked-letter`).
+
+## Shipped (Admin-editable Market S letter)
+
+| Option | Where price lives | Admin can change? | Applies live? |
+|---|---|---|---|
+| Stickers **Standard Letter** | CMS `shippingOptions` | Yes | Yes |
+| Market S **untracked letter** (`market-s-untracked-letter`) | CMS `shippingOptions` (same Admin list) | **Yes** — Edit → Price → save | **Yes** (contentStore + `resolveMarketSUntrackedLetter*` + server `findActiveShippingOption`) |
+| Free-ship threshold + Market S free-at-threshold toggle | CMS `freeShippingSettings` | Yes | Yes |
+
+**Seed / migrate:** If the CMS row is missing, hydrate/merge/server config **inserts** the default row (`ensureMarketSUntrackedLetterInShippingOptions`). Next Admin CMS persist writes it to Supabase. Code constants remain **fallback only**.
+
+**Do not delete** the Market S letter row (UI + `deleteShippingOption` guard). Edit the price instead.
+
+## Implementation pointers
+
+- `lib/shipping/marketSLetterOption.ts` — resolve from CMS + ensure helper
+- `mergeShippingOptionsForCart` — uses CMS price when eligible
+- Admin badge: “Market S letter — edit price for AusPost changes”
+
+## Do / Do not
+
+**Do** — Prefer Admin CMS for postage dollars; keep id `market-s-untracked-letter` stable; show `option.price` in UI (no hard-coded `$3.70` in copy).
+
+**Do not** — Bump only `MARKET_S_UNTRACKED_LETTER_PRICE` in git for live rate rises; invent a second Market S letter id.

@@ -18,6 +18,16 @@ export interface ShippingOption {
  */
 export const shippingOptions: ShippingOption[] = [
   {
+    id: 'market-s-untracked-letter',
+    name: 'Untracked letter (Market S singles)',
+    description:
+      'For 1–3 Single Item packs (and up to 3 sticker sheets) at 20 mm / 500 g or under',
+    price: 3.7,
+    deliveryTime: '2–8 business days',
+    tracking: false,
+    insurance: false
+  },
+  {
     id: 'standard-letter',
     name: 'Standard Letter',
     description: 'Best for name stickers and flat custom sheets',
