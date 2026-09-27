@@ -1,0 +1,51 @@
+---
+description: Admin User Management Shop profiles & VIP — what is real vs seeded
+alwaysApply: false
+---
+
+# Admin Users — Shop profiles & VIP (learned 2026-09-27)
+
+**Invariant:** The **Shop profiles & VIP** tab lists `useUserAuth().users` (browser Zustand `user-auth` persist), **not** Supabase Auth. Summary cards count **customer profiles only** (exclude seeds). Sales / “with orders” use `store.orders` after **Supabase sync on mount** (same `/api/orders` as dashboard).
+
+## Two tabs (do not mix)
+
+| Tab | Data source | What it is |
+|-----|-------------|------------|
+| **Shop profiles & VIP** | `userAuth.users` + synced `store.orders` | VIP grades, posting permission; seed rows badged |
+| **Supabase Auth accounts** | `GET /api/admin/supabase-users` | Real login accounts (separate list) |
+
+“Open VIP grade monitor” links to `/admin/users/grades` (same customer filter + order sync).
+
+## Seeds (`lib/shopProfileUsers.ts`)
+
+| Email | Role |
+|-------|------|
+| `user@example.com` | Demo Selpic (`isDemo`) — **not** an Auth customer |
+| `info@selpic.com.au` | Seed Administrator shop profile — **email collides** with company **Auth admin**; still not a VIP customer |
+
+Owner Auth truth (customers vs company admins): see `admin-users-shop-vs-supabase-auth.mdc`.
+
+- Shown in the table with a **Seed** badge; **excluded** from Total / New / With orders / grade % / Total Sales.
+- Stable `createdAt` on re-seed; empty phone (no shared Mansfield mobile).
+- Order match for seeds is **email-only** (`calculateUserTotalSales` + `phoneForShopProfileOrderMatch`).
+
+## Re-check vs Auth (2026-09-27, owner)
+
+VIP follows Auth: real customers in list+summary; EMMA = Test (list only); company admins excluded; seeds hidden. See `admin-users-shop-vs-supabase-auth.mdc`.
+
+## Summary cards
+
+| Card | Formula |
+|------|---------|
+| **Total Users** | Non-seed `users.length` |
+| **New Users (7 days)** | `isRegisteredWithinLastDays(createdAt, 7)` with `Date.now()` — **not** a hardcoded calendar date |
+| **With / without orders** | Email (or non-seed phone) vs synced orders |
+| **VIP bars / Total Sales** | Non-seed only |
+
+Eligible sales statuses: `paid`, `approved`, `processing`, `shipped`, `ready_for_collection`, `collected`.
+
+## Do / Do not
+
+**Do** — Keep seed detection in `shopProfileUsers`; sync orders on Users + Grades mount; rolling 7-day helper for New badge.
+
+**Do not** — Reintroduce `new Date('2025-09-03')`; share one phone across seed rows; treat Shop profiles Total as Auth user count.

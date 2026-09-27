@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   TrendingUp, 
@@ -24,6 +24,17 @@ import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
 import { User } from '@/lib/userAuth'
 import { calculateUserTotalSales, recalculateAllUserGrades } from '@/lib/userGradeUtils'
+import {
+  isShopProfileSeedUser,
+  phoneForShopProfileOrderMatch,
+} from '@/lib/shopProfileUsers'
+import {
+  type AuthUserListRow,
+  countsTowardVipSummary,
+  displayNameFromAuthRow,
+  isAuthVipCustomerCandidate,
+  normalizeAuthEmail,
+} from '@/lib/authCustomerRoster'
 
 interface BorderlineCustomer {
   user: User
@@ -37,10 +48,84 @@ export default function GradeStatusMonitoringPage() {
   const router = useRouter()
   const { adminUser } = useAdminAuth()
   const canWrite = !!adminUser?.permissions?.includes('users:write')
-  const { users, updateUser } = useUserAuth()
-  const { orders, _hasHydrated } = useStore()
+  const { users, updateUser, ensureShopProfilesFromAuth } = useUserAuth()
+  const {
+    orders,
+    _hasHydrated,
+    mergeOrdersFromServer,
+    refreshOrdersFromStorage,
+  } = useStore()
   const { getActiveVIPGradeConfigs, vipGradeConfigs: storeVipGradeConfigs } = useContentStore()
   const { t } = useTranslation()
+
+  const [authVipEmailSet, setAuthVipEmailSet] = useState<Set<string> | null>(null)
+
+  const syncOrdersFromSupabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        mergeOrdersFromServer(data.orders)
+      }
+    } catch {
+      /* ledger unavailable */
+    }
+  }, [mergeOrdersFromServer])
+
+  const syncVipRosterFromAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/supabase-users', { credentials: 'include' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAuthVipEmailSet(new Set())
+        return
+      }
+      const list = Array.isArray(j.users) ? j.users : []
+      const candidates = list.filter(isAuthVipCustomerCandidate)
+      ensureShopProfilesFromAuth(
+        candidates.map((row: AuthUserListRow) => ({
+          id: row.id,
+          email: normalizeAuthEmail(row.email),
+          name: displayNameFromAuthRow(row),
+          createdAt: row.created_at || undefined,
+        }))
+      )
+      setAuthVipEmailSet(
+        new Set(
+          candidates
+            .map((row: AuthUserListRow) => normalizeAuthEmail(row.email))
+            .filter(Boolean)
+        )
+      )
+    } catch {
+      setAuthVipEmailSet(new Set())
+    }
+  }, [ensureShopProfilesFromAuth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !_hasHydrated) return
+    void (async () => {
+      await syncOrdersFromSupabase()
+      refreshOrdersFromStorage()
+      await syncVipRosterFromAuth()
+    })()
+  }, [
+    _hasHydrated,
+    syncOrdersFromSupabase,
+    refreshOrdersFromStorage,
+    syncVipRosterFromAuth,
+  ])
+
+  const customerUsers = useMemo(() => {
+    if (!authVipEmailSet) return []
+    return users.filter((u: User) => {
+      if (isShopProfileSeedUser(u)) return false
+      if (!countsTowardVipSummary(u.email)) return false
+      const e = normalizeAuthEmail(u.email)
+      return Boolean(e && authVipEmailSet.has(e))
+    })
+  }, [users, authVipEmailSet])
   
   // 모든 등급을 포함하도록: 기본값을 기반으로 하고 vipGradeConfigs에 있는 것들로 업데이트
   // 비활성화된 등급도 포함하여 Grade Distribution에 표시
@@ -137,10 +222,12 @@ export default function GradeStatusMonitoringPage() {
       4: { count: 0, totalSales: 0, avgSales: 0 }
     }
     
-    users.forEach((u: User) => {
+    customerUsers.forEach((u: User) => {
       const grade = u.currentGrade ?? 0
       // 실시간으로 주문에서 총 판매액 계산
-      const sales = _hasHydrated ? calculateUserTotalSales(u.email, orders, u.phone) : (u.totalSalesAmount || 0)
+      const sales = _hasHydrated
+        ? calculateUserTotalSales(u.email, orders, phoneForShopProfileOrderMatch(u))
+        : (u.totalSalesAmount || 0)
       stats[grade].count++
       stats[grade].totalSales += sales
     })
@@ -154,7 +241,7 @@ export default function GradeStatusMonitoringPage() {
     })
     
     return stats
-  }, [users, orders, _hasHydrated, refreshTrigger])
+  }, [customerUsers, orders, _hasHydrated, refreshTrigger])
 
   // 경계선 고객 목록 (다음 등급까지 80% 이상 진행)
   const borderlineCustomers = useMemo(() => {
@@ -163,10 +250,12 @@ export default function GradeStatusMonitoringPage() {
     // 모든 등급 정보 가져오기 (비활성화된 등급도 포함)
     const allGradeConfigs = getAllGradeConfigsForDisplay()
     
-    users.forEach((user: User) => {
+    customerUsers.forEach((user: User) => {
       const currentGrade = user.currentGrade ?? 0
       // 실시간으로 주문에서 총 판매액 계산
-      const totalSales = _hasHydrated ? calculateUserTotalSales(user.email, orders, user.phone) : (user.totalSalesAmount || 0)
+      const totalSales = _hasHydrated
+        ? calculateUserTotalSales(user.email, orders, phoneForShopProfileOrderMatch(user))
+        : (user.totalSalesAmount || 0)
       const nextGrade = currentGrade + 1
       
       // 최고 등급이 아니고, 다음 등급이 존재하는 경우
@@ -198,15 +287,19 @@ export default function GradeStatusMonitoringPage() {
     
     // 남은 금액이 적은 순으로 정렬
     return borderline.sort((a, b) => a.remainingAmount - b.remainingAmount)
-  }, [users, orders, _hasHydrated, refreshTrigger, storeVipGradeConfigs])
+  }, [customerUsers, orders, _hasHydrated, refreshTrigger, storeVipGradeConfigs])
 
   // 전체 통계
   const totalStats = useMemo(() => {
-    const totalUsers = users.length
+    const totalUsers = customerUsers.length
     // 실시간으로 주문에서 총 판매액 계산
     const totalSales = _hasHydrated 
-      ? users.reduce((sum: number, u: User) => sum + calculateUserTotalSales(u.email, orders, u.phone), 0)
-      : users.reduce((sum: number, u: User) => sum + (u.totalSalesAmount || 0), 0)
+      ? customerUsers.reduce(
+          (sum: number, u: User) =>
+            sum + calculateUserTotalSales(u.email, orders, phoneForShopProfileOrderMatch(u)),
+          0
+        )
+      : customerUsers.reduce((sum: number, u: User) => sum + (u.totalSalesAmount || 0), 0)
     const avgSales = totalUsers > 0 ? totalSales / totalUsers : 0
     const highestGradeCount = Math.max(...Object.values(gradeStats).map(s => s.count))
     
@@ -216,7 +309,7 @@ export default function GradeStatusMonitoringPage() {
       avgSales,
       highestGradeCount
     }
-  }, [users, orders, _hasHydrated, gradeStats, refreshTrigger])
+  }, [customerUsers, orders, _hasHydrated, gradeStats, refreshTrigger])
 
   const handleEditGrade = (user: User) => {
     setSelectedUser(user)
@@ -492,7 +585,11 @@ export default function GradeStatusMonitoringPage() {
           {isEditModalOpen && selectedUser && (() => {
             // 실시간으로 주문에서 총 판매액 계산
             const userTotalSales = _hasHydrated 
-              ? calculateUserTotalSales(selectedUser.email, orders, selectedUser.phone)
+              ? calculateUserTotalSales(
+                  selectedUser.email,
+                  orders,
+                  phoneForShopProfileOrderMatch(selectedUser)
+                )
               : (selectedUser.totalSalesAmount || 0)
             
             const currentGradeInfo = vipGradeConfigs.find(

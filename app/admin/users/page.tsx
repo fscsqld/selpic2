@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Users, 
@@ -44,6 +44,19 @@ import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
 import { User as UserType } from '@/lib/userAuth'
 import { isUuid } from '@/lib/isUuid'
+import {
+  isRegisteredWithinLastDays,
+  isShopProfileSeedUser,
+  phoneForShopProfileOrderMatch,
+} from '@/lib/shopProfileUsers'
+import {
+  type AuthUserListRow,
+  countsTowardVipSummary,
+  displayNameFromAuthRow,
+  isAuthVipCustomerCandidate,
+  isTestCustomerEmail,
+  normalizeAuthEmail,
+} from '@/lib/authCustomerRoster'
 
 interface User extends UserType {
   // UserType from lib/userAuth already includes all VIP grade fields
@@ -53,10 +66,117 @@ export default function UserManagementPage() {
   // 모든 hooks를 먼저 호출 (조건부 return 이전에)
   const router = useRouter()
   const { adminUser, isLoggedIn } = useAdminAuth()
-  const { users, register, deleteUser, updateUser } = useUserAuth()
-  const { orders, language, setLanguage, _hasHydrated, defaultPageSize } = useStore()
+  const { users, register, deleteUser, updateUser, ensureShopProfilesFromAuth } = useUserAuth()
+  const {
+    orders,
+    language,
+    setLanguage,
+    _hasHydrated,
+    defaultPageSize,
+    mergeOrdersFromServer,
+    refreshOrdersFromStorage,
+  } = useStore()
   const { getActiveVIPGradeConfigs, vipGradeConfigs: storeVipGradeConfigs } = useContentStore()
   const { t } = useTranslation()
+
+  const [authVipEmailSet, setAuthVipEmailSet] = useState<Set<string> | null>(null)
+  const [authRosterError, setAuthRosterError] = useState('')
+  const [authRosterLoading, setAuthRosterLoading] = useState(true)
+
+  const syncOrdersFromSupabase = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        mergeOrdersFromServer(data.orders)
+      }
+    } catch {
+      /* ledger unavailable */
+    }
+  }, [mergeOrdersFromServer])
+
+  const syncVipRosterFromAuth = useCallback(async () => {
+    setAuthRosterLoading(true)
+    setAuthRosterError('')
+    try {
+      const res = await fetch('/api/admin/supabase-users', { credentials: 'include' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAuthRosterError(typeof j.error === 'string' ? j.error : 'Failed to load Auth users')
+        setAuthVipEmailSet(new Set())
+        return
+      }
+      const list = Array.isArray(j.users) ? j.users : []
+      const candidates = list.filter(isAuthVipCustomerCandidate)
+      ensureShopProfilesFromAuth(
+        candidates.map((row: AuthUserListRow) => ({
+          id: row.id,
+          email: normalizeAuthEmail(row.email),
+          name: displayNameFromAuthRow(row),
+          createdAt: row.created_at || undefined,
+        }))
+      )
+      setAuthVipEmailSet(
+        new Set(
+          candidates
+            .map((row: AuthUserListRow) => normalizeAuthEmail(row.email))
+            .filter(Boolean)
+        )
+      )
+    } catch {
+      setAuthRosterError('Network error loading Auth users')
+      setAuthVipEmailSet(new Set())
+    } finally {
+      setAuthRosterLoading(false)
+    }
+  }, [ensureShopProfilesFromAuth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !_hasHydrated) return
+    void (async () => {
+      await syncOrdersFromSupabase()
+      refreshOrdersFromStorage()
+      await syncVipRosterFromAuth()
+    })()
+  }, [
+    _hasHydrated,
+    syncOrdersFromSupabase,
+    refreshOrdersFromStorage,
+    syncVipRosterFromAuth,
+  ])
+
+  /** Auth VIP customers only (no seeds / no company admins). Includes test EMMA until deleted. */
+  const vipDisplayUsers = useMemo(() => {
+    if (!authVipEmailSet) return []
+    return users.filter((u: User) => {
+      if (isShopProfileSeedUser(u)) return false
+      const e = normalizeAuthEmail(u.email)
+      return Boolean(e && authVipEmailSet.has(e))
+    })
+  }, [users, authVipEmailSet])
+
+  /** Summary cards — production customers only (excludes test EMMA). */
+  const summaryUsers = useMemo(
+    () => vipDisplayUsers.filter((u: User) => countsTowardVipSummary(u.email)),
+    [vipDisplayUsers]
+  )
+
+  const userHasOrders = useCallback(
+    (u: User) => {
+      const uEmail = (u.email || '').trim().toLowerCase()
+      const matchPhone = phoneForShopProfileOrderMatch(u)
+      const uPhone = matchPhone
+        ? matchPhone.replace(/\D/g, '').replace(/^\+?61/, '0')
+        : ''
+      return orders.some((o) => {
+        const oEmail = (o.customer.email || '').trim().toLowerCase()
+        const oPhone = (o.customer.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
+        return (uEmail && uEmail === oEmail) || (!!uPhone && oPhone.includes(uPhone))
+      })
+    },
+    [orders]
+  )
   
   // 인증 체크는 hooks 호출 이후에
   const canWrite = !!adminUser?.permissions?.includes('users:write')
@@ -151,7 +271,7 @@ export default function UserManagementPage() {
   
   // 검색 + 필터 + 정렬 (useMemo는 hooks이므로 최상단에)
   const filteredUsers = useMemo(() => {
-    return users.filter(user => {
+    return vipDisplayUsers.filter(user => {
       // 검색 필터
       const q = searchTerm.trim().toLowerCase()
       if (q) {
@@ -172,13 +292,7 @@ export default function UserManagementPage() {
       
       // 주문 여부 필터
       if (filterOrderStatus !== 'all') {
-        const uEmail = (user.email || '').trim().toLowerCase()
-        const uPhone = (user.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
-        const hasOrders = orders.some(o => {
-          const oEmail = (o.customer.email || '').trim().toLowerCase()
-          const oPhone = (o.customer.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
-          return (uEmail && uEmail === oEmail) || (!!uPhone && oPhone.includes(uPhone))
-        })
+        const hasOrders = userHasOrders(user)
         
         if (filterOrderStatus === 'with' && !hasOrders) return false
         if (filterOrderStatus === 'without' && hasOrders) return false
@@ -196,7 +310,7 @@ export default function UserManagementPage() {
       
       return true
     })
-  }, [users, searchTerm, filterGrade, filterOrderStatus, filterRegistrationDate, orders])
+  }, [vipDisplayUsers, searchTerm, filterGrade, filterOrderStatus, filterRegistrationDate, userHasOrders])
 
   const displayUsers = useMemo(() => {
     return [...filteredUsers].sort((a, b) => {
@@ -206,24 +320,27 @@ export default function UserManagementPage() {
     })
   }, [filteredUsers, sortDesc])
 
-  // VIP 등급별 통계용 데이터 (hooks는 컴포넌트 최상단에서만 호출)
+  // VIP grade bars — Auth production customers only (excludes test EMMA)
   const gradeStats = useMemo(() => {
     const stats: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 }
-    users.forEach((u: User) => {
+    summaryUsers.forEach((u: User) => {
       const grade = u.currentGrade ?? 0
       stats[grade] = (stats[grade] || 0) + 1
     })
     return stats
-  }, [users])
+  }, [summaryUsers])
 
   const totalSales = useMemo(() => {
-    // 실시간으로 주문에서 총 판매액 계산
     if (!_hasHydrated) return 0
-    return users.reduce((sum: number, u: User) => {
-      const userTotalSales = calculateUserTotalSales(u.email, orders, u.phone)
+    return summaryUsers.reduce((sum: number, u: User) => {
+      const userTotalSales = calculateUserTotalSales(
+        u.email,
+        orders,
+        phoneForShopProfileOrderMatch(u)
+      )
       return sum + userTotalSales
     }, 0)
-  }, [users, orders, _hasHydrated])
+  }, [summaryUsers, orders, _hasHydrated])
   
   // 페이지네이션 계산
   const totalPages = useMemo(() => {
@@ -290,7 +407,10 @@ export default function UserManagementPage() {
 
   const getLastPaymentMethod = (user: User) => {
     const userEmail = (user.email || '').trim().toLowerCase()
-    const userPhoneDigits = (user.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
+    const matchPhone = phoneForShopProfileOrderMatch(user)
+    const userPhoneDigits = matchPhone
+      ? matchPhone.replace(/\D/g, '').replace(/^\+?61/, '0')
+      : ''
     const matched = orders
       .filter(o => {
         const oEmail = (o.customer.email || '').trim().toLowerCase()
@@ -587,7 +707,7 @@ export default function UserManagementPage() {
         />
 
         <div className="flex-1 flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-0 w-full">
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-2">
             <button
               type="button"
               onClick={() => setUsersMainTab('vip')}
@@ -611,12 +731,32 @@ export default function UserManagementPage() {
               Supabase Auth accounts
             </button>
           </div>
+          <p className="text-xs text-gray-500 mb-6 max-w-3xl">
+            {usersMainTab === 'vip'
+              ? 'VIP list follows Supabase Auth customers (company admins excluded). Seeds are hidden. Test accounts (e.g. EMMA) stay in the table with a Test badge but are excluded from summary counts. Sales use orders synced from the server.'
+              : 'Supabase Auth is the registered login list — source of truth for who can sign in.'}
+          </p>
 
           <div className={usersMainTab === 'supabase' ? 'mb-10' : 'hidden'}>
             <SupabaseAuthUsersPanel canWrite={canWrite} />
           </div>
 
           <div className={usersMainTab === 'vip' ? '' : 'hidden'}>
+          {authRosterLoading && (
+            <div className="mb-4 text-sm text-gray-600">Loading VIP roster from Supabase Auth…</div>
+          )}
+          {authRosterError && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {authRosterError} — VIP list may be incomplete. Use the Auth tab or refresh the page.
+              <button
+                type="button"
+                className="ml-3 underline font-medium"
+                onClick={() => void syncVipRosterFromAuth()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {/* VIP 등급 모니터링 링크 */}
           <div className="mb-6 flex-shrink-0">
             <a
@@ -624,9 +764,12 @@ export default function UserManagementPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 shadow-sm transition-all"
             >
               <Award size={18} />
-              <span>VIP Grade Status Monitoring</span>
+              <span>Open VIP grade monitor</span>
               <ChevronRight size={16} />
             </a>
+            <p className="mt-2 text-xs text-gray-500">
+              Detailed borderline / grade progress lives on the VIP monitor page (same shop profiles + synced orders).
+            </p>
           </div>
           
           {/* 요약 카드 (접기/펼치기 가능) */}
@@ -652,17 +795,11 @@ export default function UserManagementPage() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {(() => {
-              const totalUsers = users.length
-              const newUsers = users.filter((u: User) => u.createdAt && (new Date('2025-09-03').getTime() - new Date(u.createdAt).getTime()) < 7*24*60*60*1000).length
-              const usersWithOrders = users.filter(u => {
-                const uEmail = (u.email || '').trim().toLowerCase()
-                const uPhone = (u.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
-                return orders.some(o => {
-                  const oEmail = (o.customer.email || '').trim().toLowerCase()
-                  const oPhone = (o.customer.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
-                  return (uEmail && uEmail === oEmail) || (!!uPhone && oPhone.includes(uPhone))
-                })
-              }).length
+              const totalUsers = summaryUsers.length
+              const newUsers = summaryUsers.filter(
+                (u: User) => isRegisteredWithinLastDays(u.createdAt, 7)
+              ).length
+              const usersWithOrders = summaryUsers.filter((u) => userHasOrders(u)).length
               const withoutOrders = totalUsers - usersWithOrders
               return (
                 <>
@@ -711,7 +848,7 @@ export default function UserManagementPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
                   {getAllGradeConfigsForDisplay.map((grade) => {
                     const count = gradeStats[grade.code] || 0
-                    const percentage = users.length > 0 ? ((count / users.length) * 100).toFixed(1) : '0.0'
+                    const percentage = summaryUsers.length > 0 ? ((count / summaryUsers.length) * 100).toFixed(1) : '0.0'
                     return (
                       <div key={grade.code} className="bg-white rounded-xl border shadow-sm p-4">
                         <div className="flex items-center justify-between mb-2">
@@ -922,9 +1059,15 @@ export default function UserManagementPage() {
                                   </div>
                                 </div>
                                 <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                  <div className="text-sm font-medium text-gray-900 flex items-center gap-2 flex-wrap">
                                     <span>{user.name}</span>
-                                    {user.createdAt && (new Date('2025-09-03').getTime() - new Date(user.createdAt).getTime() < 7*24*60*60*1000) && (
+                                    {isTestCustomerEmail(user.email) && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                                        Test
+                                      </span>
+                                    )}
+                                    {!isTestCustomerEmail(user.email) &&
+                                      isRegisteredWithinLastDays(user.createdAt, 7) && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">New</span>
                                     )}
                                   </div>
@@ -946,7 +1089,13 @@ export default function UserManagementPage() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                               {(() => {
                                 // 실시간으로 주문에서 총 판매액 계산
-                                const userTotalSales = _hasHydrated ? calculateUserTotalSales(user.email, orders, user.phone) : (user.totalSalesAmount || 0)
+                                const userTotalSales = _hasHydrated
+                                  ? calculateUserTotalSales(
+                                      user.email,
+                                      orders,
+                                      phoneForShopProfileOrderMatch(user)
+                                    )
+                                  : (user.totalSalesAmount || 0)
                                 return (
                                   <>
                                     <div className="font-medium">${(userTotalSales / 1000).toFixed(1)}K</div>
@@ -1362,7 +1511,11 @@ export default function UserManagementPage() {
           const userGrade = selectedUser.currentGrade ?? 0
           // 실시간으로 주문에서 총 판매액 계산
           const totalSales = _hasHydrated 
-            ? calculateUserTotalSales(selectedUser.email, orders, selectedUser.phone)
+            ? calculateUserTotalSales(
+                selectedUser.email,
+                orders,
+                phoneForShopProfileOrderMatch(selectedUser)
+              )
             : (selectedUser.totalSalesAmount || 0)
           const gradeConfigs = getActiveVIPGradeConfigs()
           const nextGradeAmount = calculateNextGradeAmount(userGrade, totalSales, gradeConfigs)
@@ -1496,7 +1649,11 @@ export default function UserManagementPage() {
                       {(() => {
                         // 실시간으로 주문에서 총 판매액 계산
                         const userTotalSales = _hasHydrated 
-                          ? calculateUserTotalSales(selectedUser.email, orders, selectedUser.phone)
+                          ? calculateUserTotalSales(
+                selectedUser.email,
+                orders,
+                phoneForShopProfileOrderMatch(selectedUser)
+              )
                           : (selectedUser.totalSalesAmount || 0)
                         return `${t('admin.users.modals.viewUser.totalSales')}: $${(userTotalSales / 1000).toFixed(1)}K`
                       })()}

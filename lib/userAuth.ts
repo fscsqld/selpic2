@@ -52,6 +52,10 @@ interface UserAuthState {
   setKeepLoggedIn: (keepLoggedIn: boolean) => void
   changePassword: (userId: string, currentPassword: string, newPassword: string) => Promise<boolean> // 비밀번호 변경 함수 추가
   initializeDemoUser: () => void // 데모 사용자 초기화 함수 추가
+  /** Upsert local shop profiles from Auth VIP customer rows (by email). */
+  ensureShopProfilesFromAuth: (
+    rows: Array<{ id: string; email: string; name: string; createdAt?: string }>
+  ) => number
   /** After Supabase Auth sign-in: mirror session into local profile for checkout / VIP features. */
   establishSessionFromSupabaseUser: (sbUser: {
     id: string
@@ -60,29 +64,29 @@ interface UserAuthState {
   }) => void
 }
 
-// 기본 데모 사용자 데이터
+// 기본 데모 사용자 데이터 (stable createdAt — do not stamp "today" on every re-seed)
 const DEFAULT_DEMO_USER: User = {
   id: '1',
   email: 'user@example.com',
   name: 'Selpic',
-  phone: '0466894279',
+  phone: '',
   address: 'Mansfield QLD 4122, AU',
   password: 'password123',
-  createdAt: new Date().toISOString(),
+  createdAt: '2024-01-01T00:00:00.000Z',
   isDemo: true, // Mark as demo user
   canPost: true, // 기본적으로 글쓰기 권한 있음
   isBanned: false
 }
 
-// 기본 관리자 계정
+// 기본 관리자 계정 (seed shop profile — distinct empty phone; not Admin Auth staff)
 const DEFAULT_ADMIN_USER: User = {
   id: 'admin',
   email: 'info@selpic.com.au',
   name: 'Administrator',
-  phone: '0466894279',
+  phone: '',
   address: 'Mansfield QLD 4122, AU',
   password: 'admin123',
-  createdAt: new Date().toISOString(),
+  createdAt: '2024-01-01T00:00:00.000Z',
   isDemo: false,
   canPost: true, // 관리자는 항상 글쓰기 권한 있음
   isBanned: false
@@ -127,7 +131,18 @@ export const useUserAuth = create<UserAuthState>()(
                    id !== DEFAULT_DEMO_USER.id &&
                    id !== DEFAULT_ADMIN_USER.id
           })
-          const updatedUsers = [...filtered, { ...DEFAULT_DEMO_USER }, { ...DEFAULT_ADMIN_USER }]
+          const updatedUsers = [
+            ...filtered,
+            {
+              ...DEFAULT_DEMO_USER,
+              // Always keep stable seed createdAt (never stamp "today" on re-init)
+              createdAt: DEFAULT_DEMO_USER.createdAt,
+            },
+            {
+              ...DEFAULT_ADMIN_USER,
+              createdAt: DEFAULT_ADMIN_USER.createdAt,
+            },
+          ]
           
           console.log('Demo user to add:', DEFAULT_DEMO_USER)
           console.log('Admin user to add:', DEFAULT_ADMIN_USER)
@@ -143,6 +158,60 @@ export const useUserAuth = create<UserAuthState>()(
         } catch (error) {
           console.error('Error initializing users:', error)
         }
+      },
+
+      ensureShopProfilesFromAuth: (rows) => {
+        if (!rows?.length) return 0
+        const { users } = get()
+        const byEmail = new Map(
+          users.map((u) => [(u.email || '').trim().toLowerCase(), u] as const)
+        )
+        let changed = false
+        let added = 0
+        const next = [...users]
+        for (const row of rows) {
+          const email = (row.email || '').trim().toLowerCase()
+          if (!email) continue
+          const existing = byEmail.get(email)
+          if (existing) {
+            if (
+              row.id &&
+              existing.id !== row.id &&
+              /^\d+$/.test(String(existing.id || ''))
+            ) {
+              const idx = next.findIndex((u) => u.id === existing.id)
+              if (idx >= 0) {
+                next[idx] = {
+                  ...existing,
+                  id: row.id,
+                  name: existing.name || row.name,
+                  createdAt: existing.createdAt || row.createdAt,
+                }
+                byEmail.set(email, next[idx])
+                changed = true
+              }
+            }
+            continue
+          }
+          const profile: User = {
+            id: row.id || `auth-${Date.now()}-${added}`,
+            email,
+            name: row.name || email.split('@')[0] || 'Customer',
+            phone: '',
+            createdAt: row.createdAt || new Date().toISOString(),
+            canPost: true,
+            isBanned: false,
+            isDemo: false,
+            currentGrade: 0,
+            totalSalesAmount: 0,
+          }
+          next.push(profile)
+          byEmail.set(email, profile)
+          added += 1
+          changed = true
+        }
+        if (changed) set({ users: next })
+        return added
       },
 
       login: async (email: string, password: string, keepLoggedIn: boolean = false) => {

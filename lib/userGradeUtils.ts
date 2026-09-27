@@ -7,6 +7,7 @@ import { User } from '@/lib/userAuth'
 import { OrderRecord } from '@/lib/store'
 import { calculateGrade } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
+import { isShopProfileSeedEmail } from '@/lib/shopProfileUsers'
 
 /**
  * 사용자의 총 판매액을 계산합니다.
@@ -31,7 +32,12 @@ export function calculateUserTotalSales(
     'collected',
   ])
   const normalizedEmail = (userEmail || '').trim().toLowerCase()
-  const normalizedPhone = userPhone ? (userPhone || '').replace(/\D/g, '').replace(/^\+?61/, '0') : ''
+  // Seed shop profiles historically shared one phone — email-only match for those rows.
+  const allowPhoneMatch = !isShopProfileSeedEmail(normalizedEmail)
+  const normalizedPhone =
+    allowPhoneMatch && userPhone
+      ? (userPhone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
+      : ''
   
   const userOrders = orders.filter(order => {
     // 결제 확정/이행 단계 주문만 포함 (pending, cancelled 제외)
@@ -42,7 +48,7 @@ export function calculateUserTotalSales(
     
     // 이메일 또는 전화번호로 매칭
     const emailMatch = normalizedEmail && orderEmail === normalizedEmail
-    const phoneMatch = normalizedPhone && orderPhone && orderPhone.includes(normalizedPhone)
+    const phoneMatch = Boolean(normalizedPhone && orderPhone && orderPhone.includes(normalizedPhone))
     
     return emailMatch || phoneMatch
   })

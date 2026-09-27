@@ -1,0 +1,31 @@
+---
+description: Shop profiles VIP follows Supabase Auth customers
+alwaysApply: false
+---
+
+# Shop profiles vs Supabase Auth (learned 2026-09-27)
+
+**Invariant:** **Supabase Auth** is the registered-login source of truth. **Shop profiles & VIP** now **imports Auth VIP candidates** into local profiles and **lists only those emails** (seeds hidden). Summary metrics exclude company admins and known **test** customers.
+
+## Owner roster
+
+| Email | Role |
+|-------|------|
+| `mahalakshmi0108@gmail.com` | Real customer → VIP list + summary |
+| `christine9763@hotmail.com` | Real customer → VIP list + summary |
+| `fscsqld@gmail.com` (EMMA) | **Test** — VIP table with Test badge; **excluded from summary**; delete after development |
+| `jimmy@selpic.com.au`, `info@selpic.com.au` | Company admins — not VIP customers |
+
+## Implementation
+
+- `lib/authCustomerRoster.ts` — admin / test sets, `isAuthVipCustomerCandidate`, `countsTowardVipSummary`
+- `userAuth.ensureShopProfilesFromAuth` — upsert missing local profiles by Auth email
+- `/admin/users` + `/admin/users/grades` — fetch `/api/admin/supabase-users`, sync profiles, filter UI
+
+Seeds (`user@example.com`, seed Administrator) stay in Zustand for demo login but are **not shown** on VIP.
+
+## Do / Do not
+
+**Do** — Treat Auth as register list; keep company admins out of VIP; keep EMMA out of summary until deleted from Auth.
+
+**Do not** — Show Seed rows on VIP; count jimmy/info as customers; treat EMMA sales as production VIP proof.
