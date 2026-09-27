@@ -15,6 +15,7 @@ import { orderRequiresTrackingNumber } from '@/lib/shipping/shippingSnapshot'
 import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom'
 import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 import type { MarketSSubcategory } from '@/lib/marketSSubcategory'
+import { mergeCartFromPersist } from '@/lib/mergePersistedCart'
 
 export interface Product {
   id: string
@@ -2852,7 +2853,9 @@ Thank you for your continued support!`,
         return {
           ...currentState,
           products: data.products && Array.isArray(data.products) ? data.products : currentState.products,
-          cart: data.cart ?? currentState.cart,
+          // Never wipe an in-memory cart with an empty/stale rehydrate snapshot
+          // (customize → Checkout before persist finishes).
+          cart: mergeCartFromPersist(data.cart, currentState.cart) as typeof currentState.cart,
           customizations: data.customizations ?? currentState.customizations,
           // English-only storefront: ignore persisted non-English preference
           language: 'en',

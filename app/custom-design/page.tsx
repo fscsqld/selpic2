@@ -13,6 +13,8 @@ import Header from '@/components/Header'
 import CustomDesignStudioPreview from '@/components/CustomDesignStudioPreview'
 import { isStampsCheckoutEnabled } from '@/lib/stampsCommerce'
 import { TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE } from '@/lib/orderCustomizationSurcharge'
+import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
+import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
 
 // Suspense wrapper for useSearchParams
 export default function CustomDesignPage() {
@@ -274,9 +276,15 @@ function CustomDesignContent() {
       return
     }
 
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      router.push(customerLoginHrefWithNext('/custom-design'))
       return
     }
 
@@ -348,9 +356,15 @@ function CustomDesignContent() {
       return
     }
 
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to place orders')
-      router.push('/login')
+      router.push(customerLoginHrefWithNext('/custom-design'))
       return
     }
 

@@ -34,7 +34,7 @@ import { getMarketSBundleUpsellOffers } from '@/lib/marketSBundleUpsell'
 
 export default function CartPage() {
   const router = useRouter()
-  const { cart, removeFromCart, updateCartItemQuantity, clearCart, products } = useStore()
+  const { cart, removeFromCart, updateCartItemQuantity, products } = useStore()
   const { t } = useTranslation()
   const { isLoggedIn, isDemo, user: currentUser } = useUserAuth()
   const { 
@@ -132,23 +132,23 @@ export default function CartPage() {
 
   const insufficientItems = stockStatuses.filter(status => status.isExceeded)
 
-  // Clean up invalid cart items automatically
+  // Drop invalid lines only — never clearCart() the whole basket (would wipe a
+  // valid customize→Checkout add sitting next to a stale broken row).
   useEffect(() => {
-    const invalidItems = cart.filter(item => 
-      !item || 
-      typeof item !== 'object' || 
-      !item.product || 
-      typeof item.product !== 'object' || 
-      !item.product.id || 
-      item.product.price === undefined
+    const next = cart.filter(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        item.product &&
+        typeof item.product === 'object' &&
+        item.product.id &&
+        item.product.price !== undefined
     )
-    
-    if (invalidItems.length > 0) {
-      console.log('Cleaning up invalid cart items:', invalidItems)
-      // Clear the entire cart if there are invalid items
-      clearCart(isLoggedIn)
+    if (next.length !== cart.length) {
+      console.log('Pruning invalid cart items:', cart.length - next.length)
+      useStore.setState({ cart: next })
     }
-  }, [cart, clearCart, isLoggedIn])
+  }, [cart])
 
   // Debug cart data
   useEffect(() => {

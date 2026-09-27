@@ -22,6 +22,8 @@ import {
 } from '@/lib/stickerSheetBundles'
 import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
+import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
+import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -698,9 +700,19 @@ function StickerCustomizeContent() {
   }, [displayProduct, customText, selectedFont, selectedColor, textPosition, generateCustomizedImage])
 
   const handleAddToCartAndCheckout = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/stickers/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 
@@ -893,9 +905,19 @@ function StickerCustomizeContent() {
   }, [])
 
   const handleAddToCart = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/stickers/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 
@@ -1702,7 +1724,7 @@ function StickerCustomizeContent() {
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     onClick={handleAddToCartAndCheckout}
-                    disabled={!displayProduct || isAddingToCart}
+                    disabled={!displayProduct || isAddingToCart || !_hasHydrated}
                     className="w-full btn-ux btn-ux-editor-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAddingToCart ? (
@@ -1720,7 +1742,7 @@ function StickerCustomizeContent() {
                   
                   <button
                     onClick={handleAddToCart}
-                    disabled={!displayProduct}
+                    disabled={!displayProduct || !_hasHydrated}
                     className="w-full btn-ux btn-ux-editor-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Package className="w-5 h-5" />
@@ -2210,7 +2232,7 @@ function StickerCustomizeContent() {
             <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
               <button
                 onClick={handleAddToCartAndCheckout}
-                disabled={!displayProduct || isAddingToCart}
+                disabled={!displayProduct || isAddingToCart || !_hasHydrated}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAddingToCart ? (
@@ -2228,7 +2250,7 @@ function StickerCustomizeContent() {
               
               <button
                 onClick={handleAddToCart}
-                disabled={!displayProduct}
+                disabled={!displayProduct || !_hasHydrated}
                 className="flex-1 bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Package className="w-5 h-5" />

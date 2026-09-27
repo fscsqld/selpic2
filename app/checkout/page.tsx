@@ -32,7 +32,7 @@ import { cartContainsMarketSGoods, MARKET_S_HYGIENE_CHECKOUT } from '@/lib/marke
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { cart, products, orders, clearCart, mergeOrdersFromServer } = useStore()
+  const { cart, products, orders, clearCart, mergeOrdersFromServer, _hasHydrated: storeHydrated } = useStore()
   const { isLoggedIn, user: currentUser, updateUser } = useUserAuth()
   useCustomerOrdersLedgerSync()
   const { 
@@ -576,14 +576,35 @@ export default function CheckoutPage() {
   }
 
   // ALL HOOKS MUST BE CALLED AFTER FUNCTIONS THEY DEPEND ON
+  // Wait for cart + auth persist before redirecting — otherwise a pre-hydrate
+  // empty cart sends customize→Checkout customers to “Your cart is empty”.
   useEffect(() => {
-    if (!isLoggedIn) {
-      setCheckoutNotice({ type: 'info', message: 'Please sign in to continue to checkout.' })
-      router.push('/login')
-    } else if (!skipEmptyCartRedirect && cart.length === 0) {
-      router.push('/cart')
+    let cancelled = false
+    const run = () => {
+      if (cancelled) return
+      let authReady = true
+      try {
+        authReady = Boolean(useUserAuth.persist?.hasHydrated?.())
+      } catch {
+        authReady = true
+      }
+      if (!authReady || !storeHydrated) return
+
+      if (!isLoggedIn) {
+        setCheckoutNotice({ type: 'info', message: 'Please sign in to continue to checkout.' })
+        router.push('/login?next=%2Fcheckout')
+      } else if (!skipEmptyCartRedirect && cart.length === 0) {
+        router.push('/cart')
+      }
     }
-  }, [cart, router, isLoggedIn, skipEmptyCartRedirect])
+    run()
+    // Auth may finish after first paint
+    const unsub = useUserAuth.persist?.onFinishHydration?.(() => run())
+    return () => {
+      cancelled = true
+      unsub?.()
+    }
+  }, [cart, router, isLoggedIn, skipEmptyCartRedirect, storeHydrated])
 
   // VIP Grade Benefits/Criteria 변경 감지 및 실시간 반영
   useEffect(() => {
@@ -629,8 +650,8 @@ export default function CheckoutPage() {
     return option.fee || 0
   }
 
-  // 장바구니가 비어있으면 로딩 표시
-  if (!hasCartItems) {
+  // 장바구니가 비어있으면 로딩 표시 (hydrate 전이면 빈 카트로 오판하지 않음)
+  if (!storeHydrated || !hasCartItems) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -639,7 +660,11 @@ export default function CheckoutPage() {
             <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
               <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('checkout.redirectingToCart')}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              {!storeHydrated
+                ? 'Loading your cart…'
+                : t('checkout.redirectingToCart')}
+            </h2>
           </div>
         </div>
       </div>

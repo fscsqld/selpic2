@@ -1,0 +1,27 @@
+---
+description: Customize→Checkout must not hit empty cart (persist race)
+alwaysApply: false
+---
+
+# Customize Checkout empty-cart race (learned 2026-09-27)
+
+**Invariant:** Logged-in customize → **Checkout** must land on `/checkout` with the just-added line. Never show cart “Your cart is empty” solely because persist rehydrate lagged.
+
+## Root cause (class)
+
+1. Product UI can load via `CatalogStoreHydrator` **before** `selpic-store` `_hasHydrated`.
+2. `addToCart` then persist `merge` applied `cart: []` from disk (`??` treats `[]` as defined) → wiped the add.
+3. Checkout redirected empty cart to `/cart` **without waiting** for store hydrate.
+4. Cart page used to `clearCart()` on **any** invalid line → wiped valid lines too.
+
+## Do
+
+- `mergeCartFromPersist`: non-empty in-memory cart wins over empty/stale disk.
+- Checkout: wait `storeHydrated` + auth `hasHydrated` before empty→`/cart` or login redirect.
+- Customize (stickers / mixed / stamp / bundle / custom-design): `canMutateStorefrontCart()` before add; disable Checkout until `_hasHydrated`.
+- Cart: prune invalid lines only — never full `clearCart` for cleanup.
+
+## Do not
+
+- Treat “Cart button required” as product design — Checkout must stay direct-to-pay.
+- Reintroduce `cart: data.cart ?? currentState.cart` without the merge helper.

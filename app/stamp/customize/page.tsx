@@ -8,6 +8,8 @@ import { useTranslation } from '@/lib/useTranslation'
 import { Type, Palette, Package, ShoppingCart, ArrowRight, X, ChevronDown, ChevronUp, Minus, Plus } from 'lucide-react'
 import Header from '@/components/Header'
 import { getStampFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
+import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
+import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
 
 // Suspense wrapper for useSearchParams
 export default function StampCustomizePage() {
@@ -21,7 +23,7 @@ export default function StampCustomizePage() {
 function StampCustomizeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { products, addToCart } = useStore()
+  const { products, addToCart, _hasHydrated } = useStore()
   const { isLoggedIn, isDemo } = useUserAuth()
   const { t } = useTranslation()
   
@@ -285,9 +287,19 @@ function StampCustomizeContent() {
   }, [])
 
   const handleAddToCartAndCheckout = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/stamp/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 
@@ -406,9 +418,19 @@ function StampCustomizeContent() {
   }
 
   const handleAddToCart = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/stamp/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 

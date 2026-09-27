@@ -36,6 +36,8 @@ import {
 } from '@/lib/mixedLabelsProduct'
 import { getEffectiveFont } from '@/lib/fontList'
 import { getMixedLabelsTemplate } from '@/lib/mixedLabelsTemplates'
+import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
+import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 
@@ -190,9 +192,18 @@ export default function MixedLabelsCustomizeClient() {
 
   const addToCartWithRedirect = useCallback(
     async (redirectToCheckout: boolean) => {
+      const ready = canMutateStorefrontCart()
+      if (!ready.ok) {
+        alert(cartNotReadyMessage(ready.reason))
+        return
+      }
       if (!isLoggedIn) {
         alert('Please log in to add items to your cart.')
-        router.push('/login')
+        const returnTo =
+          typeof window !== 'undefined'
+            ? `${window.location.pathname}${window.location.search}`
+            : '/stickers/customize/mixed'
+        router.push(customerLoginHrefWithNext(returnTo))
         return
       }
       if (isDemo) {
@@ -243,8 +254,8 @@ export default function MixedLabelsCustomizeClient() {
       buildCustomizations,
       addToCart,
       orderQuantity,
-      router,
       selectedBundle,
+      router,
     ]
   )
 
@@ -343,7 +354,8 @@ export default function MixedLabelsCustomizeClient() {
     )
   }
 
-  const canPurchase = nameValidation.ok && !!selectedBundle && designCompletion === 100
+  const canPurchase =
+    nameValidation.ok && !!selectedBundle && designCompletion === 100 && _hasHydrated
 
   return (
     <div className="min-h-screen relative">

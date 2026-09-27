@@ -1,0 +1,42 @@
+---
+description: Empty Resend dashboard with one account — why (learned 2026-09-27)
+alwaysApply: true
+---
+
+# Empty Resend UI (one account) — learned 2026-09-27
+
+Owner logged into a single Resend account and saw **no email data**. Do not assume “Resend never sent” or “account is wrong” without checking the distinctions below.
+
+## What SELPIC uses Resend for
+
+| Direction | Feature | Dashboard place |
+|---|---|---|
+| **Outbound** (order confirm, `[SELPIC Order]`, contact notify) | Sending API + `RESEND_API_KEY` | **Emails** (sent / logs) |
+| **Inbound** (Fundraising reply webhook) | Receiving + webhook | **Receiving** / inbound — often empty if unused |
+
+If the owner opens **Receiving**, **Audiences**, **Broadcasts**, or **Domains** only, the list looks “empty” even when outbound sends exist.
+
+## Why the UI can be empty while the shop “sent” mail
+
+1. **Wrong sidebar page** — must open **Emails** (outbound sent list), not Domains / Receiving / Audiences.
+2. **API key ≠ logged-in account** — Vercel `RESEND_API_KEY` (often months old) may belong to an older Resend user/team. Owner “has one account now” but the **key still points at another**. UI empty; production may still send under the key’s account (or fail). Verify: Resend → API Keys → does the production key prefix match a key listed there?
+3. **Date / retention filters** — Free/plan retention or “Today” filter hides Sep 26 sends. Widen date range; search `ORD-…` / `SELPIC Order` / `Order Confirmed`.
+4. **Admin alert never reached Resend** — `void notifyAdminsOfNewOrder` can drop before API call → no row for `[SELPIC Order]`. Customer confirmation can still succeed (`emailConfirmation.sent: true` only after Resend `ok` in `sendGuestCheckoutEmailsAction`).
+5. **Team switcher** — same login, empty team selected.
+
+## Do not confuse
+
+- Order payload `emailConfirmation.sent: true` ⇒ Resend API returned success for **customer** confirmation (that send should appear under the **API key’s** account Emails list).
+- Missing `[SELPIC Order]` in Resend ⇒ admin notify likely never completed (void/serverless), not “dashboard broken”.
+
+## How to verify (ops)
+
+1. Resend → **Emails** (outbound).
+2. Confirm API key on Vercel matches a key on that Resend account.
+3. Optional: `GET https://api.resend.com/emails?limit=10` with the same key — if API returns rows but UI empty, UI/filter/team issue; if API returns `[]` / 401, key/account issue or no sends on that key.
+4. Vercel logs for `RESEND_API_KEY is not set` / `[admin-inbound]`.
+
+## Fix backlog (when asked)
+
+- `await notifyAdminsOfNewOrder` on bank/Stripe insert (see `order-admin-email-await-vs-void.mdc`).
+- Document in Admin runbook: check **Emails**, match API key, don’t use Receiving for order alerts.

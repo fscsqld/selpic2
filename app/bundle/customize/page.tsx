@@ -8,6 +8,8 @@ import { useTranslation } from '@/lib/useTranslation'
 import { getStickerFonts, getEffectiveFont } from '@/lib/fontList'
 import { Type, Palette, Package, ShoppingCart, ArrowRight, Minus, Plus } from 'lucide-react'
 import Header from '@/components/Header'
+import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
+import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
 
 // Suspense wrapper for useSearchParams
 export default function BundleCustomizePage() {
@@ -184,9 +186,19 @@ function BundleCustomizeContent() {
   }, [])
 
   const handleAddToCartAndCheckout = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/bundle/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 
@@ -275,9 +287,19 @@ function BundleCustomizeContent() {
   }
 
   const handleAddToCart = async () => {
+    const ready = canMutateStorefrontCart()
+    if (!ready.ok) {
+      alert(cartNotReadyMessage(ready.reason))
+      return
+    }
+
     if (!isLoggedIn) {
       alert('Please login to add items to cart')
-      router.push('/login')
+      const returnTo =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/bundle/customize'
+      router.push(customerLoginHrefWithNext(returnTo))
       return
     }
 
