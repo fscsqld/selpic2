@@ -17,7 +17,8 @@ export function buildPublicMetadata(input: PublicSeoInput): Metadata {
   const keywords = input.keywords || []
 
   return {
-    title,
+    /** absolute — root layout uses `title.template` `%s | Selpic`; avoid "… | Selpic | Selpic". */
+    title: { absolute: title },
     description: input.description,
     keywords,
     alternates: { canonical },

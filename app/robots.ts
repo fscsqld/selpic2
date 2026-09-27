@@ -1,8 +1,11 @@
 import type { MetadataRoute } from 'next'
 import { getPublicSiteUrl } from '@/lib/publicSiteUrl'
 
+/**
+ * Crawl rules for Google Search Console.
+ * Allow public shop URLs; block admin/API/auth and private commerce/account paths.
+ */
 export default function robots(): MetadataRoute.Robots {
-  // Match the live primary host (www). Apex redirects to www in Vercel Domains.
   const base = getPublicSiteUrl()
   return {
     rules: [
@@ -12,11 +15,17 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           '/admin/',
           '/api/',
-          '/auth/callback',
+          '/auth/',
+          '/cart',
+          '/checkout',
+          '/orders',
+          '/profile',
+          '/login',
+          '/register',
           '/forgot-password',
           '/reset-password',
-          '/auth/forgot-password',
-          '/auth/reset-password',
+          '/unsubscribe',
+          '/success',
         ],
       },
     ],

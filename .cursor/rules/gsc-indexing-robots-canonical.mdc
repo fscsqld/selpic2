@@ -1,0 +1,28 @@
+---
+description: GSC indexing — robots, canonicals, sitemap private URLs (learned 2026-09-27)
+alwaysApply: false
+---
+
+# Google Search Console indexing (learned 2026-09-27)
+
+**Invariant:** Public shop URLs (home, stickers hubs/subcats, products, Market S, about/contact/legal) stay crawlable with **www** canonicals. Private/account/cart/checkout stay out of robots + sitemap. Parent layouts must **not** force child routes to inherit a hub-only canonical.
+
+## GSC buckets (owner mail ~Sep 2026)
+
+| Reason | Likely cause in this repo |
+|--------|---------------------------|
+| Alternate with proper canonical (~4) | `/stickers/*` subpages inherited `canonical: /stickers` from `stickers/layout.tsx` |
+| Blocked by robots.txt (~1) | Expected for `/admin` / `/api` / auth reset — expand private Disallows carefully |
+| Crawled – not indexed (~2) | Thin or low-value URLs still in sitemap (cart/checkout/login) or weak subcategory SEO |
+
+## Do
+
+- `robots.ts`: Disallow admin/api/auth resets **and** cart/checkout/orders/profile/login/register/unsubscribe.
+- `sitemap.ts`: omit those private paths; keep product + category URLs.
+- Per-route `buildPublicMetadata({ path })` for sticker subcategories; hub metadata only on `/stickers` page layout segment.
+- `noindex` layouts for cart/checkout/account tooling if still reachable.
+
+## Do not
+
+- Disallow `/stickers`, `/products`, `/hot-goods`, or `/`.
+- Put apex `selpic.com.au` in canonical/sitemap (use `www` via `getPublicSiteUrl`).

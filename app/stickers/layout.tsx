@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 import { buildPublicMetadata } from '@/lib/seo'
 
+/**
+ * Hub-only SEO. Subcategory routes (basic/premium/…) have their own layouts so they
+ * do not inherit canonical `/stickers` (GSC “alternate with proper canonical”).
+ */
 export const metadata: Metadata = buildPublicMetadata({
   path: '/stickers',
   title: 'Custom Stickers & Labels',
