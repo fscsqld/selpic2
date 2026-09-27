@@ -1,0 +1,55 @@
+---
+description: Order admin email void vs await — deploy window drops (learned 2026-09-27)
+alwaysApply: true
+---
+
+# Order emails: customer vs owner, and why afternoon deploys can miss admin mail
+
+**Learned 2026-09-27** after orders landed in Admin (~4pm+ AEST 26 Sep) but the owner did not get inbound order email during shipping deploys.
+
+## Two different emails
+
+| Mail | Who | Trigger | Subject cue |
+|---|---|---|---|
+| **Customer confirmation** | Buyer `order.customer.email` | After checkout: Bank → client `sendGuestCheckoutEmailsAction`; Stripe → `/success` `await sendStripeCheckoutEmailsAction` | `[Selpic] Order Confirmed:` |
+| **Owner / admin alert** | `ADMIN_NOTIFICATION_EMAIL` → else `CONTACT_ADMIN_EMAIL` → else `info@selpic.com.au` | Server right after order insert | `[SELPIC Order]` |
+
+Admin Settings “order confirmations” UI toggle does **not** gate Resend.
+
+## Why deploy window correlates with missing owner mail
+
+Contact / Bespoke already **`await`** admin notify (comment: `void notify` was dropped after the handler returned on serverless).
+
+Order paths still use **`void notifyAdminsOfNewOrder`**:
+
+- `app/api/orders/checkout-bank/route.ts`
+- `lib/orders/stripePaidOrder.ts` (first insert only)
+
+On Vercel, work after the HTTP response can be frozen. Redeploys / cold starts around that time raise the chance the Resend call never finishes. **Order insert still succeeds** → Admin UI shows the order, mailbox stays empty.
+
+Sep 26 afternoon shipping/cart commits did **not** change email modules — they are not the root cause of a broken import; they only coincide with redeploy churn.
+
+## Current “is mail normal?” answer
+
+- **Designed to send** when `RESEND_API_KEY` is set.
+- **Not guaranteed** for owner `[SELPIC Order]` until order notify is `await`ed like Contact/Bespoke.
+- Bank customer confirmation is also fragile (client fire-and-forget + navigate away). Stripe confirmation on `/success` uses `await` and is more reliable.
+
+## Verify
+
+1. Resend dashboard: subject `[SELPIC Order]` vs `[Selpic] Order Confirmed`.
+2. Vercel logs: `[admin-inbound]`, `RESEND_API_KEY is not set`.
+3. Do not blame Mixed Labels / shipping price commits for silent admin mail.
+
+## Fix when owner asks
+
+`await notifyAdminsOfNewOrder(...)` (and handle errors) on bank + Stripe insert paths — same pattern as `app/api/contact/route.ts` / Bespoke.
+
+## Fix status (shipped)
+
+**Done:** `await notifyAdminsOfNewOrder(...)` on:
+
+- `app/api/orders/checkout-bank/route.ts` (returns `adminNotifyOk` like Contact)
+- `lib/orders/stripePaidOrder.ts` (first insert only; failures logged, order still saved)
+
+Do **not** reintroduce `void notifyAdminsOfNewOrder` on those paths.

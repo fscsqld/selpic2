@@ -49,9 +49,28 @@ export async function POST(req: Request) {
       throw new Error(error.message)
     }
 
-    void notifyAdminsOfNewOrder(order)
+    // Await Resend before responding — same as Contact/Bespoke.
+    // `void notify` was dropped after the handler returned on serverless (ORD-mui1en1q).
+    let adminNotifyOk = false
+    let adminNotifyError: string | undefined
+    try {
+      const notifyResult = await notifyAdminsOfNewOrder(order)
+      adminNotifyOk = Boolean(notifyResult?.ok)
+      if (!notifyResult?.ok) {
+        adminNotifyError = notifyResult?.logMessage || 'Admin notify failed'
+        console.warn('[checkout-bank] admin notify failed:', adminNotifyError)
+      }
+    } catch (err) {
+      adminNotifyError = err instanceof Error ? err.message : 'Admin notify failed'
+      console.warn('[checkout-bank] admin notify threw:', adminNotifyError)
+    }
 
-    return NextResponse.json({ success: true, order })
+    return NextResponse.json({
+      success: true,
+      order,
+      adminNotifyOk,
+      ...(adminNotifyError ? { adminNotifyError } : {}),
+    })
   } catch (e) {
     logAndSafeMessage('orders/checkout-bank POST', e)
     return NextResponse.json({ error: SAFE_API_ERROR_MESSAGE }, { status: 500 })

@@ -104,7 +104,19 @@ export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, 
   }
 
   const saved = normalizeLedgerOrder(order)
-  void notifyAdminsOfNewOrder(saved)
+  // Await Resend before returning — same as Contact/Bespoke / checkout-bank.
+  // `void notify` could be frozen after the serverless response (missing [SELPIC Order] mail).
+  try {
+    const notifyResult = await notifyAdminsOfNewOrder(saved)
+    if (!notifyResult?.ok) {
+      console.warn('[stripePaidOrder] admin notify failed:', notifyResult?.logMessage)
+    }
+  } catch (err) {
+    console.warn(
+      '[stripePaidOrder] admin notify threw:',
+      err instanceof Error ? err.message : err
+    )
+  }
   return saved
 }
 
