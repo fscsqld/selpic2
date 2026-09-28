@@ -17,6 +17,11 @@ import {
   landscapeFormBBoxPoints,
   landscapeFormStampMatrix,
 } from '@/lib/shipping/shippingLabelLandscapeForm'
+import {
+  labelBottomReservedMm,
+  maxLinesThatFit,
+  takeLinesWithEllipsis,
+} from '@/lib/shipping/shippingLabelContentFit'
 
 /** Service line on internal labels until live API selects a product. */
 const INTERNAL_SERVICE_DISPLAY = 'Standard Letter'
@@ -155,9 +160,20 @@ type BuildOptions = {
 }
 
 function drawLabelFrame(doc: jsPDF, box: LabelBox): void {
+  // Stroke is centered on the path in PDF — drawing on the exact Avery die edge
+  // puts half the line outside the label (looks like the border "isn't on the page").
+  // Inset by half stroke + a tiny print tolerance so the full frame stays inside the cell.
+  const strokeMm = 0.3
+  const insetMm = strokeMm / 2 + 0.15
   doc.setDrawColor(30, 41, 59)
-  doc.setLineWidth(0.3)
-  doc.rect(box.x, box.y, box.width, box.height, 'S')
+  doc.setLineWidth(strokeMm)
+  doc.rect(
+    box.x + insetMm,
+    box.y + insetMm,
+    Math.max(0, box.width - insetMm * 2),
+    Math.max(0, box.height - insetMm * 2),
+    'S'
+  )
 }
 
 /**
@@ -170,6 +186,11 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   const innerW = innerR - innerL
   const boxBottom = box.y + box.height
   const contentMaxY = boxBottom - LABEL_INNER_MARGIN_MM
+  // Landscape virtual box is only 99.1 mm tall — reserve barcode+FROM so Items cannot overlap.
+  // Slightly smaller barcode + larger FROM (both portrait & landscape share this path).
+  const barH = 11
+  const fromBlockH = 15
+  const midMaxY = contentMaxY - labelBottomReservedMm(barH, fromBlockH, 2)
   let y = box.y + LABEL_INNER_MARGIN_MM + 2.5
 
   drawLabelFrame(doc, box)
@@ -213,69 +234,86 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   doc.line(innerL, y, innerR, y)
   y += 3.2
 
-  // 2) Order / personalization / items (skip empty PERSONALIZATION — no "—" box)
+  // 2) Order / personalization / items — truncate to midMaxY (never invade barcode band)
   const pers = formatOrderPersonalizationForLabel(order)
-  if (hasPersonalizationForLabel(pers)) {
+  if (hasPersonalizationForLabel(pers) && y < midMaxY) {
     doc.setDrawColor(203, 213, 225)
     doc.setFillColor(248, 250, 252)
     doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(71, 85, 105)
     const persAll = doc.splitTextToSize(pers, innerW - 3)
-    const maxPersLines = 3
-    const persLines =
-      persAll.length > maxPersLines
-        ? [...persAll.slice(0, maxPersLines - 1), `${String(persAll[maxPersLines - 1] ?? '').slice(0, 48)}…`]
-        : persAll
     const persLineH = 3.4
-    const persBoxH = 4.5 + persLines.length * persLineH + 1.2
-    const persTop = y
-    doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
-    doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
-    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(17, 24, 39)
-    doc.text(persLines, innerL + 1.5, persTop + 4.6)
-    y = persTop + persBoxH + 2.2
+    const persHeaderH = 4.5
+    const persPad = 1.2
+    const roomForPers = midMaxY - y - 2.2
+    const maxPersBySpace = Math.max(
+      0,
+      Math.floor((roomForPers - persHeaderH - persPad) / persLineH)
+    )
+    const persLines = takeLinesWithEllipsis(persAll, Math.min(3, maxPersBySpace))
+    if (persLines.length > 0) {
+      const persBoxH = persHeaderH + persLines.length * persLineH + persPad
+      const persTop = y
+      doc.roundedRect(innerL, persTop - 1.5, innerW, persBoxH, 0.8, 0.8, 'FD')
+      doc.text('PERSONALIZATION', innerL + 1.5, persTop + 1.8)
+      doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(17, 24, 39)
+      doc.text(persLines, innerL + 1.5, persTop + 4.6)
+      y = persTop + persBoxH + 2.2
+    }
   }
 
   const weightKg = computeDeclaredShippingWeightKg(order)
   const weightStr = formatDeclaredWeightForLabel(weightKg)
   const serviceName = serviceDisplayName(order)
-  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(55, 65, 81)
-  doc.text(`Service: ${serviceName}  ·  Wt: ${weightStr}`, innerL, y, { maxWidth: innerW })
-  y += 3.6
+  if (y + 3.6 <= midMaxY) {
+    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(55, 65, 81)
+    doc.text(`Service: ${serviceName}  ·  Wt: ${weightStr}`, innerL, y, { maxWidth: innerW })
+    y += 3.6
+  }
 
-  if (shouldPrintItemsLine(order)) {
-    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(31, 41, 55)
-    const itemLine = itemsSummaryLine(order, 110)
-    const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW).slice(0, 3)
-    doc.text(itemWrapped, innerL, y)
-    y += itemWrapped.length * 3.5 + 1.5
+  if (shouldPrintItemsLine(order) && y < midMaxY) {
+    const itemLineH = 3.5
+    const maxItemLines = maxLinesThatFit({
+      startY: y,
+      maxY: midMaxY - 1.5,
+      lineHeight: itemLineH,
+      maxCap: 3,
+    })
+    if (maxItemLines > 0) {
+      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(31, 41, 55)
+      const itemLine = itemsSummaryLine(order, 110)
+      const itemWrapped = doc.splitTextToSize(`Items: ${itemLine}`, innerW)
+      const shown = takeLinesWithEllipsis(itemWrapped, maxItemLines)
+      doc.text(shown, innerL, y)
+      y += shown.length * itemLineH + 1.5
+    }
   }
 
   const created = order.createdAtIso
     ? new Date(order.createdAtIso).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
     : '—'
-  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(100, 116, 139)
-  doc.text(`Order ${order.id}  ·  ${created}`, innerL, y, { maxWidth: innerW })
-  y += 4
+  if (y + 4 <= midMaxY) {
+    doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(100, 116, 139)
+    doc.text(`Order ${order.id}  ·  ${created}`, innerL, y, { maxWidth: innerW })
+    y += 4
+  }
 
-  // 3) Barcode soon after content (no large empty middle)
-  const barH = 14
-  const fromBlockH = 14
-  const barcodeY = Math.min(y + 0.5, contentMaxY - barH - fromBlockH - 2)
+  // 3) Barcode soon after content; mid content already capped so this cannot overlap Items
+  const barcodeY = Math.min(y + 0.5, midMaxY)
   const barcodeText = toCode128Payload(getShippingLabelBarcodePayload(order))
   const png: Buffer = await bwipjs.toBuffer({
     bcid: 'code128',
     text: barcodeText,
     scale: 2,
-    height: 9,
+    height: 7,
     includetext: true,
     textfont: 'Helvetica',
-    textsize: 7,
+    textsize: 6,
     textxalign: 'center',
     barcolor: '000000',
     textcolor: '000000',
   })
   const imgData = `data:image/png;base64,${png.toString('base64')}`
-  const barW = Math.min(innerW - 4, 88)
+  const barW = Math.min(innerW - 4, 72)
   const barX = innerL + (innerW - barW) / 2
   try {
     doc.addImage(imgData, 'PNG', barX, barcodeY, barW, barH)
@@ -284,23 +322,23 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
     doc.text(barcodeText, innerL, barcodeY + 5)
   }
 
-  // 4) FROM under barcode — clear gap below barcode
-  let fromY = barcodeY + barH + 5.5
+  // 4) FROM under barcode — slightly larger for packing / return readability
+  let fromY = barcodeY + barH + 4.5
   if (fromY + fromBlockH > contentMaxY) {
-    fromY = Math.max(barcodeY + barH + 3.5, contentMaxY - fromBlockH)
+    fromY = Math.max(barcodeY + barH + 3, contentMaxY - fromBlockH)
   }
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
   doc.line(innerL, fromY - 1.5, innerR, fromY - 1.5)
 
-  doc.setFont('helvetica', 'bold').setFontSize(5).setTextColor(100, 116, 139)
+  doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(100, 116, 139)
   doc.text('FROM', innerL, fromY)
-  fromY += 2.8
+  fromY += 3.2
   const fromPrint = resolveShippingLabelFromPrint(order)
-  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(55, 65, 81)
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(55, 65, 81)
   doc.text(fromPrint.name, innerL, fromY)
-  fromY += 2.8
-  doc.setFont('helvetica', 'normal').setFontSize(5.5).setTextColor(100, 116, 139)
+  fromY += 3.4
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(100, 116, 139)
   doc.text(`${fromPrint.addressLine1}, ${fromPrint.addressLine2}`, innerL, fromY, {
     maxWidth: innerW,
   })
