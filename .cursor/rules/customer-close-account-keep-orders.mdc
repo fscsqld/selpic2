@@ -1,0 +1,32 @@
+---
+description: Customer Cancel Membership closes Auth, keeps orders (learned 2026-09-29)
+globs: app/profile/**,app/api/me/close-account/**
+alwaysApply: false
+---
+
+# Customer close account (learned 2026-09-29)
+
+**Invariant:** Customer “Cancel Membership” / close login = **delete Supabase Auth user** + clear VIP override / likes / carts. **Never delete `orders`.** Admin Users drops the row because VIP roster is Auth-synced. Past purchases remain in Admin → Orders (email / order id).
+
+## Two delete paths (do not mix)
+
+| Path | Auth | Orders | Use |
+|---|---|---|---|
+| `POST /api/me/close-account` | Deleted | **Kept** | Customer self-service |
+| `DELETE /api/admin/supabase-users` + `deletePublicDataForAuthUser` | Deleted | **Deleted** | Admin hard delete (tests / ops) |
+
+## Where orders live after close
+
+- Supabase `orders` table (unchanged)
+- Admin → Orders (search by email / order id)
+- Not on Admin → Users (no Auth → not in `authVipEmailSet`)
+
+## UI copy
+
+Say login is closed and order records may remain for legal/business reasons — do not claim “all related data deleted.”
+
+## Cousins
+
+- Local-only demo profiles without Auth UUID: local `deleteUser` only
+- VIP `vip_manual_grade_overrides` cleared by email on close
+- Admin hard-delete still cascades orders — intentional ops tool, not customer UX

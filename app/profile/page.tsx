@@ -17,6 +17,7 @@ import {
   buildVipGradeUserPatch,
   fetchMyVipGradeFromServer,
 } from '@/lib/syncStorefrontVipGradeFromServer'
+import { isUuid } from '@/lib/isUuid'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -194,9 +195,10 @@ export default function ProfilePage() {
   })
   const [passwordError, setPasswordError] = useState('')
 
-  // 회원 탈퇴 모달
+  // Close-account modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
 
   // 사용자 정보 업데이트
   useEffect(() => {
@@ -299,16 +301,44 @@ export default function ProfilePage() {
 
   const handleConfirmCancelMembership = async () => {
     if (!user) return
+    setCancelError('')
     try {
       setIsCancelling(true)
-      // 계정 삭제 후 로그아웃 및 장바구니 정리
-      await useUserAuth.getState().deleteUser(user.id)
+      const hasSupabase =
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+
+      // Auth customers: close login on server (orders retained). Local-only demos: local cleanup only.
+      if (hasSupabase && isUuid(user.id)) {
+        const res = await fetch('/api/me/close-account', {
+          method: 'POST',
+          credentials: 'include',
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setCancelError(
+            typeof data.error === 'string'
+              ? data.error
+              : 'Could not close your login. Please try again or contact support.'
+          )
+          return
+        }
+        try {
+          const { createSupabaseBrowserClient } = await import('@/lib/supabase/browser')
+          await createSupabaseBrowserClient().auth.signOut()
+        } catch {
+          /* session may already be invalid after Auth delete */
+        }
+      }
+
+      useUserAuth.getState().deleteUser(user.id)
       logout()
       clearCart(true)
       setShowCancelModal(false)
       router.push('/')
     } catch (error) {
-      console.error('Cancel membership error:', error)
+      console.error('Close account error:', error)
+      setCancelError('Could not close your login. Please try again.')
     } finally {
       setIsCancelling(false)
     }
@@ -656,15 +686,18 @@ export default function ProfilePage() {
 
                 {/* 회원 탈퇴 */}
                 <button
-                  onClick={() => setShowCancelModal(true)}
+                  onClick={() => {
+                    setCancelError('')
+                    setShowCancelModal(true)
+                  }}
                   className="w-full flex items-center space-x-4 p-4 bg-red-50 hover:bg-red-100 rounded-xl transition-colors group"
                 >
                   <div className="w-12 h-12 bg-red-100 group-hover:bg-red-200 rounded-full flex items-center justify-center transition-colors">
                     <X size={20} className="text-red-600" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className="font-medium text-red-700">Cancel Membership</p>
-                    <p className="text-sm text-red-600">Your account and data will be deleted</p>
+                    <p className="font-medium text-red-700">Close account</p>
+                    <p className="text-sm text-red-600">Closes your login. Past order records may be retained as required by law.</p>
                   </div>
                 </button>
               </div>
@@ -815,31 +848,54 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 회원 탈퇴 확인 모달 */}
+      {/* Close account confirmation */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white/95 border border-white/20 rounded-3xl shadow-2xl max-w-md w-full mx-4">
             <div className="p-8">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Cancel Membership</h3>
-                <button onClick={() => setShowCancelModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <h3 className="text-2xl font-bold text-gray-900">Close account</h3>
+                <button
+                  onClick={() => {
+                    if (isCancelling) return
+                    setShowCancelModal(false)
+                    setCancelError('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
                   <X size={24} />
                 </button>
               </div>
-              <p className="text-gray-700 mb-6">Are you sure you want to cancel your membership? This action cannot be undone and will delete your account and related data.</p>
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to close your login? This cannot be undone. You will no longer
+                appear in our customer account list and will not be able to sign in with this email.
+              </p>
+              <p className="text-sm text-gray-600 mb-6">
+                Order records we must keep for legal and business purposes (for example past purchases)
+                may remain in our order system.
+              </p>
+              {cancelError && (
+                <p className="text-sm text-red-600 mb-4" role="alert">
+                  {cancelError}
+                </p>
+              )}
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setShowCancelModal(false)}
+                  onClick={() => {
+                    if (isCancelling) return
+                    setShowCancelModal(false)
+                    setCancelError('')
+                  }}
                   className="flex-1 px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors font-medium"
                 >
-                  Cancel
+                  Keep account
                 </button>
                 <button
                   onClick={handleConfirmCancelMembership}
                   disabled={isCancelling}
                   className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:opacity-60"
                 >
-                  {isCancelling ? 'Processing…' : 'Confirm Delete'}
+                  {isCancelling ? 'Closing…' : 'Close login'}
                 </button>
               </div>
             </div>
