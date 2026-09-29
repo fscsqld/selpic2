@@ -398,31 +398,69 @@ export default function UserManagementPage() {
     return raw || '-'
   }
 
-  // 최근 결제수단 (환불 기준으로 참고)
-  const mapPaymentLabel = (m?: string) => {
-    switch (m) {
-      case 'card': return t('admin.users.payment.card')
-      case 'paypal': return t('admin.users.payment.paypal')
-      case 'bank': return t('admin.users.payment.bank')
-      case 'cash': return t('admin.users.payment.cash')
-      default: return '-'
+  // Recent payment method from synced ledger orders (not profile fields).
+  // Stripe Checkout persists paymentMethod: 'stripe' — must not fall through to '-'.
+  const mapPaymentLabel = (m?: string, paymentMethodName?: string) => {
+    const method = String(m || '').trim().toLowerCase()
+    switch (method) {
+      case 'card':
+      case 'stripe':
+        return t('admin.users.payment.card')
+      case 'paypal':
+        return t('admin.users.payment.paypal')
+      case 'bank':
+        return t('admin.users.payment.bank')
+      case 'cash':
+        return t('admin.users.payment.cash')
+      case 'marketplace': {
+        const named = String(paymentMethodName || '').trim()
+        return named || 'Marketplace'
+      }
+      default: {
+        const named = String(paymentMethodName || '').trim()
+        return named || '-'
+      }
     }
   }
 
-  const getLastPaymentMethod = (user: User) => {
+  const findLatestOrderForUser = (user: User) => {
     const userEmail = (user.email || '').trim().toLowerCase()
     const matchPhone = phoneForShopProfileOrderMatch(user)
     const userPhoneDigits = matchPhone
       ? matchPhone.replace(/\D/g, '').replace(/^\+?61/, '0')
       : ''
     const matched = orders
-      .filter(o => {
+      .filter((o) => {
         const oEmail = (o.customer.email || '').trim().toLowerCase()
         const oPhone = (o.customer.phone || '').replace(/\D/g, '').replace(/^\+?61/, '0')
         return (oEmail && oEmail === userEmail) || (!!userPhoneDigits && oPhone.includes(userPhoneDigits))
       })
       .sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime())
-    return mapPaymentLabel(matched[0]?.paymentMethod)
+    return matched[0] || null
+  }
+
+  const getLastPaymentMethod = (user: User) => {
+    const latest = findLatestOrderForUser(user)
+    return mapPaymentLabel(latest?.paymentMethod, latest?.paymentMethodName)
+  }
+
+  /** Profile phone/address first; if empty, show latest order shipping/contact (ops often never fills profile). */
+  const getDisplayContact = (user: User) => {
+    const latest = findLatestOrderForUser(user)
+    const phone = (user.phone || '').trim() || (latest?.customer?.phone || '').trim()
+    const fromProfile = (user.address || '').trim()
+    const fromOrder =
+      (latest?.address?.asSingleLine || '').trim() ||
+      [
+        latest?.address?.streetAddress,
+        latest?.address?.suburb,
+        latest?.address?.state,
+        latest?.address?.postcode,
+      ]
+        .map((p) => String(p || '').trim())
+        .filter(Boolean)
+        .join(', ')
+    return { phone, address: fromProfile || fromOrder }
   }
 
   const paymentBadgeClasses = (label: string) => {
@@ -1069,6 +1107,7 @@ export default function UserManagementPage() {
                     ) : (
                       paginatedUsers.map((user, index) => {
                         const lastPaymentLabel = getLastPaymentMethod(user)
+                        const displayContact = getDisplayContact(user)
                         // 고유한 key 생성: user.id가 중복될 수 있으므로 index도 포함
                         const uniqueKey = `${user.id}-${user.email}-${index}`
                         return (
@@ -1097,13 +1136,13 @@ export default function UserManagementPage() {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{formatAuPhone(user.phone)}</div>
+                              <div className="text-sm text-gray-900">{formatAuPhone(displayContact.phone)}</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                               {user.email}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs truncate" title={user.address || '-'}>
-                              {user.address || '-'}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs truncate" title={displayContact.address || '-'}>
+                              {displayContact.address || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <GradeBadge gradeCode={user.currentGrade ?? 0} />

@@ -1,0 +1,58 @@
+---
+description: Admin Users table — empty Contact/Address, Last Payment stripe gap (learned 2026-09-29)
+globs: app/admin/users/**
+alwaysApply: false
+---
+
+# Admin Users table empty fields & Last Payment (learned 2026-09-29)
+
+Roster fixture: EMMA, Andrew YOON, Maha, Christine Chang.
+
+## VIP / row updates on the same page
+
+`handleSaveGrade` → `updateUser` (Zustand). The table reads `users` → **same Admin tab updates VIP Grade immediately** after Save (modal closes). Server override is separate (`vip_manual_grade_overrides`); other browsers need their own hydrate/sync.
+
+## Why Contact / Address are often `-`
+
+| Column | Reads from | Why empty |
+|---|---|---|
+| **Contact** | Shop profile `user.phone` | Auth signup / `establishSessionFromSupabaseUser` seeds `phone: ''`. Checkout phone goes on the **order**, not auto-back to profile |
+| **Address** | Shop profile `user.address` | Same — shipping address lives on `order.address`, not profile |
+
+Orders with sales (e.g. Christine `$54.34`) may still show `-` on Contact/Address until UI falls back to latest order phone / `address.asSingleLine`.
+
+**Not** caused by homepage redesign wiping Auth fields.
+
+## Christine Last Payment `-` while card paid
+
+| Check | Result |
+|---|---|
+| Total Sales `$54.34` | Orders **are** matched by email |
+| Ledger `paymentMethod` | Stripe Checkout saves **`stripe`**, not `card` |
+| Old Users `mapPaymentLabel` | Only `card`/`paypal`/`bank`/`cash` → **`stripe` → `-`** |
+| Admin Orders page | Already maps `stripe` → Stripe/Card |
+
+**Not data loss** from homepage work — display mapping gap. Fix: treat `stripe` like card; optional order fallback for Contact/Address.
+
+## Do / Do not
+
+**Do** — Align Users Last Payment with Orders (`stripe` → Card); prefer order contact when profile blank.
+
+**Do not** — Assume empty Last Payment means the order was deleted; blame Hero/homepage commits for missing profile phone.
+
+## Grade cards: Silver 0 after admin set EMMA to Silver
+
+Top grade bars / Total Sales use **`summaryUsers`**, which **excludes** `TEST_CUSTOMER_EMAILS` (`fscsqld@gmail.com` = EMMA).
+
+| Surface | Includes EMMA? |
+|---|---|
+| User table (Test badge) | Yes — can show manual Silver |
+| Basic/Silver/… count cards + Total Sales | **No** — production customers only |
+
+Basic **3 / 100%** + Silver **0** is expected while only EMMA is Silver. Save still worked; summary cards ignore test accounts by design.
+
+## Total Sales vs unpaid bank transfer
+
+`calculateUserTotalSales` counts only: `paid`, `approved`, `processing`, `shipped`, `ready_for_collection`, `collected`. **`pending` (unconfirmed bank) and `cancelled` are excluded.**
+
+`$54.34` with a pending bank order open elsewhere ≈ Christine’s **paid** total; unpaid bank does not add until status leaves `pending`.
