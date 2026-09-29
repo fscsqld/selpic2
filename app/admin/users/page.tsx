@@ -29,7 +29,8 @@ import {
   MessageSquare,
   Ban,
   Shield,
-  ShieldCheck
+  ShieldCheck,
+  Copy
 } from 'lucide-react'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import SupabaseAuthUsersPanel from '@/components/admin/SupabaseAuthUsersPanel'
@@ -42,6 +43,8 @@ import { migrateUserGrades, calculateUserTotalSales } from '@/lib/userGradeUtils
 import { calculateNextGradeAmount } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
+import { adminVipGradeLabel } from '@/lib/adminVipGradeLabel'
+import { adminVipBenefitLines } from '@/lib/adminVipBenefitLines'
 import { User as UserType } from '@/lib/userAuth'
 import { isUuid } from '@/lib/isUuid'
 import {
@@ -77,7 +80,7 @@ export default function UserManagementPage() {
     mergeOrdersFromServer,
     refreshOrdersFromStorage,
   } = useStore()
-  const { getActiveVIPGradeConfigs, vipGradeConfigs: storeVipGradeConfigs } = useContentStore()
+  const { getActiveVIPGradeConfigs, vipGradeConfigs: storeVipGradeConfigs, vipGradeBenefits } = useContentStore()
   const { t } = useTranslation()
 
   const [authVipEmailSet, setAuthVipEmailSet] = useState<Set<string> | null>(null)
@@ -876,9 +879,9 @@ export default function UserManagementPage() {
                         <div className="text-2xl font-bold text-gray-900">{count}</div>
                         <div className="text-xs text-gray-500 mt-1">{percentage}%</div>
                         <div className="text-xs text-gray-400 mt-1">
-                          {grade.nameEn === 'Basic' ? '$0+' : 
-                           grade.nameEn === 'VVIP' ? `$${grade.minAmount.toLocaleString()}+` :
-                           `$${grade.minAmount.toLocaleString()}+`}
+                          {adminVipGradeLabel(grade) === 'Basic' ? '$0+' : 
+                           adminVipGradeLabel(grade) === 'VVIP' ? `$${grade.minAmount.toLocaleString()}+` :
+                             `$${grade.minAmount.toLocaleString()}+`}
                         </div>
                       </div>
                     )
@@ -955,7 +958,7 @@ export default function UserManagementPage() {
                   <option value="all">All Grades</option>
                   {getAllGradeConfigsForDisplay.map((grade) => (
                     <option key={grade.code} value={grade.code}>
-                      {grade.nameEn}
+                      {adminVipGradeLabel(grade)}
                     </option>
                   ))}
                 </select>
@@ -1539,6 +1542,19 @@ export default function UserManagementPage() {
           const gradeConfigs = getActiveVIPGradeConfigs()
           const nextGradeAmount = calculateNextGradeAmount(userGrade, totalSales, gradeConfigs)
           const gradeInfo = gradeConfigs.find(g => g.code === userGrade)
+          const benefitRow = vipGradeBenefits.find(
+            (b) => b.gradeCode === userGrade && b.isActive !== false
+          )
+          const benefitLines = adminVipBenefitLines({
+            gradeCode: userGrade,
+            configBenefits: gradeInfo?.benefits,
+            benefitRow,
+          })
+          const userId = String(selectedUser.id || '')
+          const userIdShort =
+            userId.length > 20
+              ? `${userId.slice(0, 8)}…${userId.slice(-6)}`
+              : userId
           
           return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1589,11 +1605,11 @@ export default function UserManagementPage() {
                         {t('admin.users.modals.viewUser.nextGrade')}: ${nextGradeAmount.toLocaleString()}
                       </div>
                     )}
-                    {gradeInfo && gradeInfo.benefits.length > 0 && (
+                    {benefitLines.length > 0 && (
                       <div className="mt-2">
                         <span className="text-gray-500 text-xs">{t('admin.users.modals.viewUser.benefits')}:</span>
                         <ul className="list-disc list-inside text-xs text-gray-600 mt-1">
-                          {gradeInfo.benefits.map((benefit, idx) => (
+                          {benefitLines.map((benefit, idx) => (
                             <li key={idx}>{benefit}</li>
                           ))}
                         </ul>
@@ -1613,7 +1629,33 @@ export default function UserManagementPage() {
                   </div>
                   
                     <div><span className="text-gray-500">{t('admin.users.modals.viewUser.registeredAt')}:</span> <span className="text-gray-900">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toISOString().split('T')[0] : '-'}</span></div>
-                    <div><span className="text-gray-500">{t('admin.users.modals.viewUser.id')}:</span> <span className="text-gray-900">{selectedUser.id}</span></div>
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <span className="text-gray-500 shrink-0">{t('admin.users.modals.viewUser.id')}:</span>
+                      <span
+                        className="text-gray-900 font-mono text-xs break-all"
+                        title={userId || undefined}
+                      >
+                        {userIdShort || '-'}
+                      </span>
+                      {userId && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                          title="Copy full Auth user id"
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(userId)
+                          }}
+                        >
+                          <Copy size={12} />
+                          Copy
+                        </button>
+                      )}
+                    </div>
+                    {isUuid(userId) && (
+                      <p className="text-[11px] text-gray-400">
+                        Supabase Auth UUID (support / debug). VIP overrides use email, not this id.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 pt-4 border-t bg-white">
@@ -1691,7 +1733,7 @@ export default function UserManagementPage() {
                   >
                     {getAllGradeConfigsForDisplay.map((grade) => (
                       <option key={grade.code} value={grade.code}>
-                        {grade.nameEn}
+                        {adminVipGradeLabel(grade)}
                       </option>
                     ))}
                   </select>

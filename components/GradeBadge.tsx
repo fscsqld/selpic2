@@ -1,5 +1,6 @@
 'use client'
 
+import { adminVipGradeLabel, adminVipGradeLabelFromCode } from '@/lib/adminVipGradeLabel'
 import { getGradeInfo, GradeConfig } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 
@@ -10,8 +11,7 @@ interface GradeBadgeProps {
 }
 
 /**
- * VIP 등급 배지 컴포넌트
- * 사용자의 등급을 시각적으로 표시합니다.
+ * VIP grade badge — English label by grade code (admin + storefront profile).
  */
 export default function GradeBadge({ 
   gradeCode, 
@@ -20,10 +20,7 @@ export default function GradeBadge({
 }: GradeBadgeProps) {
   const { getActiveVIPGradeConfigs, vipGradeConfigs } = useContentStore()
   
-  // 모든 등급을 포함하도록: 기본값을 기반으로 하고 vipGradeConfigs에 있는 것들로 업데이트
-  // 비활성화된 등급도 포함하여 표시
   const getAllGradeConfigs = () => {
-    // 기본 등급 정의 (0-4 모두 포함)
     const defaultGradeDefinitions = [
       { code: 0, name: 'Basic', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray' },
       { code: 1, name: 'Silver', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver' },
@@ -32,11 +29,9 @@ export default function GradeBadge({
       { code: 4, name: 'VVIP', nameEn: 'VVIP', minAmount: 3000, maxAmount: undefined, color: 'purple' }
     ]
     
-    // vipGradeConfigs에 있는 등급들로 업데이트 (비활성화된 것도 포함)
     if (vipGradeConfigs && vipGradeConfigs.length > 0) {
       const configMap = new Map()
       
-      // 먼저 기본값으로 초기화
       defaultGradeDefinitions.forEach(def => {
         const gradeConfig: GradeConfig = {
           code: def.code,
@@ -50,12 +45,12 @@ export default function GradeBadge({
         configMap.set(def.code, gradeConfig)
       })
       
-      // vipGradeConfigs의 등급으로 업데이트 (비활성화된 것도 포함)
       vipGradeConfigs.forEach(config => {
+        const label = adminVipGradeLabel(config)
         const gradeConfig: GradeConfig = {
           code: config.code,
-          name: config.name,
-          nameEn: config.nameEn,
+          name: label,
+          nameEn: label,
           minAmount: config.minAmount,
           maxAmount: config.maxAmount,
           color: config.color,
@@ -67,7 +62,6 @@ export default function GradeBadge({
       return Array.from(configMap.values()).sort((a, b) => a.code - b.code)
     }
     
-    // vipGradeConfigs가 없으면 기본값 사용 (활성화된 것만)
     return getActiveVIPGradeConfigs()
   }
   
@@ -82,14 +76,12 @@ export default function GradeBadge({
     )
   }
   
-  // 크기별 스타일
   const sizeClasses = {
     sm: 'px-1.5 py-0.5 text-[10px]',
     md: 'px-2 py-1 text-xs',
     lg: 'px-3 py-1.5 text-sm'
   }
   
-  // 등급별 색상 클래스
   const colorClasses = {
     gray: 'bg-gray-100 text-gray-800 border border-gray-200',
     silver: 'bg-gray-200 text-gray-900 border border-gray-300',
@@ -99,11 +91,12 @@ export default function GradeBadge({
   }
   
   const colorClass = colorClasses[gradeInfo.color as keyof typeof colorClasses] || colorClasses.gray
+  const label = adminVipGradeLabelFromCode(gradeCode)
   
   return (
     <span className={`inline-flex items-center rounded-full font-medium ${sizeClasses[size]} ${colorClass}`}>
       {showName && (
-        <span className="font-semibold">{gradeInfo.nameEn}</span>
+        <span className="font-semibold">{label}</span>
       )}
     </span>
   )

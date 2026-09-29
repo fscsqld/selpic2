@@ -1,0 +1,52 @@
+---
+description: Admin User Information modal — English benefits + Auth UUID User ID (learned 2026-09-29)
+globs: app/admin/users/**
+alwaysApply: false
+---
+
+# Admin User Information modal (learned 2026-09-29)
+
+Fixture: EMMA / `fscsqld@gmail.com` View User modal after manual Silver override.
+
+## Benefits still Korean — why
+
+| Field in modal | Source | Language trap |
+|---|---|---|
+| Benefits list | `getActiveVIPGradeConfigs()` → `gradeInfo.benefits` | Live CMS `vipGradeConfigs[].benefits` still holds **Hangul** marketing lines (e.g. `5% 상시 할인`, `생일 쿠폰`) from early KR seeds |
+| Checkout discounts | `vipGradeBenefits` numbers (`baseDiscountPercentage`, etc.) | **Not** those Hangul strings — payment math is fine |
+
+**Invariant:** Admin must never dump raw `benefits[]` / Hangul `additionalBenefits` into the modal. Use `adminVipBenefitLines` (structured English → filter Hangul → English fallback by grade code).
+
+Do **not** “fix” by rewriting every customer’s CMS row mid-flight unless owner asks for a Content migrate; display-side English is enough for ops.
+
+Related: grade **names** → `adminVipGradeLabel` (code → Basic/Silver/…); never `nameEn (한글 name)`.
+
+## User ID — what it is
+
+```
+User ID: 0b4fd77b-774b-4727-a9ae-195ee812fcdf
+```
+
+| Question | Answer |
+|---|---|
+| What is it? | **Supabase Auth `auth.users.id`** (UUID v4), mirrored onto the shop profile when Auth VIP roster / `establishSessionFromSupabaseUser` syncs |
+| Why so long? | Standard UUID = 32 hex + 4 hyphens (**36 chars**). Not a SELPIC-generated short code |
+| Why show it? | Support / debug: match Auth dashboard, `/api/admin/supabase-users`, activity logs, likes, orders tied to Auth user id |
+| Needed for VIP override? | **No** — manual grade is **email-keyed** (`vip_manual_grade_overrides`) |
+| Needed for daily grade edits? | **No** — email + name are enough for the owner |
+| Safe to hide? | Yes for casual ops UI; keep available (truncated + copy, or “Technical” disclosure). Do **not** invent a second short public id unless product asks |
+
+## Do / Do not
+
+**Do**
+
+- Admin Benefits = English via `adminVipBenefitLines`
+- Treat User ID as Auth UUID; truncate + copy in modal if full width is noisy
+- Match customers for VIP by **email** first
+
+**Do not**
+
+- Paste Hangul CMS benefit strings into Admin
+- Assume User ID length means a bug
+- Key VIP overrides by UUID only (email is the stable checkout key today)
+- Confuse shop-profile numeric demo ids (`"1"`) with Auth UUIDs — Auth customers use UUIDs

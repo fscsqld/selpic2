@@ -22,6 +22,7 @@ import { useTranslation } from '@/lib/useTranslation'
 import { calculateNextGradeAmount, getGradeInfo } from '@/lib/vipGradeConfig'
 import { useContentStore } from '@/lib/contentStore'
 import GradeBadge from '@/components/GradeBadge'
+import { adminVipGradeLabel } from '@/lib/adminVipGradeLabel'
 import { User } from '@/lib/userAuth'
 import { calculateUserTotalSales, recalculateAllUserGrades } from '@/lib/userGradeUtils'
 import {
@@ -689,7 +690,7 @@ export default function GradeStatusMonitoringPage() {
                           <GradeBadge gradeCode={selectedUser.currentGrade ?? 0} size="lg" />
                           {currentGradeInfo && (
                             <div className="text-sm text-gray-600">
-                              {currentGradeInfo.nameEn}
+                              {adminVipGradeLabel(currentGradeInfo)}
                             </div>
                           )}
                         </div>
@@ -748,7 +749,7 @@ export default function GradeStatusMonitoringPage() {
                                   )}
                                 </div>
                                 <div className="text-sm font-semibold text-gray-900 mb-1">
-                                  {grade.nameEn}
+                                  {adminVipGradeLabel(grade)}
                                 </div>
                                 <div className="text-xs text-gray-500">
                                   <div>Min: ${grade.minAmount.toLocaleString()}</div>
@@ -794,7 +795,7 @@ export default function GradeStatusMonitoringPage() {
                             <div className="flex justify-between">
                               <span className="text-gray-600">New Grade:</span>
                               <span className="font-semibold text-gray-900">
-                                {selectedGradeInfo.nameEn}
+                                {adminVipGradeLabel(selectedGradeInfo)}
                               </span>
                             </div>
                             <div className="flex justify-between">

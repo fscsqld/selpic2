@@ -7,6 +7,7 @@ import { useUserAuth } from '@/lib/userAuth'
 import { useStore } from '@/lib/store'
 import { calculateUserTotalSales } from '@/lib/userGradeUtils'
 import GradeBadge from '@/components/GradeBadge'
+import { adminVipGradeLabel } from '@/lib/adminVipGradeLabel'
 
 export default function VIPGradeBenefitManager() {
   const {
@@ -97,7 +98,7 @@ export default function VIPGradeBenefitManager() {
 
   const getGradeName = (gradeCode: number) => {
     const grade = getAllGradeConfigs().find(g => g.code === gradeCode)
-    return grade ? grade.nameEn : `Grade ${gradeCode}`
+    return grade ? adminVipGradeLabel(grade) : `Grade ${gradeCode}`
   }
 
   const isEventActive = (benefit: VIPGradeBenefit) => {
@@ -255,7 +256,7 @@ export default function VIPGradeBenefitManager() {
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Users className="text-indigo-600" size={20} />
-              {getAllGradeConfigs().find(g => g.code === selectedGradeForCustomers)?.nameEn || `Grade ${selectedGradeForCustomers}`} Customers
+              {adminVipGradeLabel(getAllGradeConfigs().find(g => g.code === selectedGradeForCustomers) || { code: selectedGradeForCustomers })} Customers
               <span className="text-sm font-normal text-gray-500">
                 ({gradeStats[selectedGradeForCustomers].count} customers)
               </span>
@@ -712,7 +713,7 @@ function VIPGradeBenefitForm({
             setFormData({
               ...formData,
               gradeCode: code,
-              gradeName: grade?.nameEn || '',
+              gradeName: grade ? adminVipGradeLabel(grade) : '',
               minAmount: grade?.minAmount ?? formData.minAmount,
               maxAmount: grade?.maxAmount ?? formData.maxAmount
             })
@@ -722,7 +723,7 @@ function VIPGradeBenefitForm({
         >
           {allGradeConfigs.map((grade) => (
             <option key={grade.code} value={grade.code}>
-              {grade.nameEn} ({grade.name}) - Code {grade.code}
+              {adminVipGradeLabel(grade)} — Code {grade.code}
             </option>
           ))}
         </select>
