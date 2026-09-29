@@ -13,6 +13,10 @@ import GradeBadge from '@/components/GradeBadge'
 import ProfileLikedProducts from '@/components/ProfileLikedProducts'
 import { calculateUserTotalSales } from '@/lib/userGradeUtils'
 import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
+import {
+  buildVipGradeUserPatch,
+  fetchMyVipGradeFromServer,
+} from '@/lib/syncStorefrontVipGradeFromServer'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -34,6 +38,30 @@ export default function ProfilePage() {
   const { orders, _hasHydrated } = useStore()
 
   useCustomerOrdersLedgerSync()
+
+  // Admin manual VIP override lives in site_configs — sync into local session for display.
+  useEffect(() => {
+    if (!isLoggedIn || !user?.id) return
+    let cancelled = false
+    ;(async () => {
+      const remote = await fetchMyVipGradeFromServer()
+      if (cancelled || !remote) return
+      const patch = buildVipGradeUserPatch(remote)
+      const latest = useUserAuth.getState().user
+      if (!latest || latest.id !== user.id) return
+      if (
+        latest.currentGrade === patch.currentGrade &&
+        Boolean(latest.manualGradeOverride) === patch.manualGradeOverride &&
+        (latest.totalSalesAmount || 0) === patch.totalSalesAmount
+      ) {
+        return
+      }
+      updateUser(user.id, patch)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isLoggedIn, user?.id, updateUser])
   
   // VIP 등급 정보 업데이트 함수
   const updateVipGradeInfo = (currentUser: typeof user) => {

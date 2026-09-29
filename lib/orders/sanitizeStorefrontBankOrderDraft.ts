@@ -3,6 +3,9 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
 import { applyServerShippingToDraft } from '@/lib/orders/applyServerShippingToDraft'
+import { applyServerCheckoutMoney } from '@/lib/orders/applyServerCheckoutMoney'
+import { readCmsCheckoutPricingConfig } from '@/lib/server/cmsCheckoutPricingConfig'
+import { resolveStorefrontVipGradeFromOrders } from '@/lib/server/resolveStorefrontVipGrade'
 
 export type BankOrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -11,10 +14,13 @@ function audCents(amount: number): number {
 }
 
 /**
- * Server-side validation for bank-transfer storefront orders: prices and totals
- * are derived from the live catalog (same trust model as Stripe checkout validation).
+ * Server-side validation for bank-transfer orders: prices from live catalog.
+ * @param sessionEmail Storefront signed-in email; admin manual may omit (falls back to draft customer email).
  */
-export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraft): Promise<BankOrderDraft> {
+export async function sanitizeStorefrontBankOrderDraft(
+  orderDraft: BankOrderDraft,
+  sessionEmail?: string
+): Promise<BankOrderDraft> {
   if (!Array.isArray(orderDraft.items) || orderDraft.items.length === 0) {
     throw new Error('Order must include at least one item.')
   }
@@ -98,16 +104,36 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
     })
   }
 
+  const cms = await readCmsCheckoutPricingConfig()
+  const emailForMoney = String(sessionEmail || orderDraft.customer?.email || '')
+    .trim()
+    .toLowerCase()
+  const { gradeCode } = emailForMoney
+    ? await resolveStorefrontVipGradeFromOrders({
+        email: emailForMoney,
+        phone: orderDraft.customer?.phone,
+        gradeConfigs: cms.vipGradeConfigs,
+      })
+    : { gradeCode: Number(orderDraft.vipGradeCode) || 0 }
+
   const withCatalog: BankOrderDraft = {
     ...orderDraft,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
+    vipGradeCode: gradeCode,
   }
   const shippingValidated = await applyServerShippingToDraft(withCatalog)
+  const moneyValidated = emailForMoney
+    ? await applyServerCheckoutMoney({
+        orderDraft: shippingValidated,
+        sessionEmail: emailForMoney,
+        paymentType: orderDraft.paymentMethod === 'stripe' ? 'stripe' : 'bank',
+      })
+    : shippingValidated
 
-  const shippingCents = Math.max(0, audCents(shippingValidated.shippingPrice))
-  const feeCents = Math.max(0, audCents(shippingValidated.paymentFee || 0))
-  const discountCents = Math.max(0, audCents(shippingValidated.discount || 0))
+  const shippingCents = Math.max(0, audCents(moneyValidated.shippingPrice))
+  const feeCents = Math.max(0, audCents(moneyValidated.paymentFee || 0))
+  const discountCents = Math.max(0, audCents(moneyValidated.discount || 0))
   const grossCents = itemsSubtotalCents + shippingCents + feeCents
 
   if (discountCents > grossCents) {
@@ -115,13 +141,13 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
   }
 
   const expectedTotalCents = grossCents - discountCents
-  const draftTotalCents = Math.max(0, audCents(shippingValidated.total))
+  const draftTotalCents = Math.max(0, audCents(moneyValidated.total))
   if (Math.abs(expectedTotalCents - draftTotalCents) > 1) {
     throw new Error('Order total does not match items and discounts.')
   }
 
   return {
-    ...shippingValidated,
+    ...moneyValidated,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shippingCents / 100).toFixed(2)),
@@ -129,7 +155,7 @@ export async function sanitizeStorefrontBankOrderDraft(orderDraft: BankOrderDraf
     discount: Number((discountCents / 100).toFixed(2)),
     total: Number((expectedTotalCents / 100).toFixed(2)),
     paymentMethod: 'bank',
-    paymentMethodName: shippingValidated.paymentMethodName || 'Bank Transfer',
+    paymentMethodName: moneyValidated.paymentMethodName || 'Bank Transfer',
     status: 'pending',
   }
 }

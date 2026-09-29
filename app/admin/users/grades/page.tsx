@@ -28,6 +28,7 @@ import {
   isShopProfileSeedUser,
   phoneForShopProfileOrderMatch,
 } from '@/lib/shopProfileUsers'
+import { syncVipManualGradeOverrideToServer } from '@/lib/admin/syncVipManualGradeOverride'
 import {
   type AuthUserListRow,
   countsTowardVipSummary,
@@ -132,10 +133,10 @@ export default function GradeStatusMonitoringPage() {
   const getAllGradeConfigsForDisplay = () => {
     // 기본 등급 정의 (0-4 모두 포함)
     const defaultGradeDefinitions = [
-      { code: 0, name: '일반', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray' },
-      { code: 1, name: '실버', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver' },
-      { code: 2, name: '골드', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold' },
-      { code: 3, name: '블랙', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black' },
+      { code: 0, name: 'Basic', nameEn: 'Basic', minAmount: 0, maxAmount: 100, color: 'gray' },
+      { code: 1, name: 'Silver', nameEn: 'Silver', minAmount: 100, maxAmount: 300, color: 'silver' },
+      { code: 2, name: 'Gold', nameEn: 'Gold', minAmount: 300, maxAmount: 1000, color: 'gold' },
+      { code: 3, name: 'Black', nameEn: 'Black', minAmount: 1000, maxAmount: 3000, color: 'black' },
       { code: 4, name: 'VVIP', nameEn: 'VVIP', minAmount: 3000, maxAmount: undefined, color: 'purple' }
     ]
     
@@ -325,10 +326,26 @@ export default function GradeStatusMonitoringPage() {
     
     setIsLoading(true)
     try {
+      const email = (selectedUser.email || '').trim()
+      if (!email) {
+        alert('Customer email is required to sync VIP grade for checkout.')
+        return
+      }
+      const sync = await syncVipManualGradeOverrideToServer({
+        email,
+        gradeCode: editFormData.gradeCode,
+        reason: editFormData.reason || undefined,
+        mode: 'set',
+      })
+      if (!sync.ok) {
+        alert(sync.error || 'Failed to sync VIP grade to server. Checkout would not apply this grade.')
+        return
+      }
+
       const updatedUser: User = {
         ...selectedUser,
         currentGrade: editFormData.gradeCode,
-        manualGradeOverride: editFormData.gradeCode !== (selectedUser.currentGrade ?? 0),
+        manualGradeOverride: true,
         gradeOverrideReason: editFormData.reason || undefined,
         gradeUpdatedAt: new Date().toISOString()
       }
@@ -338,14 +355,27 @@ export default function GradeStatusMonitoringPage() {
       setSelectedUser(null)
     } catch (error) {
       console.error('Error updating grade:', error)
+      alert('Failed to update grade')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleRemoveOverride = (user: User) => {
+  const handleRemoveOverride = async (user: User) => {
     setIsLoading(true)
     try {
+      const email = (user.email || '').trim()
+      if (email) {
+        const sync = await syncVipManualGradeOverrideToServer({
+          email,
+          gradeCode: user.currentGrade ?? 0,
+          mode: 'clear',
+        })
+        if (!sync.ok) {
+          alert(sync.error || 'Failed to clear server VIP override.')
+          return
+        }
+      }
       const updatedUser: User = {
         ...user,
         manualGradeOverride: false,
@@ -659,7 +689,7 @@ export default function GradeStatusMonitoringPage() {
                           <GradeBadge gradeCode={selectedUser.currentGrade ?? 0} size="lg" />
                           {currentGradeInfo && (
                             <div className="text-sm text-gray-600">
-                              {currentGradeInfo.nameEn} ({currentGradeInfo.name})
+                              {currentGradeInfo.nameEn}
                             </div>
                           )}
                         </div>
@@ -720,9 +750,6 @@ export default function GradeStatusMonitoringPage() {
                                 <div className="text-sm font-semibold text-gray-900 mb-1">
                                   {grade.nameEn}
                                 </div>
-                                <div className="text-xs text-gray-600 mb-2">
-                                  {grade.name}
-                                </div>
                                 <div className="text-xs text-gray-500">
                                   <div>Min: ${grade.minAmount.toLocaleString()}</div>
                                   {grade.maxAmount && (
@@ -767,7 +794,7 @@ export default function GradeStatusMonitoringPage() {
                             <div className="flex justify-between">
                               <span className="text-gray-600">New Grade:</span>
                               <span className="font-semibold text-gray-900">
-                                {selectedGradeInfo.nameEn} ({selectedGradeInfo.name})
+                                {selectedGradeInfo.nameEn}
                               </span>
                             </div>
                             <div className="flex justify-between">

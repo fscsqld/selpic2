@@ -17,9 +17,14 @@ import { useUserAuth } from '@/lib/userAuth'
 import { getGradeInfo } from '@/lib/vipGradeConfig'
 import { updateUserGrade } from '@/lib/userGradeUtils'
 import { useCustomerOrdersLedgerSync } from '@/lib/useCustomerOrdersLedgerSync'
+import {
+  buildVipGradeUserPatch,
+  fetchMyVipGradeFromServer,
+} from '@/lib/syncStorefrontVipGradeFromServer'
 import AustralianAddressForm, { AddressData } from '@/components/AustralianAddressForm'
 import { getStorefrontLinePriceBreakdown, getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
+import { getPaymentFee } from '@/lib/checkout/paymentFee'
 import { buildOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
 import { computeChargedShippingPrice } from '@/lib/shipping/computeChargedShippingPrice'
 import {
@@ -124,11 +129,36 @@ export default function CheckoutPage() {
   }, [_hasHydrated, promoCodes])
   const { t } = useTranslation()
 
-  // Ensure checkout discounts always use up-to-date VIP grade after order ledger syncs.
+  // Ensure checkout discounts use server VIP (admin manual override ∪ sales), same as payment APIs.
   useEffect(() => {
     if (!_hasHydrated || !isLoggedIn || !currentUser?.id) return
-    updateUserGrade(currentUser, orders, updateUser)
-  }, [_hasHydrated, isLoggedIn, currentUser, orders, updateUser])
+    let cancelled = false
+    ;(async () => {
+      const remote = await fetchMyVipGradeFromServer()
+      if (cancelled) return
+      if (remote) {
+        const patch = buildVipGradeUserPatch(remote)
+        const latest = useUserAuth.getState().user
+        if (latest && latest.id === currentUser.id) {
+          const unchanged =
+            latest.currentGrade === patch.currentGrade &&
+            Boolean(latest.manualGradeOverride) === patch.manualGradeOverride &&
+            (latest.totalSalesAmount || 0) === patch.totalSalesAmount
+          if (!unchanged) {
+            updateUser(currentUser.id, patch)
+          }
+          if (patch.manualGradeOverride) return
+        }
+      }
+      const userAfter = useUserAuth.getState().user
+      if (userAfter && !userAfter.manualGradeOverride) {
+        updateUserGrade(userAfter, orders, updateUser)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [_hasHydrated, isLoggedIn, currentUser?.id, orders, updateUser])
   
   // Restrict letter services when merchandise or total packed weight requires a parcel.
   // Canonical store products take precedence over cart snapshots.
@@ -640,15 +670,6 @@ export default function CheckoutPage() {
   const handlePaymentMethodChange = (method: string) => {
     setPaymentMethod(method)
   }
-  
-  // 결제 옵션 수수료 계산
-  const getPaymentFee = (option: any, subtotal: number): number => {
-    if (!option) return 0
-    if (option.feeType === 'percentage' && option.feePercentage) {
-      return (subtotal * option.feePercentage) / 100
-    }
-    return option.fee || 0
-  }
 
   // 장바구니가 비어있으면 로딩 표시 (hydrate 전이면 빈 카트로 오판하지 않음)
   if (!storeHydrated || !hasCartItems) {
@@ -968,30 +989,29 @@ export default function CheckoutPage() {
           }
         }
 
-        void (async () => {
-          try {
-            const { sendGuestCheckoutEmailsAction } = await import('@/app/actions/emails')
-            const placed = data.order as OrderRecord
-            const r = await sendGuestCheckoutEmailsAction(JSON.stringify(placed))
-            if (r.ok) {
-              const sentAt = new Date().toISOString()
-              mergeOrdersFromServer([
-                {
-                  ...placed,
-                  emailConfirmation: {
-                    sent: true,
-                    sentAt,
-                    status: 'sent' as const,
-                    attempts: 1,
-                    lastAttempt: sentAt,
-                  },
+        // Await customer confirmation after order is saved — never roll back the order on email failure.
+        try {
+          const { sendGuestCheckoutEmailsAction } = await import('@/app/actions/emails')
+          const placed = data.order as OrderRecord
+          const r = await sendGuestCheckoutEmailsAction(JSON.stringify(placed))
+          if (r.ok) {
+            const sentAt = new Date().toISOString()
+            mergeOrdersFromServer([
+              {
+                ...placed,
+                emailConfirmation: {
+                  sent: true,
+                  sentAt,
+                  status: 'sent' as const,
+                  attempts: 1,
+                  lastAttempt: sentAt,
                 },
-              ])
-            }
-          } catch {
-            /* non-fatal */
+              },
+            ])
           }
-        })()
+        } catch {
+          /* non-fatal — order already placed */
+        }
 
         setCheckoutNotice({
           type: 'success',

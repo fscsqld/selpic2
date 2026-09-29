@@ -1,0 +1,79 @@
+---
+description: Checkout/payment hardening must not break live customer purchases (learned 2026-09-29)
+globs: app/checkout/**/*.tsx,app/success/**/*.tsx,app/api/orders/**/*.ts,app/api/stripe/**/*.ts,lib/orders/**/*.ts,app/actions/emails.ts
+alwaysApply: true
+---
+
+# Live checkout safety — do not break working payments
+
+**Learned 2026-09-29.** Owner: customers are **already paying successfully** on the live storefront. Security / integrity hardening of checkout must **not** introduce payment errors, false declines, or “refresh and try again” loops that hurt sales.
+
+## Invariant
+
+> Any change to bank checkout, Stripe session create, shipping revalidation, discount/VIP/fee, stock, or auth on payment APIs must keep the **current logged-in UI happy path** working identically for honest customers.
+
+If unsure whether a change could reject a real cart that works today → **do not ship** until proven with the same payload shape the checkout page already sends.
+
+## What is already healthy (do not regress)
+
+| Area | Status |
+|------|--------|
+| Catalog **item prices** server overwrite | Working — keep |
+| **Shipping** option + charged price server match (±1¢) | Working — keep; do not tighten blindly without UI sync |
+| Customize → checkout **empty-cart race** guards | Working — keep |
+| Stripe **paid** verify + amount match + idempotent upsert | Working — keep |
+| Admin `[SELPIC Order]` **await** notify | Working — do not reintroduce `void` |
+| Checkout UI **login required** | Product choice — keep UX |
+
+## Audit findings vs sales risk (2026-09-29)
+
+Most “High” items are **attacker / crafted-API** gaps, **not** proof that normal homepage checkout is broken.
+
+| Finding | Hurts honest shoppers today? | Fix urgency vs sales |
+|---------|------------------------------|----------------------|
+| Client-trusted `discount` / Stripe coupon from draft | No (UI computes promo correctly) | Harden carefully; must accept UI-calculated amounts that match server recompute of same promo+VIP |
+| Client-trusted `vipGradeCode` for free ship | No for honest logged-in VIP | Prefer resolve grade from **server session user**, fallback only if identical to current UI |
+| Client-trusted `paymentFee` | No if UI uses CMS fee | Recompute fee from CMS payment option id; must match current `getPaymentFee` |
+| Checkout APIs unauthenticated | No for UI (login gate) | Adding auth is good **only if** session cookie the checkout page already has is accepted; never require a new header the UI does not send |
+| No server stock / bank no decrement | Edge oversell only | Optional; must not block purchase on stale catalog `inStock` false positives |
+| Bank customer email fire-and-forget | Occasional missed mail | Safe to `await` **after** order insert succeeds; never fail the order response because email failed |
+
+## How to harden without breaking sales
+
+### Do
+
+1. **Additive validation** — recompute discount/fee/VIP on the server from the **same inputs the UI uses** (promo code string, payment option id, logged-in user id). Compare to client cents (±1¢). Reject only clear tampering.
+2. **Parity tests** — fixture: real-shaped checkout draft from `app/checkout/page.tsx` (with and without promo, VIP, Market S letter, stickers parcel, bank + Stripe). Server sanitize must return success.
+3. **Fail closed for attackers, fail open for email/stock side effects** — order insert / Stripe session success must not depend on Resend or stock sync succeeding.
+4. **Feature-flag or staged** — prefer ship bank path and Stripe path behind the same helper; one PR that only adds logging “would reject” before enforcing reject is safer when discount logic is complex.
+5. **Preserve error messages** honest users already see (`Shipping price mismatch… refresh`) — do not invent new cryptic 500s on the happy path.
+
+### Do not
+
+- Rewrite checkout UI and payment APIs in the same PR “while we’re here”.
+- Reject drafts solely because optional fields (`vipGradeCode`, `discount`) are missing if today’s UI sometimes omits them when zero.
+- Change Stripe `line_items` / metadata chunking / success→complete flow unless required for the harden.
+- Block checkout when promo CMS is temporarily empty/stale if that would false-reject codes the UI already validated from the same CMS snapshot — prefer server read of same promo source with clear “code invalid” only when code is wrong.
+- Treat security audit items as an emergency that justifies risky refactors while sales are flowing.
+
+## Required verification before deploy of any payment harden
+
+1. Local: login → cart with stickers (± promo) → bank place order succeeds; Stripe session create returns URL (test mode OK).
+2. Local: Market S Single Item letter-eligible cart still gets letter rate; mixed/parcel still parcel.
+3. Confirm admin notify still awaited; customer email failure does not roll back order.
+4. No change to empty-cart race guards unless tests still pass (`mergePersistedCart`, checkout hydrate wait).
+
+## Status (shipped 2026-09-29 local)
+
+Implemented with sales-safe defaults:
+
+- Auth required on bank + Stripe checkout create
+- Order email overwritten to session email (form edits do not 403)
+- VIP grade from ledger orders (not client `vipGradeCode`)
+- **Manual VIP override** (Admin Users / Grades) → `site_configs` key `vip_manual_grade_overrides`; checkout prefers it when present. Customers **without** a row keep sales-only grade (no change).
+- Fee/discount recomputed from CMS; reject only if client discount **exceeds** server allow
+- Promo codes remain on storefront CMS — unchanged by VIP override work
+- CMS missing promo/VIP rows → do not false-reject empty-discount checkouts
+- Bank customer email awaited after insert (failure does not roll back order)
+
+Still out of scope: server stock enforcement.

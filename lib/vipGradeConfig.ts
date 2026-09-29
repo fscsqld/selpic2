@@ -23,45 +23,45 @@ export const VIP_GRADE_CONFIGS: GradeConfig[] = [
     name: '일반',
     nameEn: 'Basic',
     minAmount: 0,
-    maxAmount: 100000,        // 10만원 미만
+    maxAmount: 100000,        // under $100k (legacy KRW-era fallback; CMS overrides live)
     color: 'gray',
-    benefits: ['기본 5% 할인 쿠폰']
+    benefits: ['5% coupon (no automatic discount)']
   },
   {
     code: 1,
     name: '실버',
     nameEn: 'Silver',
     minAmount: 100000,
-    maxAmount: 300000,        // 30만원 미만
+    maxAmount: 300000,
     color: 'silver',
-    benefits: ['5% 상시 할인', '생일 쿠폰']
+    benefits: ['5% ongoing discount', 'Birthday coupon']
   },
   {
     code: 2,
     name: '골드',
     nameEn: 'Gold',
     minAmount: 300000,
-    maxAmount: 1000000,       // 100만원 미만
+    maxAmount: 1000000,
     color: 'gold',
-    benefits: ['10% 상시 할인', '무료 배송 쿠폰']
+    benefits: ['10% ongoing discount', 'Free shipping coupon']
   },
   {
     code: 3,
     name: '블랙',
     nameEn: 'Black',
     minAmount: 1000000,
-    maxAmount: 3000000,       // 300만원 미만
+    maxAmount: 3000000,
     color: 'black',
-    benefits: ['20% 상시 할인', '전용 고객 센터']
+    benefits: ['20% ongoing discount', 'Dedicated support']
   },
   {
     code: 4,
     name: 'VVIP',
     nameEn: 'VVIP',
     minAmount: 3000000,
-    maxAmount: undefined,     // 무제한
+    maxAmount: undefined,
     color: 'purple',
-    benefits: ['50% 상시 할인', '특별 선물']
+    benefits: ['50% ongoing discount', 'Special gift']
   }
 ]
 

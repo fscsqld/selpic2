@@ -4,11 +4,12 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { sanitizeStorefrontBankOrderDraft, type BankOrderDraft } from '@/lib/orders/sanitizeStorefrontBankOrderDraft'
+import { requireStorefrontCheckoutSession } from '@/lib/orders/requireStorefrontCheckoutSession'
 import { notifyAdminsOfNewOrder } from '@/lib/server/adminInboundNotify'
 
 /**
- * Storefront bank-transfer checkout: same catalog/total validation as admin manual orders,
- * but no Supabase admin session required (insert uses service_role).
+ * Storefront bank-transfer checkout: catalog/total validation + signed-in session required.
+ * Insert uses service_role after sanitize.
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) {
@@ -22,9 +23,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid order draft.' }, { status: 400 })
     }
 
+    const sessionGate = await requireStorefrontCheckoutSession()
+    if (!sessionGate.ok) {
+      return NextResponse.json({ error: sessionGate.error }, { status: sessionGate.status })
+    }
+
+    // Bind order contact email to the signed-in account (form field may differ).
+    const orderDraftBound: BankOrderDraft = {
+      ...orderDraft,
+      customer: {
+        ...(orderDraft.customer || { name: '', phone: '' }),
+        email: sessionGate.email,
+      },
+    }
+
     let sanitizedDraft: BankOrderDraft
     try {
-      sanitizedDraft = await sanitizeStorefrontBankOrderDraft(orderDraft)
+      sanitizedDraft = await sanitizeStorefrontBankOrderDraft(orderDraftBound, sessionGate.email)
     } catch (validationError) {
       const message = validationError instanceof Error ? validationError.message : 'Invalid order.'
       return NextResponse.json({ error: message }, { status: 400 })

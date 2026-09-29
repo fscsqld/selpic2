@@ -7,6 +7,10 @@ import { readCatalogProducts } from '@/lib/server/catalogStore'
 import { getStorefrontLinePriceBreakdown } from '@/lib/storefrontLinePrice'
 import { isValidAuPhone } from '@/lib/phone'
 import { applyServerShippingToDraft } from '@/lib/orders/applyServerShippingToDraft'
+import { applyServerCheckoutMoney } from '@/lib/orders/applyServerCheckoutMoney'
+import { requireStorefrontCheckoutSession } from '@/lib/orders/requireStorefrontCheckoutSession'
+import { readCmsCheckoutPricingConfig } from '@/lib/server/cmsCheckoutPricingConfig'
+import { resolveStorefrontVipGradeFromOrders } from '@/lib/server/resolveStorefrontVipGrade'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -24,7 +28,10 @@ function normalizeSiteOriginFromEnv(): string {
   return `${parsed.protocol}//${parsed.host}`
 }
 
-async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<{
+async function validateTotalsAndBuildLineItems(
+  orderDraft: OrderDraft,
+  sessionEmail: string
+): Promise<{
   line_items: Stripe.Checkout.SessionCreateParams.LineItem[]
   discountCents: number
   sanitizedOrderDraft: OrderDraft
@@ -98,14 +105,27 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
     })
   }
 
+  const cms = await readCmsCheckoutPricingConfig()
+  const { gradeCode } = await resolveStorefrontVipGradeFromOrders({
+    email: sessionEmail,
+    phone: orderDraft.customer?.phone,
+    gradeConfigs: cms.vipGradeConfigs,
+  })
+
   const draftWithCatalogSubtotal: OrderDraft = {
     ...orderDraft,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
+    vipGradeCode: gradeCode,
   }
   const shippingValidated = await applyServerShippingToDraft(draftWithCatalogSubtotal)
+  const moneyValidated = await applyServerCheckoutMoney({
+    orderDraft: shippingValidated,
+    sessionEmail,
+    paymentType: 'stripe',
+  })
 
-  const shipCents = Math.max(0, audCents(shippingValidated.shippingPrice))
+  const shipCents = Math.max(0, audCents(moneyValidated.shippingPrice))
   if (shipCents > 0) {
     line_items.push({
       quantity: 1,
@@ -113,13 +133,13 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
         currency: 'aud',
         unit_amount: shipCents,
         product_data: {
-          name: (shippingValidated.shippingOptionName || 'Shipping').slice(0, 120),
+          name: (moneyValidated.shippingOptionName || 'Shipping').slice(0, 120),
         },
       },
     })
   }
 
-  const fee = Math.max(0, Number(shippingValidated.paymentFee) || 0)
+  const fee = Math.max(0, Number(moneyValidated.paymentFee) || 0)
   if (fee > 0) {
     const feeCents = audCents(fee)
     line_items.push({
@@ -134,21 +154,21 @@ async function validateTotalsAndBuildLineItems(orderDraft: OrderDraft): Promise<
     })
   }
 
-  const discountCents = Math.max(0, audCents(shippingValidated.discount ?? 0))
+  const discountCents = Math.max(0, audCents(moneyValidated.discount ?? 0))
   const feeCents = audCents(fee)
   const grossTotalCents = itemsSubtotalCents + shipCents + feeCents
   if (discountCents > grossTotalCents) {
     throw new Error('Invalid discount amount for checkout.')
   }
   const expectedTotalCents = grossTotalCents - discountCents
-  const draftTotalCents = Math.max(0, audCents(shippingValidated.total))
+  const draftTotalCents = Math.max(0, audCents(moneyValidated.total))
 
   if (Math.abs(expectedTotalCents - draftTotalCents) > 1) {
     throw new Error('Order total does not match line items and discounts.')
   }
 
   const sanitizedOrderDraft: OrderDraft = {
-    ...shippingValidated,
+    ...moneyValidated,
     items: sanitizedItems,
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shipCents / 100).toFixed(2)),
@@ -170,15 +190,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid order draft' }, { status: 400 })
     }
 
+    const sessionGate = await requireStorefrontCheckoutSession()
+    if (!sessionGate.ok) {
+      return NextResponse.json({ error: sessionGate.error }, { status: sessionGate.status })
+    }
+
+    const orderDraftBound: OrderDraft = {
+      ...orderDraft,
+      customer: {
+        ...(orderDraft.customer || { name: '', phone: '' }),
+        email: sessionGate.email,
+      },
+    }
+
     // Basic debug logging (no sensitive data) to trace checkout calls
     const stripeKey = process.env.STRIPE_SECRET_KEY || ''
     const keyPrefix = stripeKey ? stripeKey.slice(0, 8) : '(missing)'
     console.log('[stripe/checkout] incoming orderDraft summary:', {
-      total: orderDraft.total,
+      total: orderDraftBound.total,
       currency: 'aud',
-      itemsCount: Array.isArray(orderDraft.items) ? orderDraft.items.length : 0,
-      email: orderDraft.customer?.email || '(none)',
-      shippingOptionId: orderDraft.shippingOptionId,
+      itemsCount: Array.isArray(orderDraftBound.items) ? orderDraftBound.items.length : 0,
+      email: orderDraftBound.customer?.email || '(none)',
+      shippingOptionId: orderDraftBound.shippingOptionId,
       env: process.env.NODE_ENV,
       stripeKeyPrefix: keyPrefix,
     })
@@ -187,7 +220,10 @@ export async function POST(req: Request) {
     let discountCents: number
     let sanitizedOrderDraft: OrderDraft
     try {
-      ;({ line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(orderDraft))
+      ;({ line_items, discountCents, sanitizedOrderDraft } = await validateTotalsAndBuildLineItems(
+        orderDraftBound,
+        sessionGate.email
+      ))
     } catch (validationError) {
       const message = validationError instanceof Error ? validationError.message : 'Invalid checkout totals.'
       console.warn('[stripe/checkout] validation failed:', message)
@@ -225,6 +261,7 @@ export async function POST(req: Request) {
       ...(phone ? { selpic_phone: phone.slice(0, 60) } : {}),
       ...(addrSingleLine ? { selpic_address: addrSingleLine.slice(0, 450) } : {}),
       ...(sanitizedOrderDraft.shippingOptionId ? { selpic_shipping: String(sanitizedOrderDraft.shippingOptionId).slice(0, 80) } : {}),
+      selpic_user_id: sessionGate.userId.slice(0, 80),
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {

@@ -83,6 +83,9 @@ export async function applyServerShippingToDraft(orderDraft: OrderDraft): Promis
   return {
     ...orderDraft,
     ...snapshot,
+    // Keep client fee/discount for now; applyServerCheckoutMoney overwrites after shipping.
+    paymentFee: fee,
+    discount,
     total: Number(total.toFixed(2)),
   }
 }
