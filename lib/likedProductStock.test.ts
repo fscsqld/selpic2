@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isProductOutOfStock,
   likedProductStockLabel,
   resolveLikedProductStockStatus,
 } from './likedProductStock'
@@ -19,5 +20,18 @@ describe('resolveLikedProductStockStatus', () => {
     expect(resolveLikedProductStockStatus(null)).toBe('unavailable')
     expect(resolveLikedProductStockStatus(undefined)).toBe('unavailable')
     expect(likedProductStockLabel('out_of_stock')).toBe('Out of stock')
+  })
+})
+
+describe('isProductOutOfStock', () => {
+  it('is true for zero stock or missing product', () => {
+    expect(isProductOutOfStock({ inStock: true, stockQuantity: 0 })).toBe(true)
+    expect(isProductOutOfStock({ inStock: false })).toBe(true)
+    expect(isProductOutOfStock(null)).toBe(true)
+  })
+
+  it('is false when stock or inStock allows purchase', () => {
+    expect(isProductOutOfStock({ inStock: true, stockQuantity: 2 })).toBe(false)
+    expect(isProductOutOfStock({ inStock: true })).toBe(false)
   })
 })

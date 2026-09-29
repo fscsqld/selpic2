@@ -30,3 +30,14 @@ export function likedProductStockLabel(status: LikedProductStockStatus): string 
       return 'No longer available'
   }
 }
+
+/**
+ * True when the SKU cannot be purchased (stock 0 or inStock false).
+ * Missing product is treated as out of stock for cart/CTA guards.
+ */
+export function isProductOutOfStock(
+  product: Pick<Product, 'inStock' | 'stockQuantity'> | null | undefined
+): boolean {
+  const status = resolveLikedProductStockStatus(product)
+  return status === 'out_of_stock' || status === 'unavailable'
+}

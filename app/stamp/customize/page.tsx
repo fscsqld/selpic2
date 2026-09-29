@@ -10,6 +10,7 @@ import Header from '@/components/Header'
 import { getStampFonts, getEffectiveFont, containsKorean, type FontConfig } from '@/lib/fontList'
 import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
 import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
 
 // Suspense wrapper for useSearchParams
 export default function StampCustomizePage() {
@@ -163,6 +164,8 @@ function StampCustomizeContent() {
       }
     : { id: 'medium', name: 'Medium', price: 25.00 }
 
+  const isOutOfStock = isProductOutOfStock(selectedProduct)
+
   // HEX 코드를 색상 이름으로 변환
   const getColorName = (hex: string): string => {
     const colorMap: { [key: string]: string } = {
@@ -313,6 +316,11 @@ function StampCustomizeContent() {
       return
     }
 
+    if (isOutOfStock) {
+      alert('This product is currently out of stock.')
+      return
+    }
+
     setIsAddingToCart(true)
 
     try {
@@ -320,6 +328,12 @@ function StampCustomizeContent() {
       const storeProduct = products.find(p => p.id === selectedProduct.id)
       if (!storeProduct) {
         alert('Product not found. Please refresh the page and try again.')
+        setIsAddingToCart(false)
+        return
+      }
+
+      if (isProductOutOfStock(storeProduct)) {
+        alert('This product is currently out of stock.')
         setIsAddingToCart(false)
         return
       }
@@ -444,11 +458,21 @@ function StampCustomizeContent() {
       return
     }
 
+    if (isOutOfStock) {
+      alert('This product is currently out of stock.')
+      return
+    }
+
     try {
       // Store에서 최신 제품 정보 가져오기
       const storeProduct = products.find(p => p.id === selectedProduct.id)
       if (!storeProduct) {
         alert('Product not found. Please refresh the page and try again.')
+        return
+      }
+
+      if (isProductOutOfStock(storeProduct)) {
+        alert('This product is currently out of stock.')
         return
       }
 
@@ -820,7 +844,7 @@ function StampCustomizeContent() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={handleAddToCartAndCheckout}
-                      disabled={!selectedProduct || isAddingToCart || !setItems.every(item => item.selectedDesign !== null)}
+                      disabled={!selectedProduct || isAddingToCart || isOutOfStock || !setItems.every(item => item.selectedDesign !== null)}
                       className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isAddingToCart ? (
@@ -838,7 +862,7 @@ function StampCustomizeContent() {
                     
                     <button
                       onClick={handleAddToCart}
-                      disabled={!selectedProduct || !setItems.every(item => item.selectedDesign !== null)}
+                      disabled={!selectedProduct || isOutOfStock || !setItems.every(item => item.selectedDesign !== null)}
                       className="flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg font-semibold hover:bg-gray-600 transition-all border border-gray-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Package className="w-5 h-5" />
@@ -940,7 +964,7 @@ function StampCustomizeContent() {
                 <div className="mt-4 space-y-2">
                   <button
                     onClick={handleAddToCartAndCheckout}
-                    disabled={!selectedProduct || isAddingToCart}
+                    disabled={!selectedProduct || isAddingToCart || isOutOfStock}
                     className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAddingToCart ? (
@@ -958,7 +982,7 @@ function StampCustomizeContent() {
                   
                   <button
                     onClick={handleAddToCart}
-                    disabled={!selectedProduct}
+                    disabled={!selectedProduct || isOutOfStock}
                     className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition-all border border-slate-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Package className="w-5 h-5" />

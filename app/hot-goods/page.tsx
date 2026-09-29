@@ -12,6 +12,7 @@ import SeoProductJsonLd from '@/components/SeoProductJsonLd'
 import ProductLikeButton from '@/components/ProductLikeButton'
 import { resolveMarketSHeroCopy } from '@/lib/marketSHeroCopy'
 import { isMarketSCatalogProduct, marketSSubcategoryIcon } from '@/lib/marketSSubcategory'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
 import {
   MARKET_S_HUB_FILTER_ALL,
   marketSHubFilterOptions,
@@ -523,9 +524,9 @@ export default function HotGoodsPage() {
             const safety = typeof product.safetyStock === 'number' ? Math.max(0, product.safetyStock) : undefined
             const incoming = typeof product.incomingStock === 'number' ? Math.max(0, product.incomingStock) : undefined
             const lowStockThreshold = Math.max(safety ?? 0, 5)
-            // 재고가 0이면 자동으로 품절 처리
-            const isOutOfStock = typeof stockQty === 'number' ? stockQty === 0 : !product.inStock
-            const isLowStock = stockQty !== undefined && stockQty > 0 && stockQty <= lowStockThreshold && product.inStock
+            const isOutOfStock = isProductOutOfStock(product)
+            const isLowStock =
+              stockQty !== undefined && stockQty > 0 && stockQty <= lowStockThreshold && !isOutOfStock
             return (
             <div key={product.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               {/* 상품 이미지 */}
@@ -545,8 +546,13 @@ export default function HotGoodsPage() {
                     className="w-full h-48 object-cover"
                   />
                 )}
+                {isOutOfStock && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center pointer-events-none z-[5]">
+                    <span className="text-white font-medium">Out of Stock</span>
+                  </div>
+                )}
                 {/* 배지 */}
-                <div className="absolute top-2 left-2 flex flex-col gap-1">
+                <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
                   {product.trending && (
                     <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1">
                       <Sparkles className="w-3 h-3" />
@@ -562,10 +568,7 @@ export default function HotGoodsPage() {
                   {product.isPopular && (
                     <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">POPULAR</span>
                   )}
-                  {isOutOfStock && (
-                    <span className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full">Out of Stock</span>
-                  )}
-                  {isLowStock && product.inStock && typeof stockQty === 'number' && (
+                  {isLowStock && typeof stockQty === 'number' && (
                     <span className="bg-white/90 text-red-600 text-xs px-2 py-1 rounded-full border border-red-100">
                       Only {stockQty} left
                     </span>

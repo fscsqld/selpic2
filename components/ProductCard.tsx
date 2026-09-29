@@ -18,6 +18,7 @@ import {
   resolveProductCardMerchBadges,
 } from '@/lib/productCardMerchBadges'
 import { isStickerSheetSpecDescription } from '@/lib/stickerSheetSpecDescription'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
 import ProductLikeButton from '@/components/ProductLikeButton'
 
 export type { ProductCardImageLayout }
@@ -120,13 +121,15 @@ export default function ProductCard({
   const incomingStock =
     typeof product.incomingStock === 'number' ? Math.max(0, product.incomingStock) : undefined
   const lowStockThreshold = Math.max(safetyStock ?? 0, 5)
-  // 재고가 0이면 자동으로 품절 처리
-  const isOutOfStock = typeof stockQuantity === 'number' ? stockQuantity === 0 : !product.inStock
+  const isOutOfStock = isProductOutOfStock(product)
   const isLowStock =
-    typeof stockQuantity === 'number' && stockQuantity > 0 && stockQuantity <= lowStockThreshold && product.inStock
+    typeof stockQuantity === 'number' && stockQuantity > 0 && stockQuantity <= lowStockThreshold && !isOutOfStock
 
   const handleAddToCart = () => {
     if (requiresCustomization) {
+      return
+    }
+    if (isOutOfStock) {
       return
     }
     if (!isLoggedIn) {
@@ -287,7 +290,7 @@ export default function ProductCard({
             <ProductLikeButton productId={product.id} variant="compact" />
           </div>
         ) : null}
-        {!product.inStock && (
+        {isOutOfStock && (
           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
             <span className="text-white font-medium">{t('product.outOfStock')}</span>
           </div>
@@ -364,19 +367,37 @@ export default function ProductCard({
                 ) : null}
               </div>
               {requiresCustomization ? (
-                <Link href={customizationPath} className="shrink-0 btn-ux btn-ux-cta text-sm px-4 py-2">
-                  <Eye size={16} />
-                  <span>{t('product.customize')}</span>
-                </Link>
+                isOutOfStock ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="shrink-0 btn-ux btn-ux-cta text-sm px-4 py-2 opacity-50 cursor-not-allowed"
+                  >
+                    <span>{t('product.outOfStock')}</span>
+                  </button>
+                ) : (
+                  <Link href={customizationPath} className="shrink-0 btn-ux btn-ux-cta text-sm px-4 py-2">
+                    <Eye size={16} />
+                    <span>{t('product.customize')}</span>
+                  </Link>
+                )
               ) : isStickersOrStamps ? (
                 <button
                   type="button"
                   onClick={handleAddToCart}
                   className="shrink-0 btn-ux btn-ux-cart text-sm px-4 py-2"
-                  disabled={!product.inStock}
+                  disabled={isOutOfStock}
                 >
                   <ShoppingCart size={16} />
                   <span>{isOutOfStock ? t('product.outOfStock') : t('product.addToCart')}</span>
+                </button>
+              ) : isOutOfStock ? (
+                <button
+                  type="button"
+                  disabled
+                  className="shrink-0 btn-ux btn-ux-cta text-sm px-4 py-2 opacity-50 cursor-not-allowed"
+                >
+                  <span>{t('product.outOfStock')}</span>
                 </button>
               ) : (
                 <Link
@@ -437,39 +458,58 @@ export default function ProductCard({
 
             <div className="flex space-x-2 pt-2">
               {requiresCustomization ? (
-                <Link
-                  href={customizationPath}
-                  className="flex-1 btn-ux btn-ux-cta text-sm"
-                >
-                  <Eye size={16} />
-                  <span>{t('product.customize')}</span>
-                </Link>
-              ) : isStickersOrStamps ? (
-                <button
-                  onClick={handleAddToCart}
-                  className="flex-1 btn-ux btn-ux-cart text-sm"
-                  disabled={!product.inStock}
-                >
-                  <ShoppingCart size={16} />
-                  <span>{t('product.addToCart')}</span>
-                </button>
-              ) : (
-                <>
-                  <Link
-                    href={`/customize?product=${product.id}`}
-                    className="flex-1 btn-ux btn-ux-cta text-sm"
+                isOutOfStock ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex-1 btn-ux btn-ux-cta text-sm opacity-50 cursor-not-allowed"
                   >
+                    <span>{t('product.outOfStock')}</span>
+                  </button>
+                ) : (
+                  <Link href={customizationPath} className="flex-1 btn-ux btn-ux-cta text-sm">
                     <Eye size={16} />
                     <span>{t('product.customize')}</span>
                   </Link>
+                )
+              ) : isStickersOrStamps ? (
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  className="flex-1 btn-ux btn-ux-cart text-sm"
+                  disabled={isOutOfStock}
+                >
+                  <ShoppingCart size={16} />
+                  <span>{isOutOfStock ? t('product.outOfStock') : t('product.addToCart')}</span>
+                </button>
+              ) : (
+                <>
+                  {isOutOfStock ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex-1 btn-ux btn-ux-cta text-sm opacity-50 cursor-not-allowed"
+                    >
+                      <span>{t('product.outOfStock')}</span>
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/customize?product=${product.id}`}
+                      className="flex-1 btn-ux btn-ux-cta text-sm"
+                    >
+                      <Eye size={16} />
+                      <span>{t('product.customize')}</span>
+                    </Link>
+                  )}
 
                   <button
+                    type="button"
                     onClick={handleAddToCart}
                     className="flex-1 btn-ux btn-ux-cart text-sm"
-                    disabled={!product.inStock}
+                    disabled={isOutOfStock}
                   >
                     <ShoppingCart size={16} />
-                    <span>{t('product.addToCart')}</span>
+                    <span>{isOutOfStock ? t('product.outOfStock') : t('product.addToCart')}</span>
                   </button>
                 </>
               )}

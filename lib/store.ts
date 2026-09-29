@@ -652,18 +652,18 @@ export const useStore = create<Store>()(
         const { cart, products } = get()
         const storeProduct = products.find(p => p.id === item.product.id)
         
-        // 커스텀 제품인 경우 (Custom Design Studio에서 생성된 제품) 허용
-        const isCustomProduct = item.product.id.startsWith('custom-') || 
-                                 item.product.category === 'Custom Design' ||
-                                 item.product.category === 'Stickers' ||
-                                 item.product.category === 'Stamps'
+        // Studio-only rows (Custom Design / custom-* ids) may not exist in catalog.
+        // Catalog Stickers/Stamps must still pass stock checks — do not treat them as studio-only.
+        const isStudioOnlyProduct =
+          item.product.id.startsWith('custom-') ||
+          item.product.category === 'Custom Design'
         
-        if (!storeProduct && !isCustomProduct) {
+        if (!storeProduct && !isStudioOnlyProduct) {
           console.error('Product not found for cart add:', item.product.id)
           return false
         }
         
-        // 커스텀 제품인 경우 item.product를 직접 사용, 아니면 storeProduct 사용
+        // Studio-only: use cart payload; otherwise use live catalog row
         const productToUse = storeProduct || item.product
 
         const existingItem = cart.find(cartItem => 
@@ -673,8 +673,8 @@ export const useStore = create<Store>()(
           JSON.stringify(cartItem.customizations) === JSON.stringify(item.customizations)
         )
 
-        // 커스텀 제품은 재고 체크 스킵
-        if (!isCustomProduct) {
+        // Studio-only designs skip stock; catalog SKUs (incl. Stickers/Stamps) enforce stock
+        if (!isStudioOnlyProduct) {
           const availableStock = getAvailableStock(productToUse)
           const existingQty = existingItem ? existingItem.quantity : 0
           const requestedQty = item.quantity + existingQty

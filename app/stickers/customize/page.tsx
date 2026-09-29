@@ -24,6 +24,7 @@ import { getStorefrontLineUnitPrice } from '@/lib/storefrontLinePrice'
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
 import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 /** Static print guide: official AU school fonts (Fonts 1–5); matches sticker Font 1–5 in the menu */
@@ -208,6 +209,7 @@ function StickerCustomizeContent() {
     return products.find(p => p.id === id && p.category === 'Stickers') ?? null
   }, [searchParams, products])
   const displayProduct = selectedProduct ?? restoredProduct
+  const isOutOfStock = isProductOutOfStock(displayProduct)
 
   useEffect(() => {
     if (!isMounted || !displayProduct) return
@@ -726,6 +728,11 @@ function StickerCustomizeContent() {
       return
     }
 
+    if (isOutOfStock) {
+      alert('This product is currently out of stock.')
+      return
+    }
+
     if (stickerPackOptionsEnabled && !selectedStickerPack) {
       alert('Please select a pack size')
       return
@@ -928,6 +935,11 @@ function StickerCustomizeContent() {
 
     if (!displayProduct) {
       alert('Please select a product first')
+      return
+    }
+
+    if (isOutOfStock) {
+      alert('This product is currently out of stock.')
       return
     }
 
@@ -1724,7 +1736,7 @@ function StickerCustomizeContent() {
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     onClick={handleAddToCartAndCheckout}
-                    disabled={!displayProduct || isAddingToCart || !_hasHydrated}
+                    disabled={!displayProduct || isAddingToCart || !_hasHydrated || isOutOfStock}
                     className="w-full btn-ux btn-ux-editor-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAddingToCart ? (
@@ -1732,6 +1744,8 @@ function StickerCustomizeContent() {
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                         <span>Processing...</span>
                       </>
+                    ) : isOutOfStock ? (
+                      <span>Out of Stock</span>
                     ) : (
                       <>
                         <ShoppingCart className="w-5 h-5" />
@@ -1742,11 +1756,11 @@ function StickerCustomizeContent() {
                   
                   <button
                     onClick={handleAddToCart}
-                    disabled={!displayProduct || !_hasHydrated}
+                    disabled={!displayProduct || !_hasHydrated || isOutOfStock}
                     className="w-full btn-ux btn-ux-editor-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Package className="w-5 h-5" />
-                    <span>Add to Cart</span>
+                    <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
                   </button>
                 </div>
               </div>
@@ -2232,7 +2246,7 @@ function StickerCustomizeContent() {
             <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
               <button
                 onClick={handleAddToCartAndCheckout}
-                disabled={!displayProduct || isAddingToCart || !_hasHydrated}
+                disabled={!displayProduct || isAddingToCart || !_hasHydrated || isOutOfStock}
                 className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAddingToCart ? (
@@ -2240,6 +2254,8 @@ function StickerCustomizeContent() {
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                     <span>Processing...</span>
                   </>
+                ) : isOutOfStock ? (
+                  <span>Out of Stock</span>
                 ) : (
                   <>
                     <ShoppingCart className="w-5 h-5" />
@@ -2250,11 +2266,11 @@ function StickerCustomizeContent() {
               
               <button
                 onClick={handleAddToCart}
-                disabled={!displayProduct || !_hasHydrated}
+                disabled={!displayProduct || !_hasHydrated || isOutOfStock}
                 className="flex-1 bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Package className="w-5 h-5" />
-                <span>Add to Cart</span>
+                <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
               </button>
             </div>
           </div>

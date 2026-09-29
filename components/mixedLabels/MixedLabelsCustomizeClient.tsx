@@ -38,6 +38,7 @@ import { getEffectiveFont } from '@/lib/fontList'
 import { getMixedLabelsTemplate } from '@/lib/mixedLabelsTemplates'
 import { canMutateStorefrontCart, cartNotReadyMessage } from '@/lib/cartMutateReady'
 import { customerLoginHrefWithNext } from '@/lib/storefrontLoginNext'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
 
 const DEFAULT_BG_IMAGE = '/images/STICKER1.jpg'
 
@@ -93,6 +94,7 @@ export default function MixedLabelsCustomizeClient() {
     const p = products.find((x) => x.id === productId && x.category === 'Stickers')
     return p && isMixedLabelsProduct(p) ? p : null
   }, [productId, products])
+  const isOutOfStock = isProductOutOfStock(displayProduct)
 
   const mixedLabelsProducts = useMemo(
     () => products.filter((p) => p.category === 'Stickers' && isMixedLabelsProduct(p)),
@@ -212,6 +214,10 @@ export default function MixedLabelsCustomizeClient() {
       }
       if (!displayProduct) {
         alert('Please open this page from a Mixed Labels product.')
+        return
+      }
+      if (isProductOutOfStock(displayProduct)) {
+        alert('This product is currently out of stock.')
         return
       }
       if (!selectedBundle) {
@@ -355,7 +361,11 @@ export default function MixedLabelsCustomizeClient() {
   }
 
   const canPurchase =
-    nameValidation.ok && !!selectedBundle && designCompletion === 100 && _hasHydrated
+    nameValidation.ok &&
+    !!selectedBundle &&
+    designCompletion === 100 &&
+    _hasHydrated &&
+    !isOutOfStock
 
   return (
     <div className="min-h-screen relative">
@@ -596,6 +606,8 @@ export default function MixedLabelsCustomizeClient() {
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                         <span>Processing...</span>
                       </>
+                    ) : isOutOfStock ? (
+                      <span>Out of Stock</span>
                     ) : (
                       <>
                         <ShoppingCart className="w-5 h-5" />
@@ -610,7 +622,7 @@ export default function MixedLabelsCustomizeClient() {
                     className="w-full btn-ux btn-ux-editor-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Package className="w-5 h-5" />
-                    <span>Add to Cart</span>
+                    <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
                   </button>
                 </div>
               </div>
