@@ -17,9 +17,18 @@ import {
   COMPANY_LOGO_URL,
   getCompanyBrandName
 } from '@/lib/companyLegal'
+import {
+  getDefaultLineItemsByCategory,
+  getDefaultNotesByCategory,
+  getNewDocumentLineItem,
+  type DocumentBusinessCategory,
+} from '@/lib/documentCreateDefaults'
+import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
 
 // 마운트 시점에 최신 COMPANY_LEGAL·COMPANY_CONTACT·COMPANY_BANK 반영 (Preview 화면에 올바른 값 표시)
-function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'> & {
+function getDefaultInvoiceData(
+  category: DocumentBusinessCategory = 'sticker'
+): Omit<InvoiceTemplateProps, 'items' | 'totals'> & {
   items: InvoiceLineItem[]
   totals: { subtotal: number; tax: number; total: number; currency: string }
   discounts?: {
@@ -36,6 +45,8 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
+  const items = getDefaultLineItemsByCategory(category) as InvoiceLineItem[]
+  const computed = computeDocumentCreateTotals({ items })
   return {
     company: {
       name: COMPANY_LEGAL.companyName,
@@ -65,12 +76,13 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       reference: ''
     },
-    items: [
-      { description: 'Custom Stickers (Premium Gloss)', qty: 2, unitPrice: 25, taxRate: 0.1 },
-      { description: 'Stamp Product (Self-inking)', qty: 1, unitPrice: 32, taxRate: 0.1 },
-      { description: 'Shipping (Standard)', qty: 1, unitPrice: 10, taxRate: 0 }
-    ],
-    totals: { subtotal: 92, tax: 8.2, total: 100.2, currency: 'AUD' },
+    items,
+    totals: {
+      subtotal: computed.subtotal,
+      tax: computed.tax,
+      total: computed.total,
+      currency: 'AUD',
+    },
     discounts: {
       totalDiscount: 0,
       vipDiscount: 0,
@@ -88,7 +100,7 @@ function getDefaultInvoiceData(): Omit<InvoiceTemplateProps, 'items' | 'totals'>
       account: COMPANY_BANK.accountNumber,
       note: COMPANY_BANK.paymentNote
     },
-    notes: 'Thank you for your business! It is a pleasure to help bring your creative ideas to life.\nPlease be advised that payment is due within 7 days of the invoice date.'
+    notes: getDefaultNotesByCategory(category)
   }
 }
 
@@ -330,59 +342,93 @@ function InvoicePreviewPageContent() {
     }
   }, [])
 
-  // 합계 자동 계산 (할인, 배송비, 결제 수수료 포함)
+  // 합계 자동 계산: 할인 후 GST (shared helper — do not add tax before discount)
   useEffect(() => {
     const data = documentType === 'invoice' ? invoiceData : quoteData
-    const subtotal = data.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
-    const tax = data.items.reduce(
-      (sum, item) => sum + (item.taxRate ? item.unitPrice * item.qty * item.taxRate : 0),
-      0
-    )
-    
-    // VIP 할인 퍼센트를 기반으로 실제 할인 금액 계산
-    // undefined나 null일 때는 0으로 처리, 빈 값은 undefined로 유지
-    const vipDiscountPercent = data.discounts?.vipDiscountPercent !== undefined && data.discounts?.vipDiscountPercent !== null
-      ? data.discounts.vipDiscountPercent
-      : 0
-    const vipDiscount = vipDiscountPercent > 0 ? subtotal * (vipDiscountPercent / 100) : 0
-    
-    // Promo 할인 퍼센트를 기반으로 실제 할인 금액 계산
-    const promoDiscountPercent = data.discounts?.promoDiscountPercent !== undefined && data.discounts?.promoDiscountPercent !== null
-      ? data.discounts.promoDiscountPercent
-      : 0
-    const promoDiscount = promoDiscountPercent > 0 ? subtotal * (promoDiscountPercent / 100) : 0
-    const totalDiscount = vipDiscount + promoDiscount
-    
-    const shipping = data.shipping || 0
-    const paymentFee = data.paymentFee || 0
-    const total = subtotal + tax - totalDiscount + shipping + paymentFee
-    
+    const computed = computeDocumentCreateTotals({
+      items: data.items,
+      vipDiscountPercent: data.discounts?.vipDiscountPercent,
+      promoDiscountPercent: data.discounts?.promoDiscountPercent,
+      shipping: data.shipping,
+      paymentFee: data.paymentFee,
+    })
+
     if (documentType === 'invoice') {
-      setInvoiceData(prev => ({
+      setInvoiceData((prev) => ({
         ...prev,
         discounts: {
           ...prev.discounts,
-          // 할인 금액이 0.01보다 작으면 undefined로 설정하여 표시하지 않음
-          vipDiscount: vipDiscount > 0.01 ? vipDiscount : undefined,
-          promoDiscount: promoDiscount > 0.01 ? promoDiscount : undefined,
-          totalDiscount: totalDiscount > 0.01 ? totalDiscount : undefined
+          vipDiscount: computed.vipDiscount > 0.01 ? computed.vipDiscount : undefined,
+          promoDiscount: computed.promoDiscount > 0.01 ? computed.promoDiscount : undefined,
+          totalDiscount: computed.totalDiscount > 0.01 ? computed.totalDiscount : undefined,
         },
-        totals: { ...prev.totals, subtotal, tax, total }
+        totals: {
+          ...prev.totals,
+          subtotal: computed.subtotal,
+          tax: computed.tax,
+          total: computed.total,
+        },
       }))
     } else {
-      setQuoteData(prev => ({
+      setQuoteData((prev) => ({
         ...prev,
         discounts: {
           ...prev.discounts,
-          // 할인 금액이 0.01보다 작으면 undefined로 설정하여 표시하지 않음
-          vipDiscount: vipDiscount > 0.01 ? vipDiscount : undefined,
-          promoDiscount: promoDiscount > 0.01 ? promoDiscount : undefined,
-          totalDiscount: totalDiscount > 0.01 ? totalDiscount : undefined
+          vipDiscount: computed.vipDiscount > 0.01 ? computed.vipDiscount : undefined,
+          promoDiscount: computed.promoDiscount > 0.01 ? computed.promoDiscount : undefined,
+          totalDiscount: computed.totalDiscount > 0.01 ? computed.totalDiscount : undefined,
         },
-        totals: { ...prev.totals, subtotal, tax, total }
+        totals: {
+          ...prev.totals,
+          subtotal: computed.subtotal,
+          tax: computed.tax,
+          total: computed.total,
+        },
       }))
     }
-  }, [documentType, invoiceData.items, invoiceData.discounts?.vipDiscountPercent, invoiceData.discounts?.promoDiscountPercent, invoiceData.shipping, invoiceData.paymentFee, quoteData.items, quoteData.discounts?.vipDiscountPercent, quoteData.discounts?.promoDiscountPercent, quoteData.shipping, quoteData.paymentFee])
+  }, [
+    documentType,
+    invoiceData.items,
+    invoiceData.discounts?.vipDiscountPercent,
+    invoiceData.discounts?.promoDiscountPercent,
+    invoiceData.shipping,
+    invoiceData.paymentFee,
+    quoteData.items,
+    quoteData.discounts?.vipDiscountPercent,
+    quoteData.discounts?.promoDiscountPercent,
+    quoteData.shipping,
+    quoteData.paymentFee,
+  ])
+
+  const applyBusinessCategory = (category: DocumentBusinessCategory) => {
+    setDocumentCategory(category)
+    const items = getDefaultLineItemsByCategory(category) as InvoiceLineItem[]
+    const notes = getDefaultNotesByCategory(category)
+    setInvoiceData((prev) => ({
+      ...prev,
+      billing: {
+        ...prev.billing,
+        ...(category === 'sticker'
+          ? { serviceAddress: '', serviceDate: '' }
+          : {}),
+      },
+      items,
+      notes,
+      shipping: category === 'cleaning' ? 0 : prev.shipping,
+    }))
+    setQuoteData((prev) => ({
+      ...prev,
+      billing: {
+        ...prev.billing,
+        ...(category === 'sticker'
+          ? { serviceAddress: '', serviceDate: '' }
+          : {}),
+      },
+      items,
+      notes,
+      shipping: category === 'cleaning' ? 0 : prev.shipping,
+    }))
+  }
 
   const handleDownloadPDF = async () => {
     if (!invoiceRef.current) return
@@ -416,15 +462,16 @@ function InvoicePreviewPageContent() {
   }
 
   const handleAddItem = () => {
+    const line = getNewDocumentLineItem(documentCategory) as InvoiceLineItem
     if (documentType === 'invoice') {
-      setInvoiceData(prev => ({
+      setInvoiceData((prev) => ({
         ...prev,
-        items: [...prev.items, { description: 'New Item', qty: 1, unitPrice: 0, taxRate: 0.1 }]
+        items: [...prev.items, line],
       }))
     } else {
-      setQuoteData(prev => ({
+      setQuoteData((prev) => ({
         ...prev,
-        items: [...prev.items, { description: 'New Item', qty: 1, unitPrice: 0, taxRate: 0.1 }]
+        items: [...prev.items, line],
       }))
     }
   }
@@ -706,25 +753,8 @@ function InvoicePreviewPageContent() {
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium text-gray-700">Business:</span>
               <button
-                onClick={() => {
-                  setDocumentCategory('sticker')
-                  setInvoiceData(prev => ({
-                    ...prev,
-                    billing: {
-                      ...prev.billing,
-                      serviceAddress: '',
-                      serviceDate: ''
-                    }
-                  }))
-                  setQuoteData(prev => ({
-                    ...prev,
-                    billing: {
-                      ...prev.billing,
-                      serviceAddress: '',
-                      serviceDate: ''
-                    }
-                  }))
-                }}
+                type="button"
+                onClick={() => applyBusinessCategory('sticker')}
                 className={`px-4 py-2 rounded-lg border-2 transition-all text-sm flex items-center gap-2 ${
                   documentCategory === 'sticker'
                     ? 'border-green-600 bg-green-50 text-green-800'
@@ -734,10 +764,8 @@ function InvoicePreviewPageContent() {
                 <span className="font-medium">Sticker</span>
               </button>
               <button
-                onClick={() => {
-                  setDocumentCategory('cleaning')
-                  // Cleaning으로 전환해도 기존 값은 유지 (필요 시 관리자 수동 입력)
-                }}
+                type="button"
+                onClick={() => applyBusinessCategory('cleaning')}
                 className={`px-4 py-2 rounded-lg border-2 transition-all text-sm flex items-center gap-2 ${
                   documentCategory === 'cleaning'
                     ? 'border-green-600 bg-green-50 text-green-800'
@@ -1322,8 +1350,17 @@ function InvoicePreviewPageContent() {
                       className="flex items-center justify-between flex-1 text-left"
                     >
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Step 4 – Line Items</h3>
-                        <p className="text-xs text-gray-500 mt-1">Add and edit line items. Click to {showStep4LineItems ? 'collapse' : 'expand'}.</p>
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {documentCategory === 'cleaning'
+                            ? 'Step 4 – Service Line Items'
+                            : 'Step 4 – Line Items'}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {documentCategory === 'cleaning'
+                            ? 'Add cleaning services (unit prices are ex-GST). Click to '
+                            : 'Add and edit line items. Click to '}
+                          {showStep4LineItems ? 'collapse' : 'expand'}.
+                        </p>
                       </div>
                       {showStep4LineItems ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
                     </button>
@@ -1336,7 +1373,7 @@ function InvoicePreviewPageContent() {
                         className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
                       >
                         <Plus size={16} />
-                        Add Item
+                        {documentCategory === 'cleaning' ? 'Add service line' : 'Add Item'}
                       </button>
                     </div>
                   <div className="space-y-4">
@@ -1369,7 +1406,11 @@ function InvoicePreviewPageContent() {
                               }}
                               rows={3}
                               className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
-                              placeholder="Product or service name / detailed description (multi-line)"
+                              placeholder={
+                                documentCategory === 'cleaning'
+                                  ? 'e.g. Regular clean / Fit out / End of lease (multi-line OK)'
+                                  : 'Product or service name / detailed description (multi-line)'
+                              }
                             />
                           </div>
                           <div className="grid grid-cols-3 gap-2">
@@ -1394,7 +1435,9 @@ function InvoicePreviewPageContent() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                {documentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                              </label>
                               <input
                                 type="number"
                                 value={item.unitPrice}
@@ -1454,7 +1497,12 @@ function InvoicePreviewPageContent() {
                   >
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">Step 5 – Discounts & Additional Charges</h3>
-                      <p className="text-xs text-gray-500 mt-1">Apply VIP and promo discounts, shipping, and payment fees. Click to {showStep5Discounts ? 'collapse' : 'expand'}.</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {documentCategory === 'cleaning'
+                          ? 'Apply VIP and promo discounts and payment fees (GST recalculates after discount). Click to '
+                          : 'Apply VIP and promo discounts, shipping, and payment fees. Click to '}
+                        {showStep5Discounts ? 'collapse' : 'expand'}.
+                      </p>
                     </div>
                     {showStep5Discounts ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
                   </button>
@@ -1578,7 +1626,8 @@ function InvoicePreviewPageContent() {
                         placeholder="e.g., SUMMER2025"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid gap-4 ${documentCategory === 'cleaning' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                      {documentCategory !== 'cleaning' && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Shipping ($)</label>
                         <input
@@ -1602,6 +1651,7 @@ function InvoicePreviewPageContent() {
                           step="0.01"
                         />
                       </div>
+                      )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Fee ($)</label>
                         <input

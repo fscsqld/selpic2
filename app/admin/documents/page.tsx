@@ -56,6 +56,12 @@ import {
   lineLooksLikeShipping,
   lineLooksLikePaymentFee
 } from '@/lib/invoiceTotals'
+import {
+  getDefaultLineItemsByCategory,
+  getDefaultNotesByCategory,
+  getNewDocumentLineItem,
+} from '@/lib/documentCreateDefaults'
+import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
@@ -217,26 +223,9 @@ export default function DocumentSenderPage() {
     }
   }, [savedClients])
   
-  // 비즈니스 유형별 기본 품목 (스티커 vs 청소)
+  // 비즈니스 유형별 기본 품목 (스티커 vs 청소 — Fit Out 포함 공유 시드)
   const getDefaultItemsByCategory = (category: 'sticker' | 'cleaning'): InvoiceLineItem[] => {
-    if (category === 'cleaning') {
-      return [
-        { description: 'Regular Cleaning Service (per visit)', qty: 1, unitPrice: 0, taxRate: 0.1 },
-        { description: 'Deep Clean / End of Lease', qty: 0, unitPrice: 0, taxRate: 0.1 },
-        { description: 'Additional Services (carpet, windows, etc.)', qty: 0, unitPrice: 0, taxRate: 0.1 }
-      ]
-    }
-    return [
-      { description: 'Custom Stickers (Premium Gloss)', qty: 2, unitPrice: 25, taxRate: 0.1 },
-      { description: 'Stamp Product (Self-inking)', qty: 1, unitPrice: 32, taxRate: 0.1 },
-      { description: 'Shipping (Standard)', qty: 1, unitPrice: 10, taxRate: 0 }
-    ]
-  }
-  const getDefaultNotesByCategory = (category: 'sticker' | 'cleaning'): string => {
-    if (category === 'cleaning') {
-      return 'Thank you for choosing our cleaning services.\nPayment is due within 7 days of the invoice date.\nPlease contact us to confirm booking and for any special requirements.'
-    }
-    return 'Thank you for your business! It is a pleasure to help bring your creative ideas to life.\nPlease be advised that payment is due within 7 days of the invoice date.'
+    return getDefaultLineItemsByCategory(category) as InvoiceLineItem[]
   }
 
   // Create Invoice 기본 데이터 생성 함수 (회사·결제 정보는 항상 lib/companyLegal 단일 소스 사용)
@@ -332,54 +321,63 @@ export default function DocumentSenderPage() {
     }
   })
 
-  // Create Invoice/Quote 합계 자동 계산
+  // Create Invoice/Quote 합계: 할인 후 GST
   useEffect(() => {
     const data = createDocumentType === 'invoice' ? createInvoiceData : createQuoteData
-    const subtotal = data.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
-    const tax = data.items.reduce(
-      (sum, item) => sum + (item.taxRate ? item.unitPrice * item.qty * item.taxRate : 0),
-      0
-    )
-    
-    const vipDiscountPercent = data.discounts?.vipDiscountPercent !== undefined && data.discounts?.vipDiscountPercent !== null
-      ? data.discounts.vipDiscountPercent
-      : 0
-    const vipDiscount = vipDiscountPercent > 0 ? subtotal * (vipDiscountPercent / 100) : 0
-    
-    const promoDiscountPercent = data.discounts?.promoDiscountPercent !== undefined && data.discounts?.promoDiscountPercent !== null
-      ? data.discounts.promoDiscountPercent
-      : 0
-    const promoDiscount = promoDiscountPercent > 0 ? subtotal * (promoDiscountPercent / 100) : 0
-    const totalDiscount = vipDiscount + promoDiscount
-    
-    const shipping = data.shipping || 0
-    const paymentFee = data.paymentFee || 0
-    const total = subtotal + tax - totalDiscount + shipping + paymentFee
-    
+    const computed = computeDocumentCreateTotals({
+      items: data.items,
+      vipDiscountPercent: data.discounts?.vipDiscountPercent,
+      promoDiscountPercent: data.discounts?.promoDiscountPercent,
+      shipping: data.shipping,
+      paymentFee: data.paymentFee,
+    })
+
     if (createDocumentType === 'invoice') {
-      setCreateInvoiceData(prev => ({
+      setCreateInvoiceData((prev) => ({
         ...prev,
         discounts: {
           ...prev.discounts,
-          vipDiscount: vipDiscount > 0.01 ? vipDiscount : undefined,
-          promoDiscount: promoDiscount > 0.01 ? promoDiscount : undefined,
-          totalDiscount: totalDiscount > 0.01 ? totalDiscount : undefined
+          vipDiscount: computed.vipDiscount > 0.01 ? computed.vipDiscount : undefined,
+          promoDiscount: computed.promoDiscount > 0.01 ? computed.promoDiscount : undefined,
+          totalDiscount: computed.totalDiscount > 0.01 ? computed.totalDiscount : undefined,
         },
-        totals: { ...prev.totals, subtotal, tax, total }
+        totals: {
+          ...prev.totals,
+          subtotal: computed.subtotal,
+          tax: computed.tax,
+          total: computed.total,
+        },
       }))
     } else {
-      setCreateQuoteData(prev => ({
+      setCreateQuoteData((prev) => ({
         ...prev,
         discounts: {
           ...prev.discounts,
-          vipDiscount: vipDiscount > 0.01 ? vipDiscount : undefined,
-          promoDiscount: promoDiscount > 0.01 ? promoDiscount : undefined,
-          totalDiscount: totalDiscount > 0.01 ? totalDiscount : undefined
+          vipDiscount: computed.vipDiscount > 0.01 ? computed.vipDiscount : undefined,
+          promoDiscount: computed.promoDiscount > 0.01 ? computed.promoDiscount : undefined,
+          totalDiscount: computed.totalDiscount > 0.01 ? computed.totalDiscount : undefined,
         },
-        totals: { ...prev.totals, subtotal, tax, total }
+        totals: {
+          ...prev.totals,
+          subtotal: computed.subtotal,
+          tax: computed.tax,
+          total: computed.total,
+        },
       }))
     }
-  }, [createDocumentType, createInvoiceData.items, createInvoiceData.discounts?.vipDiscountPercent, createInvoiceData.discounts?.promoDiscountPercent, createInvoiceData.shipping, createInvoiceData.paymentFee, createQuoteData.items, createQuoteData.discounts?.vipDiscountPercent, createQuoteData.discounts?.promoDiscountPercent, createQuoteData.shipping, createQuoteData.paymentFee])
+  }, [
+    createDocumentType,
+    createInvoiceData.items,
+    createInvoiceData.discounts?.vipDiscountPercent,
+    createInvoiceData.discounts?.promoDiscountPercent,
+    createInvoiceData.shipping,
+    createInvoiceData.paymentFee,
+    createQuoteData.items,
+    createQuoteData.discounts?.vipDiscountPercent,
+    createQuoteData.discounts?.promoDiscountPercent,
+    createQuoteData.shipping,
+    createQuoteData.paymentFee,
+  ])
 
   // 고객 목록 (주문 이력이 있는 고객 + 일반 사용자)
   const allCustomers = Array.from(
@@ -2470,7 +2468,9 @@ If you have any questions, please contact us.`
                               />
                             </div>
                             <div className="col-span-2">
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                {createDocumentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                              </label>
                               <input
                                 type="number"
                                 value={item.unitPrice}
@@ -2749,8 +2749,18 @@ If you have any questions, please contact us.`
                   onClick={() => {
                     setCreateDocumentCategory('cleaning')
                     const base = getDefaultCreateInvoiceData('cleaning')
-                    setCreateInvoiceData(prev => ({ ...prev, items: base.items, notes: base.notes }))
-                    setCreateQuoteData(prev => ({ ...prev, items: base.items, notes: base.notes }))
+                    setCreateInvoiceData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      shipping: 0,
+                    }))
+                    setCreateQuoteData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      shipping: 0,
+                    }))
                   }}
                   className={`px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2 ${
                     createDocumentCategory === 'cleaning'
@@ -3248,8 +3258,17 @@ If you have any questions, please contact us.`
                         className="flex items-center justify-between flex-1 text-left"
                       >
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Step 4 – Line Items</h3>
-                          <p className="text-xs text-gray-500 mt-1">Add and edit line items. Click to {showStep4LineItems ? 'collapse' : 'expand'}.</p>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {createDocumentCategory === 'cleaning'
+                              ? 'Step 4 – Service Line Items'
+                              : 'Step 4 – Line Items'}
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {createDocumentCategory === 'cleaning'
+                              ? 'Add cleaning services (unit prices are ex-GST). Click to '
+                              : 'Add and edit line items. Click to '}
+                            {showStep4LineItems ? 'collapse' : 'expand'}.
+                          </p>
                         </div>
                         {showStep4LineItems ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
                       </button>
@@ -3259,23 +3278,23 @@ If you have any questions, please contact us.`
                       <div className="flex justify-end">
                         <button
                           onClick={() => {
-                            if (createDocumentType === 'invoice') {
-                              setCreateInvoiceData(prev => ({
-                                ...prev,
-                                items: [...prev.items, { description: 'New Item', qty: 1, unitPrice: 0, taxRate: 0.1 }]
-                              }))
-                            } else {
-                              setCreateQuoteData(prev => ({
-                                ...prev,
-                                items: [...prev.items, { description: 'New Item', qty: 1, unitPrice: 0, taxRate: 0.1 }]
-                              }))
-                            }
-                          }}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                        >
-                          <Plus size={16} />
-                          Add Item
-                        </button>
+                              if (createDocumentType === 'invoice') {
+                                setCreateInvoiceData(prev => ({
+                                  ...prev,
+                                  items: [...prev.items, getNewDocumentLineItem(createDocumentCategory) as InvoiceLineItem]
+                                }))
+                              } else {
+                                setCreateQuoteData(prev => ({
+                                  ...prev,
+                                  items: [...prev.items, getNewDocumentLineItem(createDocumentCategory) as InvoiceLineItem]
+                                }))
+                              }
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                          >
+                            <Plus size={16} />
+                            {createDocumentCategory === 'cleaning' ? 'Add service line' : 'Add Item'}
+                          </button>
                       </div>
                     <div className="space-y-4">
                       {(createDocumentType === 'invoice' ? createInvoiceData.items : createQuoteData.items).map((item, index) => (
@@ -3344,7 +3363,9 @@ If you have any questions, please contact us.`
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                {createDocumentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                              </label>
                               <input
                                 type="number"
                                 value={item.unitPrice}
@@ -3489,7 +3510,8 @@ If you have any questions, please contact us.`
                           placeholder="Optional"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className={`grid gap-4 ${createDocumentCategory === 'cleaning' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                        {createDocumentCategory !== 'cleaning' && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Shipping</label>
                           <input
@@ -3507,6 +3529,7 @@ If you have any questions, please contact us.`
                             step="0.01"
                           />
                         </div>
+                        )}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Fee</label>
                           <input
