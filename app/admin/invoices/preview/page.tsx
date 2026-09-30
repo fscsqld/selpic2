@@ -28,15 +28,16 @@ import {
   buildCleaningServiceDescription,
   MARKET_S_LINE_OPTIONS,
   MARKET_S_LINE_CUSTOM,
-  MARKET_S_SHIPPING_CUSTOM,
+  DOCUMENT_SHIPPING_CUSTOM,
   resolveMarketSLineSelectValue,
   getMarketSLineExtraDetails,
   buildMarketSLineDescription,
   isMarketSSelectableProductLine,
-  isMarketSShippingLine,
+  isDocumentShippingLine,
   listDocumentShippingOptionsForSelect,
-  resolveMarketSShippingSelectValue,
-  applyMarketSShippingOptionToLine,
+  resolveDocumentShippingSelectValue,
+  applyDocumentShippingOptionToLine,
+  documentCategoryUsesShippingSelect,
   documentCategoryShowsShipping,
   documentCategoryShowsServiceSite,
   documentCategoryLabel,
@@ -166,10 +167,6 @@ function InvoicePreviewPageContent() {
   const { adminUser } = useAdminAuth()
   const addSendLog = useDocumentSendLogStore((s) => s.addSendLog)
   const cmsShippingOptions = useContentStore((s) => s.shippingOptions)
-  const documentShippingOptions = useMemo(
-    () => listDocumentShippingOptionsForSelect(cmsShippingOptions),
-    [cmsShippingOptions]
-  )
   const invoiceRef = useRef<HTMLDivElement>(null)
   const [pageTab, setPageTab] = useState<'create' | 'history'>('create')
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
@@ -266,6 +263,10 @@ function InvoicePreviewPageContent() {
   const [showStep5Discounts, setShowStep5Discounts] = useState(false)
   // 비즈니스 유형 & 저장된 클라이언트 (Create & Send와 동일 개념)
   const [documentCategory, setDocumentCategory] = useState<DocumentBusinessCategory>('sticker')
+  const documentShippingOptions = useMemo(
+    () => listDocumentShippingOptionsForSelect(cmsShippingOptions, documentCategory),
+    [cmsShippingOptions, documentCategory]
+  )
   const [savedClients, setSavedClients] = useState<SavedClientProfile[]>([])
   const [selectedSavedClientId, setSelectedSavedClientId] = useState<string>('')
   const [newSavedClientLabel, setNewSavedClientLabel] = useState<string>('')
@@ -1628,22 +1629,22 @@ function InvoicePreviewPageContent() {
                                 />
                               </div>
                             </>
-                          ) : documentCategory === 'market-s' &&
-                            isMarketSShippingLine(item.description) ? (
+                          ) : documentCategoryUsesShippingSelect(documentCategory) &&
+                            isDocumentShippingLine(item.description) ? (
                             <>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
                                   Shipping method (AusPost)
                                 </label>
                                 <select
-                                  value={resolveMarketSShippingSelectValue(
+                                  value={resolveDocumentShippingSelectValue(
                                     item.description,
                                     documentShippingOptions
                                   )}
                                   onChange={(e) => {
                                     const selected = e.target.value
                                     if (!selected) {
-                                      const next = applyMarketSShippingOptionToLine(item, null)
+                                      const next = applyDocumentShippingOptionToLine(item, null)
                                       if (documentType === 'invoice') {
                                         const newItems = [...invoiceData.items]
                                         newItems[index] = next
@@ -1655,7 +1656,7 @@ function InvoicePreviewPageContent() {
                                       }
                                       return
                                     }
-                                    if (selected === MARKET_S_SHIPPING_CUSTOM) {
+                                    if (selected === DOCUMENT_SHIPPING_CUSTOM) {
                                       const next = {
                                         ...item,
                                         description: item.description?.trim()
@@ -1677,7 +1678,7 @@ function InvoicePreviewPageContent() {
                                     const option =
                                       documentShippingOptions.find((o) => String(o.id) === selected) ||
                                       null
-                                    const next = applyMarketSShippingOptionToLine(item, option)
+                                    const next = applyDocumentShippingOptionToLine(item, option)
                                     if (documentType === 'invoice') {
                                       const newItems = [...invoiceData.items]
                                       newItems[index] = next
@@ -1708,13 +1709,13 @@ function InvoicePreviewPageContent() {
                                         : ''}
                                     </option>
                                   ))}
-                                  <option value={MARKET_S_SHIPPING_CUSTOM}>Custom shipping…</option>
+                                  <option value={DOCUMENT_SHIPPING_CUSTOM}>Custom shipping…</option>
                                 </select>
                               </div>
-                              {resolveMarketSShippingSelectValue(
+                              {resolveDocumentShippingSelectValue(
                                 item.description,
                                 documentShippingOptions
-                              ) === MARKET_S_SHIPPING_CUSTOM && (
+                              ) === DOCUMENT_SHIPPING_CUSTOM && (
                                 <div>
                                   <label className="block text-xs font-medium text-gray-600 mb-1">
                                     Shipping description

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyMarketSShippingOptionToLine,
+  applyDocumentShippingOptionToLine,
+  DOCUMENT_SHIPPING_CUSTOM,
+  DOCUMENT_SHIPPING_PLACEHOLDER,
   getDefaultNotesByCategory,
+  getStickerDefaultLineItems,
+  isDocumentShippingLine,
   isMarketSSelectableProductLine,
-  isMarketSShippingLine,
   listDocumentShippingOptionsForSelect,
-  MARKET_S_SHIPPING_CUSTOM,
-  MARKET_S_SHIPPING_PLACEHOLDER,
-  resolveMarketSShippingSelectValue,
+  resolveDocumentShippingSelectValue,
 } from './documentCreateDefaults'
 
 describe('document create notes', () => {
@@ -20,8 +21,8 @@ describe('document create notes', () => {
   })
 })
 
-describe('Market S document shipping line', () => {
-  const options = listDocumentShippingOptionsForSelect([
+describe('document shipping line (Market S + Stickers)', () => {
+  const cms = [
     {
       id: 'parcel-post',
       name: 'Parcel Post (Goods)',
@@ -37,39 +38,69 @@ describe('Market S document shipping line', () => {
       order: 0,
     },
     {
+      id: 'standard-letter',
+      name: 'Standard Letter',
+      price: 3.7,
+      isActive: true,
+      order: 1,
+    },
+    {
       id: 'inactive',
       name: 'Hidden',
       price: 9,
       isActive: false,
       order: 9,
     },
-  ])
+  ]
 
-  it('lists only active CMS options sorted by order', () => {
-    expect(options.map((o) => o.id)).toEqual([
+  it('lists only active CMS options; stickers hide Market S letter', () => {
+    expect(listDocumentShippingOptionsForSelect(cms, 'market-s').map((o) => o.id)).toEqual([
       'market-s-untracked-letter',
+      'standard-letter',
+      'parcel-post',
+    ])
+    expect(listDocumentShippingOptionsForSelect(cms, 'sticker').map((o) => o.id)).toEqual([
+      'standard-letter',
       'parcel-post',
     ])
   })
 
+  it('uses live CMS price when applying an option (future admin price edits)', () => {
+    const raised = {
+      id: 'parcel-post',
+      name: 'Parcel Post (Goods)',
+      price: 12.5,
+      isActive: true,
+    }
+    const applied = applyDocumentShippingOptionToLine(
+      { description: DOCUMENT_SHIPPING_PLACEHOLDER, qty: 1, unitPrice: 0, taxRate: 0.1 },
+      raised
+    )
+    expect(applied.unitPrice).toBe(12.5)
+    expect(applied.description).toBe('Shipping — Parcel Post (Goods)')
+  })
+
   it('treats placeholder and Shipping — name as shipping lines, not pack class', () => {
-    expect(isMarketSShippingLine(MARKET_S_SHIPPING_PLACEHOLDER)).toBe(true)
-    expect(isMarketSShippingLine('Shipping — Parcel Post (Goods)')).toBe(true)
-    expect(isMarketSSelectableProductLine(MARKET_S_SHIPPING_PLACEHOLDER)).toBe(false)
+    expect(isDocumentShippingLine(DOCUMENT_SHIPPING_PLACEHOLDER)).toBe(true)
+    expect(isDocumentShippingLine('Shipping — Parcel Post (Goods)')).toBe(true)
+    expect(isDocumentShippingLine('Shipping (Standard)')).toBe(true)
+    expect(isMarketSSelectableProductLine(DOCUMENT_SHIPPING_PLACEHOLDER)).toBe(false)
     expect(isMarketSSelectableProductLine('Market S — Single Item')).toBe(true)
   })
 
   it('resolves select value and auto-fills CMS price on apply', () => {
-    expect(resolveMarketSShippingSelectValue(MARKET_S_SHIPPING_PLACEHOLDER, options)).toBe('')
+    const options = listDocumentShippingOptionsForSelect(cms, 'market-s')
+    expect(resolveDocumentShippingSelectValue(DOCUMENT_SHIPPING_PLACEHOLDER, options)).toBe('')
+    expect(resolveDocumentShippingSelectValue('Shipping (Standard)', options)).toBe('')
     expect(
-      resolveMarketSShippingSelectValue('Shipping — Parcel Post (Goods)', options)
+      resolveDocumentShippingSelectValue('Shipping — Parcel Post (Goods)', options)
     ).toBe('parcel-post')
     expect(
-      resolveMarketSShippingSelectValue('Shipping — Special courier', options)
-    ).toBe(MARKET_S_SHIPPING_CUSTOM)
+      resolveDocumentShippingSelectValue('Shipping — Special courier', options)
+    ).toBe(DOCUMENT_SHIPPING_CUSTOM)
 
-    const applied = applyMarketSShippingOptionToLine(
-      { description: MARKET_S_SHIPPING_PLACEHOLDER, qty: 1, unitPrice: 0, taxRate: 0.1 },
+    const applied = applyDocumentShippingOptionToLine(
+      { description: DOCUMENT_SHIPPING_PLACEHOLDER, qty: 1, unitPrice: 0, taxRate: 0.1 },
       options.find((o) => o.id === 'parcel-post')
     )
     expect(applied.description).toBe('Shipping — Parcel Post (Goods)')
@@ -77,9 +108,17 @@ describe('Market S document shipping line', () => {
     expect(applied.taxRate).toBe(0)
   })
 
+  it('seeds sticker shipping as AusPost placeholder at $0', () => {
+    const items = getStickerDefaultLineItems()
+    const shipping = items.find((i) => isDocumentShippingLine(i.description))
+    expect(shipping?.description).toBe(DOCUMENT_SHIPPING_PLACEHOLDER)
+    expect(shipping?.unitPrice).toBe(0)
+  })
+
   it('falls back to code defaults when CMS list is empty', () => {
-    const fallback = listDocumentShippingOptionsForSelect([])
+    const fallback = listDocumentShippingOptionsForSelect([], 'sticker')
     expect(fallback.some((o) => o.id === 'parcel-post')).toBe(true)
     expect(fallback.some((o) => o.id === 'express-post')).toBe(true)
+    expect(fallback.some((o) => o.id === 'market-s-untracked-letter')).toBe(false)
   })
 })

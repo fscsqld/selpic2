@@ -67,15 +67,16 @@ import {
   buildCleaningServiceDescription,
   MARKET_S_LINE_OPTIONS,
   MARKET_S_LINE_CUSTOM,
-  MARKET_S_SHIPPING_CUSTOM,
+  DOCUMENT_SHIPPING_CUSTOM,
   resolveMarketSLineSelectValue,
   getMarketSLineExtraDetails,
   buildMarketSLineDescription,
   isMarketSSelectableProductLine,
-  isMarketSShippingLine,
+  isDocumentShippingLine,
   listDocumentShippingOptionsForSelect,
-  resolveMarketSShippingSelectValue,
-  applyMarketSShippingOptionToLine,
+  resolveDocumentShippingSelectValue,
+  applyDocumentShippingOptionToLine,
+  documentCategoryUsesShippingSelect,
   documentCategoryShowsShipping,
   documentCategoryShowsServiceSite,
   documentCategoryLabel,
@@ -105,10 +106,6 @@ export default function DocumentSenderPage() {
   const { adminUser } = useAdminAuth()
   const { users } = useUserAuth()
   const cmsShippingOptions = useContentStore((s) => s.shippingOptions)
-  const documentShippingOptions = useMemo(
-    () => listDocumentShippingOptionsForSelect(cmsShippingOptions),
-    [cmsShippingOptions]
-  )
   const { orders } = useStore()
   const { t } = useTranslation()
   const { defaultTemplate, setDefaultTemplate, addGeneratedInvoice, deleteGeneratedInvoice, generatedInvoices } = useInvoiceStore()
@@ -210,6 +207,10 @@ export default function DocumentSenderPage() {
   const [createDocumentType, setCreateDocumentType] = useState<'invoice' | 'quote'>('invoice')
   /** 스티커 vs 청소 비즈니스 – 통합 관리용 */
   const [createDocumentCategory, setCreateDocumentCategory] = useState<DocumentBusinessCategory>('sticker')
+  const documentShippingOptions = useMemo(
+    () => listDocumentShippingOptionsForSelect(cmsShippingOptions, createDocumentCategory),
+    [cmsShippingOptions, createDocumentCategory]
+  )
   const [showCreateEditForm, setShowCreateEditForm] = useState(true)
   /** Step 1–5: 필요 시에만 펼쳐서 볼 수 있도록 접기/펼치기 */
   const [showStep1CompanyInfo, setShowStep1CompanyInfo] = useState(false)
@@ -3541,22 +3542,22 @@ If you have any questions, please contact us.`
                                     />
                                   </div>
                                 </>
-                              ) : createDocumentCategory === 'market-s' &&
-                                isMarketSShippingLine(item.description) ? (
+                              ) : documentCategoryUsesShippingSelect(createDocumentCategory) &&
+                                isDocumentShippingLine(item.description) ? (
                                 <>
                                   <div>
                                     <label className="block text-xs font-medium text-gray-600 mb-1">
                                       Shipping method (AusPost)
                                     </label>
                                     <select
-                                      value={resolveMarketSShippingSelectValue(
+                                      value={resolveDocumentShippingSelectValue(
                                         item.description,
                                         documentShippingOptions
                                       )}
                                       onChange={(e) => {
                                         const selected = e.target.value
                                         if (!selected) {
-                                          const next = applyMarketSShippingOptionToLine(item, null)
+                                          const next = applyDocumentShippingOptionToLine(item, null)
                                           if (createDocumentType === 'invoice') {
                                             const newItems = [...createInvoiceData.items]
                                             newItems[index] = next
@@ -3574,7 +3575,7 @@ If you have any questions, please contact us.`
                                           }
                                           return
                                         }
-                                        if (selected === MARKET_S_SHIPPING_CUSTOM) {
+                                        if (selected === DOCUMENT_SHIPPING_CUSTOM) {
                                           const next = {
                                             ...item,
                                             description: item.description?.trim()
@@ -3597,7 +3598,7 @@ If you have any questions, please contact us.`
                                           documentShippingOptions.find(
                                             (o) => String(o.id) === selected
                                           ) || null
-                                        const next = applyMarketSShippingOptionToLine(item, option)
+                                        const next = applyDocumentShippingOptionToLine(item, option)
                                         if (createDocumentType === 'invoice') {
                                           const newItems = [...createInvoiceData.items]
                                           newItems[index] = next
@@ -3627,13 +3628,13 @@ If you have any questions, please contact us.`
                                             : ''}
                                         </option>
                                       ))}
-                                      <option value={MARKET_S_SHIPPING_CUSTOM}>Custom shipping…</option>
+                                      <option value={DOCUMENT_SHIPPING_CUSTOM}>Custom shipping…</option>
                                     </select>
                                   </div>
-                                  {resolveMarketSShippingSelectValue(
+                                  {resolveDocumentShippingSelectValue(
                                     item.description,
                                     documentShippingOptions
-                                  ) === MARKET_S_SHIPPING_CUSTOM && (
+                                  ) === DOCUMENT_SHIPPING_CUSTOM && (
                                     <div>
                                       <label className="block text-xs font-medium text-gray-600 mb-1">
                                         Shipping description
