@@ -67,16 +67,22 @@ import {
   buildCleaningServiceDescription,
   MARKET_S_LINE_OPTIONS,
   MARKET_S_LINE_CUSTOM,
+  MARKET_S_SHIPPING_CUSTOM,
   resolveMarketSLineSelectValue,
   getMarketSLineExtraDetails,
   buildMarketSLineDescription,
   isMarketSSelectableProductLine,
+  isMarketSShippingLine,
+  listDocumentShippingOptionsForSelect,
+  resolveMarketSShippingSelectValue,
+  applyMarketSShippingOptionToLine,
   documentCategoryShowsShipping,
   documentCategoryShowsServiceSite,
   documentCategoryLabel,
   type DocumentBusinessCategory,
 } from '@/lib/documentCreateDefaults'
 import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
+import { useContentStore } from '@/lib/contentStore'
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 
@@ -98,6 +104,11 @@ export default function DocumentSenderPage() {
   const router = useRouter()
   const { adminUser } = useAdminAuth()
   const { users } = useUserAuth()
+  const cmsShippingOptions = useContentStore((s) => s.shippingOptions)
+  const documentShippingOptions = useMemo(
+    () => listDocumentShippingOptionsForSelect(cmsShippingOptions),
+    [cmsShippingOptions]
+  )
   const { orders } = useStore()
   const { t } = useTranslation()
   const { defaultTemplate, setDefaultTemplate, addGeneratedInvoice, deleteGeneratedInvoice, generatedInvoices } = useInvoiceStore()
@@ -3529,6 +3540,137 @@ If you have any questions, please contact us.`
                                       placeholder="e.g. Mediheel 15ml × 1 (optional)"
                                     />
                                   </div>
+                                </>
+                              ) : createDocumentCategory === 'market-s' &&
+                                isMarketSShippingLine(item.description) ? (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Shipping method (AusPost)
+                                    </label>
+                                    <select
+                                      value={resolveMarketSShippingSelectValue(
+                                        item.description,
+                                        documentShippingOptions
+                                      )}
+                                      onChange={(e) => {
+                                        const selected = e.target.value
+                                        if (!selected) {
+                                          const next = applyMarketSShippingOptionToLine(item, null)
+                                          if (createDocumentType === 'invoice') {
+                                            const newItems = [...createInvoiceData.items]
+                                            newItems[index] = next
+                                            setCreateInvoiceData((prev) => ({
+                                              ...prev,
+                                              items: newItems,
+                                            }))
+                                          } else {
+                                            const newItems = [...createQuoteData.items]
+                                            newItems[index] = next
+                                            setCreateQuoteData((prev) => ({
+                                              ...prev,
+                                              items: newItems,
+                                            }))
+                                          }
+                                          return
+                                        }
+                                        if (selected === MARKET_S_SHIPPING_CUSTOM) {
+                                          const next = {
+                                            ...item,
+                                            description: item.description?.trim()
+                                              ? item.description
+                                              : 'Shipping — Custom',
+                                            taxRate: 0,
+                                          }
+                                          if (createDocumentType === 'invoice') {
+                                            const newItems = [...createInvoiceData.items]
+                                            newItems[index] = next
+                                            setCreateInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                          } else {
+                                            const newItems = [...createQuoteData.items]
+                                            newItems[index] = next
+                                            setCreateQuoteData((prev) => ({ ...prev, items: newItems }))
+                                          }
+                                          return
+                                        }
+                                        const option =
+                                          documentShippingOptions.find(
+                                            (o) => String(o.id) === selected
+                                          ) || null
+                                        const next = applyMarketSShippingOptionToLine(item, option)
+                                        if (createDocumentType === 'invoice') {
+                                          const newItems = [...createInvoiceData.items]
+                                          newItems[index] = next
+                                          setCreateInvoiceData((prev) => ({
+                                            ...prev,
+                                            items: newItems,
+                                            shipping: 0,
+                                          }))
+                                        } else {
+                                          const newItems = [...createQuoteData.items]
+                                          newItems[index] = next
+                                          setCreateQuoteData((prev) => ({
+                                            ...prev,
+                                            items: newItems,
+                                            shipping: 0,
+                                          }))
+                                        }
+                                      }}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                    >
+                                      <option value="">Select shipping…</option>
+                                      {documentShippingOptions.map((opt) => (
+                                        <option key={String(opt.id)} value={String(opt.id)}>
+                                          {opt.name}
+                                          {typeof opt.price === 'number'
+                                            ? ` — $${Number(opt.price).toFixed(2)}`
+                                            : ''}
+                                        </option>
+                                      ))}
+                                      <option value={MARKET_S_SHIPPING_CUSTOM}>Custom shipping…</option>
+                                    </select>
+                                  </div>
+                                  {resolveMarketSShippingSelectValue(
+                                    item.description,
+                                    documentShippingOptions
+                                  ) === MARKET_S_SHIPPING_CUSTOM && (
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Shipping description
+                                      </label>
+                                      <textarea
+                                        value={item.description}
+                                        onChange={(e) => {
+                                          if (createDocumentType === 'invoice') {
+                                            const newItems = [...createInvoiceData.items]
+                                            newItems[index] = {
+                                              ...item,
+                                              description: e.target.value,
+                                              taxRate: 0,
+                                            }
+                                            setCreateInvoiceData((prev) => ({
+                                              ...prev,
+                                              items: newItems,
+                                            }))
+                                          } else {
+                                            const newItems = [...createQuoteData.items]
+                                            newItems[index] = {
+                                              ...item,
+                                              description: e.target.value,
+                                              taxRate: 0,
+                                            }
+                                            setCreateQuoteData((prev) => ({
+                                              ...prev,
+                                              items: newItems,
+                                            }))
+                                          }
+                                        }}
+                                        rows={2}
+                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                        placeholder="Shipping — custom method"
+                                      />
+                                    </div>
+                                  )}
                                 </>
                               ) : (
                                 <>

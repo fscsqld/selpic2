@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import InvoiceTemplate, { InvoiceLineItem, InvoiceTemplateProps } from '@/components/invoice/InvoiceTemplate'
 import QuoteTemplate, { QuoteTemplateProps } from '@/components/invoice/QuoteTemplate'
 import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp, History } from 'lucide-react'
@@ -28,16 +28,22 @@ import {
   buildCleaningServiceDescription,
   MARKET_S_LINE_OPTIONS,
   MARKET_S_LINE_CUSTOM,
+  MARKET_S_SHIPPING_CUSTOM,
   resolveMarketSLineSelectValue,
   getMarketSLineExtraDetails,
   buildMarketSLineDescription,
   isMarketSSelectableProductLine,
+  isMarketSShippingLine,
+  listDocumentShippingOptionsForSelect,
+  resolveMarketSShippingSelectValue,
+  applyMarketSShippingOptionToLine,
   documentCategoryShowsShipping,
   documentCategoryShowsServiceSite,
   documentCategoryLabel,
   type DocumentBusinessCategory,
 } from '@/lib/documentCreateDefaults'
 import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
+import { useContentStore } from '@/lib/contentStore'
 
 // 마운트 시점에 최신 COMPANY_LEGAL·COMPANY_CONTACT·COMPANY_BANK 반영 (Preview 화면에 올바른 값 표시)
 function getDefaultInvoiceData(
@@ -159,6 +165,11 @@ type SavedClientProfile = {
 function InvoicePreviewPageContent() {
   const { adminUser } = useAdminAuth()
   const addSendLog = useDocumentSendLogStore((s) => s.addSendLog)
+  const cmsShippingOptions = useContentStore((s) => s.shippingOptions)
+  const documentShippingOptions = useMemo(
+    () => listDocumentShippingOptionsForSelect(cmsShippingOptions),
+    [cmsShippingOptions]
+  )
   const invoiceRef = useRef<HTMLDivElement>(null)
   const [pageTab, setPageTab] = useState<'create' | 'history'>('create')
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
@@ -1616,6 +1627,125 @@ function InvoicePreviewPageContent() {
                                   placeholder="e.g. Mediheel 15ml × 1 (optional)"
                                 />
                               </div>
+                            </>
+                          ) : documentCategory === 'market-s' &&
+                            isMarketSShippingLine(item.description) ? (
+                            <>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Shipping method (AusPost)
+                                </label>
+                                <select
+                                  value={resolveMarketSShippingSelectValue(
+                                    item.description,
+                                    documentShippingOptions
+                                  )}
+                                  onChange={(e) => {
+                                    const selected = e.target.value
+                                    if (!selected) {
+                                      const next = applyMarketSShippingOptionToLine(item, null)
+                                      if (documentType === 'invoice') {
+                                        const newItems = [...invoiceData.items]
+                                        newItems[index] = next
+                                        setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                      } else {
+                                        const newItems = [...quoteData.items]
+                                        newItems[index] = next
+                                        setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                      }
+                                      return
+                                    }
+                                    if (selected === MARKET_S_SHIPPING_CUSTOM) {
+                                      const next = {
+                                        ...item,
+                                        description: item.description?.trim()
+                                          ? item.description
+                                          : 'Shipping — Custom',
+                                        taxRate: 0,
+                                      }
+                                      if (documentType === 'invoice') {
+                                        const newItems = [...invoiceData.items]
+                                        newItems[index] = next
+                                        setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                      } else {
+                                        const newItems = [...quoteData.items]
+                                        newItems[index] = next
+                                        setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                      }
+                                      return
+                                    }
+                                    const option =
+                                      documentShippingOptions.find((o) => String(o.id) === selected) ||
+                                      null
+                                    const next = applyMarketSShippingOptionToLine(item, option)
+                                    if (documentType === 'invoice') {
+                                      const newItems = [...invoiceData.items]
+                                      newItems[index] = next
+                                      setInvoiceData((prev) => ({
+                                        ...prev,
+                                        items: newItems,
+                                        // Avoid double-counting: fee lives on the line item
+                                        shipping: 0,
+                                      }))
+                                    } else {
+                                      const newItems = [...quoteData.items]
+                                      newItems[index] = next
+                                      setQuoteData((prev) => ({
+                                        ...prev,
+                                        items: newItems,
+                                        shipping: 0,
+                                      }))
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                >
+                                  <option value="">Select shipping…</option>
+                                  {documentShippingOptions.map((opt) => (
+                                    <option key={String(opt.id)} value={String(opt.id)}>
+                                      {opt.name}
+                                      {typeof opt.price === 'number'
+                                        ? ` — $${Number(opt.price).toFixed(2)}`
+                                        : ''}
+                                    </option>
+                                  ))}
+                                  <option value={MARKET_S_SHIPPING_CUSTOM}>Custom shipping…</option>
+                                </select>
+                              </div>
+                              {resolveMarketSShippingSelectValue(
+                                item.description,
+                                documentShippingOptions
+                              ) === MARKET_S_SHIPPING_CUSTOM && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                                    Shipping description
+                                  </label>
+                                  <textarea
+                                    value={item.description}
+                                    onChange={(e) => {
+                                      if (documentType === 'invoice') {
+                                        const newItems = [...invoiceData.items]
+                                        newItems[index] = {
+                                          ...item,
+                                          description: e.target.value,
+                                          taxRate: 0,
+                                        }
+                                        setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                      } else {
+                                        const newItems = [...quoteData.items]
+                                        newItems[index] = {
+                                          ...item,
+                                          description: e.target.value,
+                                          taxRate: 0,
+                                        }
+                                        setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                      }
+                                    }}
+                                    rows={2}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                    placeholder="Shipping — custom method"
+                                  />
+                                </div>
+                              )}
                             </>
                           ) : (
                           <div>

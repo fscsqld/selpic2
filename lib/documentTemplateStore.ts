@@ -435,7 +435,7 @@ const createDefaultTemplate = (type: DocumentType): DocumentTemplate => {
         payment: getDefaultPayment(),
         email,
         content: {
-          notes: 'Thank you for your business! It is a pleasure to help bring your creative ideas to life.\nPlease be advised that payment is due within 7 days of the invoice date.',
+          notes: 'Thank you for your business! It is a pleasure to help bring your creative ideas to life.',
           customMessage: 'If you have any questions about this invoice, please contact us.'
         },
         lastModified: now,

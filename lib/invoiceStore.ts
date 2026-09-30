@@ -102,7 +102,7 @@ const defaultInvoiceTemplate: InvoiceTemplateData = {
     account: COMPANY_BANK.accountNumber,
     note: COMPANY_BANK.paymentNote
   },
-  notes: `Thank you for your business! It is a pleasure to help bring your creative ideas to life.\nPlease be advised that payment is due within 7 days of the invoice date.`,
+  notes: `Thank you for your business! It is a pleasure to help bring your creative ideas to life.`,
   isDefault: true,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
