@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyDocumentShippingOptionToLine,
+  buildCleaningServiceDescription,
+  buildMarketSLineDescription,
+  CLEANING_SERVICE_CUSTOM,
   DOCUMENT_SHIPPING_CUSTOM,
   DOCUMENT_SHIPPING_PLACEHOLDER,
+  getCleaningServiceExtraDetails,
   getDefaultNotesByCategory,
+  getMarketSLineExtraDetails,
   getStickerDefaultLineItems,
   isDocumentShippingLine,
   isMarketSSelectableProductLine,
   listDocumentShippingOptionsForSelect,
+  MARKET_S_LINE_CUSTOM,
   resolveDocumentShippingSelectValue,
 } from './documentCreateDefaults'
 
@@ -18,6 +24,41 @@ describe('document create notes', () => {
       expect(notes.toLowerCase()).not.toMatch(/payment is due/)
       expect(notes.toLowerCase()).not.toMatch(/within 7 days/)
     }
+  })
+})
+
+describe('cleaning / Market S / sticker line typing spaces', () => {
+  it('preserves spaces in Cleaning Extra details (no per-keystroke trim)', () => {
+    const withTrailing = buildCleaningServiceDescription(
+      'Regular Cleaning Service (per visit)',
+      'Selpic Cleaning '
+    )
+    expect(withTrailing).toBe('Regular Cleaning Service (per visit)\nSelpic Cleaning ')
+    expect(getCleaningServiceExtraDetails(withTrailing)).toBe('Selpic Cleaning ')
+
+    const customSpaces = buildCleaningServiceDescription(CLEANING_SERVICE_CUSTOM, 'Custom job ')
+    expect(customSpaces).toBe('Custom job ')
+  })
+
+  it('preserves spaces in Market S Brand / product details', () => {
+    const marketS = buildMarketSLineDescription('Market S — Single Item', 'Mediheel 15ml ')
+    expect(marketS).toBe('Market S — Single Item\nMediheel 15ml ')
+    expect(getMarketSLineExtraDetails(marketS)).toBe('Mediheel 15ml ')
+
+    const marketCustom = buildMarketSLineDescription(MARKET_S_LINE_CUSTOM, 'Other SKU ')
+    expect(marketCustom).toBe('Other SKU ')
+  })
+
+  it('omits extra line only when extra is empty string (not whitespace-only trim)', () => {
+    expect(buildCleaningServiceDescription('Fit Out Cleaning', '')).toBe('Fit Out Cleaning')
+    // A single space is intentional typing — keep the second line
+    expect(buildCleaningServiceDescription('Fit Out Cleaning', ' ')).toBe('Fit Out Cleaning\n ')
+    expect(buildMarketSLineDescription('Market S — Family Bundle', '')).toBe(
+      'Market S — Family Bundle'
+    )
+    expect(buildMarketSLineDescription('Market S — Family Bundle', ' ')).toBe(
+      'Market S — Family Bundle\n '
+    )
   })
 })
 

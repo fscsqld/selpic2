@@ -189,15 +189,13 @@ export function buildCleaningServiceDescription(
   serviceSelect: string,
   extraDetails: string
 ): string {
-  const base =
-    serviceSelect === CLEANING_SERVICE_CUSTOM
-      ? extraDetails.trim() || 'Cleaning service'
-      : serviceSelect
+  // Do not trim on every keystroke — trailing/leading spaces must survive while typing.
+  const extra = String(extraDetails ?? '')
   if (serviceSelect === CLEANING_SERVICE_CUSTOM) {
-    return base
+    return extra.length > 0 ? extra : 'Cleaning service'
   }
-  const extra = extraDetails.trim()
-  return extra ? `${base}\n${extra}` : base
+  if (extra.length === 0) return serviceSelect
+  return `${serviceSelect}\n${extra}`
 }
 
 export function resolveMarketSLineSelectValue(description: string): string {
@@ -222,11 +220,13 @@ export function buildMarketSLineDescription(
   lineSelect: string,
   extraDetails: string
 ): string {
+  // Do not trim on every keystroke — trailing/leading spaces must survive while typing.
+  const extra = String(extraDetails ?? '')
   if (lineSelect === MARKET_S_LINE_CUSTOM) {
-    return extraDetails.trim() || 'Market S product'
+    return extra.length > 0 ? extra : 'Market S product'
   }
-  const extra = extraDetails.trim()
-  return extra ? `${lineSelect}\n${extra}` : lineSelect
+  if (extra.length === 0) return lineSelect
+  return `${lineSelect}\n${extra}`
 }
 
 /** True when this line should show the Market S pack-class select (not a shipping row). */
