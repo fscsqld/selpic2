@@ -43,9 +43,17 @@ describe('computeDocumentCreateTotals', () => {
 })
 
 describe('getCleaningDefaultLineItems', () => {
-  it('includes Fit Out Cleaning', () => {
-    const lines = getCleaningDefaultLineItems()
-    expect(lines.some((l) => /fit out cleaning/i.test(l.description))).toBe(true)
-    expect(getDefaultLineItemsByCategory('cleaning')).toHaveLength(4)
+  it('seeds one cleaning line', () => {
+    expect(getCleaningDefaultLineItems()).toHaveLength(1)
+    expect(getDefaultLineItemsByCategory('cleaning')).toHaveLength(1)
+  })
+})
+
+describe('getMarketSDefaultLineItems', () => {
+  it('seeds Single Item line plus shipping', () => {
+    const lines = getDefaultLineItemsByCategory('market-s')
+    expect(lines.length).toBe(2)
+    expect(lines[0]?.description).toMatch(/Single Item/i)
+    expect(lines[1]?.description).toMatch(/Shipping/i)
   })
 })

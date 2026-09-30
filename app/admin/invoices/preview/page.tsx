@@ -21,6 +21,20 @@ import {
   getDefaultLineItemsByCategory,
   getDefaultNotesByCategory,
   getNewDocumentLineItem,
+  CLEANING_SERVICE_OPTIONS,
+  CLEANING_SERVICE_CUSTOM,
+  resolveCleaningServiceSelectValue,
+  getCleaningServiceExtraDetails,
+  buildCleaningServiceDescription,
+  MARKET_S_LINE_OPTIONS,
+  MARKET_S_LINE_CUSTOM,
+  resolveMarketSLineSelectValue,
+  getMarketSLineExtraDetails,
+  buildMarketSLineDescription,
+  isMarketSSelectableProductLine,
+  documentCategoryShowsShipping,
+  documentCategoryShowsServiceSite,
+  documentCategoryLabel,
   type DocumentBusinessCategory,
 } from '@/lib/documentCreateDefaults'
 import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
@@ -63,8 +77,8 @@ function getDefaultInvoiceData(
       companyAbn: '',
       serviceAddress: '',
       serviceDate: '',
-      // 공통 청구 필드
-      name: 'Customer Name',
+      // 공통 청구 필드 (name = 개인 고객 또는 회사 담당자; 회사명만 있어도 됨)
+      name: '',
       email: '',
       phone: '',
       address: ''
@@ -129,7 +143,7 @@ export default function InvoicePreviewPage() {
 type SavedClientProfile = {
   id: string
   label: string
-  category: 'sticker' | 'cleaning'
+  category: DocumentBusinessCategory
   billing: {
     companyName?: string
     companyAbn?: string
@@ -240,7 +254,7 @@ function InvoicePreviewPageContent() {
   const [showStep4LineItems, setShowStep4LineItems] = useState(false)
   const [showStep5Discounts, setShowStep5Discounts] = useState(false)
   // 비즈니스 유형 & 저장된 클라이언트 (Create & Send와 동일 개념)
-  const [documentCategory, setDocumentCategory] = useState<'sticker' | 'cleaning'>('sticker')
+  const [documentCategory, setDocumentCategory] = useState<DocumentBusinessCategory>('sticker')
   const [savedClients, setSavedClients] = useState<SavedClientProfile[]>([])
   const [selectedSavedClientId, setSelectedSavedClientId] = useState<string>('')
   const [newSavedClientLabel, setNewSavedClientLabel] = useState<string>('')
@@ -404,29 +418,30 @@ function InvoicePreviewPageContent() {
     setDocumentCategory(category)
     const items = getDefaultLineItemsByCategory(category) as InvoiceLineItem[]
     const notes = getDefaultNotesByCategory(category)
+    const clearServiceFields = !documentCategoryShowsServiceSite(category)
     setInvoiceData((prev) => ({
       ...prev,
       billing: {
         ...prev.billing,
-        ...(category === 'sticker'
+        ...(clearServiceFields
           ? { serviceAddress: '', serviceDate: '' }
           : {}),
       },
       items,
       notes,
-      shipping: category === 'cleaning' ? 0 : prev.shipping,
+      shipping: documentCategoryShowsShipping(category) ? prev.shipping : 0,
     }))
     setQuoteData((prev) => ({
       ...prev,
       billing: {
         ...prev.billing,
-        ...(category === 'sticker'
+        ...(clearServiceFields
           ? { serviceAddress: '', serviceDate: '' }
           : {}),
       },
       items,
       notes,
-      shipping: category === 'cleaning' ? 0 : prev.shipping,
+      shipping: documentCategoryShowsShipping(category) ? prev.shipping : 0,
     }))
   }
 
@@ -530,9 +545,10 @@ function InvoicePreviewPageContent() {
       : quoteData.quoteMeta.quoteNumber
     let emailContent = ''
     let subject = ''
+    const rawName = (currentData.billing.name || '').trim()
     const recipientDisplayName =
       (currentData.billing.companyName || '').trim() ||
-      (currentData.billing.name || '').trim() ||
+      (rawName && rawName !== 'Customer Name' ? rawName : '') ||
       emailToSend.split('@')[0] ||
       'Customer'
     const brandName = getCompanyBrandName(COMPANY_LEGAL.companyName)
@@ -765,6 +781,17 @@ function InvoicePreviewPageContent() {
               </button>
               <button
                 type="button"
+                onClick={() => applyBusinessCategory('market-s')}
+                className={`px-4 py-2 rounded-lg border-2 transition-all text-sm flex items-center gap-2 ${
+                  documentCategory === 'market-s'
+                    ? 'border-green-600 bg-green-50 text-green-800'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                }`}
+              >
+                <span className="font-medium">Market S</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => applyBusinessCategory('cleaning')}
                 className={`px-4 py-2 rounded-lg border-2 transition-all text-sm flex items-center gap-2 ${
                   documentCategory === 'cleaning'
@@ -948,7 +975,7 @@ function InvoicePreviewPageContent() {
                               </option>
                             {savedClients.map(client => (
                               <option key={client.id} value={client.id}>
-                                {client.label} {client.category === 'cleaning' ? '(Cleaning)' : '(Sticker)'}
+                                {client.label} ({documentCategoryLabel(client.category)})
                               </option>
                             ))}
                           </select>
@@ -1072,7 +1099,8 @@ function InvoicePreviewPageContent() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Company Name <span className="text-gray-400 text-xs">(if billing a business)</span>
+                        Company Name{' '}
+                        <span className="text-gray-400 text-xs">(business — enough on its own)</span>
                       </label>
                       <input
                         type="text"
@@ -1080,15 +1108,33 @@ function InvoicePreviewPageContent() {
                           ? (invoiceData.billing.companyName || '')
                           : (quoteData.billing.companyName || '')}
                         onChange={e => {
+                          const companyName = e.target.value
+                          const clearPlaceholderName = (prevName: string) => {
+                            const n = (prevName || '').trim()
+                            return !n || n === 'Customer Name' ? '' : prevName
+                          }
                           if (documentType === 'invoice') {
                             setInvoiceData(prev => ({
                               ...prev,
-                              billing: { ...prev.billing, companyName: e.target.value }
+                              billing: {
+                                ...prev.billing,
+                                companyName,
+                                // Company alone is enough for Bill To; drop placeholder customer name
+                                name: companyName.trim()
+                                  ? clearPlaceholderName(prev.billing.name || '')
+                                  : prev.billing.name,
+                              },
                             }))
                           } else {
                             setQuoteData(prev => ({
                               ...prev,
-                              billing: { ...prev.billing, companyName: e.target.value }
+                              billing: {
+                                ...prev.billing,
+                                companyName,
+                                name: companyName.trim()
+                                  ? clearPlaceholderName(prev.billing.name || '')
+                                  : prev.billing.name,
+                              },
                             }))
                           }
                         }}
@@ -1121,10 +1167,33 @@ function InvoicePreviewPageContent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {(documentType === 'invoice'
+                          ? invoiceData.billing.companyName
+                          : quoteData.billing.companyName
+                        )?.trim()
+                          ? 'Contact person (optional)'
+                          : 'Customer Name'}
+                        {(documentType === 'invoice'
+                          ? invoiceData.billing.companyName
+                          : quoteData.billing.companyName
+                        )?.trim() ? (
+                          <span className="text-gray-400 text-xs font-normal"> — only if Attn needed</span>
+                        ) : (
+                          <span className="text-gray-400 text-xs font-normal"> — for individuals without company</span>
+                        )}
+                      </label>
                       <input
                         type="text"
-                        value={documentType === 'invoice' ? invoiceData.billing.name : quoteData.billing.name}
+                        value={
+                          (() => {
+                            const n =
+                              documentType === 'invoice'
+                                ? invoiceData.billing.name
+                                : quoteData.billing.name
+                            return n === 'Customer Name' ? '' : n || ''
+                          })()
+                        }
                         onChange={e => {
                           if (documentType === 'invoice') {
                             setInvoiceData(prev => ({ ...prev, billing: { ...prev.billing, name: e.target.value } }))
@@ -1133,6 +1202,14 @@ function InvoicePreviewPageContent() {
                           }
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder={
+                          (documentType === 'invoice'
+                            ? invoiceData.billing.companyName
+                            : quoteData.billing.companyName
+                          )?.trim()
+                            ? 'Optional contact / Attn name'
+                            : 'Individual customer name'
+                        }
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1182,7 +1259,7 @@ function InvoicePreviewPageContent() {
                         rows={2}
                       />
                     </div>
-                    {documentCategory === 'cleaning' && (
+                    {documentCategoryShowsServiceSite(documentCategory) && (
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Service Address (Cleaning Site) (Optional)</label>
@@ -1353,12 +1430,16 @@ function InvoicePreviewPageContent() {
                         <h3 className="text-lg font-semibold text-gray-900">
                           {documentCategory === 'cleaning'
                             ? 'Step 4 – Service Line Items'
-                            : 'Step 4 – Line Items'}
+                            : documentCategory === 'market-s'
+                              ? 'Step 4 – Market S Line Items'
+                              : 'Step 4 – Line Items'}
                         </h3>
                         <p className="text-xs text-gray-500 mt-1">
                           {documentCategory === 'cleaning'
                             ? 'Add cleaning services (unit prices are ex-GST). Click to '
-                            : 'Add and edit line items. Click to '}
+                            : documentCategory === 'market-s'
+                              ? 'Pick Single Item or Family Bundle, then brand/SKU in details (ex-GST). Click to '
+                              : 'Add and edit line items. Click to '}
                           {showStep4LineItems ? 'collapse' : 'expand'}.
                         </p>
                       </div>
@@ -1373,7 +1454,11 @@ function InvoicePreviewPageContent() {
                         className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
                       >
                         <Plus size={16} />
-                        {documentCategory === 'cleaning' ? 'Add service line' : 'Add Item'}
+                        {documentCategory === 'cleaning'
+                          ? 'Add service line'
+                          : documentCategory === 'market-s'
+                            ? 'Add Market S line'
+                            : 'Add Item'}
                       </button>
                     </div>
                   <div className="space-y-4">
@@ -1389,6 +1474,150 @@ function InvoicePreviewPageContent() {
                           </button>
                         </div>
                         <div className="space-y-3">
+                          {documentCategory === 'cleaning' ? (
+                            <>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Service type
+                                </label>
+                                <select
+                                  value={resolveCleaningServiceSelectValue(item.description)}
+                                  onChange={(e) => {
+                                    const selected = e.target.value
+                                    const extra = getCleaningServiceExtraDetails(item.description)
+                                    const nextDescription = buildCleaningServiceDescription(
+                                      selected,
+                                      selected === CLEANING_SERVICE_CUSTOM ? extra || '' : extra
+                                    )
+                                    if (documentType === 'invoice') {
+                                      const newItems = [...invoiceData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                    } else {
+                                      const newItems = [...quoteData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                >
+                                  {CLEANING_SERVICE_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                  <option value={CLEANING_SERVICE_CUSTOM}>Custom / other…</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Extra details (optional)
+                                </label>
+                                <textarea
+                                  value={
+                                    resolveCleaningServiceSelectValue(item.description) ===
+                                    CLEANING_SERVICE_CUSTOM
+                                      ? item.description
+                                      : getCleaningServiceExtraDetails(item.description)
+                                  }
+                                  onChange={(e) => {
+                                    const selected = resolveCleaningServiceSelectValue(
+                                      item.description
+                                    )
+                                    const nextDescription = buildCleaningServiceDescription(
+                                      selected === CLEANING_SERVICE_CUSTOM
+                                        ? CLEANING_SERVICE_CUSTOM
+                                        : selected,
+                                      e.target.value
+                                    )
+                                    if (documentType === 'invoice') {
+                                      const newItems = [...invoiceData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                    } else {
+                                      const newItems = [...quoteData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                    }
+                                  }}
+                                  rows={2}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                  placeholder="Room notes, site notes, etc. (optional)"
+                                />
+                              </div>
+                            </>
+                          ) : documentCategory === 'market-s' &&
+                            isMarketSSelectableProductLine(item.description) ? (
+                            <>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Pack class (shipping)
+                                </label>
+                                <select
+                                  value={resolveMarketSLineSelectValue(item.description)}
+                                  onChange={(e) => {
+                                    const selected = e.target.value
+                                    const extra = getMarketSLineExtraDetails(item.description)
+                                    const nextDescription = buildMarketSLineDescription(
+                                      selected,
+                                      selected === MARKET_S_LINE_CUSTOM ? extra || '' : extra
+                                    )
+                                    if (documentType === 'invoice') {
+                                      const newItems = [...invoiceData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                    } else {
+                                      const newItems = [...quoteData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                >
+                                  {MARKET_S_LINE_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                  <option value={MARKET_S_LINE_CUSTOM}>Custom product…</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Brand / product details
+                                </label>
+                                <textarea
+                                  value={
+                                    resolveMarketSLineSelectValue(item.description) ===
+                                    MARKET_S_LINE_CUSTOM
+                                      ? item.description
+                                      : getMarketSLineExtraDetails(item.description)
+                                  }
+                                  onChange={(e) => {
+                                    const selected = resolveMarketSLineSelectValue(item.description)
+                                    const nextDescription = buildMarketSLineDescription(
+                                      selected === MARKET_S_LINE_CUSTOM
+                                        ? MARKET_S_LINE_CUSTOM
+                                        : selected,
+                                      e.target.value
+                                    )
+                                    if (documentType === 'invoice') {
+                                      const newItems = [...invoiceData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                    } else {
+                                      const newItems = [...quoteData.items]
+                                      newItems[index] = { ...item, description: nextDescription }
+                                      setQuoteData((prev) => ({ ...prev, items: newItems }))
+                                    }
+                                  }}
+                                  rows={2}
+                                  className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                  placeholder="e.g. Mediheel 15ml × 1 (optional)"
+                                />
+                              </div>
+                            </>
+                          ) : (
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Description (line breaks allowed)</label>
                             <textarea
@@ -1406,13 +1635,10 @@ function InvoicePreviewPageContent() {
                               }}
                               rows={3}
                               className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
-                              placeholder={
-                                documentCategory === 'cleaning'
-                                  ? 'e.g. Regular clean / Fit out / End of lease (multi-line OK)'
-                                  : 'Product or service name / detailed description (multi-line)'
-                              }
+                              placeholder="Product or service name / detailed description (multi-line)"
                             />
                           </div>
+                          )}
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
@@ -1436,7 +1662,9 @@ function InvoicePreviewPageContent() {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">
-                                {documentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                                {documentCategory === 'cleaning' || documentCategory === 'market-s'
+                                  ? 'Unit Price (ex-GST)'
+                                  : 'Unit Price'}
                               </label>
                               <input
                                 type="number"
@@ -1500,7 +1728,9 @@ function InvoicePreviewPageContent() {
                       <p className="text-xs text-gray-500 mt-1">
                         {documentCategory === 'cleaning'
                           ? 'Apply VIP and promo discounts and payment fees (GST recalculates after discount). Click to '
-                          : 'Apply VIP and promo discounts, shipping, and payment fees. Click to '}
+                          : documentCategory === 'market-s'
+                            ? 'Apply VIP/promo discounts, AusPost shipping, and payment fees. Click to '
+                            : 'Apply VIP and promo discounts, shipping, and payment fees. Click to '}
                         {showStep5Discounts ? 'collapse' : 'expand'}.
                       </p>
                     </div>
@@ -1626,8 +1856,8 @@ function InvoicePreviewPageContent() {
                         placeholder="e.g., SUMMER2025"
                       />
                     </div>
-                    <div className={`grid gap-4 ${documentCategory === 'cleaning' ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                      {documentCategory !== 'cleaning' && (
+                    <div className={`grid gap-4 ${documentCategoryShowsShipping(documentCategory) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      {documentCategoryShowsShipping(documentCategory) && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Shipping ($)</label>
                         <input

@@ -205,8 +205,9 @@ export default function QuoteTemplate({
               <span className="font-semibold text-gray-700">ABN:</span> {billing.companyAbn}
             </p>
           )}
-          {/* Contact person is optional. If empty, do not render a placeholder like "Customer". */}
-          {Boolean((billing.name || '').trim()) && (
+          {/* Contact person optional. Ignore leftover placeholder "Customer Name". */}
+          {Boolean((billing.name || '').trim()) &&
+            (billing.name || '').trim() !== 'Customer Name' && (
             <p className={`font-semibold text-gray-800 ${billing.companyName ? 'text-sm mt-1' : 'text-lg'}`}>
               {billing.companyName ? `Attn: ${billing.name}` : billing.name}
             </p>

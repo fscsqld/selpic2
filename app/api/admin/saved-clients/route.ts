@@ -6,7 +6,9 @@ import {
 } from '@/lib/supabase/requireAdminPermission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-type SavedClientCategory = 'sticker' | 'cleaning'
+type SavedClientCategory = 'sticker' | 'cleaning' | 'market-s'
+
+const SAVED_CLIENT_CATEGORIES: SavedClientCategory[] = ['sticker', 'cleaning', 'market-s']
 
 type SavedClientRow = {
   id: string
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
   const billing = body?.billing && typeof body.billing === 'object' ? body.billing : {}
 
   if (!label) return NextResponse.json({ error: 'Missing label' }, { status: 400 })
-  if (category !== 'sticker' && category !== 'cleaning') {
+  if (!SAVED_CLIENT_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
   }
 

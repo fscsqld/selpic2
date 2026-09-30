@@ -60,6 +60,21 @@ import {
   getDefaultLineItemsByCategory,
   getDefaultNotesByCategory,
   getNewDocumentLineItem,
+  CLEANING_SERVICE_OPTIONS,
+  CLEANING_SERVICE_CUSTOM,
+  resolveCleaningServiceSelectValue,
+  getCleaningServiceExtraDetails,
+  buildCleaningServiceDescription,
+  MARKET_S_LINE_OPTIONS,
+  MARKET_S_LINE_CUSTOM,
+  resolveMarketSLineSelectValue,
+  getMarketSLineExtraDetails,
+  buildMarketSLineDescription,
+  isMarketSSelectableProductLine,
+  documentCategoryShowsShipping,
+  documentCategoryShowsServiceSite,
+  documentCategoryLabel,
+  type DocumentBusinessCategory,
 } from '@/lib/documentCreateDefaults'
 import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
@@ -167,7 +182,7 @@ export default function DocumentSenderPage() {
   type SavedClientProfile = {
     id: string
     label: string
-    category: 'sticker' | 'cleaning'
+    category: DocumentBusinessCategory
     billing: {
       companyName?: string
       companyAbn?: string
@@ -183,7 +198,7 @@ export default function DocumentSenderPage() {
   // Create Invoice & Quote 관련 상태
   const [createDocumentType, setCreateDocumentType] = useState<'invoice' | 'quote'>('invoice')
   /** 스티커 vs 청소 비즈니스 – 통합 관리용 */
-  const [createDocumentCategory, setCreateDocumentCategory] = useState<'sticker' | 'cleaning'>('sticker')
+  const [createDocumentCategory, setCreateDocumentCategory] = useState<DocumentBusinessCategory>('sticker')
   const [showCreateEditForm, setShowCreateEditForm] = useState(true)
   /** Step 1–5: 필요 시에만 펼쳐서 볼 수 있도록 접기/펼치기 */
   const [showStep1CompanyInfo, setShowStep1CompanyInfo] = useState(false)
@@ -224,12 +239,12 @@ export default function DocumentSenderPage() {
   }, [savedClients])
   
   // 비즈니스 유형별 기본 품목 (스티커 vs 청소 — Fit Out 포함 공유 시드)
-  const getDefaultItemsByCategory = (category: 'sticker' | 'cleaning'): InvoiceLineItem[] => {
+  const getDefaultItemsByCategory = (category: DocumentBusinessCategory): InvoiceLineItem[] => {
     return getDefaultLineItemsByCategory(category) as InvoiceLineItem[]
   }
 
   // Create Invoice 기본 데이터 생성 함수 (회사·결제 정보는 항상 lib/companyLegal 단일 소스 사용)
-  const getDefaultCreateInvoiceData = (category?: 'sticker' | 'cleaning'): Omit<InvoiceTemplateProps, 'items' | 'totals'> & {
+  const getDefaultCreateInvoiceData = (category?: DocumentBusinessCategory): Omit<InvoiceTemplateProps, 'items' | 'totals'> & {
     items: InvoiceLineItem[]
     totals: { subtotal: number; tax: number; total: number; currency: string }
     discounts?: {
@@ -2469,7 +2484,10 @@ If you have any questions, please contact us.`
                             </div>
                             <div className="col-span-2">
                               <label className="block text-xs font-medium text-gray-600 mb-1">
-                                {createDocumentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                                {createDocumentCategory === 'cleaning' ||
+                                createDocumentCategory === 'market-s'
+                                  ? 'Unit Price (ex-GST)'
+                                  : 'Unit Price'}
                               </label>
                               <input
                                 type="number"
@@ -2732,9 +2750,18 @@ If you have any questions, please contact us.`
                   onClick={() => {
                     setCreateDocumentCategory('sticker')
                     const base = getDefaultCreateInvoiceData('sticker')
-                    // Sticker 문서에서는 현장(Service) 주소가 필요 없으므로 값도 함께 초기화
-                    setCreateInvoiceData(prev => ({ ...prev, items: base.items, notes: base.notes, billing: { ...prev.billing, serviceAddress: '', serviceDate: '' } }))
-                    setCreateQuoteData(prev => ({ ...prev, items: base.items, notes: base.notes, billing: { ...prev.billing, serviceAddress: '', serviceDate: '' } }))
+                    setCreateInvoiceData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      billing: { ...prev.billing, serviceAddress: '', serviceDate: '' },
+                    }))
+                    setCreateQuoteData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      billing: { ...prev.billing, serviceAddress: '', serviceDate: '' },
+                    }))
                   }}
                   className={`px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2 ${
                     createDocumentCategory === 'sticker'
@@ -2744,6 +2771,33 @@ If you have any questions, please contact us.`
                 >
                   <Package className="w-4 h-4" />
                   <span className="font-medium">Sticker</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateDocumentCategory('market-s')
+                    const base = getDefaultCreateInvoiceData('market-s')
+                    setCreateInvoiceData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      billing: { ...prev.billing, serviceAddress: '', serviceDate: '' },
+                    }))
+                    setCreateQuoteData(prev => ({
+                      ...prev,
+                      items: base.items,
+                      notes: base.notes,
+                      billing: { ...prev.billing, serviceAddress: '', serviceDate: '' },
+                    }))
+                  }}
+                  className={`px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                    createDocumentCategory === 'market-s'
+                      ? 'border-green-600 bg-green-50 text-green-800'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  <span className="font-medium">Market S</span>
                 </button>
                 <button
                   onClick={() => {
@@ -2922,7 +2976,7 @@ If you have any questions, please contact us.`
                               <option value="">Select saved client</option>
                               {savedClients.map(client => (
                                 <option key={client.id} value={client.id}>
-                                  {client.label} {client.category === 'cleaning' ? '(Cleaning)' : '(Sticker)'}
+                                  {client.label} ({documentCategoryLabel(client.category)})
                                 </option>
                               ))}
                             </select>
@@ -3014,7 +3068,10 @@ If you have any questions, please contact us.`
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Company Name (Optional)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Company Name{' '}
+                          <span className="text-gray-400 text-xs">(enough for Bill To — no separate customer name needed)</span>
+                        </label>
                         <input
                           type="text"
                           value={createDocumentType === 'invoice'
@@ -3098,7 +3155,7 @@ If you have any questions, please contact us.`
                           rows={2}
                         />
                       </div>
-                      {createDocumentCategory === 'cleaning' && (
+                      {documentCategoryShowsServiceSite(createDocumentCategory) && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Service Address (Cleaning Site) (Optional)</label>
                           <textarea
@@ -3118,7 +3175,7 @@ If you have any questions, please contact us.`
                           />
                         </div>
                       )}
-                      {createDocumentCategory === 'cleaning' && (
+                      {documentCategoryShowsServiceSite(createDocumentCategory) && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Service Date (Optional)</label>
                           <input
@@ -3261,12 +3318,16 @@ If you have any questions, please contact us.`
                           <h3 className="text-lg font-semibold text-gray-900">
                             {createDocumentCategory === 'cleaning'
                               ? 'Step 4 – Service Line Items'
-                              : 'Step 4 – Line Items'}
+                              : createDocumentCategory === 'market-s'
+                                ? 'Step 4 – Market S Line Items'
+                                : 'Step 4 – Line Items'}
                           </h3>
                           <p className="text-xs text-gray-500 mt-1">
                             {createDocumentCategory === 'cleaning'
                               ? 'Add cleaning services (unit prices are ex-GST). Click to '
-                              : 'Add and edit line items. Click to '}
+                              : createDocumentCategory === 'market-s'
+                                ? 'Pick Single Item or Family Bundle, then brand/SKU in details (ex-GST). Click to '
+                                : 'Add and edit line items. Click to '}
                             {showStep4LineItems ? 'collapse' : 'expand'}.
                           </p>
                         </div>
@@ -3293,7 +3354,11 @@ If you have any questions, please contact us.`
                             className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
                           >
                             <Plus size={16} />
-                            {createDocumentCategory === 'cleaning' ? 'Add service line' : 'Add Item'}
+                            {createDocumentCategory === 'cleaning'
+                              ? 'Add service line'
+                              : createDocumentCategory === 'market-s'
+                                ? 'Add Market S line'
+                                : 'Add Item'}
                           </button>
                       </div>
                     <div className="space-y-4">
@@ -3321,25 +3386,172 @@ If you have any questions, please contact us.`
                             </button>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2">
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Description (line breaks allowed)</label>
-                              <textarea
-                                value={item.description}
-                                onChange={e => {
-                                  if (createDocumentType === 'invoice') {
-                                    const newItems = [...createInvoiceData.items]
-                                    newItems[index] = { ...item, description: e.target.value }
-                                    setCreateInvoiceData(prev => ({ ...prev, items: newItems }))
-                                  } else {
-                                    const newItems = [...createQuoteData.items]
-                                    newItems[index] = { ...item, description: e.target.value }
-                                    setCreateQuoteData(prev => ({ ...prev, items: newItems }))
-                                  }
-                                }}
-                                rows={3}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
-                                placeholder="Product or service name / detailed description (multi-line)"
-                              />
+                            <div className="col-span-2 space-y-3">
+                              {createDocumentCategory === 'cleaning' ? (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Service type
+                                    </label>
+                                    <select
+                                      value={resolveCleaningServiceSelectValue(item.description)}
+                                      onChange={(e) => {
+                                        const selected = e.target.value
+                                        const extra = getCleaningServiceExtraDetails(item.description)
+                                        const nextDescription = buildCleaningServiceDescription(
+                                          selected,
+                                          selected === CLEANING_SERVICE_CUSTOM ? extra || '' : extra
+                                        )
+                                        if (createDocumentType === 'invoice') {
+                                          const newItems = [...createInvoiceData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                        } else {
+                                          const newItems = [...createQuoteData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateQuoteData((prev) => ({ ...prev, items: newItems }))
+                                        }
+                                      }}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                    >
+                                      {CLEANING_SERVICE_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                      <option value={CLEANING_SERVICE_CUSTOM}>Custom / other…</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Extra details (optional)
+                                    </label>
+                                    <textarea
+                                      value={
+                                        resolveCleaningServiceSelectValue(item.description) ===
+                                        CLEANING_SERVICE_CUSTOM
+                                          ? item.description
+                                          : getCleaningServiceExtraDetails(item.description)
+                                      }
+                                      onChange={(e) => {
+                                        const selected = resolveCleaningServiceSelectValue(
+                                          item.description
+                                        )
+                                        const nextDescription = buildCleaningServiceDescription(
+                                          selected === CLEANING_SERVICE_CUSTOM
+                                            ? CLEANING_SERVICE_CUSTOM
+                                            : selected,
+                                          e.target.value
+                                        )
+                                        if (createDocumentType === 'invoice') {
+                                          const newItems = [...createInvoiceData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                        } else {
+                                          const newItems = [...createQuoteData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateQuoteData((prev) => ({ ...prev, items: newItems }))
+                                        }
+                                      }}
+                                      rows={2}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                      placeholder="Room notes, site notes, etc. (optional)"
+                                    />
+                                  </div>
+                                </>
+                              ) : createDocumentCategory === 'market-s' &&
+                                isMarketSSelectableProductLine(item.description) ? (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Pack class (shipping)
+                                    </label>
+                                    <select
+                                      value={resolveMarketSLineSelectValue(item.description)}
+                                      onChange={(e) => {
+                                        const selected = e.target.value
+                                        const extra = getMarketSLineExtraDetails(item.description)
+                                        const nextDescription = buildMarketSLineDescription(
+                                          selected,
+                                          selected === MARKET_S_LINE_CUSTOM ? extra || '' : extra
+                                        )
+                                        if (createDocumentType === 'invoice') {
+                                          const newItems = [...createInvoiceData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                        } else {
+                                          const newItems = [...createQuoteData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateQuoteData((prev) => ({ ...prev, items: newItems }))
+                                        }
+                                      }}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                                    >
+                                      {MARKET_S_LINE_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                      <option value={MARKET_S_LINE_CUSTOM}>Custom product…</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                      Brand / product details
+                                    </label>
+                                    <textarea
+                                      value={
+                                        resolveMarketSLineSelectValue(item.description) ===
+                                        MARKET_S_LINE_CUSTOM
+                                          ? item.description
+                                          : getMarketSLineExtraDetails(item.description)
+                                      }
+                                      onChange={(e) => {
+                                        const selected = resolveMarketSLineSelectValue(item.description)
+                                        const nextDescription = buildMarketSLineDescription(
+                                          selected === MARKET_S_LINE_CUSTOM
+                                            ? MARKET_S_LINE_CUSTOM
+                                            : selected,
+                                          e.target.value
+                                        )
+                                        if (createDocumentType === 'invoice') {
+                                          const newItems = [...createInvoiceData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateInvoiceData((prev) => ({ ...prev, items: newItems }))
+                                        } else {
+                                          const newItems = [...createQuoteData.items]
+                                          newItems[index] = { ...item, description: nextDescription }
+                                          setCreateQuoteData((prev) => ({ ...prev, items: newItems }))
+                                        }
+                                      }}
+                                      rows={2}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                      placeholder="e.g. Mediheel 15ml × 1 (optional)"
+                                    />
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Description (line breaks allowed)</label>
+                                  <textarea
+                                    value={item.description}
+                                    onChange={e => {
+                                      if (createDocumentType === 'invoice') {
+                                        const newItems = [...createInvoiceData.items]
+                                        newItems[index] = { ...item, description: e.target.value }
+                                        setCreateInvoiceData(prev => ({ ...prev, items: newItems }))
+                                      } else {
+                                        const newItems = [...createQuoteData.items]
+                                        newItems[index] = { ...item, description: e.target.value }
+                                        setCreateQuoteData(prev => ({ ...prev, items: newItems }))
+                                      }
+                                    }}
+                                    rows={3}
+                                    className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm resize-y"
+                                    placeholder="Product or service name / detailed description (multi-line)"
+                                  />
+                                </>
+                              )}
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
@@ -3364,7 +3576,10 @@ If you have any questions, please contact us.`
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">
-                                {createDocumentCategory === 'cleaning' ? 'Unit Price (ex-GST)' : 'Unit Price'}
+                                {createDocumentCategory === 'cleaning' ||
+                                createDocumentCategory === 'market-s'
+                                  ? 'Unit Price (ex-GST)'
+                                  : 'Unit Price'}
                               </label>
                               <input
                                 type="number"
@@ -3510,8 +3725,8 @@ If you have any questions, please contact us.`
                           placeholder="Optional"
                         />
                       </div>
-                      <div className={`grid gap-4 ${createDocumentCategory === 'cleaning' ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                        {createDocumentCategory !== 'cleaning' && (
+                      <div className={`grid gap-4 ${documentCategoryShowsShipping(createDocumentCategory) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {documentCategoryShowsShipping(createDocumentCategory) && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Shipping</label>
                           <input
