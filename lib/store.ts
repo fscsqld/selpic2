@@ -377,7 +377,8 @@ export interface StockMovement {
 const DEFAULT_STOCK_LEVEL = 100
 const DEFAULT_SAFETY_STOCK = 10
 const MAX_STOCK_HISTORY = 500
-const MAX_STORED_ORDERS = 10
+/** Match GET /api/orders limit — admin list/dashboard merge must not drop older ledger rows. */
+const MAX_STORED_ORDERS = 500
 const MAX_STORED_PRODUCTS = 500 // 최대 저장 가능한 제품 수
 
 const sanitizeCustomizations = (customizations: Record<string, string> = {}) => {
