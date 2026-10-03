@@ -1,0 +1,31 @@
+# Stripe webhook: ACK vs retry (learned 2026-10-03)
+
+Live endpoint: `https://selpic.com.au/api/stripe/webhook` (`app/api/stripe/webhook/route.ts`).
+
+## Invariant
+
+Stripe retries every non-2xx delivery. Do **not** return 4xx for permanent persist failures after a valid signature — that causes dashboard failure email + retry storms. Do **not** blind-ACK 200 on every error (lost orders when Supabase is briefly down).
+
+## Response policy
+
+| Case | HTTP | Why |
+|---|---|---|
+| Valid signature + handled / ignored event | **200** `{ received: true }` | Success |
+| Missing / invalid signature | **400** | Bad request; ops fix `STRIPE_WEBHOOK_SECRET` |
+| Secret unset | **503** | Retry until Vercel env fixed |
+| Persist transient (DB 500/503, Stripe retrieve 500) | **5xx/503** | Stripe retries |
+| Persist “Payment not completed” (400) | **retry status** | Race with `payment_status` |
+| Persist permanent 400 (amount / metadata) | **200** + log `persistFailed` | Stop storm; `/success` → `/api/stripe/complete` may still save |
+| Unexpected throw | **500** | Retry |
+
+## Implementation notes
+
+- Raw body: `await req.text()` then `constructEvent` — never `req.json()` first.
+- Handled today: `checkout.session.completed` (`mode === 'payment'`). Other events → 200 (no `invoice.paid` yet).
+- First insert: `persistVerifiedStripeSession(..., { notifyAdmins: false })` then `after(() => notifyAdminsOfNewOrder)` so Resend does not delay Stripe’s 200.
+- `/api/stripe/complete` still awaits notify on first insert (browser success path).
+- Classifier: `lib/orders/stripeWebhookResponse.ts`.
+
+## Ops check (Dashboard email)
+
+If failures continue after deploy: Stripe Live endpoint **Signing secret** must match Vercel `STRIPE_WEBHOOK_SECRET` (test `whsec_` ≠ live).

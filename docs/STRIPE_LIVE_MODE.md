@@ -40,6 +40,12 @@ After editing `.env.local`, restart the Next.js process (and redeploy if you use
 4. **Production URL**  
    In **Checkout** settings or wherever you configure success/cancel URLs, confirm they use your **live** site URL if anything is hard-coded outside env (this project often uses relative paths; verify hosted `NEXT_PUBLIC_*` site URL matches production).
 
+## Webhook response policy (code)
+
+`/api/stripe/webhook` uses the **raw** body for signature verification. On success it returns **200** `{ received: true }`. Permanent persist client errors ACK **200** (logged) so Stripe does not retry-storm; DB/config failures stay **5xx/503** for retry. Admin `[SELPIC Order]` mail on the webhook path runs after the response via Next.js `after()` (see `.cursor/rules/stripe-webhook-ack-vs-retry.mdc`).
+
+If **Recent deliveries** show signature failures: Live endpoint **Signing secret** ≠ Vercel `STRIPE_WEBHOOK_SECRET`.
+
 ## Quick verification
 
 - In the Dashboard, remain in **Live** mode and place a **small real** card payment (or Stripe’s test flow is not applicable — use a real small charge per your policy).  

@@ -72,8 +72,21 @@ export function draftToPersistedOrder(orderDraft: OrderDraft, stripeCheckoutSess
   return normalizeLedgerOrder(base)
 }
 
+export type UpsertStripePaidOrderOptions = {
+  /**
+   * When true (default), await admin Resend on first insert.
+   * Webhook path sets false and schedules notify via `after()` so Stripe gets 200 before Resend.
+   */
+  notifyAdmins?: boolean
+}
+
 /** Idempotent: same Stripe session always maps to one row / one order payload. */
-export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, order: OrderRecord): Promise<OrderRecord> {
+export async function upsertStripePaidOrderRow(
+  stripeCheckoutSessionId: string,
+  order: OrderRecord,
+  options?: UpsertStripePaidOrderOptions
+): Promise<{ order: OrderRecord; created: boolean }> {
+  const notifyAdmins = options?.notifyAdmins !== false
   const sb = getSupabaseAdmin()
   const { data: existing, error: selErr } = await sb
     .from('orders')
@@ -85,7 +98,10 @@ export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, 
     throw new Error(selErr.message)
   }
   if (existing?.payload) {
-    return normalizeLedgerOrder(existing.payload as OrderRecord)
+    return {
+      order: normalizeLedgerOrder(existing.payload as OrderRecord),
+      created: false,
+    }
   }
 
   const { error: insErr } = await sb.from('orders').insert({
@@ -99,29 +115,42 @@ export async function upsertStripePaidOrderRow(stripeCheckoutSessionId: string, 
       .select('payload')
       .eq('stripe_checkout_session_id', stripeCheckoutSessionId)
       .maybeSingle()
-    if (race?.payload) return normalizeLedgerOrder(race.payload as OrderRecord)
+    if (race?.payload) {
+      return {
+        order: normalizeLedgerOrder(race.payload as OrderRecord),
+        created: false,
+      }
+    }
     throw new Error(insErr.message)
   }
 
   const saved = normalizeLedgerOrder(order)
   // Await Resend before returning — same as Contact/Bespoke / checkout-bank.
   // `void notify` could be frozen after the serverless response (missing [SELPIC Order] mail).
-  try {
-    const notifyResult = await notifyAdminsOfNewOrder(saved)
-    if (!notifyResult?.ok) {
-      console.warn('[stripePaidOrder] admin notify failed:', notifyResult?.logMessage)
+  // Webhook skips this and uses Next.js `after()` instead (fast 200 to Stripe).
+  if (notifyAdmins) {
+    try {
+      const notifyResult = await notifyAdminsOfNewOrder(saved)
+      if (!notifyResult?.ok) {
+        console.warn('[stripePaidOrder] admin notify failed:', notifyResult?.logMessage)
+      }
+    } catch (err) {
+      console.warn(
+        '[stripePaidOrder] admin notify threw:',
+        err instanceof Error ? err.message : err
+      )
     }
-  } catch (err) {
-    console.warn(
-      '[stripePaidOrder] admin notify threw:',
-      err instanceof Error ? err.message : err
-    )
   }
-  return saved
+  return { order: saved, created: true }
 }
 
-export async function persistVerifiedStripeSession(sessionId: string): Promise<
-  | { ok: true; order: OrderRecord }
+export type PersistVerifiedStripeSessionOptions = UpsertStripePaidOrderOptions
+
+export async function persistVerifiedStripeSession(
+  sessionId: string,
+  options?: PersistVerifiedStripeSessionOptions
+): Promise<
+  | { ok: true; order: OrderRecord; created: boolean }
   | { ok: false; error: string; status: number }
 > {
   if (!isSupabaseConfigured()) {
@@ -133,8 +162,8 @@ export async function persistVerifiedStripeSession(sessionId: string): Promise<
   }
   try {
     const order = draftToPersistedOrder(v.orderDraft, sessionId)
-    const saved = await upsertStripePaidOrderRow(sessionId, order)
-    return { ok: true, order: saved }
+    const saved = await upsertStripePaidOrderRow(sessionId, order, options)
+    return { ok: true, order: saved.order, created: saved.created }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to save order'
     return { ok: false, error: message, status: 500 }
