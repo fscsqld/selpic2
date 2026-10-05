@@ -270,6 +270,34 @@ export function sanitizeIncomingCatalogRecord(item: unknown): CatalogProductReco
     record.limitedEditionText = clone.limitedEditionText.trim().slice(0, 500)
   }
   if (typeof clone.isLimitedEdition === 'boolean') record.isLimitedEdition = clone.isLimitedEdition
+  if (
+    clone.salesMode === 'in_stock' ||
+    clone.salesMode === 'preorder' ||
+    clone.salesMode === 'coming_soon'
+  ) {
+    record.salesMode = clone.salesMode
+  }
+  if (typeof clone.preorderSupplierConfirmed === 'boolean') {
+    record.preorderSupplierConfirmed = clone.preorderSupplierConfirmed
+  }
+  if (typeof clone.preorderSupplierNote === 'string' && clone.preorderSupplierNote.trim()) {
+    record.preorderSupplierNote = clone.preorderSupplierNote.trim().slice(0, 500)
+  }
+  if (typeof clone.preorderShipsFrom === 'string' && clone.preorderShipsFrom.trim()) {
+    record.preorderShipsFrom = clone.preorderShipsFrom.trim().slice(0, 32)
+  }
+  if (typeof clone.preorderClosesAt === 'string' && clone.preorderClosesAt.trim()) {
+    record.preorderClosesAt = clone.preorderClosesAt.trim().slice(0, 40)
+  }
+  if (typeof clone.preorderMaxQty === 'number' && Number.isFinite(clone.preorderMaxQty)) {
+    record.preorderMaxQty = Math.max(0, Math.floor(clone.preorderMaxQty))
+  }
+  if (typeof clone.preorderSoldCount === 'number' && Number.isFinite(clone.preorderSoldCount)) {
+    record.preorderSoldCount = Math.max(0, Math.floor(clone.preorderSoldCount))
+  }
+  if (typeof clone.preorderNote === 'string' && clone.preorderNote.trim()) {
+    record.preorderNote = clone.preorderNote.trim().slice(0, 120)
+  }
   if (Array.isArray(clone.mixedLabelsSheetBundles) && clone.mixedLabelsSheetBundles.length > 0) {
     record.mixedLabelsSheetBundles = sanitizeMixedLabelsSheetBundles(clone.mixedLabelsSheetBundles)
   }

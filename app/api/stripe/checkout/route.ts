@@ -11,6 +11,11 @@ import { applyServerCheckoutMoney } from '@/lib/orders/applyServerCheckoutMoney'
 import { requireStorefrontCheckoutSession } from '@/lib/orders/requireStorefrontCheckoutSession'
 import { readCmsCheckoutPricingConfig } from '@/lib/server/cmsCheckoutPricingConfig'
 import { resolveStorefrontVipGradeFromOrders } from '@/lib/server/resolveStorefrontVipGrade'
+import {
+  assertMarketSCatalogAllowsPurchase,
+  buildOrderItemPreorderSnapshot,
+  orderHasPreorderItems,
+} from '@/lib/marketSPreorder'
 import type Stripe from 'stripe'
 
 type OrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
@@ -61,6 +66,14 @@ async function validateTotalsAndBuildLineItems(
     const unitCents = audCents(unitPrice)
     itemsSubtotalCents += unitCents * qty
     const name = (catalogProduct.name || item.name || 'Item').slice(0, 120)
+    assertMarketSCatalogAllowsPurchase(
+      {
+        ...(catalogProduct as Parameters<typeof assertMarketSCatalogAllowsPurchase>[0]),
+        name: catalogProduct.name || item.name,
+      },
+      qty
+    )
+    const preorderSnap = buildOrderItemPreorderSnapshot(catalogProduct)
     line_items.push({
       quantity: qty,
       price_data: {
@@ -102,6 +115,8 @@ async function validateTotalsAndBuildLineItems(
       features: (catalogProduct as any).features ?? item.features,
       bundleItems: (catalogProduct as any).bundleItems ?? item.bundleItems,
       isBundle: (catalogProduct as any).isBundle ?? item.isBundle,
+      salesModeAtOrder: preorderSnap.salesModeAtOrder,
+      preorderShipsFrom: preorderSnap.preorderShipsFrom,
     })
   }
 
@@ -170,6 +185,7 @@ async function validateTotalsAndBuildLineItems(
   const sanitizedOrderDraft: OrderDraft = {
     ...moneyValidated,
     items: sanitizedItems,
+    hasPreorderItems: orderHasPreorderItems(sanitizedItems),
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shipCents / 100).toFixed(2)),
     paymentFee: fee > 0 ? Number(fee.toFixed(2)) : 0,

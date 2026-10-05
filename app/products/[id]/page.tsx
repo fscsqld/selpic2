@@ -21,6 +21,16 @@ import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 import ProductLikeButton from '@/components/ProductLikeButton'
 import { isMarketSCatalogProduct } from '@/lib/marketSSubcategory'
 import { MARKET_S_HYGIENE_PDP } from '@/lib/marketSHygieneCopy'
+import { isProductOutOfStock } from '@/lib/likedProductStock'
+import {
+  formatPreorderShipsFromLabel,
+  getMarketSPreorderPurchaseLimit,
+  isMarketSComingSoonProduct,
+  isMarketSPreorderOpen,
+  MARKET_S_COMING_SOON_CTA,
+  MARKET_S_PREORDER_BADGE,
+  MARKET_S_PREORDER_CTA,
+} from '@/lib/marketSPreorder'
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
@@ -136,8 +146,23 @@ export default function ProductDetailPage() {
     ? Math.max(0, (product as any).safetyStock) 
     : undefined
   const lowStockThreshold = Math.max(safety ?? 0, 5)
-  const isOutOfStock = typeof stockQty === 'number' ? stockQty === 0 : !product?.inStock
-  const isLowStock = stockQty !== undefined && stockQty > 0 && stockQty <= lowStockThreshold && product?.inStock
+  const preorderOpen = isMarketSPreorderOpen(product)
+  const comingSoon = isMarketSComingSoonProduct(product)
+  const preorderLimit = getMarketSPreorderPurchaseLimit(product)
+  const maxPurchasableQty =
+    preorderLimit != null
+      ? preorderLimit
+      : typeof stockQty === 'number'
+        ? stockQty
+        : undefined
+  const isOutOfStock = isProductOutOfStock(product)
+  const isLowStock =
+    !preorderOpen &&
+    stockQty !== undefined &&
+    stockQty > 0 &&
+    stockQty <= lowStockThreshold &&
+    !isOutOfStock
+  const shipsLabel = formatPreorderShipsFromLabel(product?.preorderShipsFrom)
 
   // 마운트 전에는 서버와 동일한 로딩 UI만 렌더 (hydration mismatch 방지)
   const loadingBlock = (
@@ -202,12 +227,20 @@ export default function ProductDetailPage() {
     }
 
     if (isOutOfStock) {
-      alert('This product is currently out of stock.')
+      alert(
+        comingSoon
+          ? 'This item is coming soon and cannot be purchased yet.'
+          : 'This product is currently out of stock.'
+      )
       return
     }
 
-    if (stockQty !== undefined && quantity > stockQty) {
-      alert(`Insufficient stock. Current stock: ${stockQty}`)
+    if (maxPurchasableQty !== undefined && quantity > maxPurchasableQty) {
+      alert(
+        preorderOpen
+          ? `Pre-order limit reached. Max units: ${maxPurchasableQty}`
+          : `Insufficient stock. Current stock: ${maxPurchasableQty}`
+      )
       return
     }
 
@@ -230,8 +263,12 @@ export default function ProductDetailPage() {
   const handleQuantityChange = (delta: number) => {
     const newQuantity = quantity + delta
     if (newQuantity < 1) return
-    if (stockQty !== undefined && newQuantity > stockQty) {
-      alert(`Insufficient stock. Current stock: ${stockQty}`)
+    if (maxPurchasableQty !== undefined && newQuantity > maxPurchasableQty) {
+      alert(
+        preorderOpen
+          ? `Pre-order limit. Max units: ${maxPurchasableQty}`
+          : `Insufficient stock. Current stock: ${maxPurchasableQty}`
+      )
       return
     }
     setQuantity(newQuantity)
@@ -257,6 +294,16 @@ export default function ProductDetailPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
             {/* 배지 (갤러리 위에 오버레이) */}
             <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+              {preorderOpen && (
+                <span className="bg-stone-900 text-stone-50 text-xs px-3 py-1 rounded font-semibold tracking-wide">
+                  {MARKET_S_PREORDER_BADGE}
+                </span>
+              )}
+              {comingSoon && !preorderOpen && (
+                <span className="bg-amber-100 text-amber-900 text-xs px-3 py-1 rounded font-semibold tracking-wide">
+                  COMING SOON
+                </span>
+              )}
               {product.isNew && (
                 <span className="bg-green-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
                   NEW ARRIVAL
@@ -277,9 +324,9 @@ export default function ProductDetailPage() {
                   LIMITED EDITION
                 </span>
               )}
-              {isOutOfStock && (
+              {isOutOfStock && !preorderOpen && (
                 <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
-                  Out of Stock
+                  {comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'}
                 </span>
               )}
               {isLowStock && typeof stockQty === 'number' && (
@@ -415,12 +462,18 @@ export default function ProductDetailPage() {
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
                   isOutOfStock
                     ? 'bg-gray-200 text-gray-600'
+                    : preorderOpen
+                    ? 'bg-stone-100 text-stone-800'
                     : isLowStock
                     ? 'bg-red-100 text-red-700'
                     : 'bg-green-100 text-green-700'
                 }`}>
                   {isOutOfStock
-                    ? 'Out of Stock'
+                    ? comingSoon
+                      ? MARKET_S_COMING_SOON_CTA
+                      : 'Out of Stock'
+                    : preorderOpen
+                    ? shipsLabel || 'Pre-order open'
                     : typeof stockQty === 'number'
                     ? `${stockQty} in stock`
                     : product.inStock
@@ -429,6 +482,29 @@ export default function ProductDetailPage() {
                 </span>
               </div>
             </div>
+
+            {preorderOpen && (
+              <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800">
+                <p className="font-semibold tracking-wide text-xs text-stone-500 mb-1">
+                  {MARKET_S_PREORDER_BADGE}
+                </p>
+                {shipsLabel ? <p className="font-medium">{shipsLabel}</p> : null}
+                {typeof product.preorderMaxQty === 'number' &&
+                product.preorderMaxQty > 0 &&
+                preorderLimit != null ? (
+                  <p className="mt-1 text-stone-600">
+                    {preorderLimit} of {product.preorderMaxQty} left
+                  </p>
+                ) : null}
+                {product.preorderNote?.trim() ? (
+                  <p className="mt-1 text-stone-600">{product.preorderNote.trim()}</p>
+                ) : (
+                  <p className="mt-1 text-stone-600">
+                    Charged today. We dispatch on or after the ships-from date once stock arrives.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* 수량 선택 */}
             {!isOutOfStock && !requiresCustomization && (
@@ -447,12 +523,16 @@ export default function ProductDetailPage() {
                   <input
                     type="number"
                     min="1"
-                    max={stockQty}
+                    max={maxPurchasableQty}
                     value={quantity}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 1
-                      if (stockQty !== undefined && val > stockQty) {
-                        alert(`Insufficient stock. Current stock: ${stockQty}`)
+                      if (maxPurchasableQty !== undefined && val > maxPurchasableQty) {
+                        alert(
+                          preorderOpen
+                            ? `Pre-order limit. Max units: ${maxPurchasableQty}`
+                            : `Insufficient stock. Current stock: ${maxPurchasableQty}`
+                        )
                         return
                       }
                       setQuantity(Math.max(1, val))
@@ -461,14 +541,14 @@ export default function ProductDetailPage() {
                   />
                   <button
                     onClick={() => handleQuantityChange(1)}
-                    disabled={stockQty !== undefined && quantity >= stockQty}
+                    disabled={maxPurchasableQty !== undefined && quantity >= maxPurchasableQty}
                     className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
-                  {stockQty !== undefined && (
+                  {maxPurchasableQty !== undefined && (
                     <span className="text-sm text-gray-600">
-                      (Max {stockQty})
+                      (Max {maxPurchasableQty})
                     </span>
                   )}
                 </div>
@@ -504,7 +584,9 @@ export default function ProductDetailPage() {
                   className={`w-full py-4 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-2 ${
                     isOutOfStock
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-red-600 text-white hover:bg-red-700'
+                      : preorderOpen
+                        ? 'bg-stone-900 text-stone-50 hover:bg-stone-800'
+                        : 'bg-red-600 text-white hover:bg-red-700'
                   }`}
                 >
                   {isAddingToCart ? (
@@ -513,11 +595,11 @@ export default function ProductDetailPage() {
                       Adding...
                     </>
                   ) : isOutOfStock ? (
-                    'Out of Stock'
+                    comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'
                   ) : (
                     <>
                       <ShoppingCart className="w-5 h-5" />
-                      Add to Cart
+                      {preorderOpen ? MARKET_S_PREORDER_CTA : 'Add to Cart'}
                     </>
                   )}
                 </button>

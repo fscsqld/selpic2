@@ -239,6 +239,7 @@ export default function AdminOrdersPage() {
   const [maxTotal, setMaxTotal] = useState<string>('')
   const [vipFilter, setVipFilter] = useState<string>('')
   const [promoFilter, setPromoFilter] = useState<string>('')
+  const [preorderFilter, setPreorderFilter] = useState<string>('')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [sortDesc, setSortDesc] = useState<boolean>(true)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -560,8 +561,15 @@ export default function AdminOrdersPage() {
       
       const matchVip = !vipFilter || (vipFilter === 'with' && o.vipGradeCode !== undefined) || (vipFilter === 'without' && o.vipGradeCode === undefined)
       const matchPromo = !promoFilter || (promoFilter === 'with' && o.promoCode) || (promoFilter === 'without' && !o.promoCode)
+      const orderIsPreorder =
+        o.hasPreorderItems === true ||
+        (Array.isArray(o.items) && o.items.some((it) => it?.salesModeAtOrder === 'preorder'))
+      const matchPreorder =
+        !preorderFilter ||
+        (preorderFilter === 'with' && orderIsPreorder) ||
+        (preorderFilter === 'without' && !orderIsPreorder)
       
-      return matchQuery && matchStatus && matchShipping && matchPayment && matchPlatform && matchDateFrom && matchDateTo && matchMinTotal && matchMaxTotal && matchVip && matchPromo
+      return matchQuery && matchStatus && matchShipping && matchPayment && matchPlatform && matchDateFrom && matchDateTo && matchMinTotal && matchMaxTotal && matchVip && matchPromo && matchPreorder
     })
     
     return filteredOrders.sort((a, b) => {
@@ -569,7 +577,7 @@ export default function AdminOrdersPage() {
       const bTime = new Date(b.createdAtIso).getTime()
       return sortDesc ? bTime - aTime : aTime - bTime
     })
-  }, [orders, query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc])
+  }, [orders, query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, preorderFilter, sortDesc])
 
   // 페이지네이션 계산
   const totalPages = useMemo(() => {
@@ -579,7 +587,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     // 필터가 바뀌면 첫 페이지로 이동
     setCurrentPage(1)
-  }, [query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, sortDesc, pageSize])
+  }, [query, statusFilter, shippingFilter, paymentFilter, platformFilter, dateFrom, dateTo, minTotal, maxTotal, vipFilter, promoFilter, preorderFilter, sortDesc, pageSize])
 
   useEffect(() => {
     // 현재 페이지가 범위를 벗어나면 조정
@@ -644,6 +652,7 @@ export default function AdminOrdersPage() {
     setMaxTotal('')
     setVipFilter('')
     setPromoFilter('')
+    setPreorderFilter('')
   }
 
   const toggleAll = (checked: boolean) => {
@@ -1231,6 +1240,18 @@ export default function AdminOrdersPage() {
                     <option value="without">Without Promo</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pre-order</label>
+                  <select
+                    value={preorderFilter}
+                    onChange={(e) => setPreorderFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">All</option>
+                    <option value="with">Pre-order orders</option>
+                    <option value="without">No pre-order</option>
+                  </select>
+                </div>
                 <div className="md:col-span-2 lg:col-span-4">
                   <button
                     onClick={clearFilters}
@@ -1312,6 +1333,10 @@ export default function AdminOrdersPage() {
                     const plat = orderPlatformBadge(order)
                     const pers = summarizeOrderPersonalization(order)
                     const shipBadge = getShippingFulfillmentBadge(order)
+                    const orderIsPreorder =
+                      order.hasPreorderItems === true ||
+                      (Array.isArray(order.items) &&
+                        order.items.some((it) => it?.salesModeAtOrder === 'preorder'))
                     return (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm border-r border-gray-100"><input type="checkbox" checked={!!selected[order.id]} onChange={e => toggleOne(order.id, e.target.checked)} /></td>
@@ -1324,6 +1349,14 @@ export default function AdminOrdersPage() {
                           >
                             {shipBadge.label}
                           </span>
+                          {orderIsPreorder && (
+                            <span
+                              className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900"
+                              title="Contains Market S pre-order line(s)"
+                            >
+                              PRE-ORDER
+                            </span>
+                          )}
                         </div>
                         <div className="font-medium text-gray-900">{order.id}</div>
                         <div className="text-gray-500">{new Date(order.createdAtIso).toLocaleString()}</div>
@@ -1354,8 +1387,16 @@ export default function AdminOrdersPage() {
                       <td className="px-6 py-4 text-sm border-r border-gray-100">
                         <div className="space-y-1 text-gray-900">
                           {order.items.slice(0, 3).map((it, idx) => (
-                            <div key={`${order.id}-${idx}`} className="truncate">
-                              {it.name}
+                            <div key={`${order.id}-${idx}`}>
+                              <div className="truncate">{it.name}</div>
+                              {it.salesModeAtOrder === 'preorder' && (
+                                <div className="text-[10px] font-medium text-amber-800">
+                                  Pre-order
+                                  {it.preorderShipsFrom
+                                    ? ` · ships from ${it.preorderShipsFrom}`
+                                    : ''}
+                                </div>
+                              )}
                             </div>
                           ))}
                           {order.items.length > 3 && (

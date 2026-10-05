@@ -31,6 +31,11 @@ import {
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 import MarketSBundleUpsell from '@/components/MarketSBundleUpsell'
 import { getMarketSBundleUpsellOffers } from '@/lib/marketSBundleUpsell'
+import {
+  formatPreorderShipsFromLabel,
+  getMarketSPreorderPurchaseLimit,
+  isMarketSPreorderOpen,
+} from '@/lib/marketSPreorder'
 
 export default function CartPage() {
   const router = useRouter()
@@ -93,13 +98,17 @@ export default function CartPage() {
         trackable: false
       }
     }
+    // Open Market S pre-order uses purchase cap, not warehouse stock (stock 0 is valid).
+    const preorderLimit = getMarketSPreorderPurchaseLimit(storeProduct)
     const rawStock = (storeProduct as any).stockQuantity
     const available =
-      typeof rawStock === 'number'
-        ? Math.max(0, rawStock)
-        : storeProduct.inStock
-        ? Infinity
-        : 0
+      preorderLimit != null
+        ? preorderLimit
+        : typeof rawStock === 'number'
+          ? Math.max(0, rawStock)
+          : storeProduct.inStock
+            ? Infinity
+            : 0
     const safety =
       typeof (storeProduct as any).safetyStock === 'number'
         ? Math.max(0, (storeProduct as any).safetyStock)
@@ -386,6 +395,17 @@ export default function CartPage() {
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">{item.product.name}</h3>
                         <p className="text-gray-600 text-sm mt-1">{item.product.description}</p>
+                        {(() => {
+                          const live =
+                            products.find((p) => p.id === item.product.id) || item.product
+                          if (!isMarketSPreorderOpen(live)) return null
+                          const ships = formatPreorderShipsFromLabel(live.preorderShipsFrom)
+                          return (
+                            <p className="text-sm text-stone-700 mt-1 font-medium">
+                              Pre-order{ships ? ` · ${ships}` : ''}
+                            </p>
+                          )
+                        })()}
 
                         {/* 기본 상품 정보 */}
                         <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-700">

@@ -19,6 +19,13 @@ import {
 import { buildSimpleReceiptEmailHtml, buildSimpleReceiptSubject } from '@/lib/email/simpleReceiptEmail'
 import { buildOrderReceiptPdfBase64 } from '@/lib/pdf/serverReceiptPdf'
 import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
+import {
+  applyNewPreorderShipsFromToItems,
+  buildPreorderDelayEmailHtml,
+  buildPreorderDelayEmailSubject,
+  getEarliestPreorderShipsFrom,
+} from '@/lib/orderPreorderFulfillment'
+import { orderIncludesPreorder } from '@/lib/marketSPreorder'
 
 const GUEST_WINDOW_MS = 60 * 60 * 1000
 const GUEST_MAX_PER_WINDOW = 30
@@ -455,4 +462,101 @@ export async function sendAdminShippingNotificationEmailAction(input: {
   if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
   const result = await sendShippingNotificationEmailForOrder(order, input.recipientEmail)
   return result.ok ? { ok: true } : result
+}
+
+/**
+ * Market S pre-order delay: update frozen ships-from on pre-order lines, email customer, persist ledger.
+ * Fail closed if order has no pre-order lines. Does not change payment or status.
+ */
+export async function sendAdminPreorderDelayEmailAction(input: {
+  orderId: string
+  newShipsFrom: string
+  adminNote?: string
+  orderJson?: string
+}): Promise<{ ok: true; order: OrderRecord } | { ok: false; error: string }> {
+  const perm = await requireAdminPermission('orders:write')
+  if (!perm.ok) {
+    return { ok: false, error: perm.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN' }
+  }
+
+  const orderFromInput = input.orderJson ? parseOrderRecordJson(input.orderJson) : null
+  const order =
+    orderFromInput && orderFromInput.id === input.orderId
+      ? orderFromInput
+      : await loadOrderFromSupabaseById(input.orderId)
+  if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
+  if (!orderIncludesPreorder(order)) {
+    return { ok: false, error: 'NOT_PREORDER' }
+  }
+
+  const day = String(input.newShipsFrom || '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return { ok: false, error: 'INVALID_DATE' }
+  }
+
+  const previousShipsFrom = getEarliestPreorderShipsFrom(order.items)
+  let nextItems
+  try {
+    nextItems = applyNewPreorderShipsFromToItems(order.items, day)
+  } catch {
+    return { ok: false, error: 'INVALID_DATE' }
+  }
+
+  const now = new Date().toISOString()
+  const updated: OrderRecord = {
+    ...order,
+    items: nextItems,
+    hasPreorderItems: true,
+    preorderDelayNotification: {
+      sent: false,
+      sentAt: order.preorderDelayNotification?.sentAt,
+      attempts: (order.preorderDelayNotification?.attempts || 0) + 1,
+      previousShipsFrom,
+      newShipsFrom: day,
+    },
+  }
+
+  const html = buildPreorderDelayEmailHtml({
+    order: updated,
+    previousShipsFrom,
+    newShipsFrom: day,
+    adminNote: input.adminNote,
+  })
+  const r = await sendEmailViaResendServer({
+    to: order.customer.email.trim(),
+    subject: buildPreorderDelayEmailSubject(order.id),
+    html,
+  })
+  if (!r.ok) {
+    console.error('[sendAdminPreorderDelayEmailAction]', r.logMessage)
+    return { ok: false, error: 'SEND_FAILED' }
+  }
+
+  const saved: OrderRecord = {
+    ...updated,
+    preorderDelayNotification: {
+      sent: true,
+      sentAt: now,
+      attempts: updated.preorderDelayNotification?.attempts || 1,
+      previousShipsFrom,
+      newShipsFrom: day,
+    },
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const sb = getSupabaseAdmin()
+      const { error: upErr } = await sb
+        .from('orders')
+        .update(buildOrdersTableUpdate(saved))
+        .eq('id', order.id)
+      if (upErr) {
+        console.warn('[sendAdminPreorderDelayEmailAction] ledger persist failed:', upErr.message)
+      }
+    } catch (e) {
+      console.warn('[sendAdminPreorderDelayEmailAction] ledger persist error:', e)
+    }
+  }
+
+  return { ok: true, order: saved }
 }

@@ -6,6 +6,11 @@ import { applyServerShippingToDraft } from '@/lib/orders/applyServerShippingToDr
 import { applyServerCheckoutMoney } from '@/lib/orders/applyServerCheckoutMoney'
 import { readCmsCheckoutPricingConfig } from '@/lib/server/cmsCheckoutPricingConfig'
 import { resolveStorefrontVipGradeFromOrders } from '@/lib/server/resolveStorefrontVipGrade'
+import {
+  assertMarketSCatalogAllowsPurchase,
+  buildOrderItemPreorderSnapshot,
+  orderHasPreorderItems,
+} from '@/lib/marketSPreorder'
 
 export type BankOrderDraft = Omit<OrderRecord, 'id' | 'createdAtIso'>
 
@@ -54,6 +59,15 @@ export async function sanitizeStorefrontBankOrderDraft(
     const unitCents = audCents(unitPrice)
     itemsSubtotalCents += unitCents * qty
 
+    assertMarketSCatalogAllowsPurchase(
+      {
+        ...(catalogProduct as Parameters<typeof assertMarketSCatalogAllowsPurchase>[0]),
+        name: catalogProduct.name || item.name,
+      },
+      qty
+    )
+    const preorderSnap = buildOrderItemPreorderSnapshot(catalogProduct)
+
     sanitizedItems.push({
       ...item,
       productId,
@@ -101,6 +115,8 @@ export async function sanitizeStorefrontBankOrderDraft(
         (catalogProduct as { bundleItems?: BankOrderDraft['items'][0]['bundleItems'] }).bundleItems ??
         item.bundleItems,
       isBundle: (catalogProduct as { isBundle?: boolean }).isBundle ?? item.isBundle,
+      salesModeAtOrder: preorderSnap.salesModeAtOrder,
+      preorderShipsFrom: preorderSnap.preorderShipsFrom,
     })
   }
 
@@ -149,6 +165,7 @@ export async function sanitizeStorefrontBankOrderDraft(
   return {
     ...moneyValidated,
     items: sanitizedItems,
+    hasPreorderItems: orderHasPreorderItems(sanitizedItems),
     subtotal: Number((itemsSubtotalCents / 100).toFixed(2)),
     shippingPrice: Number((shippingCents / 100).toFixed(2)),
     paymentFee: Number((feeCents / 100).toFixed(2)),

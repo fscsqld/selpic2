@@ -41,6 +41,12 @@ import {
   sanitizeFamilyBundleUnitCount,
   sanitizeLinkedFamilyBundleIds,
 } from '@/lib/marketSBundleUpsell'
+import {
+  buildMarketSSalesModePayload,
+  normalizeMarketSSalesMode,
+  type MarketSSalesMode,
+} from '@/lib/marketSPreorder'
+import { scheduleLogAdminActivity } from '@/lib/loadLogAdminActivity'
 
 const ProductImagePreview = ({ src, alt, className = 'w-32 h-32 object-cover rounded-lg border border-gray-300' }: { src: string, alt: string, className?: string }) => {
   const [actualSrc, setActualSrc] = useState<string>(src)
@@ -132,6 +138,15 @@ interface ProductFormData {
   linkedFamilyBundleIds?: string[]
   /** Market S Family Bundle → units in the pack (per-unit upsell math). */
   familyBundleUnitCount?: number
+  /** Market S only — default in_stock (no site-wide pre-order). */
+  salesMode?: MarketSSalesMode
+  preorderSupplierConfirmed?: boolean
+  preorderSupplierNote?: string
+  preorderShipsFrom?: string
+  preorderClosesAt?: string
+  preorderMaxQty?: number
+  preorderSoldCount?: number
+  preorderNote?: string
 }
 
 const normalizeSubcategoryKey = (value?: string): string =>
@@ -222,6 +237,14 @@ function AdminProductsPageContent() {
     stickerSheetBundles: [],
     linkedFamilyBundleIds: [],
     familyBundleUnitCount: undefined,
+    salesMode: 'in_stock',
+    preorderSupplierConfirmed: false,
+    preorderSupplierNote: '',
+    preorderShipsFrom: '',
+    preorderClosesAt: '',
+    preorderMaxQty: undefined,
+    preorderSoldCount: 0,
+    preorderNote: '',
   })
 
   const isStationeryEssentialsProduct =
@@ -456,6 +479,20 @@ function AdminProductsPageContent() {
         familyBundleUnitCount: sanitizeFamilyBundleUnitCount((product as any).familyBundleUnitCount),
         isLimitedEdition: (product as any).isLimitedEdition,
         limitedEditionText: (product as any).limitedEditionText || '',
+        salesMode: normalizeMarketSSalesMode((product as any).salesMode),
+        preorderSupplierConfirmed: !!(product as any).preorderSupplierConfirmed,
+        preorderSupplierNote: (product as any).preorderSupplierNote || '',
+        preorderShipsFrom: (product as any).preorderShipsFrom || '',
+        preorderClosesAt: (product as any).preorderClosesAt || '',
+        preorderMaxQty:
+          typeof (product as any).preorderMaxQty === 'number'
+            ? (product as any).preorderMaxQty
+            : undefined,
+        preorderSoldCount:
+          typeof (product as any).preorderSoldCount === 'number'
+            ? (product as any).preorderSoldCount
+            : 0,
+        preorderNote: (product as any).preorderNote || '',
         rating: typeof (product as any).rating === 'number' ? (product as any).rating : 4.5,
         reviews: typeof (product as any).reviews === 'number' ? (product as any).reviews : 0
       })
@@ -502,6 +539,14 @@ function AdminProductsPageContent() {
         stickerSheetBundles: [],
         linkedFamilyBundleIds: [],
         familyBundleUnitCount: undefined,
+        salesMode: 'in_stock',
+        preorderSupplierConfirmed: false,
+        preorderSupplierNote: '',
+        preorderShipsFrom: '',
+        preorderClosesAt: '',
+        preorderMaxQty: undefined,
+        preorderSoldCount: 0,
+        preorderNote: '',
       })
     }
     setIsModalOpen(true)
@@ -572,6 +617,14 @@ function AdminProductsPageContent() {
       stickerSheetBundles: [],
       linkedFamilyBundleIds: [],
       familyBundleUnitCount: undefined,
+      salesMode: 'in_stock',
+      preorderSupplierConfirmed: false,
+      preorderSupplierNote: '',
+      preorderShipsFrom: '',
+      preorderClosesAt: '',
+      preorderMaxQty: undefined,
+      preorderSoldCount: 0,
+      preorderNote: '',
     })
   }
 
@@ -591,6 +644,22 @@ function AdminProductsPageContent() {
     // HotGoods 카테고리일 때 서브카테고리 필수 검증
     if (formData.category === 'HotGoods' && !formData.subcategory) {
       showNotification('error', t('admin.products.hotGoodsSubcategoryError'))
+      return
+    }
+
+    const salesModeSave = buildMarketSSalesModePayload({
+      category: formData.category,
+      salesMode: formData.salesMode,
+      preorderSupplierConfirmed: formData.preorderSupplierConfirmed,
+      preorderSupplierNote: formData.preorderSupplierNote,
+      preorderShipsFrom: formData.preorderShipsFrom,
+      preorderClosesAt: formData.preorderClosesAt,
+      preorderMaxQty: formData.preorderMaxQty,
+      preorderSoldCount: formData.preorderSoldCount,
+      preorderNote: formData.preorderNote,
+    })
+    if (!salesModeSave.ok) {
+      showNotification('error', salesModeSave.error)
       return
     }
 
@@ -660,6 +729,7 @@ function AdminProductsPageContent() {
       ...stickerPackPayload,
       ...limitedEditionPayload,
       ...(formData.category === 'Stickers' ? { color: STICKER_PRODUCT_COLOR } : {}),
+      ...salesModeSave.payload,
       ...(formData.category === 'HotGoods'
         ? {
             isHotGoods: true,
@@ -727,7 +797,26 @@ function AdminProductsPageContent() {
             customizationOptions: updatedProduct.customizationOptions
           })
         }
+        const previousSalesMode = normalizeMarketSSalesMode((editingProduct as any)?.salesMode)
         updateProduct(updatedProduct)
+        if (
+          formData.category === 'HotGoods' &&
+          (previousSalesMode !== normalizeMarketSSalesMode(salesModeSave.payload.salesMode) ||
+            salesModeSave.payload.salesMode === 'preorder')
+        ) {
+          scheduleLogAdminActivity({
+            action: 'product_preorder_updated',
+            target: updatedProduct.id,
+            field: 'salesMode',
+            oldValue: previousSalesMode,
+            newValue: salesModeSave.payload.salesMode || 'in_stock',
+            description: `Market S sales mode → ${salesModeSave.payload.salesMode || 'in_stock'}${
+              salesModeSave.payload.preorderShipsFrom
+                ? ` (ships ${salesModeSave.payload.preorderShipsFrom})`
+                : ''
+            }`,
+          })
+        }
         
         // 강제 새로고침을 위해 잠시 대기 후 실행
         setTimeout(() => {
@@ -785,6 +874,16 @@ function AdminProductsPageContent() {
           })
         }
         addProduct(newProduct)
+        if (formData.category === 'HotGoods' && salesModeSave.payload.salesMode === 'preorder') {
+          scheduleLogAdminActivity({
+            action: 'product_preorder_updated',
+            target: newProduct.id,
+            field: 'salesMode',
+            oldValue: 'in_stock',
+            newValue: 'preorder',
+            description: `Market S pre-order enabled (ships ${salesModeSave.payload.preorderShipsFrom || '—'})`,
+          })
+        }
         
         // 강제 새로고침을 위해 잠시 대기 후 실행
         setTimeout(() => {
@@ -857,6 +956,15 @@ function AdminProductsPageContent() {
       // 카테고리가 변경되면 서브카테고리 초기화
       if (name === 'category') {
         newData.subcategory = ''
+        if (value !== 'HotGoods') {
+          newData.salesMode = 'in_stock'
+          newData.preorderSupplierConfirmed = false
+          newData.preorderSupplierNote = ''
+          newData.preorderShipsFrom = ''
+          newData.preorderClosesAt = ''
+          newData.preorderMaxQty = undefined
+          newData.preorderNote = ''
+        }
         newData.isHotGoods = value === 'HotGoods'
         newData.shippingClass = value === 'Stickers' ? 'letter' : 'parcel'
         newData.shippingWeightGrams =
@@ -1390,6 +1498,16 @@ function AdminProductsPageContent() {
                              {(product as any).usage && (
                                <span className="inline-flex px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
                                  🎯 {(product as any).usage}
+                               </span>
+                             )}
+                             {normalizeMarketSSalesMode((product as any).salesMode) === 'preorder' && (
+                               <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wide bg-stone-800 text-stone-100 rounded">
+                                 PRE-ORDER
+                               </span>
+                             )}
+                             {normalizeMarketSSalesMode((product as any).salesMode) === 'coming_soon' && (
+                               <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wide bg-amber-100 text-amber-900 rounded">
+                                 COMING SOON
                                </span>
                              )}
                              {(product as any).isNew && (
@@ -2521,6 +2639,189 @@ function AdminProductsPageContent() {
                   <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
                     Stationery Essentials selected: name-sticker sheet quantity is hidden.  
                     Use <strong>Customization Options</strong> with type <strong>image</strong> to collect customer file uploads.
+                  </div>
+                )}
+
+                {/* Market S sales mode — per SKU only; default In stock (no site-wide pre-order). */}
+                {formData.category === 'HotGoods' && (
+                  <div className="md:col-span-2 rounded-lg border border-stone-200 bg-stone-50/80 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Sales mode (Market S)</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Pre-order applies only to this product after supplier confirmation. Other Market S SKUs stay normal sale.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      {(
+                        [
+                          ['in_stock', 'In stock'],
+                          ['preorder', 'Pre-order'],
+                          ['coming_soon', 'Coming soon'],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <label key={value} className="inline-flex items-center gap-2 text-sm text-gray-800">
+                          <input
+                            type="radio"
+                            name="salesMode"
+                            checked={(formData.salesMode || 'in_stock') === value}
+                            onChange={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                salesMode: value,
+                                preorderSupplierConfirmed:
+                                  value === 'preorder' ? prev.preorderSupplierConfirmed : false,
+                              }))
+                            }
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {formData.salesMode === 'preorder' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-stone-200">
+                        <label className="md:col-span-2 inline-flex items-start gap-2 text-sm text-gray-900">
+                          <input
+                            type="checkbox"
+                            checked={!!formData.preorderSupplierConfirmed}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderSupplierConfirmed: e.target.checked,
+                              }))
+                            }
+                            className="mt-0.5 h-4 w-4 text-emerald-600 rounded border-gray-300"
+                          />
+                          <span>
+                            Supplier availability confirmed
+                            <span className="block text-xs text-gray-500 font-normal">
+                              Required before customers can pre-order. Not shown on the storefront.
+                            </span>
+                          </span>
+                        </label>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Ships from (required)
+                          </label>
+                          <input
+                            type="date"
+                            value={formData.preorderShipsFrom || ''}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, preorderShipsFrom: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Closes at (optional)
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={
+                              formData.preorderClosesAt
+                                ? formData.preorderClosesAt.slice(0, 16)
+                                : ''
+                            }
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderClosesAt: e.target.value
+                                  ? new Date(e.target.value).toISOString()
+                                  : '',
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Max units (optional)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={formData.preorderMaxQty ?? ''}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderMaxQty: e.target.value ? Number(e.target.value) : undefined,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            placeholder="Unlimited"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Units sold (ops)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formData.preorderSoldCount ?? 0}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderSoldCount: Math.max(
+                                  0,
+                                  Math.floor(Number(e.target.value) || 0)
+                                ),
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            Auto-increments on new pre-order checkouts. Edit to correct after
+                            cancels.
+                            {typeof formData.preorderMaxQty === 'number' && formData.preorderMaxQty > 0
+                              ? ` Remaining: ${Math.max(
+                                  0,
+                                  formData.preorderMaxQty - (formData.preorderSoldCount || 0)
+                                )}.`
+                              : ''}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Internal supplier note
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.preorderSupplierNote || ''}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderSupplierNote: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            placeholder="PO / supplier name"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Customer note (optional, English)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={120}
+                            value={formData.preorderNote || ''}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, preorderNote: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            placeholder="Limited first shipment"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {formData.salesMode === 'coming_soon' && (
+                      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                        Coming soon: visible messaging only — customers cannot purchase until you switch to Pre-order or In stock.
+                      </p>
+                    )}
                   </div>
                 )}
 

@@ -3,6 +3,7 @@ import { parseOrderDraftFromMetadata } from '@/lib/stripeCheckoutMetadata'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { notifyAdminsOfNewOrder } from '@/lib/server/adminInboundNotify'
+import { incrementMarketSPreorderSoldFromOrder } from '@/lib/orders/incrementMarketSPreorderSold'
 import type Stripe from 'stripe'
 import type { OrderRecord } from '@/lib/store'
 
@@ -125,6 +126,15 @@ export async function upsertStripePaidOrderRow(
   }
 
   const saved = normalizeLedgerOrder(order)
+  // Cap tracking on first insert only (idempotent vs Stripe webhook retries).
+  try {
+    await incrementMarketSPreorderSoldFromOrder(saved)
+  } catch (err) {
+    console.warn(
+      '[stripePaidOrder] preorder sold bump threw:',
+      err instanceof Error ? err.message : err
+    )
+  }
   // Await Resend before returning — same as Contact/Bespoke / checkout-bank.
   // `void notify` could be frozen after the serverless response (missing [SELPIC Order] mail).
   // Webhook skips this and uses Next.js `after()` instead (fast 200 to Stripe).

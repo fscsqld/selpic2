@@ -1,0 +1,28 @@
+# Market S pre-order (per SKU, learned 2026-10-05)
+
+## Invariant
+
+Pre-order is **never** category-wide. Missing `salesMode` = **`in_stock`** (live catalog unchanged). Only Admin HotGoods SKUs with `salesMode: 'preorder'` + `preorderSupplierConfirmed` + `preorderShipsFrom` accept pre-order purchase.
+
+## Do
+
+- Gate saves with `buildMarketSSalesModePayload` (`lib/marketSPreorder.ts`)
+- Use `isMarketSPreorderOpen` / `getMarketSPreorderPurchaseLimit` for cart & `isProductOutOfStock`
+- Log `product_preorder_updated` when sales mode changes
+- Keep homepage Hero untouched; Stickers never get pre-order UI
+
+## Shipped phases
+
+- **P0–P1:** types, helpers, admin sales mode, hub/PDP/cart UI
+- **P2:** checkout ack + order line snapshot (`salesModeAtOrder` / `hasPreorderItems`); bank + Stripe sanitize overwrite; Admin Orders PRE-ORDER badge + filter
+- **Cart/checkout qty guard:** `/cart` and `/checkout` must use `getMarketSPreorderPurchaseLimit` (not raw `stockQuantity`) so open pre-order at stock 0 does not disable Proceed to Checkout
+- **P3:** customer confirmation + admin `[SELPIC Order]` show pre-order notice/ships-from; `/refund` Section 5 (CMS + page fallback)
+- **P4:** `preorderSoldCount` auto-bumps on bank + first Stripe insert (fail-open); Admin “Units sold”; PDP “X of Y left” when max set. Cancel does **not** auto-decrement — edit sold count in Admin.
+- **Admin order detail:** PRE-ORDER badge + line ships-from; shipping summary = dispatch on/after ships-from then transit; **Pre-order delay email** (`sendAdminPreorderDelayEmailAction`) updates line dates + emails customer + `order_preorder_delay_notified` audit
+
+## Do not
+
+- Auto-enable pre-order for all Market S
+- Treat `isNew` as pre-order
+- Add order status `preorder` (use `hasPreorderItems` + line snapshot)
+- Block normal in-stock SKUs when implementing hub/PDP UI

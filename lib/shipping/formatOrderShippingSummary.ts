@@ -1,5 +1,7 @@
 import type { OrderRecord } from '@/lib/store'
 import { resolveOrderShippingSnapshot } from '@/lib/shipping/shippingSnapshot'
+import { formatPreorderDispatchSummaryLines } from '@/lib/orderPreorderFulfillment'
+import { orderIncludesPreorder } from '@/lib/marketSPreorder'
 
 /** Customer-facing shipping lines for confirmation / receipt emails. */
 export function formatOrderShippingSummaryLines(order: OrderRecord): string[] {
@@ -14,12 +16,23 @@ export function formatOrderShippingSummaryLines(order: OrderRecord): string[] {
     lines.push('Tracking: Not included (standard untracked delivery)')
   }
 
+  const preorderDispatch = formatPreorderDispatchSummaryLines(order)
+  if (preorderDispatch.length > 0) {
+    lines.push(...preorderDispatch)
+  }
+
   if (snap.shippingDeliveryTime && snap.shippingDeliveryTime !== '—') {
-    lines.push(
-      snap.shippingType === 'pickup'
-        ? `Collection: ${snap.shippingDeliveryTime}`
-        : `Delivery window: ${snap.shippingDeliveryTime}`
-    )
+    // For pre-order, the CMS window is transit-after-dispatch (already labelled above).
+    // Keep a plain "Delivery window" only for non-preorder orders to avoid double-reading as payment-day ETA.
+    if (!orderIncludesPreorder(order)) {
+      lines.push(
+        snap.shippingType === 'pickup'
+          ? `Collection: ${snap.shippingDeliveryTime}`
+          : `Delivery window: ${snap.shippingDeliveryTime}`
+      )
+    } else if (snap.shippingType === 'pickup') {
+      lines.push(`Collection: ${snap.shippingDeliveryTime}`)
+    }
   }
 
   lines.push(`Shipping charged: $${Number(snap.shippingPrice || 0).toFixed(2)}`)

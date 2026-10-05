@@ -10,6 +10,16 @@ import {
   formatOrderItemPersonalizationPlain,
   getOrderItemCustomizationDisplayLines,
 } from '@/lib/mixedLabelsCartDisplay'
+import {
+  formatOrderItemPreorderNote,
+  MARKET_S_PREORDER_ORDER_EMAIL_NOTICE,
+  orderIncludesPreorder,
+} from '@/lib/marketSPreorder'
+import {
+  buildOrderConfirmationThankYouIntro,
+  classifyOrderCatalogMix,
+} from '@/lib/orderConfirmationCatalogMix'
+import { getOrderConfirmationPaymentNoticeForOrder } from '@/lib/orderConfirmationPaymentNotice'
 
 /** @deprecated use getTransactionalEmailSiteOrigin */
 export const getEmailSiteOrigin = getTransactionalEmailSiteOrigin
@@ -52,6 +62,10 @@ function buildOrderItemsLines(order: OrderRecord): string[] {
     const optionsTotal = surchargeUnit * qty
     const label = optionsTotal > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
     lines.push(`${index + 1}. ${item.name} × ${qty} — ${formatMoney(baseTotal)}`)
+    const preorderNote = formatOrderItemPreorderNote(item)
+    if (preorderNote) {
+      lines.push(`   ${preorderNote}`)
+    }
     const personalization = formatOrderItemPersonalizationPlain(item.customizations, 'customer', '   ')
     if (personalization) {
       lines.push(...personalization.split('\n'))
@@ -63,9 +77,35 @@ function buildOrderItemsLines(order: OrderRecord): string[] {
   return lines
 }
 
+function buildPaymentSectionPlain(order: OrderRecord): string {
+  const notice = getOrderConfirmationPaymentNoticeForOrder(order.paymentMethod, order.items)
+  if (notice.trim()) return notice
+  if (order.status === 'pending') {
+    return `[Action Required: Payment Verification]\nYour order status is currently 'Pending'. If you have chosen Bank Transfer, please ensure the payment is completed. We will begin processing as soon as your funds are cleared (usually 1–2 business days).`
+  }
+  return `Your order status is ${orderStatusLabel(order)}. We will process your order shortly.`
+}
+
+function buildPaymentSectionHtml(order: OrderRecord): string {
+  const notice = getOrderConfirmationPaymentNoticeForOrder(order.paymentMethod, order.items)
+  if (notice.trim()) {
+    const isBankPending =
+      String(order.paymentMethod || '').toLowerCase() === 'bank' &&
+      String(order.status || '').toLowerCase() === 'pending'
+    const label = isBankPending
+      ? '<strong>[Action Required: Payment Verification]</strong><br/>'
+      : ''
+    return `<p style="margin:0 0 12px;">${label}${escHtml(notice)}</p>`
+  }
+  return `<p style="margin:0 0 12px;">Your order status is ${escHtml(orderStatusLabel(order))}. We will process your order shortly.</p>`
+}
+
 /** Plain-text body (also used as the fallback / preheader-friendly copy). */
 export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string {
   const customerName = order.customer.name || order.customer.email.split('@')[0] || 'Customer'
+  const { mix } = classifyOrderCatalogMix(order.items)
+  const thankYouIntro = buildOrderConfirmationThankYouIntro(mix)
+  const paymentSection = buildPaymentSectionPlain(order)
   const orderDate = new Date(order.createdAtIso).toLocaleDateString('en-AU', {
     day: 'numeric',
     month: 'short',
@@ -73,6 +113,9 @@ export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string
   })
   const itemsLines = buildOrderItemsLines(order)
   const itemsBlock = itemsLines.length > 0 ? itemsLines.join('\n') : '(No line items)'
+  const preorderNotice = orderIncludesPreorder(order)
+    ? `\n[Pre-order]\n${MARKET_S_PREORDER_ORDER_EMAIL_NOTICE}\n`
+    : ''
 
   const financialLines: string[] = [
     `Subtotal (GST incl.): ${formatMoney(order.subtotal)}`,
@@ -90,10 +133,9 @@ export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string
 
   return `Dear ${customerName},
 
-Thank you for choosing Selpic. We've received your order and are excited to start creating your custom stickers!
-
-[Action Required: Payment Verification]
-Your order status is currently 'Pending'. If you have chosen Bank Transfer, please ensure the payment is completed. We will begin processing and production as soon as your funds are cleared (usually 1–2 business days).
+${thankYouIntro}
+${preorderNotice}
+${paymentSection}
 
 ---
 Order Summary:
@@ -124,6 +166,9 @@ function escHtml(s: string): string {
 
 /** Main HTML content only; signature & confidentiality are added by emailService (transactional branding). */
 export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
+  const { mix } = classifyOrderCatalogMix(order.items)
+  const thankYouIntro = escHtml(buildOrderConfirmationThankYouIntro(mix))
+  const paymentSectionHtml = buildPaymentSectionHtml(order)
   const customerName = escHtml(order.customer.name || order.customer.email.split('@')[0] || 'Customer')
   const orderDate = escHtml(
     new Date(order.createdAtIso).toLocaleDateString('en-AU', {
@@ -142,6 +187,10 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
       const optionsTotal = surchargeUnit * qty
       const label = optionsTotal > 0.001 ? getCustomizationSurchargeLabel(item.customizations, { size: item.size }) : ''
       let block = `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><strong>${index + 1}.</strong> ${escHtml(item.name)} <span style="color:#555;">× ${qty}</span> — <strong>${formatMoney(baseTotal)}</strong>`
+      const preorderNote = formatOrderItemPreorderNote(item)
+      if (preorderNote) {
+        block += `<br/><span style="font-size:12px;color:#92400e;">${escHtml(preorderNote)}</span>`
+      }
       const persLines = getOrderItemCustomizationDisplayLines(item.customizations, 'customer')
       if (persLines.length) {
         block += `<br/><span style="font-size:12px;color:#666;">${persLines
@@ -171,11 +220,15 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
     .map((line) => `<li>${escHtml(line)}</li>`)
     .join('')
 
+  const preorderNoticeHtml = orderIncludesPreorder(order)
+    ? `<p style="margin:0 0 12px;padding:10px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;"><strong>Pre-order</strong><br/>${escHtml(MARKET_S_PREORDER_ORDER_EMAIL_NOTICE)}</p>`
+    : ''
+
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;color:#111;max-width:600px;margin:0 auto;padding:16px;">
   <p style="margin:0 0 12px;">Dear ${customerName},</p>
-  <p style="margin:0 0 12px;">Thank you for choosing Selpic. We've received your order and are excited to start creating your custom stickers!</p>
-  <p style="margin:0 0 12px;"><strong>[Action Required: Payment Verification]</strong><br/>
-  Your order status is currently 'Pending'. If you have chosen Bank Transfer, please ensure the payment is completed. We will begin processing and production as soon as your funds are cleared (usually 1–2 business days).</p>
+  <p style="margin:0 0 12px;">${thankYouIntro}</p>
+  ${preorderNoticeHtml}
+  ${paymentSectionHtml}
   <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
   <p style="margin:0 0 8px;"><strong>Order Summary:</strong></p>
   <ul style="margin:0 0 16px;padding-left:20px;">

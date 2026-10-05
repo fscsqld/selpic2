@@ -34,4 +34,28 @@ describe('isProductOutOfStock', () => {
     expect(isProductOutOfStock({ inStock: true, stockQuantity: 2 })).toBe(false)
     expect(isProductOutOfStock({ inStock: true })).toBe(false)
   })
+
+  it('allows open Market S pre-order at stock 0', () => {
+    expect(
+      isProductOutOfStock({
+        category: 'HotGoods',
+        salesMode: 'preorder',
+        preorderSupplierConfirmed: true,
+        preorderShipsFrom: '2026-10-20',
+        stockQuantity: 0,
+        inStock: false,
+      })
+    ).toBe(false)
+  })
+
+  it('keeps coming_soon unpurchasable', () => {
+    expect(
+      isProductOutOfStock({
+        category: 'HotGoods',
+        salesMode: 'coming_soon',
+        stockQuantity: 0,
+        inStock: false,
+      })
+    ).toBe(true)
+  })
 })

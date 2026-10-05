@@ -6,6 +6,7 @@ import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { sanitizeStorefrontBankOrderDraft, type BankOrderDraft } from '@/lib/orders/sanitizeStorefrontBankOrderDraft'
 import { requireStorefrontCheckoutSession } from '@/lib/orders/requireStorefrontCheckoutSession'
 import { notifyAdminsOfNewOrder } from '@/lib/server/adminInboundNotify'
+import { incrementMarketSPreorderSoldFromOrder } from '@/lib/orders/incrementMarketSPreorderSold'
 
 /**
  * Storefront bank-transfer checkout: catalog/total validation + signed-in session required.
@@ -62,6 +63,16 @@ export async function POST(req: Request) {
     })
     if (error) {
       throw new Error(error.message)
+    }
+
+    // Cap tracking — never roll back the order if catalog bump fails.
+    try {
+      await incrementMarketSPreorderSoldFromOrder(order)
+    } catch (err) {
+      console.warn(
+        '[checkout-bank] preorder sold bump threw:',
+        err instanceof Error ? err.message : err
+      )
     }
 
     // Await Resend before responding — same as Contact/Bespoke.

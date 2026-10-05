@@ -5,6 +5,16 @@ import Header from '@/components/Header'
 import { useContentStore } from '@/lib/contentStore'
 import { COMPANY_CONTACT, COMPANY_LEGAL_LINE } from '@/lib/companyLegal'
 import { createPolicyContentGetter, REFUND_TITLE_ALIASES } from '@/lib/policyPageContent'
+import {
+  MARKET_S_HYGIENE_REFUND_BODY,
+  MARKET_S_HYGIENE_REFUND_LIST,
+  MARKET_S_HYGIENE_REFUND_TITLE,
+} from '@/lib/marketSHygieneCopy'
+import {
+  MARKET_S_PREORDER_REFUND_BODY,
+  MARKET_S_PREORDER_REFUND_LIST,
+  MARKET_S_PREORDER_REFUND_TITLE,
+} from '@/lib/marketSPreorder'
 
 export default function RefundPage() {
 	const { getActiveContentBySection, _hasHydrated } = useContentStore()
@@ -94,14 +104,31 @@ export default function RefundPage() {
 					</div>
 
 					<div>
-						<h2 className="text-xl font-semibold text-slate-900 mb-2">{getContent('Section 4 Title') || '4. Market S personal-care products (hygiene)'}</h2>
+						<h2 className="text-xl font-semibold text-slate-900 mb-2">
+							{getContent('Section 4 Title') || MARKET_S_HYGIENE_REFUND_TITLE}
+						</h2>
 						<p className="text-slate-700 mb-3">
-							{getContent('Section 4 내용') || 'Market S cosmetics and personal-care items cannot be returned for change of mind once opened, for hygiene reasons. This does not limit your rights under the Australian Consumer Law (ACL) for faulty, damaged, or incorrectly supplied goods.'}
+							{getContent('Section 4 내용') || MARKET_S_HYGIENE_REFUND_BODY}
 						</p>
 						<ul className="list-disc pl-6 space-y-1">
 							{splitPolicyList(
-								getContent('Section 4 목록') ||
-									'Opened or used personal-care items are not accepted for change of mind | Unopened change-of-mind returns may be declined where hygiene or safety rules apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL | Contact us with your order ID before sending anything back'
+								getContent('Section 4 목록') || MARKET_S_HYGIENE_REFUND_LIST
+							).map((item, index) => (
+								<li key={index}>{item}</li>
+							))}
+						</ul>
+					</div>
+
+					<div>
+						<h2 className="text-xl font-semibold text-slate-900 mb-2">
+							{getContent('Section 5 Title') || MARKET_S_PREORDER_REFUND_TITLE}
+						</h2>
+						<p className="text-slate-700 mb-3">
+							{getContent('Section 5 내용') || MARKET_S_PREORDER_REFUND_BODY}
+						</p>
+						<ul className="list-disc pl-6 space-y-1">
+							{splitPolicyList(
+								getContent('Section 5 목록') || MARKET_S_PREORDER_REFUND_LIST
 							).map((item, index) => (
 								<li key={index}>{item}</li>
 							))}

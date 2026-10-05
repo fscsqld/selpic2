@@ -2652,6 +2652,57 @@ export default function ContentManagementPage() {
                   </div>
                 </div>
 
+                {/* Section 5: Market S pre-orders */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-900 mb-4">5. Market S pre-orders</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <QuickEditCard
+                      title="Section 5 Title"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 Title')?.content || '5. Market S pre-orders'}
+                      placeholder="Enter section title"
+                      type="text"
+                      description="Section 5 title"
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 Title')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                    <QuickEditCard
+                      title="Section 5 Content"
+                      label="Section 5 content"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 Content')?.content || ''}
+                      placeholder="Enter section description"
+                      type="text"
+                      description="Section 5 description/content"
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 Content')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                    <QuickEditCard
+                      title="Section 5 List"
+                      label="Section 5 list"
+                      value={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 List')?.content || ''}
+                      placeholder="Enter list items (one per line, or separated by | )"
+                      type="textarea"
+                      description="List of items for Section 5. Prefer | between bullets so commas inside sentences stay intact."
+                      section="refund"
+                      onSave={handleQuickEditSave}
+                      existingContent={contentItems.find(item => item.section === 'refund' && item.title === 'Section 5 List')}
+                      showNotification={(type, message) => {
+                        if (type === 'success') alert(message)
+                        else if (type === 'error') alert(`Error: ${message}`)
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {/* Contact Section */}
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h4 className="text-md font-semibold text-gray-900 mb-4">Contact Information</h4>

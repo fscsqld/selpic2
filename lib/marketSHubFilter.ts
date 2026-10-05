@@ -2,8 +2,11 @@ import {
   MARKET_S_SUBCATEGORIES,
   marketSSubcategoryIcon,
 } from './marketSSubcategory'
+import { isMarketSPreorderOpen, type MarketSSalesMode } from './marketSPreorder'
 
 export const MARKET_S_HUB_FILTER_ALL = 'all'
+/** Special hub filter — not a subcategory; matches open pre-order SKUs only. */
+export const MARKET_S_HUB_FILTER_PREORDER = 'preorder'
 
 export type MarketSHubFilterOption = {
   value: string
@@ -12,13 +15,15 @@ export type MarketSHubFilterOption = {
 }
 
 /**
- * Hub filters are subcategory only (Single Item / Family Bundle).
+ * Hub filters are subcategory only (Single Item / Family Bundle),
+ * plus optional Pre-order pseudo-filter.
  * Older UI used `other-${name}` and split on the first dash, which cannot
  * match catalog `HotGoods` + `Single Item`.
  */
 export function normalizeMarketSHubFilter(filter: string): string {
   const raw = String(filter || '').trim()
   if (!raw || raw === MARKET_S_HUB_FILTER_ALL) return MARKET_S_HUB_FILTER_ALL
+  if (raw.toLowerCase() === MARKET_S_HUB_FILTER_PREORDER) return MARKET_S_HUB_FILTER_PREORDER
   if (/^other-/i.test(raw)) {
     return raw.replace(/^other-/i, '').trim() || MARKET_S_HUB_FILTER_ALL
   }
@@ -48,10 +53,23 @@ export function marketSHubFilterOptions(
 }
 
 export function productMatchesMarketSHubFilter(
-  product: { subcategory?: string },
+  product: {
+    subcategory?: string
+    category?: string
+    isHotGoods?: boolean
+    salesMode?: MarketSSalesMode
+    preorderSupplierConfirmed?: boolean
+    preorderShipsFrom?: string
+    preorderClosesAt?: string
+    preorderMaxQty?: number
+    preorderSoldCount?: number
+  },
   filter: string
 ): boolean {
   const selected = normalizeMarketSHubFilter(filter)
   if (selected === MARKET_S_HUB_FILTER_ALL) return true
+  if (selected === MARKET_S_HUB_FILTER_PREORDER) {
+    return isMarketSPreorderOpen(product)
+  }
   return String(product.subcategory || '').trim() === selected
 }

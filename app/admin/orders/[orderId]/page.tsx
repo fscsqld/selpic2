@@ -28,6 +28,16 @@ import ShippingLabelFromOverrideFields, {
 } from '@/components/admin/ShippingLabelFromOverrideFields'
 import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
+import {
+  formatOrderItemPreorderNote,
+  MARKET_S_PREORDER_BADGE,
+  orderIncludesPreorder,
+} from '@/lib/marketSPreorder'
+import {
+  formatPreorderDispatchSummaryLines,
+  getEarliestPreorderShipsFrom,
+} from '@/lib/orderPreorderFulfillment'
+import { logAdminActivity } from '@/lib/logAdminActivity'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -67,6 +77,9 @@ export default function AdminOrderDetailPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showCustomerMessage, setShowCustomerMessage] = useState(false)
   const [isSendingReceipt, setIsSendingReceipt] = useState(false)
+  const [delayShipsFrom, setDelayShipsFrom] = useState('')
+  const [delayNote, setDelayNote] = useState('')
+  const [isSendingDelayEmail, setIsSendingDelayEmail] = useState(false)
   const [ausPostLabelBusy, setAusPostLabelBusy] = useState(false)
   const [labelSlot, setLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
   const [labelOrientation, setLabelOrientation] = useState<ShippingLabelOrientation>('portrait')
@@ -77,6 +90,13 @@ export default function AdminOrderDetailPage() {
 
   const orderId = Array.isArray(params?.orderId) ? params.orderId[0] : params?.orderId
   const order = orders.find(o => o.id === orderId)
+  const orderIsPreorder = order ? orderIncludesPreorder(order) : false
+
+  useEffect(() => {
+    if (!order || !orderIsPreorder) return
+    const earliest = getEarliestPreorderShipsFrom(order.items)
+    if (earliest) setDelayShipsFrom((prev) => prev || earliest)
+  }, [order?.id, orderIsPreorder])
   const persistOrderPayloadToLedger = useCallback(
     async (targetOrderId: string) => {
       const latest = useStore.getState().orders.find((o) => o.id === targetOrderId)
@@ -551,7 +571,17 @@ Selpic Team`
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Order {order.id}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-3xl font-bold text-gray-900">Order {order.id}</h1>
+                  {orderIsPreorder && (
+                    <span
+                      className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-amber-900"
+                      title="Contains Market S pre-order line(s)"
+                    >
+                      {MARKET_S_PREORDER_BADGE}
+                    </span>
+                  )}
+                </div>
                 <p className="text-gray-500 mt-1">
                   Placed on {new Date(order.createdAtIso).toLocaleString()}
                 </p>
@@ -657,6 +687,11 @@ Selpic Team`
                           <div>
                             <p className="font-medium text-gray-900">{item.name}</p>
                             <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                            {formatOrderItemPreorderNote(item) ? (
+                              <p className="mt-1 text-xs font-medium text-amber-800">
+                                {formatOrderItemPreorderNote(item)}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="text-right">
                             {(() => {
@@ -1046,6 +1081,118 @@ Selpic Team`
                 onResendEmail={() => resendOrderConfirmationEmail(order.id)}
               />
 
+              {orderIsPreorder && (
+                <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                    Pre-order delay email
+                  </h2>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Update the ships-from date on all pre-order lines and email the customer.
+                    Transit windows still apply after the new dispatch date.
+                  </p>
+                  {order.preorderDelayNotification?.sent ? (
+                    <p className="text-sm text-amber-900 mb-3">
+                      Last delay notice sent
+                      {order.preorderDelayNotification.sentAt
+                        ? ` on ${new Date(order.preorderDelayNotification.sentAt).toLocaleString()}`
+                        : ''}
+                      {order.preorderDelayNotification.newShipsFrom
+                        ? ` (ships from ${order.preorderDelayNotification.newShipsFrom})`
+                        : ''}
+                      .
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 mb-3">No delay notice sent yet for this order.</p>
+                  )}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        New ships from (YYYY-MM-DD)
+                      </label>
+                      <input
+                        type="date"
+                        value={delayShipsFrom}
+                        onChange={(e) => setDelayShipsFrom(e.target.value)}
+                        disabled={!canWriteOrders || isSendingDelayEmail}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Note to customer (optional)
+                      </label>
+                      <textarea
+                        value={delayNote}
+                        onChange={(e) => setDelayNote(e.target.value)}
+                        rows={3}
+                        maxLength={500}
+                        disabled={!canWriteOrders || isSendingDelayEmail}
+                        placeholder="e.g. Supplier shipment delayed at customs — new dispatch estimate below."
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!canWriteOrders || isSendingDelayEmail || !delayShipsFrom}
+                      onClick={async () => {
+                        if (!order || !canWriteOrders) {
+                          denyOrderWrite()
+                          return
+                        }
+                        if (
+                          !confirm(
+                            `Email ${order.customer.email} about the new ships-from date ${delayShipsFrom}?`
+                          )
+                        ) {
+                          return
+                        }
+                        setIsSendingDelayEmail(true)
+                        try {
+                          const { sendAdminPreorderDelayEmailAction } = await import(
+                            '@/app/actions/emails'
+                          )
+                          const previous = getEarliestPreorderShipsFrom(order.items)
+                          const r = await sendAdminPreorderDelayEmailAction({
+                            orderId: order.id,
+                            newShipsFrom: delayShipsFrom,
+                            adminNote: delayNote,
+                            orderJson: JSON.stringify(order),
+                          })
+                          if (!r.ok) {
+                            alert(
+                              r.error === 'SEND_FAILED'
+                                ? 'Email send failed. Check Resend / API key.'
+                                : r.error === 'INVALID_DATE'
+                                  ? 'Enter a valid ships-from date.'
+                                  : r.error === 'NOT_PREORDER'
+                                    ? 'This order has no pre-order lines.'
+                                    : 'Could not send delay email.'
+                            )
+                            return
+                          }
+                          mergeOrdersFromServer([r.order])
+                          void logAdminActivity({
+                            action: 'order_preorder_delay_notified',
+                            target: order.id,
+                            field: 'preorderShipsFrom',
+                            oldValue: previous || '',
+                            newValue: delayShipsFrom,
+                            description: `Pre-order delay email → ${order.customer.email} (ships ${delayShipsFrom})`,
+                          })
+                          setDelayNote('')
+                          alert('Delay email sent and ships-from updated on pre-order lines.')
+                        } finally {
+                          setIsSendingDelayEmail(false)
+                        }
+                      }}
+                      className="px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 disabled:opacity-50 text-sm font-medium"
+                    >
+                      {isSendingDelayEmail ? 'Sending…' : 'Update date & email customer'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
                   Receipt email (PDF)
@@ -1200,12 +1347,28 @@ Selpic Team`
                       )
                     })()}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600">Delivery window:</span>
-                    <span className="font-medium">
-                      {resolveOrderShippingSnapshot(order).shippingDeliveryTime}
-                    </span>
-                  </div>
+                  {orderIsPreorder ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                        Pre-order fulfilment
+                      </p>
+                      {formatPreorderDispatchSummaryLines(order).map((line) => (
+                        <p key={line} className="text-sm text-amber-950">
+                          {line}
+                        </p>
+                      ))}
+                      <p className="text-xs text-amber-900/80 pt-1">
+                        AusPost transit starts after dispatch (ships-from), not from payment day.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Delivery window:</span>
+                      <span className="font-medium">
+                        {resolveOrderShippingSnapshot(order).shippingDeliveryTime}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-600">Shipping charged:</span>
                     <span className="font-medium">${Number(order.shippingPrice || 0).toFixed(2)}</span>

@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware'
 import { COMPANY_BANK } from './companyLegal'
 import { scheduleLogAdminActivity, scheduleLogAdminActivityThrottled } from '@/lib/loadLogAdminActivity'
 import { migrateSubcategoryLinkUrls } from '@/lib/subcategoryLinkUrl'
+import { migrateMarketSRefundPolicyContentItems } from '@/lib/policyPageContent'
 import {
   createDefaultMarketSUntrackedLetterCmsRow,
   ensureMarketSUntrackedLetterInShippingOptions,
@@ -2732,7 +2733,7 @@ const defaultContent: ContentItem[] = [
     section: 'refund',
     title: 'Section 4 Content',
     content:
-      'Market S cosmetics and personal-care items cannot be returned for change of mind once opened, for hygiene reasons. This does not limit your rights under the Australian Consumer Law (ACL) for faulty, damaged, or incorrectly supplied goods.',
+      'Market S cosmetics and personal-care items cannot be returned for change of mind once opened, for hygiene reasons. Items with broken protective seals or opened outer packaging are considered opened. This does not limit your rights under the Australian Consumer Law (ACL) for faulty, damaged, or incorrectly supplied goods.',
     order: 16.5,
     isActive: true,
     createdAt: new Date(),
@@ -2744,8 +2745,43 @@ const defaultContent: ContentItem[] = [
     section: 'refund',
     title: 'Section 4 List',
     content:
-      'Opened or used personal-care items are not accepted for change of mind | Unopened change-of-mind returns may be declined where hygiene or safety rules apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL | Contact us with your order ID before sending anything back',
+      'Opened or used personal-care items are not accepted for change of mind | Items with broken protective seals or opened outer packaging are non-returnable for change of mind | Unopened change-of-mind returns may be declined where hygiene or safety rules apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL | Contact us with your order ID before sending anything back',
     order: 17,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'refund-18',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 5 Title',
+    content: '5. Market S pre-orders',
+    order: 18,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'refund-18a',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 5 Content',
+    content:
+      'Pre-order items are charged at checkout and ship on or after the date shown on the product and your order confirmation. If there is an unexpected delay to the estimated ship date, we will notify you via email. Change-of-mind cancellation before dispatch may be available — contact us with your order ID. Once an item has been dispatched, returns follow Sections 1–4 and the Australian Consumer Law (ACL). This does not limit your ACL rights for faulty, damaged, or incorrectly supplied goods.',
+    order: 18.5,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 'refund-19',
+    type: 'text',
+    section: 'refund',
+    title: 'Section 5 List',
+    content:
+      'Pre-order lines are charged at checkout | Ship date is shown on the product and order confirmation | If ship dates change due to supply or customs delays, customers will be notified by email | Contact us with your order ID before dispatch if you need to cancel for change of mind | After dispatch, Sections 1–4 and the ACL apply | Faulty, damaged, or incorrect items are handled under Section 2 and the ACL',
+    order: 19,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -4052,12 +4088,14 @@ export function mergeRemoteSiteConfigForStoreApply(
 export function normalizeRehydratedContentStoreState(state: ContentStore | undefined): void {
   if (!state) return
   if (state.contentItems) {
-    state.contentItems = dedupeHeaderLogoImageItems(
-      state.contentItems.map(item => ({
-        ...item,
-        createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-        updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
-      }))
+    state.contentItems = migrateMarketSRefundPolicyContentItems(
+      dedupeHeaderLogoImageItems(
+        state.contentItems.map(item => ({
+          ...item,
+          createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+          updatedAt: typeof item.updatedAt === 'string' ? new Date(item.updatedAt) : item.updatedAt
+        }))
+      )
     )
   }
   if (state.sidebarMenuItems) {

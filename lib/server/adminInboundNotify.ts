@@ -12,6 +12,10 @@ import {
 import type { OrderRecord } from '@/lib/store'
 import { COMPANY_CONTACT } from '@/lib/companyLegal'
 import { resolveAdminNotificationRecipients } from '@/lib/server/adminNotificationRecipients'
+import {
+  formatOrderItemPreorderNote,
+  orderIncludesPreorder,
+} from '@/lib/marketSPreorder'
 
 export { resolveAdminNotificationRecipients } from '@/lib/server/adminNotificationRecipients'
 
@@ -503,16 +507,25 @@ export async function notifyAdminsOfNewOrder(order: OrderRecord) {
   const customerName = order.customer?.name || 'Customer'
   const customerEmail = order.customer?.email || '—'
   const paymentLabel = order.paymentMethodName || order.paymentMethod || '—'
+  const isPreorder = orderIncludesPreorder(order)
   const itemSummary = order.items
     .slice(0, 5)
-    .map((i) => `${i.name} ×${i.quantity}`)
+    .map((i) => {
+      const note = formatOrderItemPreorderNote(i)
+      return note ? `${i.name} ×${i.quantity} (${note})` : `${i.name} ×${i.quantity}`
+    })
     .join(', ')
 
   return sendAdminInboundEmail({
-    subjectPrefix: `[SELPIC Order] ${order.id} — ${customerName}`,
-    headline: 'New storefront order',
-    intro:
-      order.status === 'pending'
+    subjectPrefix: isPreorder
+      ? `[SELPIC Order] PRE-ORDER ${order.id} — ${customerName}`
+      : `[SELPIC Order] ${order.id} — ${customerName}`,
+    headline: isPreorder ? 'New storefront order (pre-order)' : 'New storefront order',
+    intro: isPreorder
+      ? order.status === 'pending'
+        ? 'A customer placed a bank-transfer order with Market S pre-order item(s) awaiting payment.'
+        : 'A customer completed a paid order that includes Market S pre-order item(s).'
+      : order.status === 'pending'
         ? 'A customer placed a bank-transfer order awaiting payment.'
         : 'A customer completed a new paid order.',
     rows: [
@@ -522,6 +535,7 @@ export async function notifyAdminsOfNewOrder(order: OrderRecord) {
       { label: 'Total', value: `$${Number(order.total).toFixed(2)}` },
       { label: 'Status', value: order.status },
       { label: 'Payment', value: paymentLabel },
+      ...(isPreorder ? [{ label: 'Fulfilment', value: 'Includes Market S pre-order line(s)' }] : []),
       { label: 'Items', value: itemSummary || '—' },
     ],
     adminPath: `/admin/orders/${encodeURIComponent(order.id)}`,

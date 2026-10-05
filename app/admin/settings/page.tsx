@@ -4917,6 +4917,8 @@ function ActivityLogView() {
     username_changed: 'bg-orange-100 text-orange-800',
     product_created: 'bg-emerald-100 text-emerald-800',
     product_updated: 'bg-teal-100 text-teal-800',
+    product_preorder_updated: 'bg-stone-200 text-stone-800',
+    order_preorder_delay_notified: 'bg-amber-100 text-amber-900',
     product_deleted: 'bg-red-100 text-red-800',
     product_stock_adjusted: 'bg-amber-100 text-amber-800',
     cms_content_created: 'bg-sky-100 text-sky-800',
@@ -5009,6 +5011,8 @@ function ActivityLogView() {
             <option value="username_changed">Username Changed</option>
             <option value="product_created">Product Created</option>
             <option value="product_updated">Product Updated</option>
+            <option value="product_preorder_updated">Product Pre-order Updated</option>
+            <option value="order_preorder_delay_notified">Order Pre-order Delay Notified</option>
             <option value="product_deleted">Product Deleted</option>
             <option value="product_stock_adjusted">Stock Adjusted</option>
             <option value="cms_content_created">CMS Created</option>

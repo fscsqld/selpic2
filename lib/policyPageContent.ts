@@ -1,3 +1,17 @@
+import {
+  MARKET_S_HYGIENE_REFUND_BODY,
+  MARKET_S_HYGIENE_REFUND_BODY_LEGACY,
+  MARKET_S_HYGIENE_REFUND_LIST,
+  MARKET_S_HYGIENE_REFUND_LIST_LEGACY,
+} from './marketSHygieneCopy'
+import {
+  MARKET_S_PREORDER_REFUND_BODY,
+  MARKET_S_PREORDER_REFUND_BODY_LEGACY,
+  MARKET_S_PREORDER_REFUND_LIST,
+  MARKET_S_PREORDER_REFUND_LIST_LEGACY,
+  MARKET_S_PREORDER_REFUND_TITLE,
+} from './marketSPreorder'
+
 /**
  * Admin CMS stores policy rows with English `title` fields; older page code used Korean labels.
  * Maps UI/legacy keys → canonical `contentStore` titles so `getContent()` resolves persisted data.
@@ -106,4 +120,84 @@ export const REFUND_TITLE_ALIASES: Record<string, string> = {
   'Section 3 목록': 'Section 3 List',
   'Section 4 내용': 'Section 4 Content',
   'Section 4 목록': 'Section 4 List',
+  'Section 5 내용': 'Section 5 Content',
+  'Section 5 목록': 'Section 5 List',
+}
+
+type RefundPolicyContentRow = {
+  id?: string
+  section?: string
+  title?: string
+  content?: string
+  type?: string
+  order?: number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+/**
+ * Upgrade known legacy Market S refund Section 4/5 copy (seal + delay email).
+ * Inserts missing Section 5 rows. Custom Admin edits that are not exact legacy strings are kept.
+ */
+export function migrateMarketSRefundPolicyContentItems<T extends RefundPolicyContentRow>(
+  items: T[]
+): T[] {
+  if (!Array.isArray(items) || items.length === 0) return items
+
+  const now = new Date()
+  const next = items.map((item) => {
+    if (item.section !== 'refund') return item
+    if (item.title === 'Section 4 Content' && item.content === MARKET_S_HYGIENE_REFUND_BODY_LEGACY) {
+      return { ...item, content: MARKET_S_HYGIENE_REFUND_BODY, updatedAt: now }
+    }
+    if (item.title === 'Section 4 List' && item.content === MARKET_S_HYGIENE_REFUND_LIST_LEGACY) {
+      return { ...item, content: MARKET_S_HYGIENE_REFUND_LIST, updatedAt: now }
+    }
+    if (item.title === 'Section 5 Content' && item.content === MARKET_S_PREORDER_REFUND_BODY_LEGACY) {
+      return { ...item, content: MARKET_S_PREORDER_REFUND_BODY, updatedAt: now }
+    }
+    if (item.title === 'Section 5 List' && item.content === MARKET_S_PREORDER_REFUND_LIST_LEGACY) {
+      return { ...item, content: MARKET_S_PREORDER_REFUND_LIST, updatedAt: now }
+    }
+    return item
+  })
+
+  const hasTitle = (title: string) =>
+    next.some((i) => i.section === 'refund' && i.title === title)
+
+  const ensure = (row: RefundPolicyContentRow) => {
+    if (hasTitle(String(row.title))) return
+    next.push({
+      type: 'text',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      ...row,
+    } as T)
+  }
+
+  ensure({
+    id: 'refund-18',
+    section: 'refund',
+    title: 'Section 5 Title',
+    content: MARKET_S_PREORDER_REFUND_TITLE,
+    order: 18,
+  })
+  ensure({
+    id: 'refund-18a',
+    section: 'refund',
+    title: 'Section 5 Content',
+    content: MARKET_S_PREORDER_REFUND_BODY,
+    order: 18.5,
+  })
+  ensure({
+    id: 'refund-19',
+    section: 'refund',
+    title: 'Section 5 List',
+    content: MARKET_S_PREORDER_REFUND_LIST,
+    order: 19,
+  })
+
+  return next
 }

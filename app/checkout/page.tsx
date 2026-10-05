@@ -34,6 +34,13 @@ import {
 } from '@/lib/shipping/productShippingEligibility'
 import type { OrderRecord } from '@/lib/store'
 import { cartContainsMarketSGoods, MARKET_S_HYGIENE_CHECKOUT } from '@/lib/marketSHygieneCopy'
+import {
+  buildOrderItemPreorderSnapshot,
+  getMarketSPreorderPurchaseLimit,
+  isMarketSPreorderOpen,
+  MARKET_S_PREORDER_CHECKOUT_ACK,
+  orderHasPreorderItems,
+} from '@/lib/marketSPreorder'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -172,6 +179,10 @@ export default function CheckoutPage() {
   const cartHasMarketS = cartContainsMarketSGoods(
     cart.map((item) => products.find((product) => product.id === item.product.id) || item.product)
   )
+  const cartHasPreorder = cart.some((item) => {
+    const source = products.find((product) => product.id === item.product.id) || item.product
+    return isMarketSPreorderOpen(source)
+  })
   const shippingOptions = mergeShippingOptionsForCart(
     allShippingOptions,
     shippingRequirement,
@@ -195,6 +206,9 @@ export default function CheckoutPage() {
   const getAvailableStock = (productId: string) => {
     const storeProduct = products.find(p => p.id === productId)
     if (!storeProduct) return 0
+    // Open Market S pre-order: purchase cap replaces warehouse stock (stock 0 is valid).
+    const preorderLimit = getMarketSPreorderPurchaseLimit(storeProduct)
+    if (preorderLimit != null) return preorderLimit
     const stock = (storeProduct as any).stockQuantity
     if (typeof stock === 'number') {
       return Math.max(0, stock)
@@ -240,6 +254,7 @@ export default function CheckoutPage() {
   }, [defaultShippingOption, selectedShipping, shippingOptions])
   const [showShippingOptions, setShowShippingOptions] = useState(false)
   const [marketSHygieneAck, setMarketSHygieneAck] = useState(false)
+  const [preorderAck, setPreorderAck] = useState(false)
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [appliedPromoCode, setAppliedPromoCode] = useState<{ code: string; discount: number } | null>(null)
   const [promoCodeError, setPromoCodeError] = useState<string | null>(null)
@@ -755,6 +770,7 @@ export default function CheckoutPage() {
 
       const { unitPrice: unitPriceInclOptions, baseUnitPrice, customizationSurchargePerUnit } =
         getStorefrontLinePriceBreakdown(sourceProduct, item.customizations)
+      const preorderSnap = buildOrderItemPreorderSnapshot(sourceProduct)
 
       return {
         productId: sourceProduct.id,
@@ -788,7 +804,8 @@ export default function CheckoutPage() {
         stockQuantityAtOrder: stockQuantity,
         remainingStock,
         safetyStock,
-        incomingStock
+        incomingStock,
+        ...preorderSnap,
       }
     })
 
@@ -872,6 +889,7 @@ export default function CheckoutPage() {
 
     return {
       items,
+      hasPreorderItems: orderHasPreorderItems(items),
       subtotal: Number(subtotalNow.toFixed(2)),
       paymentFee: Number(paymentFee.toFixed(2)),
       discount: Number(totalDiscount.toFixed(2)),
@@ -956,6 +974,10 @@ export default function CheckoutPage() {
 
       if (cartHasMarketS && !marketSHygieneAck) {
         throw new Error('Please confirm the Market S personal-care notice before placing your order.')
+      }
+
+      if (cartHasPreorder && !preorderAck) {
+        throw new Error('Please confirm the pre-order shipping notice before placing your order.')
       }
 
       if (paymentMethod === 'bank') {
@@ -1931,10 +1953,27 @@ export default function CheckoutPage() {
                   <span>{MARKET_S_HYGIENE_CHECKOUT}</span>
                 </label>
               )}
+
+              {cartHasPreorder && (
+                <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                    checked={preorderAck}
+                    onChange={(e) => setPreorderAck(e.target.checked)}
+                  />
+                  <span>{MARKET_S_PREORDER_CHECKOUT_ACK}</span>
+                </label>
+              )}
               
               <button
                 type="submit"
-                disabled={isProcessing || insufficientItems.length > 0 || (cartHasMarketS && !marketSHygieneAck)}
+                disabled={
+                  isProcessing ||
+                  insufficientItems.length > 0 ||
+                  (cartHasMarketS && !marketSHygieneAck) ||
+                  (cartHasPreorder && !preorderAck)
+                }
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-medium py-5 px-8 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed disabled:shadow-none mt-8 flex items-center justify-center space-x-3 text-lg"
               >
                 {isProcessing ? (

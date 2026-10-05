@@ -17,6 +17,8 @@ export type ActivityLogAction =
   | 'product_updated'
   | 'product_deleted'
   | 'product_stock_adjusted'
+  | 'product_preorder_updated'
+  | 'order_preorder_delay_notified'
   | 'cms_content_created'
   | 'cms_content_updated'
   | 'cms_content_deleted'
@@ -95,6 +97,8 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'product_updated',
   'product_deleted',
   'product_stock_adjusted',
+  'product_preorder_updated',
+  'order_preorder_delay_notified',
   'cms_content_created',
   'cms_content_updated',
   'cms_content_deleted',

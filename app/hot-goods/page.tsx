@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { useUserAuth } from '@/lib/userAuth'
 import { useContentStore } from '@/lib/contentStore'
-import { Filter, Search, Star, Shield, Award, Sparkles } from 'lucide-react'
+import { Filter, Search, Star, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import Header from '@/components/Header'
 import MarketSLandingHero from '@/components/MarketSLandingHero'
@@ -15,9 +15,19 @@ import { isMarketSCatalogProduct, marketSSubcategoryIcon } from '@/lib/marketSSu
 import { isProductOutOfStock } from '@/lib/likedProductStock'
 import {
   MARKET_S_HUB_FILTER_ALL,
+  MARKET_S_HUB_FILTER_PREORDER,
   marketSHubFilterOptions,
   productMatchesMarketSHubFilter,
 } from '@/lib/marketSHubFilter'
+import {
+  formatPreorderShipsFromLabel,
+  isMarketSComingSoonProduct,
+  isMarketSPreorderOpen,
+  MARKET_S_COMING_SOON_CTA,
+  MARKET_S_PREORDER_BADGE,
+  MARKET_S_PREORDER_CTA,
+  type MarketSSalesMode,
+} from '@/lib/marketSPreorder'
 
 // Market S 상품 타입 정의
 interface MarketSProduct {
@@ -47,6 +57,13 @@ interface MarketSProduct {
   stockQuantity?: number
   safetyStock?: number
   incomingStock?: number
+  salesMode?: MarketSSalesMode
+  preorderSupplierConfirmed?: boolean
+  preorderShipsFrom?: string
+  preorderClosesAt?: string
+  preorderMaxQty?: number
+  preorderSoldCount?: number
+  preorderNote?: string
 }
 
 export default function HotGoodsPage() {
@@ -64,6 +81,19 @@ export default function HotGoodsPage() {
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (!isMounted || typeof window === 'undefined') return
+    try {
+      const filter = new URLSearchParams(window.location.search).get('filter')?.trim().toLowerCase()
+      if (filter === MARKET_S_HUB_FILTER_PREORDER) {
+        setSelectedCategory(MARKET_S_HUB_FILTER_PREORDER)
+        setShowFilters(true)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [isMounted])
   
   const { 
     getActiveContentBySection, 
@@ -209,7 +239,14 @@ export default function HotGoodsPage() {
           spfLevel: (product as any).spfLevel,
           stockQuantity: stockQty,
           safetyStock: (product as any).safetyStock,
-          incomingStock: (product as any).incomingStock
+          incomingStock: (product as any).incomingStock,
+          salesMode: (product as any).salesMode,
+          preorderSupplierConfirmed: !!(product as any).preorderSupplierConfirmed,
+          preorderShipsFrom: (product as any).preorderShipsFrom || '',
+          preorderClosesAt: (product as any).preorderClosesAt || '',
+          preorderMaxQty: (product as any).preorderMaxQty,
+          preorderSoldCount: (product as any).preorderSoldCount,
+          preorderNote: (product as any).preorderNote || '',
         }
         return marketSProduct
       })
@@ -222,6 +259,10 @@ export default function HotGoodsPage() {
   }, [products])
 
   const hasMarketSProducts = marketSProducts.length > 0
+  const openPreorderProducts = useMemo(
+    () => marketSProducts.filter((p) => isMarketSPreorderOpen(p)),
+    [marketSProducts]
+  )
 
   const typingText = 'MARKET S: COMING SOON'
   const [typed, setTyped] = useState('')
@@ -284,11 +325,14 @@ export default function HotGoodsPage() {
           return b.price - a.price
         case 'rating':
           return b.rating - a.rating
-        case 'newest':
-          // isNew가 true인 상품 우선, 그 다음 최신순
+        case 'newest': {
+          const aPre = isMarketSPreorderOpen(a) ? 1 : 0
+          const bPre = isMarketSPreorderOpen(b) ? 1 : 0
+          if (aPre !== bPre) return bPre - aPre
           if (a.isNew && !b.isNew) return -1
           if (!a.isNew && b.isNew) return 1
           return 0
+        }
         case 'trending':
         default:
           // 트렌딩 아이템 우선, 그 다음 평점
@@ -302,6 +346,18 @@ export default function HotGoodsPage() {
   }, [marketSProducts, searchTerm, selectedCategory, sortBy])
 
   const handleAddToCart = (product: MarketSProduct) => {
+    if (isMarketSComingSoonProduct(product) || isProductOutOfStock(product)) {
+      alert(
+        isMarketSComingSoonProduct(product)
+          ? 'This item is coming soon and cannot be purchased yet.'
+          : 'This item is currently out of stock.'
+      )
+      return
+    }
+    if (!isLoggedIn) {
+      alert('Please log in to add items to your cart.')
+      return
+    }
     const catalogProduct = products.find((item) => item.id === product.id)
     const cartItem = {
       product: catalogProduct || product,
@@ -309,11 +365,10 @@ export default function HotGoodsPage() {
       customizations: {}
     }
     
-    console.log('🛒 Market S cartItem to add:', cartItem)
     const success = addToCart(cartItem, isLoggedIn)
     
     if (success) {
-      alert('Item added to cart!')
+      alert(isMarketSPreorderOpen(product) ? 'Pre-order added to cart!' : 'Item added to cart!')
     } else {
       alert('Failed to add item to cart')
     }
@@ -450,6 +505,44 @@ export default function HotGoodsPage() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {openPreorderProducts.length > 0 && (
+          <div
+            id="preorder"
+            className="mb-8 rounded-2xl overflow-hidden bg-stone-900 text-stone-50 flex flex-col sm:flex-row"
+          >
+            <div className="sm:w-2/5 min-h-[160px] relative bg-stone-800">
+              {openPreorderProducts[0]?.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={openPreorderProducts[0].image}
+                  alt={openPreorderProducts[0].name}
+                  className="absolute inset-0 w-full h-full object-cover opacity-90"
+                />
+              ) : null}
+            </div>
+            <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center gap-3">
+              <p className="text-xs font-semibold tracking-[0.2em] text-stone-300">
+                {MARKET_S_PREORDER_BADGE}
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight">Market S Pre-order</h2>
+              <p className="text-sm text-stone-300 max-w-md">
+                Limited drops with confirmed supply. Charged now, ships on the date shown.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory(MARKET_S_HUB_FILTER_PREORDER)
+                  setShowFilters(true)
+                  document.getElementById('market-s-product-grid')?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="self-start mt-1 px-4 py-2 text-sm font-medium bg-stone-50 text-stone-900 rounded-md hover:bg-white transition-colors"
+              >
+                View drops
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 검색 및 필터 */}
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row gap-4 mb-6">
@@ -488,6 +581,9 @@ export default function HotGoodsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   >
                     <option value={MARKET_S_HUB_FILTER_ALL}>All pack types</option>
+                    {openPreorderProducts.length > 0 && (
+                      <option value={MARKET_S_HUB_FILTER_PREORDER}>Pre-order</option>
+                    )}
                     {hubSubcategoryFilters.map((row) => (
                       <option key={row.value} value={row.value}>
                         {row.icon} {row.label}
@@ -517,16 +613,32 @@ export default function HotGoodsPage() {
         </div>
 
         {/* 상품 목록 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div
+          id="market-s-product-grid"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        >
           {filteredProducts.map((product) => {
             const stockQty =
               typeof product.stockQuantity === 'number' ? Math.max(0, product.stockQuantity) : undefined
             const safety = typeof product.safetyStock === 'number' ? Math.max(0, product.safetyStock) : undefined
-            const incoming = typeof product.incomingStock === 'number' ? Math.max(0, product.incomingStock) : undefined
             const lowStockThreshold = Math.max(safety ?? 0, 5)
+            const preorderOpen = isMarketSPreorderOpen(product)
+            const comingSoon = isMarketSComingSoonProduct(product)
             const isOutOfStock = isProductOutOfStock(product)
             const isLowStock =
-              stockQty !== undefined && stockQty > 0 && stockQty <= lowStockThreshold && !isOutOfStock
+              !preorderOpen &&
+              stockQty !== undefined &&
+              stockQty > 0 &&
+              stockQty <= lowStockThreshold &&
+              !isOutOfStock
+            const shipsLabel = formatPreorderShipsFromLabel(product.preorderShipsFrom)
+            const cartLabel = comingSoon
+              ? MARKET_S_COMING_SOON_CTA
+              : isOutOfStock
+                ? 'Out of Stock'
+                : preorderOpen
+                  ? MARKET_S_PREORDER_CTA
+                  : 'Cart'
             return (
             <div key={product.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               {/* 상품 이미지 */}
@@ -546,13 +658,25 @@ export default function HotGoodsPage() {
                     className="w-full h-48 object-cover"
                   />
                 )}
-                {isOutOfStock && (
+                {isOutOfStock && !preorderOpen && (
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center pointer-events-none z-[5]">
-                    <span className="text-white font-medium">Out of Stock</span>
+                    <span className="text-white font-medium">
+                      {comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'}
+                    </span>
                   </div>
                 )}
                 {/* 배지 */}
                 <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                  {preorderOpen && (
+                    <span className="bg-stone-900 text-stone-50 text-[10px] px-2 py-1 rounded font-semibold tracking-wide">
+                      {MARKET_S_PREORDER_BADGE}
+                    </span>
+                  )}
+                  {comingSoon && !preorderOpen && (
+                    <span className="bg-amber-100 text-amber-900 text-[10px] px-2 py-1 rounded font-semibold tracking-wide">
+                      COMING SOON
+                    </span>
+                  )}
                   {product.trending && (
                     <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1">
                       <Sparkles className="w-3 h-3" />
@@ -648,8 +772,8 @@ export default function HotGoodsPage() {
                 </div>
 
                 {/* 가격 및 주문 버튼 */}
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
                     <div className="text-xl font-bold text-gray-900">
                       ${product.price.toFixed(2)}
                       {product.originalPrice && product.originalPrice > product.price && (
@@ -658,6 +782,9 @@ export default function HotGoodsPage() {
                         </span>
                       )}
                     </div>
+                    {preorderOpen && shipsLabel ? (
+                      <div className="text-xs text-stone-600 font-medium mt-0.5">{shipsLabel}</div>
+                    ) : null}
                     {isLowStock && typeof stockQty === 'number' && (
                       <div className="text-xs text-red-600 font-medium">
                         Only {stockQty} left
@@ -667,13 +794,15 @@ export default function HotGoodsPage() {
                   <button
                     onClick={() => handleAddToCart(product)}
                     disabled={isOutOfStock}
-                    className={`px-4 py-2 text-sm ${
+                    className={`shrink-0 px-3 py-2 text-sm ${
                       isOutOfStock
                         ? 'rounded-xl bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'btn-ux btn-ux-cart'
+                        : preorderOpen
+                          ? 'rounded-xl bg-stone-900 text-stone-50 hover:bg-stone-800'
+                          : 'btn-ux btn-ux-cart'
                     }`}
                   >
-                    {isOutOfStock ? 'Out of Stock' : 'Cart'}
+                    {cartLabel}
                   </button>
                 </div>
               </div>

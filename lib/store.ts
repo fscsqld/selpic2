@@ -16,6 +16,7 @@ import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom
 import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 import type { MarketSSubcategory } from '@/lib/marketSSubcategory'
 import { mergeCartFromPersist } from '@/lib/mergePersistedCart'
+import { getMarketSPreorderPurchaseLimit } from '@/lib/marketSPreorder'
 
 export interface Product {
   id: string
@@ -90,6 +91,25 @@ export interface Product {
   limitedEditionText?: string
   /** When true, show limitedEditionText on product and customize UI. */
   isLimitedEdition?: boolean
+  /**
+   * Market S (HotGoods) sell mode. Missing/`in_stock` = normal sale (safe default for live catalog).
+   * Only SKUs explicitly set to `preorder` accept pre-order checkout.
+   */
+  salesMode?: 'in_stock' | 'preorder' | 'coming_soon'
+  /** Admin gate: supplier availability confirmed before enabling pre-order. Not shown on storefront. */
+  preorderSupplierConfirmed?: boolean
+  /** Internal supplier / PO note (admin only). */
+  preorderSupplierNote?: string
+  /** Customer-facing earliest ship date (YYYY-MM-DD). */
+  preorderShipsFrom?: string
+  /** Optional ISO datetime when pre-order closes. */
+  preorderClosesAt?: string
+  /** Optional total pre-order unit cap. */
+  preorderMaxQty?: number
+  /** Units already reserved via pre-order (optional counter). */
+  preorderSoldCount?: number
+  /** Short customer note on PDP (English). */
+  preorderNote?: string
   /** Mixed Labels: sheet pack options (e.g. 1 sheet $2.99, 4 sheets $9.99). */
   mixedLabelsSheetBundles?: Array<{
     id: string
@@ -206,6 +226,10 @@ export interface OrderItemSnapshot {
   incomingStock?: number
   bundleItems?: BundleItem[]
   isBundle?: boolean
+  /** Frozen when line was an open Market S pre-order at checkout. */
+  salesModeAtOrder?: 'preorder'
+  /** Ships-from date captured at checkout for pre-order lines. */
+  preorderShipsFrom?: string
 }
 
 /** AusPost label metadata on the order (internal PDF until live Digital API is wired). */
@@ -235,6 +259,8 @@ export interface OrderRecord {
     lastImportedAtIso?: string
   }
   items: OrderItemSnapshot[]
+  /** True when any line was sold as Market S pre-order (server-set). */
+  hasPreorderItems?: boolean
   subtotal: number
   shippingPrice: number
   discount?: number // 총 할인 (VIP + 프로모션)
@@ -338,6 +364,14 @@ export interface OrderRecord {
     status?: 'sending' | 'sent' | 'failed'
     lastAttempt?: string
     errorMessage?: string
+  }
+  /** Market S pre-order ship-date delay notice emailed to the customer. */
+  preorderDelayNotification?: {
+    sent: boolean
+    sentAt?: string
+    attempts?: number
+    previousShipsFrom?: string
+    newShipsFrom?: string
   }
   // 주문 이력 및 감사 로그
   auditLog?: Array<{
@@ -455,6 +489,9 @@ const generateStockMovementId = () =>
 
 const getAvailableStock = (product?: Product): number => {
   if (!product) return 0
+  // Market S pre-order (admin-enabled only): allow cart qty from preorder cap, not warehouse stock.
+  const preorderLimit = getMarketSPreorderPurchaseLimit(product)
+  if (preorderLimit != null) return preorderLimit
   const stock = (product as any).stockQuantity
   if (typeof stock === 'number') {
     return Math.max(0, stock)
