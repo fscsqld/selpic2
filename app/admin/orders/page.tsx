@@ -2,13 +2,13 @@
 
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { useStore, ORDER_PLATFORM_LABEL, type OrderPlatformSource, type OrderStatus } from '@/lib/store'
+import { useStore, ORDER_PLATFORM_LABEL, type OrderPlatformSource, type OrderRecord, type OrderStatus } from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, Package, CreditCard, User, History, FileText, Save, Plus, Loader2, Volume2, Store, RefreshCw, ExternalLink } from 'lucide-react'
+import { Truck, Clock, Search, Home, Printer, Download, ArrowUpDown, Filter, Trash2, Globe, RefreshCcw, Trash, Mail, ArrowRight, Edit, X, Calendar, Package, CreditCard, User, History, FileText, Save, Plus, Loader2, Volume2, Store, RefreshCw, ExternalLink, ChevronDown, MoreHorizontal } from 'lucide-react'
 import {
   formatEtsySyncSuccessMessage,
   runEtsyOrderSync,
@@ -20,6 +20,7 @@ import { openInternalShippingLabelPdf, openInternalShippingLabelsBatchPdf } from
 import ManualOrderCreateModal from '@/components/admin/ManualOrderCreateModal'
 import QuickShipLabelModal from '@/components/admin/QuickShipLabelModal'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
+import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 import { selectPostOfficeCutoffOrders } from '@/lib/shipping/postOfficeCutoffBatch'
 import { orderRequiresTrackingNumber, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
@@ -29,6 +30,11 @@ const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }
   { value: 'top-right', label: 'Top right' },
   { value: 'bottom-left', label: 'Bottom left' },
   { value: 'bottom-right', label: 'Bottom right' },
+]
+
+const LABEL_ORIENTATION_OPTIONS: Array<{ value: ShippingLabelOrientation; label: string }> = [
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'landscape', label: 'Landscape' },
 ]
 
 const statusColors: Record<string, string> = {
@@ -96,6 +102,8 @@ export default function AdminOrdersPage() {
   const [ledgerSynced, setLedgerSynced] = useState(false)
   const [shippingLabelBusyId, setShippingLabelBusyId] = useState<string | null>(null)
   const [shippingLabelSlot, setShippingLabelSlot] = useState<AdminShippingLabelSlot>('top-left')
+  const [shippingLabelOrientation, setShippingLabelOrientation] =
+    useState<ShippingLabelOrientation>('portrait')
   const [batchLabelBusy, setBatchLabelBusy] = useState(false)
   const [etsyConn, setEtsyConn] = useState<{
     connected: boolean
@@ -104,6 +112,8 @@ export default function AdminOrdersPage() {
   } | null>(null)
   const [etsyBanner, setEtsyBanner] = useState<string | null>(null)
   const [etsySyncBusy, setEtsySyncBusy] = useState(false)
+  /** Collapsed by default so the order table is closer to the top (learned 2026-10). */
+  const [etsyPanelExpanded, setEtsyPanelExpanded] = useState(false)
 
   const refreshEtsyStatus = useCallback(async () => {
     try {
@@ -135,20 +145,70 @@ export default function AdminOrdersPage() {
     void refreshEtsyStatus()
   }, [refreshEtsyStatus])
 
-  const syncOrdersFromSupabase = useCallback(async () => {
+  const [refreshBusy, setRefreshBusy] = useState(false)
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null)
+  const refreshNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const syncOrdersFromSupabase = useCallback(async (): Promise<{
+    ok: boolean
+    count: number
+    error?: string
+  }> => {
     try {
       const res = await fetch('/api/orders', { cache: 'no-store', credentials: 'same-origin' })
-      if (!res.ok) return
-      const data = await res.json()
-      if (Array.isArray(data.orders) && data.orders.length > 0) {
-        mergeOrdersFromServer(data.orders)
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        return {
+          ok: false,
+          count: 0,
+          error: data.error || `Could not refresh orders (HTTP ${res.status}).`,
+        }
       }
+      const data = (await res.json()) as { orders?: OrderRecord[] }
+      const list = Array.isArray(data.orders) ? data.orders : []
+      if (list.length > 0) {
+        mergeOrdersFromServer(list)
+      }
+      return { ok: true, count: list.length }
     } catch {
-      /* Supabase 미설정 또는 네트워크 오류 — 로컬 주문만 표시 */
+      return { ok: false, count: 0, error: 'Network error while refreshing orders.' }
     } finally {
       setLedgerSynced(true)
     }
   }, [mergeOrdersFromServer])
+
+  const runOrdersRefresh = useCallback(async () => {
+    if (refreshBusy) return
+    setRefreshBusy(true)
+    setRefreshNotice(null)
+    if (refreshNoticeTimerRef.current) {
+      clearTimeout(refreshNoticeTimerRef.current)
+      refreshNoticeTimerRef.current = null
+    }
+    try {
+      const result = await syncOrdersFromSupabase()
+      refreshOrdersFromStorage()
+      if (!result.ok) {
+        setRefreshNotice(result.error || 'Refresh failed.')
+      } else if (result.count === 0) {
+        setRefreshNotice('Using local orders — cloud ledger returned none (or is not configured).')
+      } else {
+        setRefreshNotice(`Synced ${result.count} order(s) from ledger.`)
+      }
+      refreshNoticeTimerRef.current = setTimeout(() => {
+        setRefreshNotice(null)
+        refreshNoticeTimerRef.current = null
+      }, 4500)
+    } finally {
+      setRefreshBusy(false)
+    }
+  }, [refreshBusy, refreshOrdersFromStorage, syncOrdersFromSupabase])
+
+  useEffect(() => {
+    return () => {
+      if (refreshNoticeTimerRef.current) clearTimeout(refreshNoticeTimerRef.current)
+    }
+  }, [])
 
   useEtsyOAuthReturn({
     enabled: true,
@@ -241,15 +301,55 @@ export default function AdminOrdersPage() {
   const [promoFilter, setPromoFilter] = useState<string>('')
   const [preorderFilter, setPreorderFilter] = useState<string>('')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [labelsMenuOpen, setLabelsMenuOpen] = useState(false)
+  const labelsMenuRef = useRef<HTMLDivElement | null>(null)
   const [sortDesc, setSortDesc] = useState<boolean>(true)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [selectAll, setSelectAll] = useState(false)
   const [editingOrder, setEditingOrder] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState<string | null>(null)
   const [showNotes, setShowNotes] = useState<string | null>(null)
+  /** Which order row has the Actions ⋯ menu open (History / Notes). */
+  const [rowActionsMenuId, setRowActionsMenuId] = useState<string | null>(null)
   const [newNote, setNewNote] = useState('')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(defaultPageSize)
+
+  useEffect(() => {
+    if (!labelsMenuOpen) return
+    const onPointerDown = (e: MouseEvent) => {
+      const el = labelsMenuRef.current
+      if (el && !el.contains(e.target as Node)) setLabelsMenuOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLabelsMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [labelsMenuOpen])
+
+  useEffect(() => {
+    if (!rowActionsMenuId) return
+    const onPointerDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && !t.closest(`[data-row-actions="${rowActionsMenuId}"]`)) {
+        setRowActionsMenuId(null)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRowActionsMenuId(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [rowActionsMenuId])
   
   const selectedIds = Object.keys(selected).filter(id => selected[id])
   const performedBy = adminUser?.username || 'admin'
@@ -369,6 +469,7 @@ export default function AdminOrdersPage() {
         printSlips: '패킹 슬립 출력',
         printLabels4up: '배송 라벨 (4-up)',
         printCutoffBatch: '컷오프 배치 (어제 10시→오늘 8시)',
+        labelsMenu: '라벨',
         export: '내보내기',
         exportSelected: '선택 항목 내보내기',
         exportAll: '전체 내보내기',
@@ -449,6 +550,7 @@ export default function AdminOrdersPage() {
         printSlips: 'Print Slips',
         printLabels4up: 'Print labels (4-up)',
         printCutoffBatch: 'Print cut-off batch',
+        labelsMenu: 'Labels',
         export: 'Export',
         exportSelected: 'Export Selected',
         exportAll: 'Export All',
@@ -905,14 +1007,119 @@ export default function AdminOrdersPage() {
         )}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-white px-4 py-3 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600 text-white shadow">
-                <Store className="h-5 w-5" aria-hidden />
+          <div className="rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-white px-3 py-2 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setEtsyPanelExpanded((v) => !v)}
+                className="inline-flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-violet-50/80"
+                aria-expanded={etsyPanelExpanded}
+                title={etsyPanelExpanded ? (isKo ? 'Etsy 패널 접기' : 'Collapse Etsy panel') : (isKo ? 'Etsy 패널 펼치기' : 'Expand Etsy panel')}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm">
+                  <Store className="h-4 w-4" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-violet-800">
+                    Etsy
+                  </span>
+                  <span className="block truncate text-xs text-gray-600">
+                    {etsyConn === null
+                      ? isKo
+                        ? '확인 중…'
+                        : 'Checking…'
+                      : etsyConn.connected
+                        ? isKo
+                          ? `연결됨${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}`
+                          : `Connected${etsyConn.shopName ? ` · ${etsyConn.shopName}` : ''}`
+                        : isKo
+                          ? '미연결'
+                          : 'Not connected'}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-violet-700 transition-transform ${etsyPanelExpanded ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {etsyConn?.connected ? (
+                  <button
+                    type="button"
+                    disabled={etsySyncBusy}
+                    onClick={() => {
+                      void (async () => {
+                        setEtsySyncBusy(true)
+                        setEtsyBanner(null)
+                        try {
+                          const result = await runEtsyOrderSync()
+                          if (!result.ok) {
+                            setEtsyBanner(result.error ?? 'Sync failed.')
+                            return
+                          }
+                          setEtsyBanner(
+                            formatEtsySyncSuccessMessage(result.imported, result.scanned, result.sinceDays)
+                          )
+                          await syncOrdersFromSupabase()
+                        } finally {
+                          setEtsySyncBusy(false)
+                        }
+                      })()
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${etsySyncBusy ? 'animate-spin' : ''}`} aria-hidden />
+                    {etsySyncBusy
+                      ? isKo
+                        ? '가져오는 중…'
+                        : 'Syncing…'
+                      : isKo
+                        ? '가져오기'
+                        : 'Sync'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startEtsyOAuth('/admin/orders')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-medium text-violet-900 shadow-sm hover:bg-violet-50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    {isKo ? '연결' : 'Connect'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setQuickShipModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm hover:bg-emerald-50"
+                >
+                  <Printer className="h-3.5 w-3.5" aria-hidden />
+                  {isKo ? '빠른 발송' : 'Quick ship'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canWriteOrders) {
+                      denyOrderWrite()
+                      return
+                    }
+                    setManualModalOpen(true)
+                  }}
+                  disabled={!canWriteOrders}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  {isKo ? '수동 추가' : 'Add order'}
+                </button>
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">Etsy shop</p>
-                <p className="text-sm text-gray-600">
+            </div>
+            {etsyBanner ? (
+              <div className="mt-2 rounded-lg border border-violet-200 bg-white/80 px-3 py-1.5 text-xs text-gray-800">
+                {etsyBanner}
+              </div>
+            ) : null}
+            {etsyPanelExpanded ? (
+              <div className="mt-2 border-t border-violet-100 pt-2 text-sm text-gray-600">
+                <p>
                   {etsyConn === null
                     ? isKo
                       ? 'Etsy 연결 상태를 확인하는 중…'
@@ -931,81 +1138,7 @@ export default function AdminOrdersPage() {
                   </Link>
                 </p>
               </div>
-            </div>
-            {etsyBanner ? (
-              <div className="w-full rounded-lg border border-violet-200 bg-white/80 px-3 py-2 text-sm text-gray-800">
-                {etsyBanner}
-              </div>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              {etsyConn?.connected ? (
-                <button
-                  type="button"
-                  disabled={etsySyncBusy}
-                  onClick={() => {
-                    void (async () => {
-                      setEtsySyncBusy(true)
-                      setEtsyBanner(null)
-                      try {
-                        const result = await runEtsyOrderSync()
-                        if (!result.ok) {
-                          setEtsyBanner(result.error ?? 'Sync failed.')
-                          return
-                        }
-                        setEtsyBanner(
-                          formatEtsySyncSuccessMessage(result.imported, result.scanned, result.sinceDays)
-                        )
-                        await syncOrdersFromSupabase()
-                      } finally {
-                        setEtsySyncBusy(false)
-                      }
-                    })()
-                  }}
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${etsySyncBusy ? 'animate-spin' : ''}`} aria-hidden />
-                  {etsySyncBusy
-                    ? isKo
-                      ? '가져오는 중…'
-                      : 'Syncing…'
-                    : isKo
-                      ? 'Etsy 주문 가져오기'
-                      : 'Sync Etsy orders'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => startEtsyOAuth('/admin/orders')}
-                  className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-900 shadow-sm hover:bg-violet-50"
-                >
-                  <ExternalLink className="h-4 w-4" aria-hidden />
-                  {isKo ? 'Etsy 샵 연결하기' : 'Connect Etsy shop'}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setQuickShipModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm hover:bg-emerald-50"
-              >
-                <Printer className="h-4 w-4" aria-hidden />
-                {isKo ? '빠른 발송 라벨' : 'Quick ship label'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!canWriteOrders) {
-                    denyOrderWrite()
-                    return
-                  }
-                  setManualModalOpen(true)
-                }}
-                disabled={!canWriteOrders}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="h-4 w-4" aria-hidden />
-                {isKo ? '주문 수동 추가' : 'Add order manually'}
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1049,88 +1182,205 @@ export default function AdminOrdersPage() {
         )}
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Filters */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          {/* Find + tools toolbar */}
+          <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            {/* Row 1 — find */}
+            <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={T.searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="h-9 w-full rounded-md border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
                 />
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="">{T.statusAll}</option>
-                <option value="pending">{T.pending}</option>
-                <option value="paid">{T.paid}</option>
-                <option value="approved">{T.approved}</option>
-                <option value="processing">{T.processing}</option>
-                <option value="shipped">{T.shipped}</option>
-                <option value="ready_for_collection">{T.readyForCollection}</option>
-                <option value="collected">{T.collected}</option>
-                <option value="cancelled">{T.cancelled}</option>
-              </select>
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <Filter size={16} />
-                {T.advancedFilters}
-              </button>
-              <button
-                onClick={() => setSortDesc(!sortDesc)}
-                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <ArrowUpDown size={16} />
-                {T.sortByDate}
-              </button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  aria-label="Filter by status"
+                  className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                >
+                  <option value="">{T.statusAll}</option>
+                  <option value="pending">{T.pending}</option>
+                  <option value="paid">{T.paid}</option>
+                  <option value="approved">{T.approved}</option>
+                  <option value="processing">{T.processing}</option>
+                  <option value="shipped">{T.shipped}</option>
+                  <option value="ready_for_collection">{T.readyForCollection}</option>
+                  <option value="collected">{T.collected}</option>
+                  <option value="cancelled">{T.cancelled}</option>
+                </select>
                 <button
                   type="button"
-                  onClick={() => {
-                    refreshOrdersFromStorage()
-                    syncOrdersFromSupabase()
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  title={isKo ? '로컬 + Supabase 주문 동기화' : 'Sync local storage + Supabase orders'}
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium ${
+                    showAdvancedFilters
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'
+                  }`}
                 >
-                  <RefreshCcw size={16} />
-                  {T.refresh}
-                </button>
-                <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Download size={16}/> {T.exportCsv}</button>
-                <button onClick={bulkPrint} className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"><Printer size={16}/> {T.printSlips}</button>
-                <button
-                  type="button"
-                  onClick={bulkPrintShippingLabels}
-                  disabled={batchLabelBusy}
-                  title="Avery L7169 A4 — 4 labels per sheet (selected orders)"
-                  className="inline-flex items-center gap-2 px-3 py-2 border border-red-300 bg-red-50 text-red-900 rounded-lg hover:bg-red-100 disabled:opacity-50"
-                >
-                  {batchLabelBusy ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
-                  {T.printLabels4up}
+                  <Filter size={15} />
+                  Filters
                 </button>
                 <button
                   type="button"
-                  onClick={printPostOfficeCutoffBatch}
-                  disabled={batchLabelBusy}
-                  title="Yesterday 10:00 → today 08:00 Australia/Brisbane — daily post-office batch"
-                  className="inline-flex items-center gap-2 px-3 py-2 border border-amber-400 bg-amber-50 text-amber-950 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+                  onClick={() => setSortDesc(!sortDesc)}
+                  title={sortDesc ? 'Newest first' : 'Oldest first'}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
                 >
-                  {batchLabelBusy ? <Loader2 size={16} className="animate-spin" /> : <Truck size={16} />}
-                  {T.printCutoffBatch}
+                  <ArrowUpDown size={15} />
+                  {sortDesc ? 'Newest' : 'Oldest'}
                 </button>
+              </div>
+            </div>
+
+            {/* Row 2 — sync / export / label print */}
+            <div className="flex flex-col gap-3 bg-gray-50/80 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void runOrdersRefresh()}
+                  disabled={refreshBusy}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-white disabled:opacity-60"
+                  title="Pull cloud ledger, then reload local cache"
+                >
+                  <RefreshCcw size={15} className={refreshBusy ? 'animate-spin' : ''} />
+                  {refreshBusy ? 'Refreshing…' : 'Refresh'}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                >
+                  <Download size={15} />
+                  CSV
+                </button>
+                {refreshNotice ? (
+                  <p
+                    className={`max-w-xl text-xs leading-snug ${
+                      /failed|error|could not/i.test(refreshNotice)
+                        ? 'text-red-700'
+                        : 'text-gray-600'
+                    }`}
+                    role="status"
+                  >
+                    {refreshNotice}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-1.5">
+                <span className="hidden px-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 sm:inline">
+                  Labels
+                </span>
+                <label className="inline-flex items-center gap-1.5 px-1 text-xs text-gray-600">
+                  <span className="hidden sm:inline">Slot</span>
+                  <select
+                    value={shippingLabelSlot}
+                    onChange={(e) => setShippingLabelSlot(e.target.value as AdminShippingLabelSlot)}
+                    className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                    title="Avery L7169 sheet position"
+                    aria-label="Avery label sheet slot"
+                  >
+                    {LABEL_SLOT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="inline-flex items-center gap-1.5 px-1 text-xs text-gray-600">
+                  <span className="hidden sm:inline">Orient</span>
+                  <select
+                    value={shippingLabelOrientation}
+                    onChange={(e) =>
+                      setShippingLabelOrientation(e.target.value as ShippingLabelOrientation)
+                    }
+                    className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                    title="Portrait or landscape for row Print"
+                    aria-label="Shipping label orientation"
+                  >
+                    {LABEL_ORIENTATION_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="relative" ref={labelsMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setLabelsMenuOpen((v) => !v)}
+                    disabled={batchLabelBusy}
+                    aria-expanded={labelsMenuOpen}
+                    aria-haspopup="menu"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-gray-900 px-3 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    {batchLabelBusy ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+                    Print
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform ${labelsMenuOpen ? 'rotate-180' : ''}`}
+                      aria-hidden
+                    />
+                  </button>
+                  {labelsMenuOpen ? (
+                    <div
+                      role="menu"
+                      className="absolute right-0 z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setLabelsMenuOpen(false)
+                          bulkPrint()
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        <Printer size={14} className="text-gray-500" />
+                        {T.printSlips}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={batchLabelBusy}
+                        onClick={() => {
+                          setLabelsMenuOpen(false)
+                          bulkPrintShippingLabels()
+                        }}
+                        title="Avery L7169 A4 — 4 labels per sheet (selected orders)"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <Printer size={14} />
+                        {T.printLabels4up}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={batchLabelBusy}
+                        onClick={() => {
+                          setLabelsMenuOpen(false)
+                          printPostOfficeCutoffBatch()
+                        }}
+                        title="Yesterday 10:00 → today 08:00 Australia/Brisbane — daily post-office batch"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <Truck size={14} />
+                        {T.printCutoffBatch}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
             {/* Advanced Filters */}
             {showAdvancedFilters && (
-              <div className="border-t pt-4 mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{T.dateFrom}</label>
                   <input
@@ -1260,12 +1510,13 @@ export default function AdminOrdersPage() {
                     {T.clear}
                   </button>
                 </div>
+                </div>
               </div>
             )}
 
             {/* Bulk Actions */}
             {selectedIds.length > 0 && (
-              <div className="border-t pt-4 mt-4 flex items-center gap-2 flex-wrap">
+              <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-white px-4 py-3">
                 <span className="text-sm font-medium text-gray-700">{isKo ? `${selectedIds.length}개 선택됨` : `${selectedIds.length} selected`}</span>
                 <button
                   type="button"
@@ -1312,20 +1563,19 @@ export default function AdminOrdersPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3"><input type="checkbox" checked={selectAll} onChange={e => toggleAll(e.target.checked)} /></th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.order}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.customer}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.items}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200 max-w-[14rem]">
+                    <th className="px-3 py-2"><input type="checkbox" checked={selectAll} onChange={e => toggleAll(e.target.checked)} /></th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.order}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.customer}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.items}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200 max-w-[14rem]">
                       {T.table.personalization}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.actions}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.followUp}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.total}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.payment}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.status}</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">{T.table.shippingLabel}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.actions}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.total}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.payment}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">{T.table.status}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider border-r border-gray-200">Email</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">{T.table.shippingLabel}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1339,88 +1589,134 @@ export default function AdminOrdersPage() {
                         order.items.some((it) => it?.salesModeAtOrder === 'preorder'))
                     return (
                     <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm border-r border-gray-100"><input type="checkbox" checked={!!selected[order.id]} onChange={e => toggleOne(order.id, e.target.checked)} /></td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className={plat.className}>{plat.text}</span>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${shipBadge.className}`}
-                            title={order.shippingOptionName || order.shippingOptionId}
-                          >
-                            {shipBadge.label}
-                          </span>
-                          {orderIsPreorder && (
-                            <span
-                              className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900"
-                              title="Contains Market S pre-order line(s)"
-                            >
-                              PRE-ORDER
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-medium text-gray-900">{order.id}</div>
-                        <div className="text-gray-500">{new Date(order.createdAtIso).toLocaleString()}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="font-medium text-gray-900">{order.customer.name}</div>
-                            <div className="text-gray-500">{order.customer.email}</div>
-                            <div className="text-gray-500">{order.customer.phone}</div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              if (!canWriteOrders) {
-                                denyOrderWrite()
-                                return
-                              }
-                              if (confirm(T.confirmDelete)) deleteOrder(order.id, performedBy)
-                            }}
-                            disabled={!canWriteOrders}
-                            title={T.delete}
-                            className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Trash size={14} />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="space-y-1 text-gray-900">
-                          {order.items.slice(0, 3).map((it, idx) => (
-                            <div key={`${order.id}-${idx}`}>
-                              <div className="truncate">{it.name}</div>
-                              {it.salesModeAtOrder === 'preorder' && (
-                                <div className="text-[10px] font-medium text-amber-800">
-                                  Pre-order
-                                  {it.preorderShipsFrom
-                                    ? ` · ships from ${it.preorderShipsFrom}`
-                                    : ''}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          {order.items.length > 3 && (
-                            <div className="text-xs text-gray-500">
-                              +{order.items.length - 3} more
-                            </div>
-                          )}
-                        </div>
+                      <td className="px-3 py-2 text-sm border-r border-gray-100"><input type="checkbox" checked={!!selected[order.id]} onChange={e => toggleOne(order.id, e.target.checked)} /></td>
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
+                        {(() => {
+                          const platformShort: Record<string, string> = {
+                            website: 'W',
+                            etsy: 'E',
+                            ebay: 'Eb',
+                            amazon: 'Am',
+                            manual: 'M',
+                          }
+                          const shipShort: Record<string, string> = {
+                            untracked: 'Untrk',
+                            tracking_required: 'Need trk',
+                            tracking_added: 'Tracked',
+                            click_collect: 'C&C',
+                            notified: 'Sent',
+                          }
+                          const pKey = String(order.platformSource || 'website')
+                          const pShort = platformShort[pKey] || plat.text.replace(/[\[\]]/g, '').slice(0, 2)
+                          const sShort = shipShort[shipBadge.key] || shipBadge.label
+                          const created = new Date(order.createdAtIso)
+                          const shortWhen = Number.isNaN(created.getTime())
+                            ? ''
+                            : created.toLocaleString('en-AU', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })
+                          const fullWhen = Number.isNaN(created.getTime())
+                            ? ''
+                            : created.toLocaleString('en-AU')
+                          return (
+                            <>
+                              <div className="mb-0.5 flex flex-nowrap items-center gap-1 overflow-hidden">
+                                <span className={`${plat.className} shrink-0 !px-1`} title={plat.text}>
+                                  {pShort}
+                                </span>
+                                <span
+                                  className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${shipBadge.className}`}
+                                  title={order.shippingOptionName || shipBadge.label}
+                                >
+                                  {sShort}
+                                </span>
+                                {orderIsPreorder ? (
+                                  <span
+                                    className="inline-flex shrink-0 items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900"
+                                    title={
+                                      (order.items || [])
+                                        .filter((it) => it?.salesModeAtOrder === 'preorder')
+                                        .map((it) =>
+                                          it.preorderShipsFrom
+                                            ? `${it.name} · ships from ${it.preorderShipsFrom}`
+                                            : it.name
+                                        )
+                                        .join('\n') || 'Pre-order'
+                                    }
+                                  >
+                                    PRE
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div
+                                className="truncate font-medium text-gray-900"
+                                title={fullWhen ? `${order.id} · ${fullWhen}` : order.id}
+                              >
+                                {order.id}
+                                {shortWhen ? (
+                                  <span className="font-normal text-gray-500"> · {shortWhen}</span>
+                                ) : null}
+                              </div>
+                            </>
+                          )
+                        })()}
                       </td>
                       <td
-                        className="px-6 py-4 text-sm border-r border-gray-100 max-w-[14rem] align-top"
+                        className="px-3 py-2 text-sm border-r border-gray-100"
+                        title={[order.customer.email, order.customer.phone].filter(Boolean).join(' · ') || undefined}
+                      >
+                        <div className="font-medium text-gray-900 truncate">{order.customer.name}</div>
+                      </td>
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
+                        {(() => {
+                          const items = order.items || []
+                          const first = items[0]
+                          const extra = Math.max(0, items.length - 1)
+                          const fullTitle = items
+                            .map((it) => {
+                              const qty = it.quantity > 1 ? ` ×${it.quantity}` : ''
+                              const pre =
+                                it.salesModeAtOrder === 'preorder'
+                                  ? it.preorderShipsFrom
+                                    ? ` (Pre-order · ships from ${it.preorderShipsFrom})`
+                                    : ' (Pre-order)'
+                                  : ''
+                              return `${it.name}${qty}${pre}`
+                            })
+                            .join('\n')
+                          if (!first) {
+                            return <span className="text-gray-400">—</span>
+                          }
+                          return (
+                            <div className="truncate" title={fullTitle || undefined}>
+                              {first.name}
+                              {first.quantity > 1 ? ` ×${first.quantity}` : ''}
+                              {extra > 0 ? (
+                                <span className="text-gray-500"> · +{extra} more</span>
+                              ) : null}
+                            </div>
+                          )
+                        })()}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-sm border-r border-gray-100 max-w-[14rem] align-middle"
                         title={pers === '—' ? undefined : pers}
                       >
-                        <p className="text-xs text-gray-800 line-clamp-3 whitespace-pre-wrap break-words">{pers}</p>
+                        <p className="text-xs text-gray-800 line-clamp-1 break-words">{pers}</p>
                       </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="flex gap-1">
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
+                        <div className="flex items-center gap-1">
                           <Link
                             href={`/admin/orders/${order.id}`}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs flex-1"
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
                           >
                             <Home size={12} /> View
                           </Link>
                           <button
+                            type="button"
                             onClick={() => {
                               if (!canWriteOrders) {
                                 denyOrderWrite()
@@ -1429,48 +1725,75 @@ export default function AdminOrdersPage() {
                               setEditingOrder(order.id)
                             }}
                             disabled={!canWriteOrders}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Edit size={12} /> {T.editOrder}
+                            <Edit size={12} /> Edit
                           </button>
+                          <div className="relative" data-row-actions={order.id}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRowActionsMenuId((id) => (id === order.id ? null : order.id))
+                              }
+                              aria-expanded={rowActionsMenuId === order.id}
+                              aria-haspopup="menu"
+                              title="More actions"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                            {rowActionsMenuId === order.id ? (
+                              <div
+                                role="menu"
+                                className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setRowActionsMenuId(null)
+                                    setShowHistory(order.id)
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-800 hover:bg-gray-50"
+                                >
+                                  <History size={12} /> {T.orderHistory}
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setRowActionsMenuId(null)
+                                    setShowNotes(order.id)
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-800 hover:bg-gray-50"
+                                >
+                                  <FileText size={12} /> {T.adminNotes}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => setShowHistory(order.id)}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-50 text-gray-700 hover:bg-gray-100 text-xs flex-1"
-                          >
-                            <History size={12} /> {T.orderHistory}
-                          </button>
-                          <button
-                            onClick={() => setShowNotes(order.id)}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded bg-yellow-50 text-yellow-700 hover:bg-yellow-100 text-xs flex-1"
-                          >
-                            <FileText size={12} /> {T.adminNotes}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
                         <div className="font-semibold text-gray-900">${order.total.toFixed(2)}</div>
                       </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
                         <span
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                             paymentMethodColors[String(order.paymentMethod || '').toLowerCase()] || 'bg-gray-100 text-gray-700'
                           }`}
                         >
                           {getPaymentMethodLabel(order)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
-                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
+                        <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={order.status}
                             onChange={(e) => {
                               void applyStatusChange(order.id, e.target.value as OrderStatus)
                             }}
-                            className="w-full text-xs border border-gray-300 rounded-md px-2 py-1.5 bg-white text-gray-900"
+                            className="w-full text-xs border border-gray-300 rounded-md px-2 py-1 bg-white text-gray-900"
                             aria-label="Order status"
                           >
                             <option value="pending">{T.pending}</option>
@@ -1497,7 +1820,7 @@ export default function AdminOrdersPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm border-r border-gray-100">
+                      <td className="px-3 py-2 text-sm border-r border-gray-100">
                         {order.emailConfirmation ? (
                           <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${
@@ -1510,56 +1833,43 @@ export default function AdminOrdersPage() {
                           <span className="text-xs text-gray-400">Not sent</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm align-top">
-                        <div className="space-y-2">
-                          <select
-                            value={shippingLabelSlot}
-                            onChange={(e) => setShippingLabelSlot(e.target.value as AdminShippingLabelSlot)}
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
-                            title="Choose Avery L7169 sheet position"
-                          >
-                            {LABEL_SLOT_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={!!shippingLabelBusyId}
-                            title="Open Avery L7169 A4 label PDF"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void (async () => {
-                                setShippingLabelBusyId(order.id)
-                                try {
-                                  const r = await openInternalShippingLabelPdf(order.id, {
-                                    slot: shippingLabelSlot,
-                                    onOrderMerged: (o) => mergeOrdersFromServer([o]),
-                                  })
-                                  if (!r.ok) window.alert(r.error || 'Failed to open label')
-                                } finally {
-                                  setShippingLabelBusyId(null)
-                                }
-                              })()
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 whitespace-nowrap disabled:opacity-50"
-                          >
-                            {shippingLabelBusyId === order.id ? (
-                              <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-                            ) : (
-                              <Printer className="w-3.5 h-3.5 shrink-0" />
-                            )}
-                            Print label
-                          </button>
-                        </div>
+                      <td className="px-3 py-2 text-sm align-middle">
+                        <button
+                          type="button"
+                          disabled={!!shippingLabelBusyId}
+                          title={`Print Avery L7169 (${LABEL_SLOT_OPTIONS.find((o) => o.value === shippingLabelSlot)?.label || shippingLabelSlot}, ${shippingLabelOrientation})`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void (async () => {
+                              setShippingLabelBusyId(order.id)
+                              try {
+                                const r = await openInternalShippingLabelPdf(order.id, {
+                                  slot: shippingLabelSlot,
+                                  orientation: shippingLabelOrientation,
+                                  onOrderMerged: (o) => mergeOrdersFromServer([o]),
+                                })
+                                if (!r.ok) window.alert(r.error || 'Failed to open label')
+                              } finally {
+                                setShippingLabelBusyId(null)
+                              }
+                            })()
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-300 text-xs text-gray-800 bg-white hover:bg-gray-50 whitespace-nowrap disabled:opacity-50"
+                        >
+                          {shippingLabelBusyId === order.id ? (
+                            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                          ) : (
+                            <Printer className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          Print
+                        </button>
                       </td>
                     </tr>
                     )
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={11} className="px-6 py-12 text-center text-gray-500">
                         <div className="flex items-center justify-center gap-2">
                           <Clock size={18} /> {T.noOrders}
                         </div>
