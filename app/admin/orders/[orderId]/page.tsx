@@ -37,6 +37,7 @@ import {
   formatPreorderDispatchSummaryLines,
   getEarliestPreorderShipsFrom,
 } from '@/lib/orderPreorderFulfillment'
+import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 import { logAdminActivity } from '@/lib/logAdminActivity'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
@@ -357,7 +358,7 @@ export default function AdminOrderDetailPage() {
   const isClickAndCollect = isOrderClickAndCollect(order)
 
   const generateCustomerMessage = () => {
-    const customerName = order.customer.name
+    const customerName = resolveOrderCustomerGreetingName(order.customer)
     const phoneNumber = order.customer.phone
     const orderId = order.id
     const orderDate = new Date(order.createdAtIso).toLocaleDateString('en-AU', {
@@ -1127,7 +1128,7 @@ Selpic Team`
                         rows={3}
                         maxLength={500}
                         disabled={!canWriteOrders || isSendingDelayEmail}
-                        placeholder="e.g. Supplier shipment delayed at customs — new dispatch estimate below."
+                        placeholder="Leave blank to use the default customs/transit delay wording. Or write a custom reason (replaces the default paragraph)."
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
                       />
                     </div>

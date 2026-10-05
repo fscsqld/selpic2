@@ -17,6 +17,7 @@ import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrien
 import type { MarketSSubcategory } from '@/lib/marketSSubcategory'
 import { mergeCartFromPersist } from '@/lib/mergePersistedCart'
 import { getMarketSPreorderPurchaseLimit } from '@/lib/marketSPreorder'
+import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 
 export interface Product {
   id: string
@@ -1539,7 +1540,7 @@ export const useStore = create<Store>()(
         const brandName = getCompanyBrandName(companyName)
         const variables = {
           orderId: order.id,
-          customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+          customerName: resolveOrderCustomerGreetingName(order.customer),
           companyName: brandName,
           companyNameLegal: companyName,
           orderDate: new Date(order.createdAtIso).toLocaleDateString('en-AU', { 
@@ -1707,7 +1708,7 @@ export const useStore = create<Store>()(
             const pdfOrder = {
               id: order.id,
               customer: {
-                name: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+                name: resolveOrderCustomerGreetingName(order.customer),
                 firstName: (order.customer as any).firstName,
                 lastName: (order.customer as any).lastName,
                 email: order.customer.email || '',
@@ -1753,7 +1754,7 @@ export const useStore = create<Store>()(
           }
           const result = await emailService.sendResponse({
             customerEmail: order.customer.email || '',
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+            customerName: resolveOrderCustomerGreetingName(order.customer),
             subject: emailSubject,
             message: emailContent,
             html: emailHtml,
@@ -1832,7 +1833,7 @@ export const useStore = create<Store>()(
           const { emailService } = await import('./emailService')
           const result = await emailService.sendResponse({
             customerEmail: order.customer.email || '',
-            customerName: order.customer.name || order.customer.email.split('@')[0] || 'Customer',
+            customerName: resolveOrderCustomerGreetingName(order.customer),
             subject: emailSubject,
             message: emailContent,
             html: emailHtml,

@@ -9,6 +9,7 @@ import {
   formatOrderItemPersonalizationPlain,
   getOrderItemCustomizationDisplayLines,
 } from '@/lib/mixedLabelsCartDisplay'
+import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 
 /**
  * Email sent when admin confirms a bank-transfer deposit (Confirm Deposit → Paid).
@@ -53,7 +54,7 @@ function buildOrderItemsLines(order: OrderRecord): string[] {
 }
 
 export function buildDepositConfirmedEmailPlainText(order: OrderRecord): string {
-  const customerName = order.customer.name || order.customer.email.split('@')[0] || 'Customer'
+  const customerName = resolveOrderCustomerGreetingName(order.customer)
   const orderDate = new Date(order.createdAtIso).toLocaleDateString('en-AU', {
     day: 'numeric',
     month: 'short',
@@ -101,7 +102,7 @@ If you have any questions, simply reply to this email or contact us at info@selp
 
 /** Main HTML content only; signature & confidentiality are added by emailService. */
 export function buildDepositConfirmedEmailHtml(order: OrderRecord): string {
-  const customerName = escHtml(order.customer.name || order.customer.email.split('@')[0] || 'Customer')
+  const customerName = escHtml(resolveOrderCustomerGreetingName(order.customer))
   const orderDate = escHtml(
     new Date(order.createdAtIso).toLocaleDateString('en-AU', {
       day: 'numeric',

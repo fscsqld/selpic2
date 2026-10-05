@@ -18,6 +18,7 @@ import {
   FUNDRAISING_GRANT_PAYOUT_POLICY,
   payoutDueDisplayForPeriod,
 } from '@/lib/fundraising/auFinancialQuarter'
+import { formatCustomerDisplayName } from '@/lib/formatCustomerDisplayName'
 
 function esc(s: string): string {
   return s
@@ -27,18 +28,9 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Title-case personal names for formal email greetings (jimmy → Jimmy). */
+/** Title-case personal names for formal email greetings (EMMA kim → Emma Kim). */
 export function formatPartnerDisplayName(name: string | undefined | null, fallback = 'Partner'): string {
-  const raw = String(name || '').trim()
-  if (!raw) return fallback
-  return raw
-    .split(/\s+/)
-    .map((part) => {
-      if (!part) return part
-      // Keep existing camel / mixed tokens lightly: capitalize first letter only
-      return part.charAt(0).toUpperCase() + part.slice(1)
-    })
-    .join(' ')
+  return formatCustomerDisplayName(name, fallback)
 }
 
 /** Resolve ABN from flat partner.abn (canonical) or legacy nested bankDetails.abn. */

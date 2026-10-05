@@ -17,6 +17,7 @@ import {
   COMPANY_LOGO_URL,
   getCompanyBrandName
 } from '@/lib/companyLegal'
+import { formatCustomerDisplayName } from '@/lib/formatCustomerDisplayName'
 import {
   getDefaultLineItemsByCategory,
   getDefaultNotesByCategory,
@@ -558,10 +559,14 @@ function InvoicePreviewPageContent() {
     let emailContent = ''
     let subject = ''
     const rawName = (currentData.billing.name || '').trim()
+    const company = (currentData.billing.companyName || '').trim()
+    const person =
+      rawName && rawName !== 'Customer Name' ? formatCustomerDisplayName(rawName) : ''
+    const emailLocal = (emailToSend.split('@')[0] || '').trim()
     const recipientDisplayName =
-      (currentData.billing.companyName || '').trim() ||
-      (rawName && rawName !== 'Customer Name' ? rawName : '') ||
-      emailToSend.split('@')[0] ||
+      company ||
+      person ||
+      (emailLocal ? formatCustomerDisplayName(emailLocal.replace(/[._]+/g, ' ')) : '') ||
       'Customer'
     const brandName = getCompanyBrandName(COMPANY_LEGAL.companyName)
     const sentBy = adminUser?.username || adminUser?.email || 'Admin'

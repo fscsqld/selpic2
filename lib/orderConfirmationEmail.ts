@@ -20,6 +20,7 @@ import {
   classifyOrderCatalogMix,
 } from '@/lib/orderConfirmationCatalogMix'
 import { getOrderConfirmationPaymentNoticeForOrder } from '@/lib/orderConfirmationPaymentNotice'
+import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 
 /** @deprecated use getTransactionalEmailSiteOrigin */
 export const getEmailSiteOrigin = getTransactionalEmailSiteOrigin
@@ -102,7 +103,7 @@ function buildPaymentSectionHtml(order: OrderRecord): string {
 
 /** Plain-text body (also used as the fallback / preheader-friendly copy). */
 export function buildOrderConfirmationEmailPlainText(order: OrderRecord): string {
-  const customerName = order.customer.name || order.customer.email.split('@')[0] || 'Customer'
+  const customerName = resolveOrderCustomerGreetingName(order.customer)
   const { mix } = classifyOrderCatalogMix(order.items)
   const thankYouIntro = buildOrderConfirmationThankYouIntro(mix)
   const paymentSection = buildPaymentSectionPlain(order)
@@ -169,7 +170,7 @@ export function buildOrderConfirmationEmailHtml(order: OrderRecord): string {
   const { mix } = classifyOrderCatalogMix(order.items)
   const thankYouIntro = escHtml(buildOrderConfirmationThankYouIntro(mix))
   const paymentSectionHtml = buildPaymentSectionHtml(order)
-  const customerName = escHtml(order.customer.name || order.customer.email.split('@')[0] || 'Customer')
+  const customerName = escHtml(resolveOrderCustomerGreetingName(order.customer))
   const orderDate = escHtml(
     new Date(order.createdAtIso).toLocaleDateString('en-AU', {
       day: 'numeric',

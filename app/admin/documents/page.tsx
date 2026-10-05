@@ -86,6 +86,7 @@ import { computeDocumentCreateTotals } from '@/lib/documentCreateTotals'
 import { useContentStore } from '@/lib/contentStore'
 import { renderReactPreviewToPdfFile } from '@/lib/previewPdf'
 import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
+import { resolveOrderCustomerGreetingName, formatCustomerDisplayName } from '@/lib/formatCustomerDisplayName'
 
 type DocumentSendHistory = DocumentSendLog
 
@@ -451,7 +452,9 @@ export default function DocumentSenderPage() {
   // 문서 유형별 기본 제목 및 내용 생성
   const generateDocumentContent = (type: string, orderId?: string) => {
     const order = orderId ? orders.find(o => o.id === orderId) : null
-    const customerName = order?.customer.name || 'Customer'
+    const customerName = order
+      ? resolveOrderCustomerGreetingName(order.customer)
+      : 'Customer'
     const companyName = defaultTemplate?.company.name || COMPANY_LEGAL.companyName
     const brandName = getCompanyBrandName(companyName)
     
@@ -598,7 +601,7 @@ If you have any questions, please contact us.`
             ...prev,
             subject: `Tax Invoice ${invoice.invoiceMeta.invoiceNumber} from ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}`,
             content:
-              `Dear ${order.customer.name},\n\n` +
+              `Dear ${resolveOrderCustomerGreetingName(order.customer)},\n\n` +
               `We appreciate your business with ${getCompanyBrandName(defaultTemplate?.company.name || COMPANY_LEGAL.companyName)}.\n\n` +
               `Please find the attached tax invoice (${invoice.invoiceMeta.invoiceNumber}) for your recent order/service.\n\n` +
               `Payment Instructions:\n` +
@@ -4146,10 +4149,10 @@ If you have any questions, please contact us.`
                             const isInvoice = createDocumentType === 'invoice'
                             const docLabel = isInvoice ? 'tax invoice' : 'quote'
                             
-                            const recipientDisplayName =
-                              (currentData.billing.companyName || '').trim() ||
-                              (currentData.billing.name || '').trim() ||
-                              'Customer'
+                            const company = (currentData.billing.companyName || '').trim()
+                            const rawPerson = (currentData.billing.name || '').trim()
+                            const person = rawPerson ? formatCustomerDisplayName(rawPerson) : ''
+                            const recipientDisplayName = company || person || 'Customer'
 
                             await emailService.sendResponse({
                               customerEmail: emailToSend,

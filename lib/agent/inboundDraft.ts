@@ -8,6 +8,7 @@
  */
 
 import { bespokeInboundSubject, formatBespokeStickerPayloadSummary } from './bespokeRequestSummary'
+import { formatCustomerDisplayName } from '../formatCustomerDisplayName'
 
 export type InboundDraftChannel = 'message' | 'bespoke'
 
@@ -85,8 +86,7 @@ export function formatInboundIntentLabel(hint: string): string {
 }
 
 function cleanName(name: string): string {
-  const n = name.trim()
-  return n || 'there'
+  return formatCustomerDisplayName(name, 'there')
 }
 
 /** Print / name-label / custom product language (Contact form — not the Bespoke channel). */

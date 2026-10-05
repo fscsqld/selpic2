@@ -16,6 +16,7 @@ import {
   formatOrderItemPreorderNote,
   orderIncludesPreorder,
 } from '@/lib/marketSPreorder'
+import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 
 export { resolveAdminNotificationRecipients } from '@/lib/server/adminNotificationRecipients'
 
@@ -504,7 +505,7 @@ export async function sendPartnerGrantAccountConfirmation(input: {
 }
 
 export async function notifyAdminsOfNewOrder(order: OrderRecord) {
-  const customerName = order.customer?.name || 'Customer'
+  const customerName = resolveOrderCustomerGreetingName(order.customer)
   const customerEmail = order.customer?.email || '—'
   const paymentLabel = order.paymentMethodName || order.paymentMethod || '—'
   const isPreorder = orderIncludesPreorder(order)

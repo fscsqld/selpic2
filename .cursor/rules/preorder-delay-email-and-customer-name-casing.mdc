@@ -1,0 +1,36 @@
+---
+description: Pre-order delay email sample + Title Case customer names in transactional mail
+globs: lib/orderPreorderFulfillment.ts,lib/formatCustomerDisplayName.ts,lib/orderConfirmationEmail.ts,lib/depositConfirmedEmail.ts,lib/emailService.ts,app/actions/emails.ts
+alwaysApply: false
+---
+
+# Pre-order delay email + customer name casing (learned 2026-10-05)
+
+Owner-approved delay notice tone (Emma Kim / ORD-muuv8629 sample). Signature + confidentiality stay in transactional branding — do not duplicate Kind regards / address block in the HTML body.
+
+## Delay email structure (`buildPreorderDelayEmailHtml`)
+
+1. Dear {Title Case name},
+2. Thank you for your patience… update regarding estimated dispatch date…
+3. Reason paragraph — default: international transit and customs delays (see `MARKET_S_PREORDER_DELAY_DEFAULT_REASON`). Admin optional note **replaces** the default reason.
+4. **Updated Ship Date** block: Order ID, Pre-order Item(s), Previous Ship Date, New Ship Date
+5. AusPost transit starts after dispatch (on or after updated date), not from payment date
+6. Apology + reply / info@selpic.com.au
+
+## Customer names in emails
+
+Use `formatCustomerDisplayName` / `resolveOrderCustomerGreetingName` (`lib/formatCustomerDisplayName.ts`).
+
+| Input | Greeting |
+|---|---|
+| `EMMA kim` / `emma KIM` | `Emma Kim` |
+| Missing name, email `emma.kim@…` | `Emma Kim` |
+| Empty | `Customer` (inbound drafts: `there`) |
+
+**Do** Title Case personal names on Dear lines (confirmation, deposit confirmed, delay, inbound drafts, document/invoice personal billing names).
+
+**Do not** Title Case company billing names (keep `billing.companyName` as entered). Do not invent Mc*/Mac* special cases unless asked.
+
+## Cousins
+
+Market S pre-order fulfillment UI: Admin → Orders → order detail delay panel. Refund §4/§5 copy is separate.
