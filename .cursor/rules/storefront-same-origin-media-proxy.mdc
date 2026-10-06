@@ -1,0 +1,20 @@
+# Same-origin storefront media proxy (learned 2026-10-06)
+
+**Invariant:** Customers who can open `selpic.com.au` but **cannot reach** `*.supabase.co` must still see CMS/catalog images.
+
+## Evidence
+
+Customer phone: `bmeyyierrvjbjikliheo.supabase.co` → Chrome “This site can't be reached”. Owner phone opens the same WebP fine. Site HTML loads; only Storage host fails.
+
+## Fix (shipped)
+
+- `/api/storefront-media?u=` — allowlisted public Storage fetch + cache headers
+- `toSameOriginStorefrontMediaUrl` / `resolveStorefrontImageSrc` rewrite display URLs
+- Wired on home hero/category, header logo, ProductCard, ProductGallery, SlidingBackground, Market S hub
+- Catalog save unwraps proxy URLs via `canonicalStorefrontMediaUrl` (do not persist `/api/storefront-media?…` as source of truth)
+
+## Do / Do not
+
+**Do** — Keep CMS/catalog canonical URLs as `https://…supabase.co/storage/v1/object/public/…`. Rewrite only at display/proxy.
+
+**Do not** — Open-proxy arbitrary hosts; save proxied paths into Supabase CMS; blame Oct 5 admin/email deploys for this class of failure.

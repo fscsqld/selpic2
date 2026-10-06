@@ -1,6 +1,7 @@
 import type { CatalogProductRecord } from '@/lib/catalogProductRecord'
 import { sanitizeMixedLabelsSheetBundles } from '@/lib/mixedLabelsPricing'
 import { sanitizeStickerSheetBundles } from '@/lib/stickerSheetBundles'
+import { canonicalStorefrontMediaUrl } from './storefrontMediaProxy'
 import type { BundleItem, CustomizationOption, Product } from '@/lib/store'
 
 const MAX_NAME = 500
@@ -13,7 +14,8 @@ const MAX_OPTION_STRING = 500
 
 export function publicCatalogImageUrl(image?: string): string | undefined {
   if (!image || typeof image !== 'string') return undefined
-  const t = image.trim()
+  // Never persist same-origin proxy wrappers as catalog source-of-truth.
+  const t = canonicalStorefrontMediaUrl(image.trim())
   if (!t || t === 'undefined') return undefined
   if (t.startsWith('indexeddb://') || t.startsWith('data:')) return undefined
   if (t.startsWith('http://') || t.startsWith('https://') || t.startsWith('/')) return t

@@ -54,11 +54,14 @@ describe('optimizeStorefrontImageUrl', () => {
     expect(out).toContain('w=800')
   })
 
-  it('does not rewrite Supabase or same-origin URLs', () => {
+  it('leaves same-origin paths alone; proxies Supabase public storage by default', () => {
     const supabase =
       'https://xyz.supabase.co/storage/v1/object/public/bucket/hero.png'
-    expect(optimizeStorefrontImageUrl(supabase)).toBe(supabase)
     expect(optimizeStorefrontImageUrl('/images/local.jpg')).toBe('/images/local.jpg')
+    expect(optimizeStorefrontImageUrl(supabase, { sameOriginProxy: false })).toBe(supabase)
+    const proxied = optimizeStorefrontImageUrl(supabase)
+    expect(proxied.startsWith('/api/storefront-media?u=')).toBe(true)
+    expect(proxied).toContain(encodeURIComponent(supabase))
   })
 
   it('passes through empty and data URLs', () => {

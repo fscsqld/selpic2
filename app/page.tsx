@@ -298,14 +298,17 @@ function computeVideoSlideSafeSrc(raw: string): string {
   const trimmedSrc = (raw || '').trim()
   if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) return ''
   if (/sample-videos\.com/i.test(trimmedSrc)) return ''
-  return trimmedSrc.startsWith('data:') ||
+  const httpsNormalized =
+    trimmedSrc.startsWith('data:') ||
     trimmedSrc.startsWith('blob:') ||
     trimmedSrc.startsWith('http://') ||
     trimmedSrc.startsWith('https://')
-    ? trimmedSrc.startsWith('http://')
-      ? `https://${trimmedSrc.slice('http://'.length)}`
-      : trimmedSrc
-    : encodeURI(trimmedSrc)
+      ? trimmedSrc.startsWith('http://')
+        ? `https://${trimmedSrc.slice('http://'.length)}`
+        : trimmedSrc
+      : encodeURI(trimmedSrc)
+  // Same-origin proxy when customers cannot reach *.supabase.co (video + poster path).
+  return resolveStorefrontImageSrc(httpsNormalized) || httpsNormalized
 }
 
 /** Mobile / Save-Data / slow-2g: delay MP4 so LCP can be the WebP fallback. Desktop loads sooner. */

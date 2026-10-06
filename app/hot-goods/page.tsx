@@ -28,6 +28,7 @@ import {
   MARKET_S_PREORDER_CTA,
   type MarketSSalesMode,
 } from '@/lib/marketSPreorder'
+import { resolveStorefrontImageSrc } from '@/lib/optimizeStorefrontImageUrl'
 
 // Market S 상품 타입 정의
 interface MarketSProduct {
@@ -514,9 +515,15 @@ export default function HotGoodsPage() {
               {openPreorderProducts[0]?.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={openPreorderProducts[0].image}
+                  src={
+                    resolveStorefrontImageSrc(openPreorderProducts[0].image) ||
+                    openPreorderProducts[0].image
+                  }
                   alt={openPreorderProducts[0].name}
                   className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
                 />
               ) : null}
             </div>
@@ -646,16 +653,22 @@ export default function HotGoodsPage() {
                 {(product as any).hasDetailPage !== false ? (
                   <Link href={`/products/${product.id}`}>
                     <img
-                      src={product.image}
+                      src={resolveStorefrontImageSrc(product.image) || product.image}
                       alt={product.name}
                       className="w-full h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                      onError={(e) => {
+                        e.currentTarget.src = '/apple-touch-icon.png'
+                      }}
                     />
                   </Link>
                 ) : (
                   <img
-                    src={product.image}
+                    src={resolveStorefrontImageSrc(product.image) || product.image}
                     alt={product.name}
                     className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = '/apple-touch-icon.png'
+                    }}
                   />
                 )}
                 {isOutOfStock && !preorderOpen && (

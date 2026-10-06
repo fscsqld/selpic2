@@ -12,6 +12,7 @@ import { useTranslation } from '@/lib/useTranslation'
 import { useContentStore } from '@/lib/contentStore'
 import { pickLogoImageItem } from '@/lib/pickLogoImageItem'
 import { HEADER_LOGO_STATIC_FALLBACKS } from '@/lib/headerLogoDisplay'
+import { toSameOriginStorefrontMediaUrl } from '@/lib/storefrontMediaProxy'
 
 const HeaderAccountMenu = dynamic(() => import('@/components/header/HeaderAccountMenu'), {
   ssr: false,
@@ -27,14 +28,22 @@ const HeaderNavDrawer = dynamic(() => import('@/components/header/HeaderNavDrawe
 const HEADER_LOGO_ALT_EN =
   'Selpic — Australia custom stickers and merchandise'
 
-/** `next/image` + preload: local app assets only (not remote CMS or blob URLs). */
+/** `next/image` + preload: local app assets only (not remote CMS, proxy, or blob URLs). */
 function isOptimizablePublicImageSrc(src: string): boolean {
   const s = src?.trim() ?? ''
   if (!s || s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('indexeddb:')) {
     return false
   }
   if (/^https?:\/\//i.test(s)) return false
+  // Same-origin Supabase media proxy — use plain <img>, not next/image optimizer.
+  if (s.startsWith('/api/storefront-media')) return false
   return s.startsWith('/')
+}
+
+function resolveHeaderLogoDisplaySrc(src: string): string {
+  const primary = src?.trim() || ''
+  if (!primary || primary.startsWith('indexeddb://')) return ''
+  return toSameOriginStorefrontMediaUrl(primary) || primary
 }
 
 /**
@@ -172,7 +181,7 @@ export function HeaderLogoImage({
   })
   const [displaySrc, setDisplaySrc] = useState(() => {
     if (!primary || primary.startsWith('indexeddb://')) return staticFallbacks[0] || ''
-    return primary
+    return resolveHeaderLogoDisplaySrc(primary)
   })
   const [fallbackIndex, setFallbackIndex] = useState(0)
   const [exhausted, setExhausted] = useState(false)
@@ -222,7 +231,7 @@ export function HeaderLogoImage({
 
     setPhase('primary')
     phaseRef.current = 'primary'
-    setDisplaySrc(primary)
+    setDisplaySrc(resolveHeaderLogoDisplaySrc(primary))
     return () => {
       cancelled = true
       revokeBlob()

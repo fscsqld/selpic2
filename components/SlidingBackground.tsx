@@ -2,6 +2,13 @@
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { CategoryHeroSlide } from '@/lib/contentStore'
+import { toSameOriginStorefrontMediaUrl } from '@/lib/storefrontMediaProxy'
+
+function proxySlideSrc(src: string): string {
+  const s = (src || '').trim()
+  if (!s || s.startsWith('indexeddb://')) return ''
+  return toSameOriginStorefrontMediaUrl(s) || s
+}
 
 // 디바운스 유틸리티 함수
 function debounce<T extends (...args: any[]) => void>(
@@ -26,8 +33,8 @@ interface SlidingBackgroundProps {
 }
 
 const ImageSlide = ({ src }: { src: string }) => {
-  const s = (src || '').trim()
-  const imageError = !s || s.startsWith('indexeddb://')
+  const s = proxySlideSrc(src)
+  const imageError = !s
   const actualSrc = s
 
   if (imageError) {
@@ -39,6 +46,8 @@ const ImageSlide = ({ src }: { src: string }) => {
   }
 
   // 해상도 향상: 2x 크기로 배경을 그린 뒤 scale(0.5)로 축소해 Retina/고DPI에서 선명하게 표시
+  // Escape for CSS url() — proxy query strings are %-encoded (no quotes).
+  const cssUrl = actualSrc.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
   return (
     <div className="w-full h-full overflow-hidden" style={{ isolation: 'isolate' }}>
       <div
@@ -48,7 +57,7 @@ const ImageSlide = ({ src }: { src: string }) => {
           height: '200%',
           transform: 'scale(0.5)',
           transformOrigin: '0 0',
-          backgroundImage: `url('${actualSrc}')`,
+          backgroundImage: `url('${cssUrl}')`,
           imageRendering: 'auto'
         }}
       />
@@ -70,16 +79,15 @@ const VideoSlide = ({
   pauseOnMobile?: boolean
   shouldPreload?: boolean // 현재 슬라이드인지 여부
 }) => {
-  const normalizedSrc = (src || '').trim()
+  const normalizedSrc = proxySlideSrc(src)
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  const [actualSrc, setActualSrc] = useState<string>(
-    normalizedSrc && !normalizedSrc.startsWith('indexeddb://') ? normalizedSrc : ''
-  )
+  const [actualSrc, setActualSrc] = useState<string>(normalizedSrc)
   const videoElementRef = useRef<HTMLVideoElement | null>(null)
   
-  const safeFallback =
+  const safeFallback = proxySlideSrc(
     fallbackImage && fallbackImage.trim() !== '' ? fallbackImage : '/images/logo.webp'
+  ) || '/images/logo.webp'
 
   // videoRef is notified from the <video ref> callback; keep this as a mount/update sync only.
   useEffect(() => {
@@ -89,20 +97,13 @@ const VideoSlide = ({
   }, [videoRef])
 
   useEffect(() => {
-    const trimmedSrc = (src || '').trim()
-    if (!trimmedSrc || trimmedSrc.startsWith('indexeddb://')) {
+    const safeSrc = proxySlideSrc(src)
+    if (!safeSrc) {
       setActualSrc('')
       setVideoError(true)
       setVideoLoaded(false)
       return
     }
-    const safeSrc =
-      trimmedSrc.startsWith('data:') ||
-      trimmedSrc.startsWith('blob:') ||
-      trimmedSrc.startsWith('http://') ||
-      trimmedSrc.startsWith('https://')
-        ? trimmedSrc
-        : encodeURI(trimmedSrc)
     setActualSrc(safeSrc)
     setVideoError(false)
     setVideoLoaded(false)

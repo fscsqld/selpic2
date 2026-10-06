@@ -19,6 +19,7 @@ import {
 } from '@/lib/productCardMerchBadges'
 import { isStickerSheetSpecDescription } from '@/lib/stickerSheetSpecDescription'
 import { isProductOutOfStock } from '@/lib/likedProductStock'
+import { resolveStorefrontImageSrc } from '@/lib/optimizeStorefrontImageUrl'
 import ProductLikeButton from '@/components/ProductLikeButton'
 
 export type { ProductCardImageLayout }
@@ -57,9 +58,11 @@ const ProductImage = ({
     )
   }
 
+  const displaySrc = resolveStorefrontImageSrc(src) || src
+
   return (
     <img
-      src={src}
+      src={displaySrc}
       alt={alt}
       className={
         fill

@@ -3,14 +3,22 @@
  * Does not change Hero look — only which URL is requested (and Unsplash dimensions).
  *
  * Cousins: indexeddb:// leftovers, sample-videos.com, http:// CMS, oversized Unsplash,
- * empty/blob/data, non-Unsplash CDN (leave dimensions alone).
+ * empty/blob/data, non-Unsplash CDN (leave dimensions alone),
+ * customer networks that block `*.supabase.co` (same-origin media proxy).
  */
+
+import { toSameOriginStorefrontMediaUrl } from './storefrontMediaProxy'
 
 export type OptimizeStorefrontImageOpts = {
   /** Max Unsplash `w` (default 1080 — mobile LCP friendly; still fine full-bleed). */
   maxWidth?: number
   /** Unsplash `q` 1–100 (default 55). */
   quality?: number
+  /**
+   * When false, skip Supabase → `/api/storefront-media` rewrite (tests / admin preview).
+   * Default true on the storefront.
+   */
+  sameOriginProxy?: boolean
 }
 
 const DEAD_HOST_RE =
@@ -49,26 +57,31 @@ export function optimizeStorefrontImageUrl(
   if (raw.startsWith('http://')) {
     raw = `https://${raw.slice('http://'.length)}`
   }
-  if (!/images\.unsplash\.com/i.test(raw)) return raw
 
-  const maxWidth = opts.maxWidth ?? 1080
-  const quality = opts.quality ?? 55
+  let out = raw
+  if (/images\.unsplash\.com/i.test(raw)) {
+    const maxWidth = opts.maxWidth ?? 1080
+    const quality = opts.quality ?? 55
 
-  try {
-    const parsed = new URL(raw)
-    const currentW = Number(parsed.searchParams.get('w') || 0)
-    if (!currentW || currentW > maxWidth) {
-      parsed.searchParams.set('w', String(maxWidth))
+    try {
+      const parsed = new URL(raw)
+      const currentW = Number(parsed.searchParams.get('w') || 0)
+      if (!currentW || currentW > maxWidth) {
+        parsed.searchParams.set('w', String(maxWidth))
+      }
+      parsed.searchParams.set('q', String(Math.min(100, Math.max(1, quality))))
+      parsed.searchParams.set('auto', 'format')
+      if (!parsed.searchParams.get('fit')) {
+        parsed.searchParams.set('fit', 'crop')
+      }
+      out = parsed.toString()
+    } catch {
+      out = raw
     }
-    parsed.searchParams.set('q', String(Math.min(100, Math.max(1, quality))))
-    parsed.searchParams.set('auto', 'format')
-    if (!parsed.searchParams.get('fit')) {
-      parsed.searchParams.set('fit', 'crop')
-    }
-    return parsed.toString()
-  } catch {
-    return raw
   }
+
+  if (opts.sameOriginProxy === false) return out
+  return toSameOriginStorefrontMediaUrl(out)
 }
 
 /** Optimize when requestable; otherwise empty string (caller uses local fallback). */

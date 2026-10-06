@@ -11,6 +11,13 @@ import {
 } from '@/lib/mediaGalleryLocal'
 import { ImageIcon } from 'lucide-react'
 import ProductImageZoomPan from '@/components/ProductImageZoomPan'
+import { toSameOriginStorefrontMediaUrl } from '@/lib/storefrontMediaProxy'
+
+function proxyGalleryUrl(url: string): string {
+  const t = (url || '').trim()
+  if (!t) return t
+  return toSameOriginStorefrontMediaUrl(t) || t
+}
 
 function isValidFallbackUrl(url: unknown): url is string {
   return typeof url === 'string' && url.trim() !== '' && url !== 'undefined' && !url.startsWith('undefined')
@@ -87,9 +94,10 @@ export default function ProductGallery({
   // 첫 방문 시에도 fallback 이미지를 즉시 표시 (미디어 스토어 복원 전에도 상품 대표 이미지 노출)
   const [galleryImages, setGalleryImages] = useState<any[]>(() => {
     if (isValidFallbackUrl(fallbackImage)) {
+      const proxied = proxyGalleryUrl(fallbackImage)
       return [{
-        original: fallbackImage,
-        thumbnail: fallbackImage,
+        original: proxied,
+        thumbnail: proxied,
         originalAlt: 'Product image',
         thumbnailAlt: 'Product thumbnail',
         description: '',
@@ -332,7 +340,7 @@ export default function ProductGallery({
         const finalFallback =
           fallbackImage.startsWith('indexeddb://') || isSuppressedMediaUrl(fallbackImage)
             ? ''
-            : fallbackImage
+            : proxyGalleryUrl(fallbackImage)
 
         if (!cancelled) {
           if (finalFallback) {
@@ -405,8 +413,8 @@ export default function ProductGallery({
         const finalThumbnail = isVideo && videoThumbnail ? videoThumbnail : imageUrl
         
         return {
-          original: originalUrl,
-          thumbnail: finalThumbnail || imageUrl,
+          original: proxyGalleryUrl(originalUrl),
+          thumbnail: proxyGalleryUrl(finalThumbnail || imageUrl),
           originalAlt: file.name || 'Product media',
           thumbnailAlt: file.name || 'Product thumbnail',
           description: '', // 갤러리에는 이미지만 표시, 텍스트(설명) 제거
@@ -420,8 +428,8 @@ export default function ProductGallery({
           backupUrls: triedUrls,
           // 🆕 동영상 정보
           isVideo: isVideo,
-          videoUrl: isVideo ? originalUrl : undefined,
-          fallbackImageUrl: isVideo && fallbackImage ? fallbackImage : undefined
+          videoUrl: isVideo ? proxyGalleryUrl(originalUrl) : undefined,
+          fallbackImageUrl: isVideo && fallbackImage ? proxyGalleryUrl(fallbackImage) : undefined
         }
         })
       
@@ -444,7 +452,7 @@ export default function ProductGallery({
           !fallbackImage.startsWith('indexeddb://') &&
           !isSuppressedMediaUrl(fallbackImage)
         ) {
-          const finalFallbackImage = fallbackImage
+          const finalFallbackImage = proxyGalleryUrl(fallbackImage)
           console.log('✅ [ProductGallery] Using fallback image:', finalFallbackImage)
           formattedImages.push({
             original: finalFallbackImage,
