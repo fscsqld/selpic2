@@ -1,0 +1,19 @@
+# PDP gallery: primary image is slide 1 (learned 2026-10-14)
+
+**Invariant:** On `/products/[id]`, if the catalog has a usable `product.image` (passed as `fallbackImage`), it is always gallery **slide 1**. Media Management links are **additional** shots after that.
+
+## Behavior
+
+| Catalog primary | Linked media | Gallery |
+|---|---|---|
+| Yes | None | Primary only |
+| Yes | Extra shots | Primary first, then linked (same URL as primary dropped) |
+| No | Linked | Linked only |
+
+Helper: `lib/productGallerySlides.ts` (`orderProductGallerySlides`).
+
+## Do / Do not
+
+**Do** — Keep list/card `product.image` as source of truth for slide 1; dedupe by normalized URL (incl. storefront-media proxy).
+
+**Do not** — Hide primary when any gallery link exists; require admins to re-link primary into Media Management for every SKU after this ships.

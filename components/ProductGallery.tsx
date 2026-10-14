@@ -12,6 +12,10 @@ import {
 import { ImageIcon } from 'lucide-react'
 import ProductImageZoomPan from '@/components/ProductImageZoomPan'
 import { toSameOriginStorefrontMediaUrl } from '@/lib/storefrontMediaProxy'
+import {
+  isUsablePrimaryGalleryUrl,
+  orderProductGallerySlides,
+} from '@/lib/productGallerySlides'
 
 function proxyGalleryUrl(url: string): string {
   const t = (url || '').trim()
@@ -20,7 +24,27 @@ function proxyGalleryUrl(url: string): string {
 }
 
 function isValidFallbackUrl(url: unknown): url is string {
-  return typeof url === 'string' && url.trim() !== '' && url !== 'undefined' && !url.startsWith('undefined')
+  return isUsablePrimaryGalleryUrl(typeof url === 'string' ? url : '')
+}
+
+function buildPrimaryGallerySlide(primaryUrl: string) {
+  const proxied = proxyGalleryUrl(primaryUrl)
+  return {
+    original: proxied,
+    thumbnail: proxied,
+    originalAlt: 'Product image',
+    thumbnailAlt: 'Product thumbnail',
+    description: '',
+    originalClass: 'gallery-image',
+    thumbnailClass: 'gallery-thumbnail',
+    fileId: 'primary',
+    fileName: 'primary',
+    backupUrls: [proxied] as string[],
+    isVideo: false,
+    videoUrl: undefined as string | undefined,
+    fallbackImageUrl: undefined as string | undefined,
+    compareUrl: primaryUrl,
+  }
 }
 
 /** Rows not on the server snapshot yet (blob/data) or very recent HTTPS uploads before snapshot refresh. */
@@ -441,46 +465,25 @@ export default function ProductGallery({
             isVideo: isVideo,
             videoUrl: isVideo ? proxyGalleryUrl(originalUrl) : undefined,
             fallbackImageUrl: isVideo && fallbackImage ? proxyGalleryUrl(fallbackImage) : undefined,
+            compareUrl: originalUrl,
           }
         })
 
       const formattedImagesResults = await Promise.all(formattedImagesPromises)
-      let formattedImages = formattedImagesResults.filter(
+      const linkedSlides = formattedImagesResults.filter(
         (img): img is NonNullable<typeof img> =>
           img !== null && !!img.original && !!img.thumbnail
       )
 
-      if (formattedImages.length === 0) {
-        const isValidFallback =
-          fallbackImage &&
-          typeof fallbackImage === 'string' &&
-          fallbackImage.trim() !== '' &&
-          fallbackImage !== 'undefined' &&
-          !fallbackImage.startsWith('undefined')
-
-        if (
-          isValidFallback &&
-          !fallbackImage.startsWith('indexeddb://') &&
-          !isSuppressedMediaUrl(fallbackImage)
-        ) {
-          const finalFallbackImage = proxyGalleryUrl(fallbackImage)
-          formattedImages.push({
-            original: finalFallbackImage,
-            thumbnail: finalFallbackImage,
-            originalAlt: 'Product image',
-            thumbnailAlt: 'Product thumbnail',
-            description: '',
-            originalClass: 'gallery-image',
-            thumbnailClass: 'gallery-thumbnail',
-            fileId: 'fallback',
-            fileName: 'fallback',
-            backupUrls: [] as string[],
-            isVideo: false,
-            videoUrl: undefined,
-            fallbackImageUrl: undefined,
-          })
-        }
-      }
+      // Catalog primary always leads; linked Media Management shots follow (URL-deduped).
+      const primaryAllowed =
+        isUsablePrimaryGalleryUrl(fallbackImage) && !isSuppressedMediaUrl(fallbackImage)
+      const formattedImages = orderProductGallerySlides({
+        primaryUrl: fallbackImage,
+        primaryAllowed,
+        linked: linkedSlides,
+        buildPrimary: () => buildPrimaryGallerySlide(String(fallbackImage).trim()),
+      })
 
       commitGallery(formattedImages)
     }
