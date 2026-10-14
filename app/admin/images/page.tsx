@@ -372,13 +372,20 @@ function ImageManagementPageContent() {
       flushMediaStoreToLocalStorage(after)
       // Prevent syncMediaFromServer from refilling zustand from stale server when local list is empty.
       lastRemoteMediaVersionRef.current = new Date().toISOString()
+      // Push server snapshot BEFORE any hydrate/merge from a stale public GET.
+      const synced = await forceMediaSync()
       const { hydrateMediaStoreFromLocalStorage } = await import('@/lib/mediaGalleryLocal')
       hydrateMediaStoreFromLocalStorage()
       await clearStorefrontProductsUsingMediaUrls(droppedUrls)
       await clearProductPrimaryWhenNoGalleryMedia(affectedProductIds)
-      const synced = await forceMediaSync()
       if (synced) {
         lastRemoteMediaVersionRef.current = new Date().toISOString()
+        // Drop selection + force UI list to match store (selected rows must disappear immediately).
+        setSelectedFiles((prev) => {
+          const next = new Set(prev)
+          for (const id of ids) next.delete(id)
+          return next
+        })
         showNotification('success', successMessage)
         return true
       }

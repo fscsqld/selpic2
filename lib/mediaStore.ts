@@ -4,7 +4,11 @@ import imageCompression from 'browser-image-compression'
 import { buildSelpicStoragePath, uploadToSelpicContents } from '@/lib/selpicStorageUpload'
 import { scheduleMediaSyncToServer } from '@/lib/mediaSyncScheduler'
 import { scheduleLogAdminActivity } from '@/lib/loadLogAdminActivity'
-import { hasClientMediaStore, recordDeletedMediaTombstone } from '@/lib/mediaDeleteTombstone'
+import {
+  getSuppressedMediaIds,
+  hasClientMediaStore,
+  recordDeletedMediaTombstone,
+} from '@/lib/mediaDeleteTombstone'
 
 // 표준 태그 상수 정의
 export const STANDARD_MEDIA_TAGS = {
@@ -516,10 +520,16 @@ scheduleLogAdminActivity({
             return
           }
           const memIds = new Set(inMemory.map((f) => f.id))
-          const fromOtherTab = fromLs.filter((f) => !memIds.has(f.id))
+          // Never resurrect rows this tab just deleted (session tombstones).
+          const suppressedIds = getSuppressedMediaIds()
+          const fromOtherTab = fromLs.filter(
+            (f) => f?.id && !memIds.has(f.id) && !suppressedIds.has(String(f.id))
+          )
           const merged = fromOtherTab.length > 0 ? [...inMemory, ...fromOtherTab] : inMemory
-          set({ mediaFiles: merged })
-          console.log('🔄 [MediaStore] Synced mediaFiles from localStorage:', merged.length, 'files')
+          if (merged !== inMemory) {
+            set({ mediaFiles: merged })
+            console.log('🔄 [MediaStore] Synced mediaFiles from localStorage:', merged.length, 'files')
+          }
         } catch (e) {
           console.warn('[MediaStore] refreshMediaFilesFromStorage failed:', e)
         }

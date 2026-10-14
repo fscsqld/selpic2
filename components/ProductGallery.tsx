@@ -88,6 +88,7 @@ export default function ProductGallery({
     if (!productId || typeof window === 'undefined') return
     hydrateMediaStoreFromLocalStorage()
     refreshMediaFilesFromStorage()
+    // Single suppression bump — a second mount effect used to double-rebuild the gallery (PDP flicker).
     bumpSuppression()
   }, [productId, refreshMediaFilesFromStorage, bumpSuppression])
 
@@ -109,7 +110,19 @@ export default function ProductGallery({
   })
   const [isLoading, setIsLoading] = useState(() => !isValidFallbackUrl(fallbackImage))
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set())
+  const failedImageIdsRef = useRef<Set<string>>(new Set())
   const retryAttemptsRef = useRef<Record<string, number>>({})
+  const gallerySigRef = useRef<string>('')
+
+  useEffect(() => {
+    failedImageIdsRef.current = failedImageIds
+  }, [failedImageIds])
+
+  const galleryItemsSignature = useCallback((items: Array<{ original?: string; thumbnail?: string; fileId?: string }>) => {
+    return items
+      .map((it) => `${it.fileId || ''}|${it.original || ''}|${it.thumbnail || ''}`)
+      .join('||')
+  }, [])
 
   // Local admin: membership from flushed localStorage (not stale Zustand / server snapshot).
   const productMedia = useMemo(() => {
@@ -215,10 +228,6 @@ export default function ProductGallery({
     }
   }, [productId, bumpRemoteRefresh, bumpSuppression, refreshMediaFilesFromStorage])
 
-  useEffect(() => {
-    bumpSuppression()
-  }, [productId, bumpSuppression])
-
   /**
    * Local `media-store`: never merge stale `/api/media/public` rows (POST may lag).
    * Production visitors (no media-store): hydrate gallery URLs from server snapshot only.
@@ -323,137 +332,138 @@ export default function ProductGallery({
 
   // react-image-gallery 형식으로 변환 (모든 이미지 유효성 검사 포함)
   useEffect(() => {
+    let cancelled = false
+
+    const commitGallery = (next: any[]) => {
+      if (cancelled) return
+      const sig = galleryItemsSignature(next)
+      if (sig === gallerySigRef.current) {
+        setIsLoading(false)
+        return
+      }
+      gallerySigRef.current = sig
+      setGalleryImages(next)
+      setIsLoading(false)
+    }
+
     // 연결된 미디어가 없으면 fallback만 즉시 표시 (로딩 스피너 없이 첫 방문에서도 이미지 노출)
     if (effectiveProductMedia.length === 0) {
-      let cancelled = false
-
-      const showFallback = async () => {
-        if (!isValidFallbackUrl(fallbackImage) || isSuppressedMediaUrl(fallbackImage)) {
-          if (!cancelled) {
-            setGalleryImages([])
-            setIsLoading(false)
-          }
-          return
-        }
-
-        setIsLoading(true)
-        const finalFallback =
-          fallbackImage.startsWith('indexeddb://') || isSuppressedMediaUrl(fallbackImage)
-            ? ''
-            : proxyGalleryUrl(fallbackImage)
-
-        if (!cancelled) {
-          if (finalFallback) {
-            setGalleryImages([{
-              original: finalFallback,
-              thumbnail: finalFallback,
-              originalAlt: 'Product image',
-              thumbnailAlt: 'Product thumbnail',
-              description: '',
-              originalClass: 'gallery-image',
-              thumbnailClass: 'gallery-thumbnail'
-            }])
-          } else {
-            setGalleryImages([])
-          }
-          setIsLoading(false)
+      if (!isValidFallbackUrl(fallbackImage) || isSuppressedMediaUrl(fallbackImage)) {
+        commitGallery([])
+        return () => {
+          cancelled = true
         }
       }
 
-      showFallback()
+      // Keep showing current frame while resolving fallback — avoid full-gallery spinner flicker.
+      if (gallerySigRef.current === '') setIsLoading(true)
+      const finalFallback =
+        fallbackImage.startsWith('indexeddb://') || isSuppressedMediaUrl(fallbackImage)
+          ? ''
+          : proxyGalleryUrl(fallbackImage)
+
+      commitGallery(
+        finalFallback
+          ? [
+              {
+                original: finalFallback,
+                thumbnail: finalFallback,
+                originalAlt: 'Product image',
+                thumbnailAlt: 'Product thumbnail',
+                description: '',
+                originalClass: 'gallery-image',
+                thumbnailClass: 'gallery-thumbnail',
+                fileId: 'fallback',
+              },
+            ]
+          : []
+      )
       return () => {
         cancelled = true
       }
-      return
     }
 
-    setIsLoading(true)
-    console.log('🖼️ [ProductGallery] Processing media:', {
-      productId,
-      productMediaCount: effectiveProductMedia.length,
-      fallbackImage: fallbackImage ? 'exists' : 'none',
-      failedImageIdsCount: failedImageIds.size
-    })
+    // Soft rebuild: only show the blocking spinner on the first empty paint.
+    if (gallerySigRef.current === '') setIsLoading(true)
 
     const processMedia = async () => {
       const formattedImagesPromises = effectiveProductMedia
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) // order 순서대로 정렬
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map(async (file) => {
           const { imageUrl, originalUrl, triedUrls } = await getImageUrlWithFallback(file)
-        
-        // URL 유효성 검사
-        if (!imageUrl || !originalUrl) {
-          console.warn(`⚠️ [ProductGallery] Invalid URL for file: ${file.name || file.id}`, {
-            webpUrl: file.webpUrl,
-            url: file.url,
-            dataUrl: file.dataUrl ? 'exists' : 'none',
-            triedUrls
-          })
-          
-          // 실패한 이미지 ID 기록
-          if (file.id) {
-            setFailedImageIds(prev => new Set(prev).add(file.id))
+
+          if (!imageUrl || !originalUrl) {
+            if (file.id) {
+              setFailedImageIds((prev) => {
+                if (prev.has(file.id)) return prev
+                const next = new Set(prev)
+                next.add(file.id)
+                return next
+              })
+            }
+            return null
           }
-          
-          return null
-        }
-        
-        // 실패 목록에서 제거 (복구됨)
-        if (failedImageIds.has(file.id)) {
-          setFailedImageIds(prev => {
-            const newSet = new Set(prev)
-            newSet.delete(file.id)
-            return newSet
-          })
-        }
-        
-        // 🆕 동영상인 경우 Fallback Image 사용
-        const isVideo = file.type === 'video'
-        const videoThumbnail = isVideo && file.thumbnailUrl ? file.thumbnailUrl : (isVideo && fallbackImage ? fallbackImage : null)
-        const finalThumbnail = isVideo && videoThumbnail ? videoThumbnail : imageUrl
-        
-        return {
-          original: proxyGalleryUrl(originalUrl),
-          thumbnail: proxyGalleryUrl(finalThumbnail || imageUrl),
-          originalAlt: file.name || 'Product media',
-          thumbnailAlt: file.name || 'Product thumbnail',
-          description: '', // 갤러리에는 이미지만 표시, 텍스트(설명) 제거
-          // react-image-gallery가 지원하는 추가 속성
-          originalClass: 'gallery-image',
-          thumbnailClass: 'gallery-thumbnail',
-          // 파일 ID 저장 (에러 처리용)
-          fileId: file.id,
-          fileName: file.name || '',
-          // 백업 URL 목록 저장
-          backupUrls: triedUrls,
-          // 🆕 동영상 정보
-          isVideo: isVideo,
-          videoUrl: isVideo ? proxyGalleryUrl(originalUrl) : undefined,
-          fallbackImageUrl: isVideo && fallbackImage ? proxyGalleryUrl(fallbackImage) : undefined
-        }
+
+          if (failedImageIdsRef.current.has(file.id)) {
+            setFailedImageIds((prev) => {
+              if (!prev.has(file.id)) return prev
+              const newSet = new Set(prev)
+              newSet.delete(file.id)
+              return newSet
+            })
+          }
+
+          const isVideo = file.type === 'video'
+          const videoThumbnail =
+            isVideo && file.thumbnailUrl
+              ? file.thumbnailUrl
+              : isVideo && fallbackImage
+                ? fallbackImage
+                : null
+          const finalThumbnail = isVideo && videoThumbnail ? videoThumbnail : imageUrl
+          // Proxy backup URLs too — raw supabase backups vs proxied <img src> caused thrash/flicker.
+          const proxiedBackups = triedUrls
+            .map((u) => proxyGalleryUrl(u))
+            .filter((u, i, arr) => !!u && arr.indexOf(u) === i)
+
+          return {
+            original: proxyGalleryUrl(originalUrl),
+            thumbnail: proxyGalleryUrl(finalThumbnail || imageUrl),
+            originalAlt: file.name || 'Product media',
+            thumbnailAlt: file.name || 'Product thumbnail',
+            description: '',
+            originalClass: 'gallery-image',
+            thumbnailClass: 'gallery-thumbnail',
+            fileId: file.id,
+            fileName: file.name || '',
+            backupUrls: proxiedBackups,
+            isVideo: isVideo,
+            videoUrl: isVideo ? proxyGalleryUrl(originalUrl) : undefined,
+            fallbackImageUrl: isVideo && fallbackImage ? proxyGalleryUrl(fallbackImage) : undefined,
+          }
         })
-      
+
       const formattedImagesResults = await Promise.all(formattedImagesPromises)
       let formattedImages = formattedImagesResults.filter(
         (img): img is NonNullable<typeof img> =>
           img !== null && !!img.original && !!img.thumbnail
       )
 
-      // 연결된 이미지가 없고 fallback 이미지가 있으면 추가
       if (formattedImages.length === 0) {
-        const isValidFallback = fallbackImage && 
-                                typeof fallbackImage === 'string' && 
-                                fallbackImage.trim() !== '' && 
-                                fallbackImage !== 'undefined' &&
-                                !fallbackImage.startsWith('undefined')
-        
+        const isValidFallback =
+          fallbackImage &&
+          typeof fallbackImage === 'string' &&
+          fallbackImage.trim() !== '' &&
+          fallbackImage !== 'undefined' &&
+          !fallbackImage.startsWith('undefined')
+
         if (
           isValidFallback &&
           !fallbackImage.startsWith('indexeddb://') &&
           !isSuppressedMediaUrl(fallbackImage)
         ) {
           const finalFallbackImage = proxyGalleryUrl(fallbackImage)
-          console.log('✅ [ProductGallery] Using fallback image:', finalFallbackImage)
           formattedImages.push({
             original: finalFallbackImage,
             thumbnail: finalFallbackImage,
@@ -469,22 +479,17 @@ export default function ProductGallery({
             videoUrl: undefined,
             fallbackImageUrl: undefined,
           })
-        } else {
-          console.log('⚠️ [ProductGallery] No images found and fallback is invalid:', {
-            fallbackImage,
-            fallbackImageType: typeof fallbackImage
-          })
         }
-      } else {
-        console.log(`✅ [ProductGallery] Found ${formattedImages.length} linked image(s)`)
       }
 
-      setGalleryImages(formattedImages)
-      setIsLoading(false)
+      commitGallery(formattedImages)
     }
-    
-    processMedia()
-  }, [effectiveProductMedia, fallbackImage, productId, suppressionEpoch])
+
+    void processMedia()
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveProductMedia, fallbackImage, productId, suppressionEpoch, galleryItemsSignature])
 
   // 이미지가 없을 때
   if (isLoading) {
@@ -554,6 +559,14 @@ export default function ProductGallery({
           const handleImageError: ReactEventHandler<HTMLImageElement> = async (e) => {
             const img = e.currentTarget
             const currentSrc = img.src
+            const abs = (u: string) => {
+              try {
+                return new URL(u, typeof window !== 'undefined' ? window.location.origin : 'https://selpic.com.au')
+                  .href
+              } catch {
+                return u
+              }
+            }
 
             console.warn(`⚠️ [ProductGallery] Image load failed: ${safeAlt}`, {
               currentSrc,
@@ -563,12 +576,14 @@ export default function ProductGallery({
             })
 
             if (backupUrls.length > 0) {
-              const nextUrlIndex = backupUrls.findIndex((url: string) => url === currentSrc) + 1
+              const currentAbs = abs(currentSrc)
+              const matched = backupUrls.findIndex((url: string) => abs(String(url)) === currentAbs)
+              const nextUrlIndex = matched >= 0 ? matched + 1 : 0
               if (nextUrlIndex < backupUrls.length) {
                 const nextUrl = backupUrls[nextUrlIndex]
-                if (!nextUrl.startsWith('indexeddb://')) {
+                if (nextUrl && !String(nextUrl).startsWith('indexeddb://')) {
                   console.log(`🔄 [ProductGallery] Trying backup URL ${nextUrlIndex + 1}/${backupUrls.length}`)
-                  img.src = nextUrl
+                  img.src = proxyGalleryUrl(String(nextUrl)) || String(nextUrl)
                   return
                 }
               }

@@ -71,7 +71,10 @@ export function countProductGalleryMediaInLocalStorage(productId: string): numbe
 /** Align in-memory Zustand with flushed localStorage (prevents rehydrate resurrecting deletes). */
 export function hydrateMediaStoreFromLocalStorage(): void {
   if (typeof window === 'undefined' || !hasClientMediaStore()) return
-  const fromLs = readAllMediaFromLocalStorage()
+  const suppressedIds = getSuppressedMediaIds()
+  const fromLs = readAllMediaFromLocalStorage().filter(
+    (f) => f?.id && !suppressedIds.has(String(f.id))
+  )
   void import('@/lib/mediaStore').then(({ useMediaStore }) => {
     const current = useMediaStore.getState().mediaFiles
     const sig = (list: MediaFile[]) =>
