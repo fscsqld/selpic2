@@ -355,18 +355,9 @@ function ImageManagementPageContent() {
         flushMediaStoreToLocalStorage,
         urlsForMediaIds,
         clearStorefrontProductsUsingMediaUrls,
-        clearProductPrimaryWhenNoGalleryMedia,
       } = await import('@/lib/mediaDeleteSideEffects')
       const before = useMediaStore.getState().mediaFiles
       const droppedUrls = urlsForMediaIds(before, ids)
-      const affectedProductIds = [
-        ...new Set(
-          before
-            .filter((f) => ids.includes(f.id) && f.productId != null)
-            .map((f) => String(f.productId).trim())
-            .filter(Boolean)
-        ),
-      ]
       deleteMediaFilesFromStore(ids)
       const after = useMediaStore.getState().mediaFiles
       flushMediaStoreToLocalStorage(after)
@@ -376,8 +367,9 @@ function ImageManagementPageContent() {
       const synced = await forceMediaSync()
       const { hydrateMediaStoreFromLocalStorage } = await import('@/lib/mediaGalleryLocal')
       hydrateMediaStoreFromLocalStorage()
+      // Only clear catalog image/fallback when they pointed at the deleted file URL —
+      // never wipe an unrelated primary just because gallery links are empty.
       await clearStorefrontProductsUsingMediaUrls(droppedUrls)
-      await clearProductPrimaryWhenNoGalleryMedia(affectedProductIds)
       if (synced) {
         lastRemoteMediaVersionRef.current = new Date().toISOString()
         // Drop selection + force UI list to match store (selected rows must disappear immediately).

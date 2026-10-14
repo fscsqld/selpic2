@@ -17,3 +17,7 @@ Helper: `lib/productGallerySlides.ts` (`orderProductGallerySlides`).
 **Do** — Keep list/card `product.image` as source of truth for slide 1; dedupe by normalized URL (incl. storefront-media proxy).
 
 **Do not** — Hide primary when any gallery link exists; require admins to re-link primary into Media Management for every SKU after this ships.
+
+## Media delete vs primary (learned 2026-10-14)
+
+Deleting all Media Management links for a SKU must **not** blank `product.image`. Only clear catalog primary/fallback when the deleted file’s URL is the same as `product.image` / `fallbackImage` (`clearStorefrontProductsUsingMediaUrls`). The old `clearProductPrimaryWhenNoGalleryMedia` wiped BIODANCE’s Collagen1 primary after gallery extras were removed.

@@ -1,5 +1,4 @@
 import type { MediaFile } from '@/lib/mediaStore'
-import { countProductGalleryMediaInLocalStorage } from '@/lib/mediaGalleryLocal'
 
 function normalizeComparableUrl(url: string): string {
   const t = url.trim()
@@ -82,43 +81,12 @@ export function flushMediaStoreToLocalStorage(files: MediaFile[]): void {
   }
 }
 
-/** When a product has no gallery media left, clear primary image so detail fallback does not show deleted assets. */
-export async function clearProductPrimaryWhenNoGalleryMedia(productIds: string[]): Promise<void> {
-  if (!productIds.length || typeof window === 'undefined') return
-  const { useStore } = await import('@/lib/store')
-  const { products, updateProduct } = useStore.getState()
-  let changed = false
-  for (const pid of productIds) {
-    const id = String(pid).trim()
-    if (!id) continue
-    if (countProductGalleryMediaInLocalStorage(id) > 0) continue
-    const p = products.find((x) => String(x.id) === id)
-    if (!p) continue
-    const img = typeof p.image === 'string' ? p.image.trim() : ''
-    const fb =
-      typeof (p as { fallbackImage?: string }).fallbackImage === 'string'
-        ? String((p as { fallbackImage?: string }).fallbackImage).trim()
-        : ''
-    if (!img && !fb) continue
-    updateProduct({
-      ...p,
-      image: '',
-      fallbackImage: '',
-    })
-    changed = true
-  }
-  if (changed) {
-    const nextProducts = useStore.getState().products
-    flushProductsToLocalStorage(nextProducts)
-    const { syncCatalogToServerNow } = await import('@/lib/catalogSyncScheduler')
-    await syncCatalogToServerNow(3)
-    window.dispatchEvent(
-      new CustomEvent('products-store-updated', {
-        detail: { action: 'media-delete-gallery-empty', products: nextProducts },
-      })
-    )
-  }
-}
+/**
+ * Do NOT clear catalog primary merely because gallery links hit zero.
+ * That wiped unrelated `product.image` (e.g. BIODANCE Collagen1) when admins
+ * deleted Media Management extras. URL-matched clearing below is enough:
+ * only wipe primary/fallback when they pointed at the deleted asset itself.
+ */
 
 /** Clear product.image / fallbackImage when they pointed at deleted media URLs. */
 export async function clearStorefrontProductsUsingMediaUrls(urls: Set<string>): Promise<void> {
