@@ -23,6 +23,7 @@ export const DASHBOARD_IMPORTANT_ACTIONS = [
   'promo_code_deleted',
   'media_uploaded',
   'media_deleted',
+  'purchase_order_sent',
   'fundraising_partner_updated',
   'fundraising_partner_deleted',
   'fundraising_settings_updated',
@@ -116,6 +117,8 @@ export function formatImportantActivityTitle(log: ActivityLog): string {
       return 'Media uploaded'
     case 'media_deleted':
       return 'Media deleted'
+    case 'purchase_order_sent':
+      return 'Purchase order emailed'
     case 'fundraising_partner_updated':
       return 'Fundraising partner updated'
     case 'fundraising_partner_deleted':

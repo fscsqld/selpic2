@@ -27,6 +27,9 @@ export type ActivityLogAction =
   | 'promo_code_deleted'
   | 'media_uploaded'
   | 'media_deleted'
+  | 'purchase_order_saved'
+  | 'purchase_order_downloaded'
+  | 'purchase_order_sent'
   /** Fundraising / domain ops a super-admin must be able to review. */
   | 'fundraising_partner_updated'
   | 'fundraising_partner_deleted'
@@ -107,6 +110,9 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'promo_code_deleted',
   'media_uploaded',
   'media_deleted',
+  'purchase_order_saved',
+  'purchase_order_downloaded',
+  'purchase_order_sent',
   'fundraising_partner_updated',
   'fundraising_partner_deleted',
   'fundraising_settings_updated',

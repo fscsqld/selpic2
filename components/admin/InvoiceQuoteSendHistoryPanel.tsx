@@ -42,6 +42,8 @@ function typeLabel(type: DocumentSendLogType): string {
       return 'Invoice'
     case 'quote':
       return 'Quote'
+    case 'po':
+      return 'Purchase Order'
     case 'order_confirmation':
       return 'Order Confirmation'
     case 'shipping_notification':
@@ -180,7 +182,7 @@ export default function InvoiceQuoteSendHistoryPanel({
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    No send history yet. Sent invoices and quotes will appear here.
+                    No send history yet. Sent invoices, quotes, and purchase orders will appear here.
                   </td>
                 </tr>
               ) : (

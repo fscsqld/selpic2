@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import InvoiceTemplate, { InvoiceLineItem, InvoiceTemplateProps } from '@/components/invoice/InvoiceTemplate'
 import QuoteTemplate, { QuoteTemplateProps } from '@/components/invoice/QuoteTemplate'
-import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp, History } from 'lucide-react'
+import PurchaseOrderCreatePanel from '@/components/invoice/PurchaseOrderCreatePanel'
+import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp, History, ClipboardList } from 'lucide-react'
+import type { PurchaseOrderDoc } from '@/lib/purchaseOrderTypes'
 import { emailService } from '@/lib/emailService'
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
@@ -175,7 +177,8 @@ function InvoicePreviewPageContent() {
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [pendingResendLogId, setPendingResendLogId] = useState<string | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)
-  const [documentType, setDocumentType] = useState<'invoice' | 'quote'>('invoice')
+  const [documentType, setDocumentType] = useState<'invoice' | 'quote' | 'po'>('invoice')
+  const [initialPoDoc, setInitialPoDoc] = useState<PurchaseOrderDoc | null>(null)
   const [invoiceData, setInvoiceData] = useState(() => getDefaultInvoiceData())
   const [quoteData, setQuoteData] = useState<Omit<QuoteTemplateProps, 'items' | 'totals'> & {
     items: InvoiceLineItem[]
@@ -525,7 +528,10 @@ function InvoicePreviewPageContent() {
       return false
     }
 
-    if (log.documentType === 'quote') {
+    if (log.documentType === 'po') {
+      setDocumentType('po')
+      setInitialPoDoc(snapshot as unknown as PurchaseOrderDoc)
+    } else if (log.documentType === 'quote') {
       setDocumentType('quote')
       setQuoteData(snapshot as typeof quoteData)
     } else {
@@ -673,8 +679,14 @@ function InvoicePreviewPageContent() {
 
   const handleResendFromHistory = (log: DocumentSendLog) => {
     if (!applyDocumentSnapshot(log)) return
-    setResendingId(log.id)
     setPageTab('create')
+    // PO uses its own send panel — open editor only (do not run invoice/quote send).
+    if (log.documentType === 'po') {
+      setResendingId(null)
+      setPendingResendLogId(null)
+      return
+    }
+    setResendingId(log.id)
     // Trigger send on the next paint after snapshot state is committed.
     setPendingResendLogId(log.id)
   }
@@ -709,7 +721,9 @@ function InvoicePreviewPageContent() {
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Create & Send Document</h1>
-                <p className="text-gray-600 mt-1">Create and send invoices or quotes to customers</p>
+                <p className="text-gray-600 mt-1">
+                  Create and send invoices, quotes, or purchase orders (PO) to customers and suppliers
+                </p>
               </div>
             </div>
 
@@ -766,20 +780,39 @@ function InvoicePreviewPageContent() {
                   <FileText className="w-5 h-5" />
                   <span className="font-semibold">Quote</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDocumentType('po')}
+                  className={`px-6 py-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                    documentType === 'po'
+                      ? 'border-slate-700 bg-slate-50 text-slate-900'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <ClipboardList className="w-5 h-5" />
+                  <span className="font-semibold">Purchase Order</span>
+                </button>
               </div>
             )}
           </div>
 
           {pageTab === 'history' && (
             <InvoiceQuoteSendHistoryPanel
-              typesFilter={['invoice', 'quote']}
+              typesFilter={['invoice', 'quote', 'po']}
               onOpenInEditor={handleOpenHistoryInEditor}
               onResend={handleResendFromHistory}
               resendingId={resendingId}
             />
           )}
 
-          {pageTab === 'create' && (
+          {pageTab === 'create' && documentType === 'po' && (
+            <PurchaseOrderCreatePanel
+              initialDoc={initialPoDoc}
+              onClearInitial={() => setInitialPoDoc(null)}
+            />
+          )}
+
+          {pageTab === 'create' && documentType !== 'po' && (
           <>
           {/* Business type & edit form toggle */}
           <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

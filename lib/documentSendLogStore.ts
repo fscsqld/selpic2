@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 export type DocumentSendLogType =
   | 'invoice'
   | 'quote'
+  | 'po'
   | 'order_confirmation'
   | 'shipping_notification'
   | 'receipt'

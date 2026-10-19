@@ -1,14 +1,14 @@
 /**
- * Monthly document reference numbers (invoices SP-*, quotes QT-*).
+ * Monthly document reference numbers (invoices SP-*, quotes QT-*, purchase orders PO-*).
  * Sequence persisted per calendar month: localStorage key selpic_{prefix}_seq_YYYY_MM (e.g. selpic_sp_seq_2026_03).
  */
 
-export type InvoiceDocPrefix = 'SP' | 'QT'
+export type InvoiceDocPrefix = 'SP' | 'QT' | 'PO'
 
 function normalizePrefix(prefix: string): InvoiceDocPrefix {
   const p = prefix.trim().toUpperCase()
-  if (p !== 'SP' && p !== 'QT') {
-    throw new Error(`invoiceRefNumber: unsupported prefix "${prefix}" (expected SP or QT)`)
+  if (p !== 'SP' && p !== 'QT' && p !== 'PO') {
+    throw new Error(`invoiceRefNumber: unsupported prefix "${prefix}" (expected SP, QT, or PO)`)
   }
   return p
 }
@@ -27,6 +27,9 @@ export function getMonthlyPlaceholder(prefix: string): string {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   return `${p}-${year}-${month}-000`
 }
+
+/** Alternate draft marker accepted for PO before finalize. */
+export const PO_DRAFT_PLACEHOLDER = 'PO-DRAFT-000'
 
 /** Increment monthly counter and return the next document id (mutates localStorage). */
 export function allocateNextMonthlyDocNumber(prefix: string): string {
@@ -51,9 +54,19 @@ export function allocateNextMonthlyDocNumber(prefix: string): string {
 
 const LEGACY_SP = 'SP-2025-001'
 const LEGACY_QT = 'QT-2025-001'
+const LEGACY_PO = 'PO-2025-001'
+
+function isDraftPlaceholder(prefix: InvoiceDocPrefix, current: string, year: number, monthMm: string): boolean {
+  const placeholder = `${prefix}-${year}-${monthMm}-000`
+  if (current === placeholder) return true
+  if (prefix === 'PO' && (current === PO_DRAFT_PLACEHOLDER || current === LEGACY_PO)) return true
+  if (prefix === 'SP' && current === LEGACY_SP) return true
+  if (prefix === 'QT' && current === LEGACY_QT) return true
+  return false
+}
 
 /**
- * If `current` is this month's placeholder or the legacy default (SP-2025-001 / QT-2025-001), allocate
+ * If `current` is this month's placeholder (or PO-DRAFT-000 / legacy default), allocate
  * the next sequential number; otherwise return `current` unchanged.
  */
 export function ensureMonthlyDocNumber(prefix: string, current: string): string {
@@ -62,8 +75,6 @@ export function ensureMonthlyDocNumber(prefix: string, current: string): string 
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
-  const placeholder = `${p}-${year}-${month}-000`
-  const legacyDefault = p === 'SP' ? LEGACY_SP : LEGACY_QT
-  if (current !== placeholder && current !== legacyDefault) return current
+  if (!isDraftPlaceholder(p, current, year, month)) return current
   return allocateNextMonthlyDocNumber(p)
 }
