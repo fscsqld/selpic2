@@ -11,14 +11,20 @@ import {
   type PoOpsStatus,
 } from '@/lib/poDomesticCarriers'
 import {
-  EMPTY_HANA_ONE_FORM_CONFIG,
+  EMPTY_HANA_ONE_FORM_PAIR,
   buildDefaultHanaOnePrefillPayload,
   buildHanaOnePrefillUrl,
   canOpenHanaOneForm,
+  getHanaOneFormConfigForDoc,
+  hanaOneFormModeLabel,
+  hanaOneForwarderLabel,
   isHanaOneFormConfigured,
-  loadHanaOneFormConfig,
-  saveHanaOneFormConfig,
+  loadHanaOneFormPair,
+  resolveHanaOneFormMode,
+  saveHanaOneFormPair,
+  type HanaOneFormMode,
   type HanaOneGoogleFormConfig,
+  type HanaOneGoogleFormPair,
 } from '@/lib/poHanaOneGoogleForm'
 import { usePoStore, type SavedPurchaseOrder } from '@/lib/poStore'
 import { formatPoMoney } from '@/lib/purchaseOrderTotals'
@@ -51,10 +57,11 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [showFormSetup, setShowFormSetup] = useState(false)
-  const [formConfig, setFormConfig] = useState<HanaOneGoogleFormConfig>(EMPTY_HANA_ONE_FORM_CONFIG)
+  const [formPair, setFormPair] = useState<HanaOneGoogleFormPair>(EMPTY_HANA_ONE_FORM_PAIR)
+  const [formSetupTab, setFormSetupTab] = useState<HanaOneFormMode>('sea')
 
   useEffect(() => {
-    setFormConfig(loadHanaOneFormConfig())
+    setFormPair(loadHanaOneFormPair())
   }, [])
 
   useEffect(() => {
@@ -130,23 +137,26 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
         setNotice('Save Carrier and Tracking No first, then open the Hana One form.')
         return
       }
-      const config = loadHanaOneFormConfig()
+      const { mode, config } = getHanaOneFormConfigForDoc(row.doc)
+      const modeLabelEn = hanaOneFormModeLabel(mode)
       const payload = buildDefaultHanaOnePrefillPayload({
         carrierCode: carrier,
         trackingNo,
         doc: row.doc,
+        mode,
       })
       if (!isHanaOneFormConfigured(config)) {
         void navigator.clipboard?.writeText(payload.packageInfo)
-        setNotice(
-          'Hana One Google Form URL / entry IDs are not configured yet. Package info copied to clipboard — open Form setup below, or paste values into the form manually.'
-        )
+        setFormSetupTab(mode)
         setShowFormSetup(true)
+        setNotice(
+          `${hanaOneForwarderLabel(mode)} form is not configured yet. Package info copied — open Form setup (${modeLabelEn} tab) and paste the viewform URL or Form ID / entry IDs.`
+        )
         return
       }
       const url = buildHanaOnePrefillUrl(config, payload)
       if (!url) {
-        setNotice('Could not build the Google Form URL. Check Form setup.')
+        setNotice(`Could not build the ${hanaOneForwarderLabel(mode)} form URL. Check Form setup.`)
         return
       }
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -193,9 +203,18 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
     }
   }, [])
 
+  const updateFormField = (mode: HanaOneFormMode, key: keyof HanaOneGoogleFormConfig, value: string) => {
+    setFormPair((prev) => ({
+      ...prev,
+      [mode]: { ...prev[mode], [key]: value },
+    }))
+  }
+
   const handleSaveFormConfig = () => {
-    saveHanaOneFormConfig(formConfig)
-    setNotice('Hana One Google Form mapping saved in this browser.')
+    saveHanaOneFormPair(formPair)
+    setNotice(
+      `Hana One Sea + Air Google Form mappings saved in this browser (edited tab: ${hanaOneFormModeLabel(formSetupTab)}).`
+    )
     setShowFormSetup(false)
   }
 
@@ -228,12 +247,39 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
       {showFormSetup ? (
         <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
           <p className="text-xs text-slate-600 leading-relaxed">
-            From the live Hana One Google Form: menu → <strong>Get pre-filled link</strong>. Paste
-            the viewform URL and each <code className="text-[11px]">entry.########</code> id below
-            (also supported via <code className="text-[11px]">NEXT_PUBLIC_HANA_ONE_*</code> env).
-            Until configured, Save still unlocks the button and Package Info is copied to the
-            clipboard.
+            Hana One uses <strong>separate</strong> Google Forms for Sea Freight vs Air Freight.
+            Prefill recipient is <strong>브리즈번해상</strong> (Sea) or <strong>브리즈번항공</strong>{' '}
+            (Air). For each tab: form → menu → <strong>Get pre-filled link</strong>, paste
+            viewform URL (or Form ID) and <code className="text-[11px]">entry.########</code> ids.
+            Env: <code className="text-[11px]">NEXT_PUBLIC_HANA_ONE_SEA_FORM_ID</code> /{' '}
+            <code className="text-[11px]">NEXT_PUBLIC_HANA_ONE_AIR_FORM_ID</code> (or full{' '}
+            <code className="text-[11px]">*_FORM_URL</code>). Open picks mode from the PO shipment
+            / hub transport.
           </p>
+          <div className="flex gap-1 border-b border-slate-200 pb-0">
+            {(['sea', 'air'] as const).map((mode) => {
+              const ready = isHanaOneFormConfigured(formPair[mode])
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setFormSetupTab(mode)}
+                  className={`px-3 py-1.5 text-sm rounded-t-md border border-b-0 ${
+                    formSetupTab === mode
+                      ? 'bg-white border-slate-300 text-slate-900 font-medium -mb-px'
+                      : 'bg-slate-50 border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {hanaOneFormModeLabel(mode)}
+                  <span
+                    className={`ml-1.5 text-[10px] ${ready ? 'text-emerald-700' : 'text-amber-700'}`}
+                  >
+                    {ready ? 'ready' : 'needed'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
           {(
             [
               ['viewFormUrl', 'Viewform URL'],
@@ -247,13 +293,19 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
               ['entryAuCustoms', 'Entry: AU Customs'],
             ] as const
           ).map(([key, label]) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+            <div key={`${formSetupTab}-${key}`}>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                {hanaOneFormModeLabel(formSetupTab)} — {label}
+              </label>
               <input
                 className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm"
-                value={formConfig[key]}
-                onChange={(e) => setFormConfig((p) => ({ ...p, [key]: e.target.value }))}
-                placeholder={key === 'viewFormUrl' ? 'https://docs.google.com/forms/d/e/…/viewform' : 'entry.123456789'}
+                value={formPair[formSetupTab][key]}
+                onChange={(e) => updateFormField(formSetupTab, key, e.target.value)}
+                placeholder={
+                  key === 'viewFormUrl'
+                    ? 'https://docs.google.com/forms/d/e/…/viewform'
+                    : 'entry.123456789'
+                }
               />
             </div>
           ))}
@@ -263,7 +315,7 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
               onClick={handleSaveFormConfig}
               className="px-3 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-900"
             >
-              Save form mapping
+              Save Sea + Air mappings
             </button>
             <button
               type="button"
@@ -309,6 +361,8 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
                   trackingNo: draft.trackingNo,
                   logisticsSaved,
                 })
+                const hanaMode = resolveHanaOneFormMode(row.doc)
+                const hanaModeLabel = hanaOneFormModeLabel(hanaMode)
                 return (
                   <tr key={row.id} className="border-b border-slate-100 align-top">
                     <td className="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap">
@@ -403,14 +457,14 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
                           disabled={!formReady}
                           title={
                             formReady
-                              ? 'Open Hana One Google Form (pre-filled when configured)'
+                              ? `Open auto-filled ${hanaOneForwarderLabel(hanaMode)} Google Form`
                               : 'Save Carrier + Tracking No first'
                           }
                           onClick={() => handleOpenHanaOne(row)}
                           className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-medium rounded-md border border-emerald-600 text-emerald-800 bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-100"
                         >
                           <ExternalLink className="w-3 h-3 shrink-0" />
-                          Open Hana One Form
+                          Open Hana One ({hanaModeLabel})
                         </button>
                         <button
                           type="button"

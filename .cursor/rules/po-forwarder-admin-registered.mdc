@@ -55,6 +55,14 @@ Ship To / Domestic Logistics Hub (공급처 국내 배송지 정보)
 
 `TRANSPORT_MODE` = `Sea Freight` | `Air Freight`. Snapshot `shipTo.forwarderName` when applying a forwarder so PDF does not depend on live store.
 
+## Hana One Google Forms (Sea ≠ Air)
+
+Dashboard **Hana One Form setup** stores two mappings (`sea` / `air`) in `selpic-hana-one-google-form`.
+**Open Hana One (Sea|Air Freight)** uses `resolveHanaOneFormMode` (`shipTo.transportMode` → else `trade.shipmentMethod`).
+Prefill **Recipient Name**: Sea → `브리즈번해상`, Air → `브리즈번항공` (not SELPIC legal name).
+Legacy flat config migrates to **Sea only**; configure Air separately.
+Env (client): `NEXT_PUBLIC_HANA_ONE_SEA_FORM_ID` / `NEXT_PUBLIC_HANA_ONE_AIR_FORM_ID` (or `*_FORM_URL` / full viewform URL).
+
 ## Do not
 
 - Hardcode “Forwarder A/B” placeholders as selectable defaults
