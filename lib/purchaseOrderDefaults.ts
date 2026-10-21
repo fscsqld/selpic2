@@ -2,16 +2,22 @@ import {
   COMPANY_CONTACT,
   COMPANY_LEGAL,
   COMPANY_LOGO_URL,
-} from '@/lib/companyLegal'
+} from './companyLegal'
 import {
   DEFAULT_PO_TERMS_AND_CONDITIONS,
   DEFAULT_PO_WAYBILL_INSTRUCTIONS,
+  PO_PAYMENT_REMITTANCE_NOTE,
+  normalizeSupplierBank,
   paymentTermsTextForPreset,
   type PurchaseOrderDoc,
   type PurchaseOrderLine,
-} from '@/lib/purchaseOrderTypes'
-import { computePurchaseOrderTotals } from '@/lib/purchaseOrderTotals'
-import { PO_DRAFT_PLACEHOLDER } from '@/lib/invoiceRefNumber'
+} from './purchaseOrderTypes'
+import { computePurchaseOrderTotals } from './purchaseOrderTotals'
+import { PO_DRAFT_PLACEHOLDER } from './invoiceRefNumber'
+import {
+  buildDomesticHubInstructionBlock,
+  syncCartonMarkingToPoNumber,
+} from './poHubPresets'
 
 export function createEmptyPoLine(lineNo: number): PurchaseOrderLine {
   return {
@@ -28,7 +34,22 @@ export function createEmptyPoLine(lineNo: number): PurchaseOrderLine {
   }
 }
 
-/** Default PO for Admin create — KRW / FOB Busan / 100% advance / overseas zero-rated. */
+/** YYYY-MM-DD = today + N calendar days (local). */
+export function addCalendarDaysIso(days: number, from = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Company name only — ABN/ACN render on separate lines in the PDF template. */
+export function defaultPoBillToName(): string {
+  return COMPANY_LEGAL.companyName
+}
+
+/** Default PO for Admin create — KRW / FOB Incheon / 100% advance / overseas zero-rated. */
 export function getDefaultPurchaseOrderDoc(): PurchaseOrderDoc {
   const today = new Date().toISOString().split('T')[0]
   const items = [createEmptyPoLine(1)]
@@ -39,10 +60,10 @@ export function getDefaultPurchaseOrderDoc(): PurchaseOrderDoc {
 
   return {
     poMeta: {
-      // Editing/draft display id — permanent PO-YYYY-MM-### only on Download / Send.
+      // Draft marker — permanent PO-YYYY-MM-### allocated on Download / Send.
       poNumber: PO_DRAFT_PLACEHOLDER,
       issueDate: today,
-      requiredShipDate: '',
+      requiredShipDate: addCalendarDaysIso(14),
       revision: 0, // hidden in UI; kept for future amendments
       status: 'draft',
       supplierQuoteRef: '',
@@ -67,32 +88,37 @@ export function getDefaultPurchaseOrderDoc(): PurchaseOrderDoc {
     },
     shipTo: {
       mode: 'selpic',
+      presetId: 'selpic_au',
       address: COMPANY_CONTACT.address,
-      hubCompanyName: '',
+      destinationIdentifier: 'AU Warehouse',
+      hubCompanyName: COMPANY_LEGAL.companyName,
       hubContactPerson: '',
-      hubPhone: '',
+      hubPhone: COMPANY_CONTACT.phone,
       waybillGuideUrl: '',
     },
     billTo: {
-      name: `${COMPANY_LEGAL.companyName} (ABN: ${COMPANY_LEGAL.abn})`,
+      name: defaultPoBillToName(),
       abn: COMPANY_LEGAL.abn,
+      acn: COMPANY_LEGAL.acn,
       address: COMPANY_CONTACT.address,
     },
     trade: {
       incoterm: 'FOB',
-      namedPlace: 'Busan',
+      namedPlace: 'Incheon',
       shipmentMethod: 'sea',
     },
     payment: {
       currency,
       termsPreset: 'advance_100',
       termsText: paymentTermsTextForPreset('advance_100'),
-      supplierBank: {
+      supplierBank: normalizeSupplierBank({
         accountName: '',
         bankName: '',
-        swiftOrAccount: '',
-        note: 'Please use the PO Number as the payment reference.',
-      },
+        accountNumber: '',
+        swiftBic: '',
+        bankCodeOrBranch: '',
+        note: PO_PAYMENT_REMITTANCE_NOTE,
+      }),
     },
     taxRule,
     items,
@@ -120,4 +146,53 @@ export function sanitizeSupplierNameForFilename(name: string): string {
 
 export function buildPoPdfFilename(poNumber: string, supplierName: string): string {
   return `${poNumber}_${sanitizeSupplierNameForFilename(supplierName)}.pdf`
+}
+
+/**
+ * Allocate / apply a final PO number and refresh Ship To carton + hub block
+ * so PDF export does not keep `PO-DRAFT-000` in carton marking.
+ */
+export function applyFinalizedPoNumber(
+  doc: PurchaseOrderDoc,
+  nextPoNumber: string,
+  status?: PurchaseOrderDoc['poMeta']['status']
+): PurchaseOrderDoc {
+  const prev = (doc.poMeta.poNumber || '').trim()
+  const next = (nextPoNumber || '').trim()
+  if (!next) return doc
+
+  const cartonMarking = syncCartonMarkingToPoNumber(
+    doc.shipTo.cartonMarking,
+    doc.shipTo.destinationIdentifier,
+    next,
+    prev
+  )
+
+  const shipTo = { ...doc.shipTo, cartonMarking }
+  let waybillInstructions = doc.waybillInstructions
+  if (shipTo.mode === 'forwarder_kr') {
+    waybillInstructions = {
+      instructionText: buildDomesticHubInstructionBlock({
+        forwarderName: shipTo.forwarderName,
+        transportMode: shipTo.transportMode,
+        recipientName: shipTo.hubCompanyName || '',
+        phone: shipTo.hubPhone || '',
+        address: shipTo.address,
+        destinationIdentifier: shipTo.destinationIdentifier || '',
+        poNumber: next,
+        cartonMarking,
+      }),
+    }
+  }
+
+  return {
+    ...doc,
+    poMeta: {
+      ...doc.poMeta,
+      poNumber: next,
+      status: status ?? doc.poMeta.status,
+    },
+    shipTo,
+    waybillInstructions,
+  }
 }

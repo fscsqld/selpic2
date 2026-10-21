@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import InvoiceTemplate, { InvoiceLineItem, InvoiceTemplateProps } from '@/components/invoice/InvoiceTemplate'
 import QuoteTemplate, { QuoteTemplateProps } from '@/components/invoice/QuoteTemplate'
 import PurchaseOrderCreatePanel from '@/components/invoice/PurchaseOrderCreatePanel'
+import PoDashboardPanel from '@/components/invoice/PoDashboardPanel'
 import { Download, Loader2, Send, Plus, Trash2, Edit2, Eye, FileText, Receipt, ChevronDown, ChevronUp, History, ClipboardList } from 'lucide-react'
 import type { PurchaseOrderDoc } from '@/lib/purchaseOrderTypes'
 import { emailService } from '@/lib/emailService'
@@ -179,6 +180,8 @@ function InvoicePreviewPageContent() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [documentType, setDocumentType] = useState<'invoice' | 'quote' | 'po'>('invoice')
   const [initialPoDoc, setInitialPoDoc] = useState<PurchaseOrderDoc | null>(null)
+  const [poWorkspaceTab, setPoWorkspaceTab] = useState<'creator' | 'dashboard'>('creator')
+  const [poLoadDraftId, setPoLoadDraftId] = useState<string | null>(null)
   const [invoiceData, setInvoiceData] = useState(() => getDefaultInvoiceData())
   const [quoteData, setQuoteData] = useState<Omit<QuoteTemplateProps, 'items' | 'totals'> & {
     items: InvoiceLineItem[]
@@ -806,10 +809,47 @@ function InvoicePreviewPageContent() {
           )}
 
           {pageTab === 'create' && documentType === 'po' && (
-            <PurchaseOrderCreatePanel
-              initialDoc={initialPoDoc}
-              onClearInitial={() => setInitialPoDoc(null)}
-            />
+            <div className="space-y-4">
+              <div className="flex gap-2 border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPoWorkspaceTab('creator')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    poWorkspaceTab === 'creator'
+                      ? 'border-slate-800 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  PO Creator (발주서 작성)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPoWorkspaceTab('dashboard')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    poWorkspaceTab === 'dashboard'
+                      ? 'border-slate-800 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  PO Dashboard (발주 관리)
+                </button>
+              </div>
+              {poWorkspaceTab === 'creator' ? (
+                <PurchaseOrderCreatePanel
+                  initialDoc={initialPoDoc}
+                  onClearInitial={() => setInitialPoDoc(null)}
+                  loadDraftId={poLoadDraftId}
+                  onClearLoadDraftId={() => setPoLoadDraftId(null)}
+                />
+              ) : (
+                <PoDashboardPanel
+                  onOpenInCreator={(draftId) => {
+                    setPoLoadDraftId(draftId)
+                    setPoWorkspaceTab('creator')
+                  }}
+                />
+              )}
+            </div>
           )}
 
           {pageTab === 'create' && documentType !== 'po' && (

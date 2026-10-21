@@ -119,6 +119,8 @@ export function formatImportantActivityTitle(log: ActivityLog): string {
       return 'Media deleted'
     case 'purchase_order_sent':
       return 'Purchase order emailed'
+    case 'purchase_order_logistics_saved':
+      return 'PO domestic shipping saved'
     case 'fundraising_partner_updated':
       return 'Fundraising partner updated'
     case 'fundraising_partner_deleted':

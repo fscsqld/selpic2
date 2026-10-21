@@ -40,10 +40,20 @@ export interface PurchaseOrderLine {
 }
 
 export interface PurchaseOrderSupplierBank {
+  /** Account Name / Holder (예금주). */
   accountName: string
   bankName: string
-  /** SWIFT and/or account number (free text for overseas banks). */
-  swiftOrAccount: string
+  /** Account Number / IBAN (domestic KRW or international). */
+  accountNumber: string
+  /** SWIFT / BIC — optional for domestic KRW transfers. */
+  swiftBic?: string
+  /** Bank Code / Branch Name — for domestic Korean KRW transfers. */
+  bankCodeOrBranch?: string
+  /**
+   * Legacy combined SWIFT/account field from older drafts.
+   * Prefer accountNumber + swiftBic; kept for round-trip of saved POs.
+   */
+  swiftOrAccount?: string
   note?: string
 }
 
@@ -77,6 +87,24 @@ export interface PurchaseOrderDoc {
   shipTo: {
     mode: PoShipToMode
     address: string
+    /**
+     * System preset id (`selpic_au` | `custom`) or synthetic
+     * `forwarderId::sea|air` when using a registered KR forwarder.
+     */
+    presetId?: string
+    /** Registered Korean forwarder id (poForwarderStore). */
+    forwarderId?: string
+    /** Snapshot of forwarder display name at apply time (for PDF). */
+    forwarderName?: string
+    /** Active transport mode when shipping via KR forwarder hub. */
+    transportMode?: 'sea' | 'air'
+    /**
+     * Air/Sea / city identifier for carton marks
+     * e.g. 브리즈번해상 — used in "SELPIC / {DEST} / PO No: …"
+     */
+    destinationIdentifier?: string
+    /** Resolved carton mark line for this PO (may include real PO number). */
+    cartonMarking?: string
     /** Korean logistics hub / forwarder — used as domestic waybill Consignee (not AU address). */
     hubCompanyName?: string
     hubContactPerson?: string
@@ -95,6 +123,8 @@ export interface PurchaseOrderDoc {
   billTo: {
     name: string
     abn?: string
+    /** Australian Company Number — shown on a separate line from the name. */
+    acn?: string
     address?: string
   }
   trade: {
@@ -128,16 +158,86 @@ export interface PurchaseOrderDoc {
   }
 }
 
-export const PO_INCOTERMS: PoIncoterm[] = [
-  'EXW',
-  'FOB',
-  'CIF',
-  'CFR',
-  'DDP',
-  'FCA',
-  'DAP',
-  'Custom',
-]
+/** Primary Incoterms shown in the main dropdown (FOB default). */
+export const PO_INCOTERMS_PRIMARY: PoIncoterm[] = ['FOB', 'FCA', 'EXW', 'DDP', 'Custom']
+
+/** Less-used terms — under Advanced / More to reduce entry errors. */
+export const PO_INCOTERMS_MORE: PoIncoterm[] = ['CIF', 'CFR', 'DAP']
+
+/** Full list (primary first, then more) — for validation / legacy drafts. */
+export const PO_INCOTERMS: PoIncoterm[] = [...PO_INCOTERMS_PRIMARY, ...PO_INCOTERMS_MORE]
+
+/** Placeholder for Port / Designated Place linked to the selected Incoterm. */
+export function namedPlacePlaceholder(incoterm: PoIncoterm): string {
+  switch (incoterm) {
+    case 'FOB':
+      return 'Port e.g. Incheon / Busan'
+    case 'FCA':
+      return 'Place e.g. Hanam Hub'
+    case 'EXW':
+      return 'Factory / warehouse e.g. Seoul'
+    case 'DDP':
+      return 'Destination e.g. Brisbane warehouse'
+    case 'CIF':
+    case 'CFR':
+      return 'Port of destination e.g. Brisbane'
+    case 'DAP':
+      return 'Named place e.g. Mansfield QLD'
+    case 'Custom':
+      return 'Named place / custom terms'
+    default:
+      return 'Port / Designated Place'
+  }
+}
+
+/** PDF/header line: `FOB Incheon` or Custom place text. */
+export function formatIncotermLine(incoterm: PoIncoterm, namedPlace: string): string {
+  const place = (namedPlace || '').trim()
+  if (incoterm === 'Custom') return place || 'Custom'
+  return place ? `${incoterm} ${place}` : incoterm
+}
+
+/**
+ * Migrate legacy `swiftOrAccount` into split fields so old drafts still print.
+ * Does not overwrite populated accountNumber / swiftBic.
+ */
+export function normalizeSupplierBank(
+  bank: PurchaseOrderSupplierBank | null | undefined
+): PurchaseOrderSupplierBank {
+  const raw = bank || {
+    accountName: '',
+    bankName: '',
+    accountNumber: '',
+  }
+  const accountNumber = (raw.accountNumber || '').trim()
+  const swiftBic = (raw.swiftBic || '').trim()
+  const legacy = (raw.swiftOrAccount || '').trim()
+
+  let nextAccount = accountNumber
+  let nextSwift = swiftBic
+  if (legacy && !accountNumber && !swiftBic) {
+    // Heuristic: long alphanumeric with letters → treat as SWIFT; else account.
+    if (/^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$/.test(legacy)) {
+      nextSwift = legacy
+    } else {
+      nextAccount = legacy
+    }
+  }
+
+  return {
+    accountName: raw.accountName || '',
+    bankName: raw.bankName || '',
+    accountNumber: nextAccount,
+    swiftBic: nextSwift || undefined,
+    bankCodeOrBranch: (raw.bankCodeOrBranch || '').trim() || undefined,
+    swiftOrAccount: legacy || undefined,
+    note: raw.note,
+  }
+}
+
+/** Explicit remittance reference shown under Supplier Bank on form + PDF. */
+export const PO_PAYMENT_REMITTANCE_NOTE =
+  'Please use the PO Number (e.g., PO-2026-XXXX) as the payment remittance reference.'
 
 export const PO_SHIPMENT_METHODS: { value: PoShipmentMethod; label: string }[] = [
   { value: 'air', label: 'Air Freight' },
@@ -251,20 +351,31 @@ export const OVERSEAS_ZERO_RATED_DISCLAIMER =
   'Prices exclude Australian GST. Overseas export transaction (VAT 0%). Import duties and Australian GST (if applicable) shall be handled by Buyer upon entry.'
 
 export const PO_THIRTY_DAY_INSPECTION_CLAUSE =
-  "Buyer shall inspect the delivered Goods within 30 days after actual delivery to Buyer's designated warehouse in Australia."
+  "Buyer shall inspect the delivered Goods within thirty (30) business days after actual receipt at Buyer's designated warehouse in Australia and notify Supplier of any defects, damages, or short shipments."
 
-/** Default T&C: offer/acceptance + shelf-life + 30-day inspection + Qld governing law. */
+export const PO_SHELF_LIFE_CLAUSE =
+  'All Goods supplied under this Purchase Order must strictly comply with agreed specifications and maintain at least seventy percent (70%) of their total shelf-life upon arrival at Buyer\'s designated warehouse in Australia.'
+
+export const PO_BINDING_OFFER_CLAUSE =
+  "This Purchase Order constitutes Buyer's official binding offer. Supplier's written confirmation, Proforma Invoice (PI) issuance, or shipment of Goods constitutes acceptance under the stated terms, quantities, and pricing."
+
+export const PO_GOVERNING_LAW_CLAUSE =
+  'This Purchase Order shall be governed by and construed in accordance with the laws of Queensland, Australia, unless an active Master Supply Agreement between Buyer and Supplier specifies otherwise.'
+
+/** Default T&C body only — PDF/form section heading supplies “Terms & Conditions”. */
 export const DEFAULT_PO_TERMS_AND_CONDITIONS =
-  "This Purchase Order constitutes Buyer's official offer. Supplier's written confirmation or shipment of goods constitutes acceptance under the stated terms, quantities, and pricing. All products must strictly comply with agreed specifications and shelf-life requirements.\n\n" +
-  `${PO_THIRTY_DAY_INSPECTION_CLAUSE}\n\n` +
-  'This Purchase Order shall be governed by and construed in accordance with the laws of Queensland, Australia, unless otherwise mutually agreed in writing by both parties.'
+  `1. Binding Offer: ${PO_BINDING_OFFER_CLAUSE}\n` +
+  `2. Quality & Shelf-Life: ${PO_SHELF_LIFE_CLAUSE}\n` +
+  `3. Inspection Period: ${PO_THIRTY_DAY_INSPECTION_CLAUSE}\n` +
+  `4. Governing Law: ${PO_GOVERNING_LAW_CLAUSE}`
 
 export function paymentTermsTextForPreset(preset: PoPaymentTermsPreset): string {
   return PO_PAYMENT_PRESETS.find((p) => p.value === preset)?.termsText ?? ''
 }
 
 export function packUnitLabel(unit: PoPackUnit, locale: PoLabelLocale = 'en'): string {
-  const en = PO_PACK_UNITS.find((u) => u.value === unit)?.label ?? unit
+  const stripDot = (s: string) => s.replace(/\.+$/, '').trim()
+  const en = stripDot(PO_PACK_UNITS.find((u) => u.value === unit)?.label ?? String(unit || ''))
   if (locale === 'en') return en
   const ko: Record<PoPackUnit, string> = {
     carton: '카톤 (C/T)',
@@ -272,7 +383,7 @@ export function packUnitLabel(unit: PoPackUnit, locale: PoLabelLocale = 'en'): s
     set: '세트',
     pcs: '개 / 매',
   }
-  return ko[unit] ?? en
+  return stripDot(ko[unit] ?? en)
 }
 
 export function shipmentMethodLabel(

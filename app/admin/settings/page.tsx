@@ -4932,6 +4932,7 @@ function ActivityLogView() {
     purchase_order_saved: 'bg-slate-100 text-slate-800',
     purchase_order_downloaded: 'bg-slate-100 text-slate-800',
     purchase_order_sent: 'bg-indigo-100 text-indigo-800',
+    purchase_order_logistics_saved: 'bg-slate-100 text-slate-800',
     fundraising_partner_updated: 'bg-emerald-100 text-emerald-800',
     fundraising_partner_deleted: 'bg-red-100 text-red-800',
     fundraising_settings_updated: 'bg-teal-100 text-teal-800',
@@ -5029,6 +5030,7 @@ function ActivityLogView() {
             <option value="purchase_order_saved">Purchase Order Saved</option>
             <option value="purchase_order_downloaded">Purchase Order Downloaded</option>
             <option value="purchase_order_sent">Purchase Order Sent</option>
+            <option value="purchase_order_logistics_saved">PO Domestic Shipping Saved</option>
             <option value="fundraising_partner_updated">Fundraising Partner Updated</option>
             <option value="fundraising_partner_deleted">Fundraising Partner Deleted</option>
             <option value="fundraising_settings_updated">Fundraising Settings Updated</option>

@@ -30,6 +30,11 @@ export type ActivityLogAction =
   | 'purchase_order_saved'
   | 'purchase_order_downloaded'
   | 'purchase_order_sent'
+  | 'purchase_order_supplier_saved'
+  | 'purchase_order_supplier_deleted'
+  | 'purchase_order_forwarder_saved'
+  | 'purchase_order_forwarder_deleted'
+  | 'purchase_order_logistics_saved'
   /** Fundraising / domain ops a super-admin must be able to review. */
   | 'fundraising_partner_updated'
   | 'fundraising_partner_deleted'
@@ -113,6 +118,11 @@ export const SUPER_ADMIN_AUDIT_ACTIONS = [
   'purchase_order_saved',
   'purchase_order_downloaded',
   'purchase_order_sent',
+  'purchase_order_supplier_saved',
+  'purchase_order_supplier_deleted',
+  'purchase_order_forwarder_saved',
+  'purchase_order_forwarder_deleted',
+  'purchase_order_logistics_saved',
   'fundraising_partner_updated',
   'fundraising_partner_deleted',
   'fundraising_settings_updated',

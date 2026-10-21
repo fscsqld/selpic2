@@ -1,0 +1,63 @@
+---
+description: PO Korean forwarders are admin-registered (Air/Sea), never seeded from spec examples
+globs:
+  - lib/poForwarder*
+  - lib/poHubPresets*
+  - components/invoice/PoForwarder*
+  - components/invoice/PurchaseOrderCreatePanel.tsx
+---
+
+# PO forwarders — admin-registered, Air/Sea per company
+
+## Invariant
+
+Real logistics company names, phones, and Korean warehouse addresses are **not** code defaults.
+Admins register them in PO Section 3 → **Manage forwarders** (`selpic-po-forwarders` localStorage).
+
+Canonical example (tests / admin placeholders only — **never seed** live store):
+`lib/poForwarderExample.ts` → **Hana One Express (하나원택배)**
+
+| Mode | Recipient / Attn | Phone | Domestic address | Carton template |
+|------|------------------|-------|------------------|-----------------|
+| Sea | `브리즈번해상` | `010-2846-3366` | `경기도 김포시 승가로 110-30 (SELPIC / +61 466 894 279)` | `SELPIC / 브리즈번해상 / PO No: {PO_NUMBER}` |
+| Air | `브리즈번항공` | same | same address | `SELPIC / 브리즈번항공 / PO No: {PO_NUMBER}` |
+
+Note: SELPIC AU phone belongs in the **address** parentheses, **not** inside Recipient/Attn.
+
+## Built-in destinations only
+
+- `selpic_au` — SELPIC AU Warehouse
+- `custom` — Custom Address
+
+Korean hubs = `poForwarderStore` records with `modes.sea` and `modes.air`.
+When a registered forwarder + Sea/Air is selected on the PO, hub fields are **read-only** (edit via Manage forwarders).
+
+## Approved domestic hub instruction block (UI + PDF)
+
+Use `buildDomesticHubInstructionBlock` only. Layout:
+
+```
+================================================================================
+Ship To / Domestic Logistics Hub (공급처 국내 배송지 정보)
+================================================================================
+* [공급사 필독] …
+
+- 배 송 업 체 (Forwarder Company) : {FORWARDER_NAME} ({TRANSPORT_MODE})
+- 수취인 명의 (Recipient / Attn)  : {RECIPIENT_ATTN}
+- 연  락  처 (Phone Number)      : {HUB_PHONE}
+- 배송지 주소 (Domestic Address) : {DOMESTIC_ADDRESS}
+
+[박스 외관 필수 표기 지침 (Carton Marking)]
+* …
+  "{CARTON_MARKING}"
+================================================================================
+```
+
+`TRANSPORT_MODE` = `Sea Freight` | `Air Freight`. Snapshot `shipTo.forwarderName` when applying a forwarder so PDF does not depend on live store.
+
+## Do not
+
+- Hardcode “Forwarder A/B” placeholders as selectable defaults
+- Copy owner/spec sample company details into `getDefaultPurchaseOrderDoc`
+- Confuse **suppliers** (`selpic-po-suppliers`) with **forwarders** (배대지)
+- Drop the Forwarder Company line or invent a different block layout
