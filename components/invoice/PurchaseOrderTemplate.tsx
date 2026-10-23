@@ -172,7 +172,8 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
               <span className="text-slate-500 font-medium">
                 {L({ locale, en: 'Payment', ko: '결제조건' })}:
               </span>{' '}
-              <span className="text-slate-800 leading-snug block mt-0.5">
+              {/* Long clause: one step below meta 13px; matches T&C body (~11px), still PDF-legible */}
+              <span className="text-[11px] text-slate-700 leading-snug block mt-0.5 font-normal">
                 {doc.payment.termsText || '—'}
               </span>
             </p>

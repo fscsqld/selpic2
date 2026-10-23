@@ -268,7 +268,9 @@ export const PO_PAYMENT_PRESETS: {
   {
     value: 'advance_100',
     label: '100% Advance Payment (T/T)',
-    termsText: '100% Advance Payment by Telegraphic Transfer (T/T) upon Purchase Order.',
+    // Clock starts after supplier returns signed PO by email (written acceptance).
+    termsText:
+      "100% Advance Payment by T/T within five (5) business days of the Supplier's written acceptance of this Purchase Order (signed PO returned by email).",
   },
   {
     value: 'deposit_30_70_ship',
