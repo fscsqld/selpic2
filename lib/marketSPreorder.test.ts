@@ -7,12 +7,14 @@ import {
   collectPreorderSoldIncrements,
   formatOrderItemPreorderNote,
   formatPreorderShipsFromLabel,
+  getMarketSPreorderCountdownParts,
   getMarketSPreorderPurchaseLimit,
   isMarketSPreorderOpen,
   isMarketSPreorderProduct,
   normalizeMarketSSalesMode,
   orderHasPreorderItems,
   orderIncludesPreorder,
+  shouldShowMarketSPreorderCountdown,
 } from './marketSPreorder'
 
 const openPreorder = {
@@ -89,6 +91,18 @@ describe('buildMarketSSalesModePayload', () => {
     if (!r.ok) expect(r.error).toMatch(/supplier/i)
   })
 
+  it('rejects countdown without closes at', () => {
+    const r = buildMarketSSalesModePayload({
+      category: 'HotGoods',
+      salesMode: 'preorder',
+      preorderSupplierConfirmed: true,
+      preorderShipsFrom: '2026-10-20',
+      preorderCountdownEnabled: true,
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/Closes at/i)
+  })
+
   it('accepts confirmed preorder with ships from', () => {
     const r = buildMarketSSalesModePayload({
       category: 'HotGoods',
@@ -102,6 +116,24 @@ describe('buildMarketSSalesModePayload', () => {
       expect(r.payload.salesMode).toBe('preorder')
       expect(r.payload.preorderSupplierConfirmed).toBe(true)
       expect(r.payload.preorderShipsFrom).toBe('2026-10-20')
+      expect(r.payload.preorderCountdownEnabled).toBe(false)
+    }
+  })
+
+  it('accepts countdown when Closes at is in the future', () => {
+    const closes = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+    const r = buildMarketSSalesModePayload({
+      category: 'HotGoods',
+      salesMode: 'preorder',
+      preorderSupplierConfirmed: true,
+      preorderShipsFrom: '2026-12-01',
+      preorderClosesAt: closes,
+      preorderCountdownEnabled: true,
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.payload.preorderCountdownEnabled).toBe(true)
+      expect(r.payload.preorderClosesAt).toBe(closes)
     }
   })
 
@@ -198,5 +230,45 @@ describe('order preorder snapshot', () => {
       )
     ).toThrow(/not available/i)
     expect(() => assertMarketSCatalogAllowsPurchase(openPreorder, 1)).not.toThrow()
+  })
+})
+
+describe('Market S preorder countdown', () => {
+  const closesSoon = '2026-10-25T12:00:00.000Z'
+  const base = {
+    category: 'HotGoods' as const,
+    salesMode: 'preorder' as const,
+    preorderSupplierConfirmed: true,
+    preorderShipsFrom: '2026-11-01',
+    preorderClosesAt: closesSoon,
+    preorderCountdownEnabled: true,
+  }
+
+  it('shows only when admin enabled, open, and within 7-day window', () => {
+    const now = new Date('2026-10-20T12:00:00.000Z') // 5 days left
+    expect(shouldShowMarketSPreorderCountdown(base, now)).toBe(true)
+    expect(
+      shouldShowMarketSPreorderCountdown({ ...base, preorderCountdownEnabled: false }, now)
+    ).toBe(false)
+    expect(
+      shouldShowMarketSPreorderCountdown({ ...base, preorderClosesAt: undefined }, now)
+    ).toBe(false)
+    // Outside window (>7 days)
+    expect(shouldShowMarketSPreorderCountdown(base, new Date('2026-10-10T12:00:00.000Z'))).toBe(
+      false
+    )
+    // Already closed
+    expect(shouldShowMarketSPreorderCountdown(base, new Date('2026-10-26T12:00:00.000Z'))).toBe(
+      false
+    )
+  })
+
+  it('returns day/hour/minute parts when visible', () => {
+    const now = new Date('2026-10-24T12:00:00.000Z') // 1 day left
+    const parts = getMarketSPreorderCountdownParts(base, now)
+    expect(parts).not.toBeNull()
+    expect(parts!.days).toBe(1)
+    expect(parts!.hours).toBe(0)
+    expect(parts!.minutes).toBe(0)
   })
 })

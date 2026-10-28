@@ -26,8 +26,10 @@ import {
   MARKET_S_COMING_SOON_CTA,
   MARKET_S_PREORDER_BADGE,
   MARKET_S_PREORDER_CTA,
+  shouldShowMarketSPreorderCountdown,
   type MarketSSalesMode,
 } from '@/lib/marketSPreorder'
+import MarketSPreorderCountdown from '@/components/market-s/MarketSPreorderCountdown'
 import { resolveStorefrontImageSrc } from '@/lib/optimizeStorefrontImageUrl'
 
 // Market S 상품 타입 정의
@@ -62,6 +64,7 @@ interface MarketSProduct {
   preorderSupplierConfirmed?: boolean
   preorderShipsFrom?: string
   preorderClosesAt?: string
+  preorderCountdownEnabled?: boolean
   preorderMaxQty?: number
   preorderSoldCount?: number
   preorderNote?: string
@@ -245,6 +248,7 @@ export default function HotGoodsPage() {
           preorderSupplierConfirmed: !!(product as any).preorderSupplierConfirmed,
           preorderShipsFrom: (product as any).preorderShipsFrom || '',
           preorderClosesAt: (product as any).preorderClosesAt || '',
+          preorderCountdownEnabled: !!(product as any).preorderCountdownEnabled,
           preorderMaxQty: (product as any).preorderMaxQty,
           preorderSoldCount: (product as any).preorderSoldCount,
           preorderNote: (product as any).preorderNote || '',
@@ -263,6 +267,10 @@ export default function HotGoodsPage() {
   const openPreorderProducts = useMemo(
     () => marketSProducts.filter((p) => isMarketSPreorderOpen(p)),
     [marketSProducts]
+  )
+  const bannerCountdownProduct = useMemo(
+    () => openPreorderProducts.find((p) => shouldShowMarketSPreorderCountdown(p)) || null,
+    [openPreorderProducts]
   )
 
   const typingText = 'MARKET S: COMING SOON'
@@ -535,6 +543,9 @@ export default function HotGoodsPage() {
               <p className="text-sm text-stone-300 max-w-md">
                 Limited drops with confirmed supply. Charged now, ships on the date shown.
               </p>
+              {bannerCountdownProduct ? (
+                <MarketSPreorderCountdown product={bannerCountdownProduct} className="mt-1 max-w-md" />
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -797,6 +808,9 @@ export default function HotGoodsPage() {
                     </div>
                     {preorderOpen && shipsLabel ? (
                       <div className="text-xs text-stone-600 font-medium mt-0.5">{shipsLabel}</div>
+                    ) : null}
+                    {preorderOpen ? (
+                      <MarketSPreorderCountdown product={product} compact />
                     ) : null}
                     {isLowStock && typeof stockQty === 'number' && (
                       <div className="text-xs text-red-600 font-medium">

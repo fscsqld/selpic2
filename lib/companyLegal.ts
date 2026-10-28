@@ -24,6 +24,9 @@ export const COMPANY_LEGAL_LINE = '© 2026 Selpic. All rights reserved.'
 /** Company logo path (emails, invoices, footer — real PNG/SVG in /public, not a stub) */
 export const COMPANY_LOGO_URL = '/logo.png'
 
+/** Default PO Authorized Signatory image (transparent WebP under /public/images). */
+export const COMPANY_PO_SIGNATURE_URL = '/images/sign-jinsoo-kim.webp'
+
 /** Shown at the bottom of transactional emails and the website footer */
 export const EMAIL_CONFIDENTIALITY_NOTICE =
   'Confidentiality Notice: This email and any files transmitted with it are confidential and intended solely for the use of the individual or entity to whom they are addressed. If you have received this email in error, please notify the sender and delete this email from your system. Any unauthorized use, disclosure, or distribution is prohibited.'

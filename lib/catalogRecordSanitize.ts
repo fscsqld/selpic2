@@ -291,6 +291,9 @@ export function sanitizeIncomingCatalogRecord(item: unknown): CatalogProductReco
   if (typeof clone.preorderClosesAt === 'string' && clone.preorderClosesAt.trim()) {
     record.preorderClosesAt = clone.preorderClosesAt.trim().slice(0, 40)
   }
+  if (typeof clone.preorderCountdownEnabled === 'boolean') {
+    record.preorderCountdownEnabled = clone.preorderCountdownEnabled
+  }
   if (typeof clone.preorderMaxQty === 'number' && Number.isFinite(clone.preorderMaxQty)) {
     record.preorderMaxQty = Math.max(0, Math.floor(clone.preorderMaxQty))
   }

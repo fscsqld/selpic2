@@ -73,13 +73,32 @@ function escHtml(s: string): string {
 export const MARKET_S_PREORDER_DELAY_DEFAULT_REASON =
   'Due to unforeseen international transit and customs delays, the shipping schedule for your item has been adjusted.'
 
+/** Default early-arrival reason when admin moves ships-from earlier. */
+export const MARKET_S_PREORDER_EARLY_DEFAULT_REASON =
+  'Good news — stock became available earlier than planned, so we have brought forward the estimated dispatch date for your pre-order.'
+
+export type PreorderShipDateUpdateKind = 'early' | 'delay' | 'same'
+
+export function resolvePreorderShipDateUpdateKind(
+  previousShipsFrom: string | undefined,
+  newShipsFrom: string
+): PreorderShipDateUpdateKind {
+  const prev = (previousShipsFrom || '').trim().slice(0, 10)
+  const next = (newShipsFrom || '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return 'delay'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(prev)) return 'delay'
+  if (next < prev) return 'early'
+  if (next > prev) return 'delay'
+  return 'same'
+}
+
 export function buildPreorderDelayEmailSubject(orderId: string): string {
   return `[Selpic] Pre-order update: ${orderId} — updated ship date`
 }
 
 /**
- * Customer delay notice HTML. Signature + confidentiality come from transactional branding.
- * Structure matches owner-approved sample (Updated Ship Date block + AusPost note + apology).
+ * Customer ship-date update HTML (earlier or later).
+ * Signature + confidentiality come from transactional branding.
  */
 export function buildPreorderDelayEmailHtml(input: {
   order: OrderRecord
@@ -88,12 +107,16 @@ export function buildPreorderDelayEmailHtml(input: {
   adminNote?: string
 }): string {
   const { order, previousShipsFrom, newShipsFrom, adminNote } = input
+  const kind = resolvePreorderShipDateUpdateKind(previousShipsFrom, newShipsFrom)
+  const isEarly = kind === 'early'
   const name = escHtml(resolveOrderCustomerGreetingName(order.customer))
   const newLabel = escHtml(formatPreorderShipsFromLabel(newShipsFrom) || `Ships from ${newShipsFrom}`)
   const prevLabel = previousShipsFrom
     ? escHtml(formatPreorderShipsFromLabel(previousShipsFrom) || `Ships from ${previousShipsFrom}`)
     : ''
-  const reason = (adminNote || '').trim().slice(0, 500) || MARKET_S_PREORDER_DELAY_DEFAULT_REASON
+  const reason =
+    (adminNote || '').trim().slice(0, 500) ||
+    (isEarly ? MARKET_S_PREORDER_EARLY_DEFAULT_REASON : MARKET_S_PREORDER_DELAY_DEFAULT_REASON)
   const preorderItems = (order.items || []).filter((i) => i.salesModeAtOrder === 'preorder')
 
   let itemLineHtml: string
@@ -111,11 +134,21 @@ export function buildPreorderDelayEmailHtml(input: {
     </li>`
   }
 
+  const intro = isEarly
+    ? 'We are writing with an update on the estimated dispatch date for your pre-order.'
+    : 'Thank you for your patience. We are writing to inform you of an update regarding the estimated dispatch date for your pre-order.'
+  const closing = isEarly
+    ? `We look forward to getting your order on its way. If you have any questions before dispatch, please reply to this email or contact us at <a href="mailto:info@selpic.com.au" style="color:#4f46e5;">info@selpic.com.au</a>.`
+    : `We sincerely apologize for this delay and any inconvenience it may cause. If you have any questions or wish to request a change to your order prior to dispatch, please reply directly to this email or contact us at <a href="mailto:info@selpic.com.au" style="color:#4f46e5;">info@selpic.com.au</a>.`
+  const boxBg = isEarly ? '#ecfdf5' : '#fffbeb'
+  const boxBorder = isEarly ? '#6ee7b7' : '#fcd34d'
+  const boxColor = isEarly ? '#065f46' : '#92400e'
+
   return `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55;color:#111;max-width:600px;margin:0 auto;padding:16px;">
   <p style="margin:0 0 12px;">Dear ${name},</p>
-  <p style="margin:0 0 12px;">Thank you for your patience. We are writing to inform you of an update regarding the estimated dispatch date for your pre-order.</p>
+  <p style="margin:0 0 12px;">${intro}</p>
   <p style="margin:0 0 12px;">${escHtml(reason)}</p>
-  <p style="margin:0 0 8px;padding:10px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;color:#92400e;">
+  <p style="margin:0 0 8px;padding:10px 12px;background:${boxBg};border:1px solid ${boxBorder};border-radius:8px;color:${boxColor};">
     <strong>Updated Ship Date</strong>
   </p>
   <ul style="margin:0 0 16px;padding-left:20px;">
@@ -125,6 +158,6 @@ export function buildPreorderDelayEmailHtml(input: {
     <li><strong>New Ship Date:</strong> ${newLabel}</li>
   </ul>
   <p style="margin:0 0 12px;">Please note that AusPost transit times start after we dispatch your order (on or after the updated date above), not from the date of payment.</p>
-  <p style="margin:0;">We sincerely apologize for this delay and any inconvenience it may cause. If you have any questions or wish to request a change to your order prior to dispatch, please reply directly to this email or contact us at <a href="mailto:info@selpic.com.au" style="color:#4f46e5;">info@selpic.com.au</a>.</p>
+  <p style="margin:0;">${closing}</p>
 </div>`
 }

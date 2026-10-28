@@ -28,7 +28,6 @@ import {
 } from '@/lib/poHanaOneGoogleForm'
 import { usePoStore, type SavedPurchaseOrder } from '@/lib/poStore'
 import { formatPoMoney } from '@/lib/purchaseOrderTotals'
-import { shipmentMethodLabel } from '@/lib/purchaseOrderTypes'
 import { scheduleLogAdminActivity } from '@/lib/loadLogAdminActivity'
 import PurchaseOrderTemplate from '@/components/invoice/PurchaseOrderTemplate'
 
@@ -43,8 +42,14 @@ type RowDraft = {
 }
 
 function modeLabel(row: SavedPurchaseOrder): string {
+  const hub = row.doc.shipTo?.transportMode
+  if (hub === 'air') return 'Air'
+  if (hub === 'sea') return 'Sea'
   const m = row.doc.trade.shipmentMethod
-  return shipmentMethodLabel(m, 'en')
+  if (m === 'air') return 'Air'
+  if (m === 'sea') return 'Sea'
+  if (m === 'express') return 'Express'
+  return 'Hub'
 }
 
 export default function PoDashboardPanel({ onOpenInCreator }: Props) {
@@ -185,6 +190,10 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
             scrollX: 0,
             scrollY: 0,
             windowWidth: host.scrollWidth,
+          },
+          pagebreak: {
+            mode: ['css', 'legacy'],
+            avoid: ['.po-pdf-keep'],
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         })
@@ -375,7 +384,7 @@ export default function PoDashboardPanel({ onOpenInCreator }: Props) {
                       {formatPoMoney(row.doc.totals.total, row.doc.payment.currency)}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap text-slate-700">
-                      {modeLabel(row).replace(' Freight', '')}
+                      {modeLabel(row)}
                     </td>
                     <td className="px-3 py-3">
                       <select

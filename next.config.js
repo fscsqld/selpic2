@@ -47,6 +47,15 @@ if (process.env.VERCEL === '1' && NEXT_PUBLIC_SUPABASE_URL && !NEXT_PUBLIC_SUPAB
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: ['192.168.1.104'],
+  /**
+   * PO PDF email (and similar) sends attachments via Server Actions as base64.
+   * Default 1mb rejects multi-page html2pdf payloads; 4mb covers typical PO PDFs.
+   */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
+  },
   // iPad Safari compatibility: ensure swiper client bundle is transpiled for older WebKit engines.
   transpilePackages: ['swiper'],
   /** New id per deploy so `/_next/static/<buildId>/…` URLs change (stronger than manual ?v= on chunks). */

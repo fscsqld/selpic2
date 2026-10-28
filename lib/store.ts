@@ -105,6 +105,8 @@ export interface Product {
   preorderShipsFrom?: string
   /** Optional ISO datetime when pre-order closes. */
   preorderClosesAt?: string
+  /** When true, storefront shows countdown to preorderClosesAt in the last 7 days (admin opt-in). */
+  preorderCountdownEnabled?: boolean
   /** Optional total pre-order unit cap. */
   preorderMaxQty?: number
   /** Units already reserved via pre-order (optional counter). */

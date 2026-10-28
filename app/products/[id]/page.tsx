@@ -31,6 +31,7 @@ import {
   MARKET_S_PREORDER_BADGE,
   MARKET_S_PREORDER_CTA,
 } from '@/lib/marketSPreorder'
+import MarketSPreorderCountdown from '@/components/market-s/MarketSPreorderCountdown'
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
@@ -484,11 +485,12 @@ export default function ProductDetailPage() {
             </div>
 
             {preorderOpen && (
-              <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800">
+              <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 space-y-2">
                 <p className="font-semibold tracking-wide text-xs text-stone-500 mb-1">
                   {MARKET_S_PREORDER_BADGE}
                 </p>
                 {shipsLabel ? <p className="font-medium">{shipsLabel}</p> : null}
+                <MarketSPreorderCountdown product={product} tone="light" />
                 {typeof product.preorderMaxQty === 'number' &&
                 product.preorderMaxQty > 0 &&
                 preorderLimit != null ? (

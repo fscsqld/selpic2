@@ -13,6 +13,7 @@ export type MarketSPreorderFields = Partial<
     | 'preorderSupplierNote'
     | 'preorderShipsFrom'
     | 'preorderClosesAt'
+    | 'preorderCountdownEnabled'
     | 'preorderMaxQty'
     | 'preorderSoldCount'
     | 'preorderNote'
@@ -20,6 +21,9 @@ export type MarketSPreorderFields = Partial<
 >
 
 const PREORDER_CART_SOFT_CAP = 99
+
+/** Show close-countdown only inside this window (days before `preorderClosesAt`). */
+export const MARKET_S_PREORDER_COUNTDOWN_WINDOW_DAYS = 7
 
 export function normalizeMarketSSalesMode(
   value: unknown
@@ -113,6 +117,79 @@ export function formatPreorderShipsFromLabel(shipsFrom: string | undefined): str
     timeZone: 'UTC',
   })
   return `Ships from ${label}`
+}
+
+/** Parse admin ISO / datetime-local value to a Date (invalid → null). */
+export function parsePreorderClosesAt(closesAt: string | undefined | null): Date | null {
+  const raw = (closesAt || '').trim()
+  if (!raw) return null
+  const t = Date.parse(raw)
+  if (!Number.isFinite(t)) return null
+  return new Date(t)
+}
+
+export function isMarketSPreorderCountdownEnabled(
+  product: MarketSPreorderFields | null | undefined
+): boolean {
+  return product?.preorderCountdownEnabled === true
+}
+
+/**
+ * Countdown to pre-order **close** (not ships-from).
+ * Requires open pre-order, admin opt-in, valid closesAt, and ≤ window days remaining.
+ */
+export function shouldShowMarketSPreorderCountdown(
+  product: MarketSPreorderFields | null | undefined,
+  now: Date = new Date(),
+  windowDays: number = MARKET_S_PREORDER_COUNTDOWN_WINDOW_DAYS
+): boolean {
+  if (!isMarketSPreorderOpen(product, now) || !product) return false
+  if (!isMarketSPreorderCountdownEnabled(product)) return false
+  const closes = parsePreorderClosesAt(product.preorderClosesAt)
+  if (!closes) return false
+  const msLeft = closes.getTime() - now.getTime()
+  if (msLeft <= 0) return false
+  const windowMs = Math.max(0, windowDays) * 24 * 60 * 60 * 1000
+  return msLeft <= windowMs
+}
+
+export type MarketSPreorderCountdownParts = {
+  closesAt: Date
+  totalMs: number
+  days: number
+  hours: number
+  minutes: number
+  seconds: number
+}
+
+export function getMarketSPreorderCountdownParts(
+  product: MarketSPreorderFields | null | undefined,
+  now: Date = new Date(),
+  windowDays: number = MARKET_S_PREORDER_COUNTDOWN_WINDOW_DAYS
+): MarketSPreorderCountdownParts | null {
+  if (!shouldShowMarketSPreorderCountdown(product, now, windowDays) || !product) return null
+  const closes = parsePreorderClosesAt(product.preorderClosesAt)
+  if (!closes) return null
+  const totalMs = Math.max(0, closes.getTime() - now.getTime())
+  const totalSec = Math.floor(totalMs / 1000)
+  const days = Math.floor(totalSec / 86400)
+  const hours = Math.floor((totalSec % 86400) / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  const seconds = totalSec % 60
+  return { closesAt: closes, totalMs, days, hours, minutes, seconds }
+}
+
+export function formatPreorderClosesAtLabel(closesAt: string | undefined): string {
+  const d = parsePreorderClosesAt(closesAt)
+  if (!d) return ''
+  return d.toLocaleString('en-AU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  })
 }
 
 export const MARKET_S_PREORDER_BADGE = 'PRE-ORDER'
@@ -262,6 +339,7 @@ export type MarketSPreorderSaveInput = {
   preorderSupplierNote?: unknown
   preorderShipsFrom?: unknown
   preorderClosesAt?: unknown
+  preorderCountdownEnabled?: unknown
   preorderMaxQty?: unknown
   preorderSoldCount?: unknown
   preorderNote?: unknown
@@ -284,6 +362,7 @@ export function buildMarketSSalesModePayload(input: MarketSPreorderSaveInput): {
         preorderSupplierNote: undefined,
         preorderShipsFrom: undefined,
         preorderClosesAt: undefined,
+        preorderCountdownEnabled: undefined,
         preorderMaxQty: undefined,
         preorderSoldCount: undefined,
         preorderNote: undefined,
@@ -302,6 +381,7 @@ export function buildMarketSSalesModePayload(input: MarketSPreorderSaveInput): {
         preorderSupplierNote: '',
         preorderShipsFrom: '',
         preorderClosesAt: '',
+        preorderCountdownEnabled: false,
         preorderMaxQty: undefined,
         preorderSoldCount:
           typeof input.preorderSoldCount === 'number' && Number.isFinite(input.preorderSoldCount)
@@ -321,6 +401,7 @@ export function buildMarketSSalesModePayload(input: MarketSPreorderSaveInput): {
         preorderSupplierNote: String(input.preorderSupplierNote || '').trim().slice(0, 500),
         preorderShipsFrom: String(input.preorderShipsFrom || '').trim().slice(0, 32),
         preorderClosesAt: '',
+        preorderCountdownEnabled: false,
         preorderMaxQty: undefined,
         preorderSoldCount: undefined,
         preorderNote: String(input.preorderNote || '').trim().slice(0, 120),
@@ -343,6 +424,24 @@ export function buildMarketSSalesModePayload(input: MarketSPreorderSaveInput): {
     }
   }
 
+  const preorderClosesAt = String(input.preorderClosesAt || '').trim().slice(0, 40)
+  const countdownEnabled = input.preorderCountdownEnabled === true
+  if (countdownEnabled) {
+    const closes = parsePreorderClosesAt(preorderClosesAt)
+    if (!closes) {
+      return {
+        ok: false,
+        error: 'Set Closes at before enabling the pre-order countdown.',
+      }
+    }
+    if (closes.getTime() <= Date.now()) {
+      return {
+        ok: false,
+        error: 'Closes at must be in the future when countdown is enabled.',
+      }
+    }
+  }
+
   let preorderMaxQty: number | undefined
   if (input.preorderMaxQty !== '' && input.preorderMaxQty != null) {
     const n = Number(input.preorderMaxQty)
@@ -359,7 +458,8 @@ export function buildMarketSSalesModePayload(input: MarketSPreorderSaveInput): {
       preorderSupplierConfirmed: true,
       preorderSupplierNote: String(input.preorderSupplierNote || '').trim().slice(0, 500),
       preorderShipsFrom: shipsFrom,
-      preorderClosesAt: String(input.preorderClosesAt || '').trim().slice(0, 40),
+      preorderClosesAt,
+      preorderCountdownEnabled: countdownEnabled,
       preorderMaxQty,
       preorderSoldCount:
         typeof input.preorderSoldCount === 'number' && Number.isFinite(input.preorderSoldCount)

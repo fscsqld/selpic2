@@ -2,6 +2,7 @@ import {
   COMPANY_CONTACT,
   COMPANY_LEGAL,
   COMPANY_LOGO_URL,
+  COMPANY_PO_SIGNATURE_URL,
 } from './companyLegal'
 import {
   DEFAULT_PO_TERMS_AND_CONDITIONS,
@@ -9,6 +10,7 @@ import {
   PO_PAYMENT_REMITTANCE_NOTE,
   normalizeSupplierBank,
   paymentTermsTextForPreset,
+  type PoPaymentTermsPreset,
   type PurchaseOrderDoc,
   type PurchaseOrderLine,
 } from './purchaseOrderTypes'
@@ -47,6 +49,45 @@ export function addCalendarDaysIso(days: number, from = new Date()): string {
 /** Company name only — ABN/ACN render on separate lines in the PDF template. */
 export function defaultPoBillToName(): string {
   return COMPANY_LEGAL.companyName
+}
+
+/**
+ * Resolve Buyer (SELPIC) signature image for PDF.
+ * Empty / missing → company default. `none` / `-` → blank sign line.
+ */
+export function resolvePoAuthorizedSignatureUrl(
+  url?: string | null
+): string {
+  const t = String(url ?? '').trim()
+  if (t === '-' || t.toLowerCase() === 'none') return ''
+  if (!t) return COMPANY_PO_SIGNATURE_URL
+  return t
+}
+
+/** ISO date (YYYY-MM-DD) → en display for PO signature date line; empty → —. */
+export function formatPoSignatureDate(isoDate?: string | null): string {
+  const raw = String(isoDate || '').trim()
+  if (!raw) return '—'
+  try {
+    const date = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`)
+    if (Number.isNaN(date.getTime())) return raw
+    const day = date.getDate()
+    const month = date.toLocaleDateString('en-US', { month: 'short' })
+    const year = date.getFullYear()
+    return `${day} ${month} ${year}`
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Latest ship date shown on PO PDF meta
+ * e.g. "On or before 10 Nov 2026".
+ */
+export function formatPoLatestShipDate(isoDate?: string | null): string {
+  const d = formatPoSignatureDate(isoDate)
+  if (d === '—') return d
+  return `On or before ${d}`
 }
 
 /** Default PO for Admin create — KRW / FOB Incheon / 100% advance / overseas zero-rated. */
@@ -128,7 +169,7 @@ export function getDefaultPurchaseOrderDoc(): PurchaseOrderDoc {
       instructionText: DEFAULT_PO_WAYBILL_INSTRUCTIONS,
     },
     notes: '',
-    signatureImageUrl: '',
+    signatureImageUrl: COMPANY_PO_SIGNATURE_URL,
     totals,
   }
 }
@@ -146,6 +187,85 @@ export function sanitizeSupplierNameForFilename(name: string): string {
 
 export function buildPoPdfFilename(poNumber: string, supplierName: string): string {
   return `${poNumber}_${sanitizeSupplierNameForFilename(supplierName)}.pdf`
+}
+
+/**
+ * Payment paragraph for supplier PO email — follows Payment terms preset (not always 100% advance).
+ */
+export function buildPoSupplierEmailPaymentParagraph(input: {
+  termsPreset?: PoPaymentTermsPreset | null
+  termsText?: string | null
+}): string {
+  const preset = input.termsPreset || 'advance_100'
+  const custom = String(input.termsText || '').trim()
+
+  switch (preset) {
+    case 'advance_100':
+      return (
+        'As per our agreed payment terms, 100% advance T/T payment will be remitted upon receipt of your written confirmation / signed PO copy, referencing the PO number on the transaction.'
+      )
+    case 'deposit_30_70_ship':
+      return (
+        'As per our agreed payment terms, a 30% deposit by T/T will be remitted upon receipt of your written confirmation / signed PO copy (please reference the PO number). The remaining 70% balance will be remitted before shipment.'
+      )
+    case 'deposit_30_70_bl':
+      return (
+        'As per our agreed payment terms, a 30% deposit by T/T will be remitted upon receipt of your written confirmation / signed PO copy (please reference the PO number). The remaining 70% balance will be remitted against a copy of the Bill of Lading.'
+      )
+    case 'net_30':
+      return (
+        'As per our agreed payment terms, payment will be remitted by T/T on Net 30 days from invoice date after your written confirmation / signed PO copy, referencing the PO number on the transaction.'
+      )
+    case 'custom':
+      if (custom) {
+        return `As per our agreed payment terms: ${custom}`
+      }
+      return (
+        'As per our agreed payment terms stated on the attached Purchase Order, payment will be remitted by T/T after your written confirmation / signed PO copy, referencing the PO number on the transaction.'
+      )
+    default:
+      return (
+        'As per our agreed payment terms stated on the attached Purchase Order, payment will be remitted by T/T after your written confirmation / signed PO copy, referencing the PO number on the transaction.'
+      )
+  }
+}
+
+/**
+ * Default supplier email body when sending a PO (admin can override via Message field).
+ */
+export function buildDefaultPoSupplierEmailBody(input: {
+  poNumber: string
+  contactPerson?: string | null
+  vendorName?: string | null
+  requiredShipDate?: string | null
+  termsPreset?: PoPaymentTermsPreset | null
+  termsText?: string | null
+}): string {
+  const vendor = String(input.vendorName || '').trim() || 'Supplier'
+  const contactRaw = String(input.contactPerson || '').trim() || vendor
+  const greetingName = /\bteam\b/i.test(contactRaw) ? contactRaw : `${contactRaw} Team`
+  const company = COMPANY_LEGAL.companyName
+  const poNumber = String(input.poNumber || '').trim() || 'PO'
+  const shipLine = input.requiredShipDate
+    ? formatPoLatestShipDate(input.requiredShipDate)
+    : null
+
+  const confirmLine = shipLine
+    ? `Kindly review the order details and confirm acceptance of the items, quantities, pricing, and the latest ship date (${shipLine.toLowerCase()}).`
+    : `Kindly review the order details and confirm acceptance of the items, quantities, pricing, and the latest ship date.`
+
+  const paymentLine = buildPoSupplierEmailPaymentParagraph({
+    termsPreset: input.termsPreset,
+    termsText: input.termsText,
+  })
+
+  return (
+    `Dear ${greetingName},\n\n` +
+    `Please find attached Purchase Order ${poNumber} from ${company}.\n\n` +
+    `${confirmLine}\n\n` +
+    `${paymentLine}\n\n` +
+    `Thank you, and we look forward to your prompt confirmation.`
+  )
 }
 
 /**

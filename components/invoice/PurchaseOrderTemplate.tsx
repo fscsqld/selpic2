@@ -4,10 +4,9 @@ import React from 'react'
 import {
   OVERSEAS_ZERO_RATED_DISCLAIMER,
   PO_PAYMENT_REMITTANCE_NOTE,
-  formatIncotermLine,
+  PO_PDF_SHIPMENT_LABEL,
   normalizeSupplierBank,
   packUnitLabel,
-  shipmentMethodLabel,
   taxRuleLabel,
   type PoLabelLocale,
   type PurchaseOrderDoc,
@@ -17,6 +16,11 @@ import {
   formatPoPersonName,
   resolveBillToDisplay,
 } from '@/lib/poDisplayNormalize'
+import {
+  formatPoLatestShipDate,
+  formatPoSignatureDate,
+  resolvePoAuthorizedSignatureUrl,
+} from '@/lib/purchaseOrderDefaults'
 import { formatPoMoney, lineAmount } from '@/lib/purchaseOrderTotals'
 import PoHubInstructionCard from '@/components/invoice/PoHubInstructionCard'
 
@@ -53,7 +57,6 @@ export type PurchaseOrderTemplateProps = {
 export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProps) {
   const locale = doc.poMeta.labelLocale || 'en'
   const currency = doc.payment.currency
-  const incotermLine = formatIncotermLine(doc.trade.incoterm, doc.trade.namedPlace)
   const supplierBank = normalizeSupplierBank(doc.payment.supplierBank)
   const remittanceNote =
     supplierBank.note?.trim() || PO_PAYMENT_REMITTANCE_NOTE
@@ -66,6 +69,8 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
     doc.poMeta.poNumber
   )
   const vendorAttn = formatPoPersonName(doc.vendor.contactPerson)
+  const authorizedSignatureUrl = resolvePoAuthorizedSignatureUrl(doc.signatureImageUrl)
+  const authorizedSignatureDate = formatPoSignatureDate(doc.poMeta.issueDate)
 
   return (
     <div
@@ -149,23 +154,24 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
             {doc.poMeta.requiredShipDate ? (
               <p>
                 <span className="text-slate-500 font-medium">
-                  {L({ locale, en: 'Required Ship / Delivery', ko: '요구 선적·납기' })}:
+                  {L({
+                    locale,
+                    en: 'Latest Ship Date',
+                    ko: '최종 선적일',
+                  })}
+                  :
                 </span>{' '}
                 <span className="text-slate-800 font-semibold">
-                  {formatDate(doc.poMeta.requiredShipDate)}
+                  {formatPoLatestShipDate(doc.poMeta.requiredShipDate)}
                 </span>
               </p>
             ) : null}
-            <p>
-              <span className="text-slate-500 font-medium">Incoterms:</span>{' '}
-              <span className="text-slate-800 font-semibold">{incotermLine}</span>
-            </p>
-            <p>
+            <p className="whitespace-nowrap text-[12px] leading-snug">
               <span className="text-slate-500 font-medium">
                 {L({ locale, en: 'Shipment', ko: '운송' })}:
               </span>{' '}
-              <span className="text-slate-800">
-                {shipmentMethodLabel(doc.trade.shipmentMethod, locale)}
+              <span className="text-slate-800 font-semibold">
+                {locale === 'ko' ? '지정 에이전트 국내 납품' : PO_PDF_SHIPMENT_LABEL}
               </span>
             </p>
             <p>
@@ -394,10 +400,13 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
 
       {/* Notes & T&C — kept near totals to reduce orphan page-2 whitespace */}
       {(doc.notes || doc.termsAndConditions) && (
-        <div className="px-8 pb-3 space-y-3">
+        <div
+          className="po-pdf-keep px-8 pb-3 space-y-3"
+          style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+        >
           {doc.notes ? (
             <div>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 leading-normal">
                 {L({ locale, en: 'Notes', ko: '비고' })}
               </h3>
               <p className="text-sm text-slate-700 whitespace-pre-line">{doc.notes}</p>
@@ -405,7 +414,7 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
           ) : null}
           {doc.termsAndConditions ? (
             <div>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 leading-normal">
                 {L({ locale, en: 'Terms & Conditions', ko: '거래 조건' })}
               </h3>
               <p className="text-[11px] text-slate-600 whitespace-pre-line leading-snug">
@@ -416,17 +425,23 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
         </div>
       )}
 
-      {/* Footer: full-width bank, then balanced 2-column signatures */}
+      {/*
+        Footer bank + signatures: keep each block intact across PDF page breaks.
+        html2canvas/html2pdf otherwise slices headings mid-glyph (looks like "broken" text).
+      */}
       <div className="px-8 py-4 border-t border-slate-200">
-        <div>
-          <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+        <div
+          className="po-pdf-keep"
+          style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+        >
+          <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 leading-normal">
             {L({
               locale,
               en: 'Supplier Bank Account (Remit To)',
               ko: '공급사 입금 계좌 (송금처)',
             })}
           </h3>
-          <p className="text-[10px] text-amber-800 mb-2.5 leading-snug">
+          <p className="text-[10px] text-amber-800 mb-2.5 leading-normal">
             {L({
               locale,
               en: 'SELPIC remits payment TO this supplier account (not SELPIC receiving account).',
@@ -499,29 +514,33 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-10 items-stretch mt-5 pt-4 border-t border-slate-100">
+        <div
+          className="po-pdf-keep grid grid-cols-2 gap-10 items-stretch mt-5 pt-4 border-t border-slate-100"
+          style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+        >
           <div className="flex flex-col">
-            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 leading-normal">
               {L({ locale, en: 'Authorized Signatory', ko: '발주 승인' })}
             </h3>
             <p className="text-[13px] font-semibold text-slate-800 mb-2">SELPIC PTY LTD</p>
-            {doc.signatureImageUrl ? (
+            {authorizedSignatureUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={doc.signatureImageUrl}
+                src={authorizedSignatureUrl}
                 alt="Authorized signature"
-                className="h-11 w-auto max-w-[200px] object-contain mb-2 mt-1"
+                className="h-14 w-auto max-w-[240px] object-contain mb-2 mt-1"
               />
             ) : (
               <div className="h-11 border-b border-slate-400 mb-2 mt-1 w-52" />
             )}
-            <p className="text-[11px] text-slate-500 mt-auto pt-1">
-              {L({ locale, en: 'Signature / Date', ko: '서명 / 일자' })}: ________________
+            <p className="text-[11px] text-slate-600 mt-auto pt-1">
+              {L({ locale, en: 'Signature / Date', ko: '서명 / 일자' })}:{' '}
+              <span className="font-medium text-slate-800">{authorizedSignatureDate}</span>
             </p>
           </div>
 
           <div className="border border-slate-300 rounded-md px-4 py-3.5 bg-slate-50 flex flex-col">
-            <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-2">
+            <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-2 leading-normal">
               {L({ locale, en: 'Supplier Acknowledgement', ko: '공급사 수락 확인' })}
             </h3>
             <p className="text-[13px] text-slate-700 mb-3 leading-snug">

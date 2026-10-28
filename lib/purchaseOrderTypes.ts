@@ -61,6 +61,7 @@ export interface PurchaseOrderDoc {
   poMeta: {
     poNumber: string
     issueDate: string
+    /** Latest ship date shown on PDF as “On or before {date}”. */
     requiredShipDate?: string
     revision?: number
     status: PoStatus
@@ -148,7 +149,11 @@ export interface PurchaseOrderDoc {
   }
   termsAndConditions: string
   notes?: string
-  /** Optional Admin signature image URL (blank line if empty). */
+  /**
+   * Buyer (SELPIC) authorized signature image URL.
+   * Default: company WebP. Empty falls back to company default; `none` / `-` = blank sign line.
+   * Date line uses Issue Date. Supplier acknowledgement stays blank.
+   */
   signatureImageUrl?: string
   totals: {
     subtotal: number
@@ -244,6 +249,9 @@ export const PO_SHIPMENT_METHODS: { value: PoShipmentMethod; label: string }[] =
   { value: 'sea', label: 'Sea Freight' },
   { value: 'express', label: 'Express / EMS' },
 ]
+
+/** Supplier-facing PO PDF shipment line (hub handoff — not Express/EMS or vessel mode). */
+export const PO_PDF_SHIPMENT_LABEL = 'Domestic Delivery to Designated Agent' as const
 
 export const PO_CURRENCIES: PoCurrency[] = ['KRW', 'USD', 'AUD', 'EUR']
 

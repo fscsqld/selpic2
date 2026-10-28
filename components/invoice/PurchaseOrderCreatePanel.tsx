@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Download,
   Eye,
+  ImagePlus,
   Loader2,
   Plus,
   Save,
@@ -20,9 +21,11 @@ import PoFormSection from '@/components/invoice/PoFormSection'
 import PoHubInstructionCard from '@/components/invoice/PoHubInstructionCard'
 import {
   applyFinalizedPoNumber,
+  buildDefaultPoSupplierEmailBody,
   buildPoPdfFilename,
   createEmptyPoLine,
   getDefaultPurchaseOrderDoc,
+  resolvePoAuthorizedSignatureUrl,
 } from '@/lib/purchaseOrderDefaults'
 import {
   applySupplierToPoDoc,
@@ -46,15 +49,10 @@ import {
 } from '@/lib/poForwarderTypes'
 import {
   PO_CURRENCIES,
-  PO_INCOTERMS_MORE,
-  PO_INCOTERMS_PRIMARY,
   PO_PACK_UNITS,
   PO_PAYMENT_PRESETS,
   PO_PAYMENT_REMITTANCE_NOTE,
-  PO_SHIPMENT_METHODS,
   PO_TAX_RULES,
-  formatIncotermLine,
-  namedPlacePlaceholder,
   normalizeSupplierBank,
   paymentTermsTextForPreset,
   type PoPaymentTermsPreset,
@@ -62,7 +60,7 @@ import {
 } from '@/lib/purchaseOrderTypes'
 import { computePurchaseOrderTotals, formatPoMoney } from '@/lib/purchaseOrderTotals'
 import { ensureMonthlyDocNumber } from '@/lib/invoiceRefNumber'
-import { COMPANY_LEGAL, getCompanyBrandName } from '@/lib/companyLegal'
+import { COMPANY_PO_SIGNATURE_URL } from '@/lib/companyLegal'
 import { usePoStore } from '@/lib/poStore'
 import { useDocumentSendLogStore } from '@/lib/documentSendLogStore'
 import { emailService } from '@/lib/emailService'
@@ -136,6 +134,8 @@ export default function PurchaseOrderCreatePanel({
   const [message, setMessage] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [signatureDragOver, setSignatureDragOver] = useState(false)
+  const signatureFileInputRef = useRef<HTMLInputElement>(null)
   const [sectionOpen, setSectionOpen] = useState({
     order: true,
     supplier: true,
@@ -209,6 +209,33 @@ export default function PurchaseOrderCreatePanel({
   const updateDoc = useCallback((updater: (prev: PurchaseOrderDoc) => PurchaseOrderDoc) => {
     setDoc((prev) => recompute(updater(prev)))
   }, [])
+
+  const applySignatureFile = useCallback(
+    (file: File | null | undefined) => {
+      if (!file) return
+      if (!file.type.startsWith('image/')) {
+        alert('Please drop a PNG, WebP, or JPG signature image.')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Signature image must be under 2 MB.')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : ''
+        if (!result.startsWith('data:image/')) {
+          alert('Could not read that image. Try PNG or WebP.')
+          return
+        }
+        updateDoc((p) => ({ ...p, signatureImageUrl: result }))
+        setNotice('Authorized signature updated from dropped image.')
+      }
+      reader.onerror = () => alert('Could not read signature file.')
+      reader.readAsDataURL(file)
+    },
+    [updateDoc]
+  )
 
   const applyRegisteredForwarder = useCallback(
     (forwarderId: string, transportMode: PoForwarderTransportMode) => {
@@ -330,6 +357,11 @@ export default function PurchaseOrderCreatePanel({
       scrollY: 0,
       windowWidth: element.scrollWidth,
     },
+    // Keep bank / signature / T&C blocks from slicing mid-heading across A4 pages.
+    pagebreak: {
+      mode: ['css', 'legacy'] as ('css' | 'legacy')[],
+      avoid: ['.po-pdf-keep'],
+    },
     jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
   })
 
@@ -385,7 +417,6 @@ export default function PurchaseOrderCreatePanel({
     }
     setSectionOpen((prev) => ({ ...prev, preview: true }))
     setIsSending(true)
-    const brandName = getCompanyBrandName(COMPANY_LEGAL.companyName)
     const sentBy = adminUser?.username || adminUser?.email || 'Admin'
     let poNumber = doc.poMeta.poNumber
     let emailContent = ''
@@ -409,12 +440,15 @@ export default function PurchaseOrderCreatePanel({
 
       const vendorName = doc.vendor.name || 'Supplier'
       emailContent =
-        message ||
-        `Dear ${doc.vendor.contactPerson || vendorName},\n\n` +
-          `Please find attached Purchase Order ${poNumber} from ${brandName}.\n\n` +
-          `Kindly confirm acceptance of the quantities, pricing, Incoterms, and delivery schedule.\n\n` +
-          `Please use the PO Number as the remittance reference when payment is due.\n\n` +
-          `Best regards,\n${brandName}`
+        message.trim() ||
+        buildDefaultPoSupplierEmailBody({
+          poNumber,
+          contactPerson: doc.vendor.contactPerson,
+          vendorName,
+          requiredShipDate: doc.poMeta.requiredShipDate,
+          termsPreset: doc.payment.termsPreset,
+          termsText: doc.payment.termsText,
+        })
 
       subject = `[SELPIC PO] ${poNumber} — ${vendorName}`
 
@@ -603,7 +637,13 @@ export default function PurchaseOrderCreatePanel({
             title="1. Order"
             open={sectionOpen.order}
             onToggle={() => toggleSection('order')}
-            summary={`${doc.trade.incoterm} ${doc.trade.namedPlace || ''} · ${doc.trade.shipmentMethod} · ${doc.payment.currency}`}
+            summary={`${doc.payment.currency} · ${
+              doc.shipTo.transportMode === 'air'
+                ? 'Air hub'
+                : doc.shipTo.transportMode === 'sea'
+                  ? 'Sea hub'
+                  : 'Hub'
+            }`}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
@@ -637,7 +677,7 @@ export default function PurchaseOrderCreatePanel({
                 />
               </div>
               <div>
-                <label className={label}>Required ship date</label>
+                <label className={label}>Latest ship date</label>
                 <input
                   type="date"
                   className={field}
@@ -649,6 +689,9 @@ export default function PurchaseOrderCreatePanel({
                     }))
                   }
                 />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Shows on PDF as “Latest Ship Date: On or before …”.
+                </p>
               </div>
               <div>
                 <label className={label}>Supplier Quote / PI (optional)</label>
@@ -662,79 +705,6 @@ export default function PurchaseOrderCreatePanel({
                     }))
                   }
                 />
-              </div>
-              <div className="md:col-span-2">
-                <label className={label}>Incoterms + Port / Designated Place</label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <select
-                    className={`${field} sm:w-44 shrink-0`}
-                    value={doc.trade.incoterm}
-                    onChange={(e) =>
-                      updateDoc((p) => ({
-                        ...p,
-                        trade: {
-                          ...p.trade,
-                          incoterm: e.target.value as PurchaseOrderDoc['trade']['incoterm'],
-                        },
-                      }))
-                    }
-                  >
-                    <optgroup label="Primary">
-                      {PO_INCOTERMS_PRIMARY.map((t) => (
-                        <option key={t} value={t}>
-                          {t === 'FOB' ? 'FOB (default)' : t}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="More (Advanced)">
-                      {PO_INCOTERMS_MORE.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  <input
-                    className={field}
-                    value={doc.trade.namedPlace}
-                    placeholder={namedPlacePlaceholder(doc.trade.incoterm)}
-                    onChange={(e) =>
-                      updateDoc((p) => ({
-                        ...p,
-                        trade: { ...p.trade, namedPlace: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  PDF shows:{' '}
-                  <span className="font-semibold text-slate-700">
-                    {formatIncotermLine(doc.trade.incoterm, doc.trade.namedPlace)}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <label className={label}>Shipment</label>
-                <select
-                  className={field}
-                  value={doc.trade.shipmentMethod}
-                  onChange={(e) =>
-                    updateDoc((p) => ({
-                      ...p,
-                      trade: {
-                        ...p.trade,
-                        shipmentMethod: e.target
-                          .value as PurchaseOrderDoc['trade']['shipmentMethod'],
-                      },
-                    }))
-                  }
-                >
-                  {PO_SHIPMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className={label}>Currency</label>
@@ -1680,14 +1650,88 @@ export default function PurchaseOrderCreatePanel({
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className={label}>Signature image URL</label>
-                    <input
-                      className={field}
-                      value={doc.signatureImageUrl || ''}
-                      onChange={(e) =>
-                        updateDoc((p) => ({ ...p, signatureImageUrl: e.target.value }))
+                    <label className={label}>Authorized signature (SELPIC)</label>
+                    <div
+                      className={
+                        'rounded-lg border-2 border-dashed px-4 py-4 transition-colors ' +
+                        (signatureDragOver
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-slate-300 bg-slate-50')
                       }
-                    />
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setSignatureDragOver(true)
+                      }}
+                      onDragLeave={() => setSignatureDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setSignatureDragOver(false)
+                        applySignatureFile(e.dataTransfer.files?.[0])
+                      }}
+                    >
+                      <div className="flex flex-wrap items-center gap-4">
+                        {resolvePoAuthorizedSignatureUrl(doc.signatureImageUrl) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={resolvePoAuthorizedSignatureUrl(doc.signatureImageUrl)}
+                            alt="Authorized signature preview"
+                            className="h-12 w-auto max-w-[220px] object-contain bg-white rounded border border-slate-200 px-2 py-1"
+                          />
+                        ) : (
+                          <div className="h-12 w-40 border-b border-slate-400 bg-white rounded" />
+                        )}
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                            <ImagePlus className="h-3.5 w-3.5 shrink-0" />
+                            Drag &amp; drop a transparent PNG/WebP here, or choose a file.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs rounded border border-slate-300 bg-white hover:bg-slate-100"
+                              onClick={() => signatureFileInputRef.current?.click()}
+                            >
+                              Choose image
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs rounded border border-slate-300 bg-white hover:bg-slate-100"
+                              onClick={() =>
+                                updateDoc((p) => ({
+                                  ...p,
+                                  signatureImageUrl: COMPANY_PO_SIGNATURE_URL,
+                                }))
+                              }
+                            >
+                              Use company default
+                            </button>
+                            <button
+                              type="button"
+                              className="px-2.5 py-1 text-xs rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-600"
+                              onClick={() =>
+                                updateDoc((p) => ({ ...p, signatureImageUrl: 'none' }))
+                              }
+                            >
+                              Clear (blank line)
+                            </button>
+                          </div>
+                          <input
+                            ref={signatureFileInputRef}
+                            type="file"
+                            accept="image/png,image/webp,image/jpeg"
+                            className="hidden"
+                            onChange={(e) => {
+                              applySignatureFile(e.target.files?.[0])
+                              e.target.value = ''
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Default: <span className="font-mono">{COMPANY_PO_SIGNATURE_URL}</span>.
+                      Signature / Date uses Issue Date. Supplier acknowledgement stays blank.
+                    </p>
                   </div>
                 </div>
               </div>

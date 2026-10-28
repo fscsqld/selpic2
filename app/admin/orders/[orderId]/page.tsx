@@ -1085,15 +1085,16 @@ Selpic Team`
               {orderIsPreorder && (
                 <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                    Pre-order delay email
+                    Pre-order ship date update
                   </h2>
                   <p className="text-sm text-gray-600 mb-4">
-                    Update the ships-from date on all pre-order lines and email the customer.
-                    Transit windows still apply after the new dispatch date.
+                    Move ships-from earlier (stock arrived early) or later (delay), update all
+                    pre-order lines, and email the customer. Blank note uses an early- or
+                    delay-appropriate default. Transit windows still apply after dispatch.
                   </p>
                   {order.preorderDelayNotification?.sent ? (
                     <p className="text-sm text-amber-900 mb-3">
-                      Last delay notice sent
+                      Last ship-date notice sent
                       {order.preorderDelayNotification.sentAt
                         ? ` on ${new Date(order.preorderDelayNotification.sentAt).toLocaleString()}`
                         : ''}
@@ -1103,7 +1104,7 @@ Selpic Team`
                       .
                     </p>
                   ) : (
-                    <p className="text-sm text-gray-500 mb-3">No delay notice sent yet for this order.</p>
+                    <p className="text-sm text-gray-500 mb-3">No ship-date notice sent yet for this order.</p>
                   )}
                   <div className="space-y-3">
                     <div>
@@ -1128,7 +1129,7 @@ Selpic Team`
                         rows={3}
                         maxLength={500}
                         disabled={!canWriteOrders || isSendingDelayEmail}
-                        placeholder="Leave blank to use the default customs/transit delay wording. Or write a custom reason (replaces the default paragraph)."
+                        placeholder="Optional. Blank = auto early-arrival or delay wording from the new date vs current ships-from."
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
                       />
                     </div>
@@ -1167,7 +1168,7 @@ Selpic Team`
                                   ? 'Enter a valid ships-from date.'
                                   : r.error === 'NOT_PREORDER'
                                     ? 'This order has no pre-order lines.'
-                                    : 'Could not send delay email.'
+                                    : 'Could not send ship-date email.'
                             )
                             return
                           }
@@ -1178,10 +1179,10 @@ Selpic Team`
                             field: 'preorderShipsFrom',
                             oldValue: previous || '',
                             newValue: delayShipsFrom,
-                            description: `Pre-order delay email → ${order.customer.email} (ships ${delayShipsFrom})`,
+                            description: `Pre-order ship-date email → ${order.customer.email} (ships ${delayShipsFrom})`,
                           })
                           setDelayNote('')
-                          alert('Delay email sent and ships-from updated on pre-order lines.')
+                          alert('Email sent and ships-from updated on pre-order lines.')
                         } finally {
                           setIsSendingDelayEmail(false)
                         }

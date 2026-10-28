@@ -5,6 +5,8 @@ import {
   formatPreorderDispatchSummaryLines,
   getEarliestPreorderShipsFrom,
   MARKET_S_PREORDER_DELAY_DEFAULT_REASON,
+  MARKET_S_PREORDER_EARLY_DEFAULT_REASON,
+  resolvePreorderShipDateUpdateKind,
 } from './orderPreorderFulfillment'
 import type { OrderRecord } from './store'
 
@@ -99,6 +101,41 @@ describe('orderPreorderFulfillment', () => {
     expect(html).toContain('New Ship Date:')
     expect(html).toContain('AusPost transit times start after we dispatch')
     expect(html).toContain('We sincerely apologize for this delay')
+  })
+
+  it('resolves early vs delay from date compare', () => {
+    expect(resolvePreorderShipDateUpdateKind('2026-11-15', '2026-11-01')).toBe('early')
+    expect(resolvePreorderShipDateUpdateKind('2026-11-01', '2026-11-15')).toBe('delay')
+    expect(resolvePreorderShipDateUpdateKind('2026-11-01', '2026-11-01')).toBe('same')
+  })
+
+  it('uses early-arrival default copy when ships-from moves earlier', () => {
+    const order = {
+      id: 'ORD-EARLY',
+      customer: { name: 'Alex', email: 'alex@example.com' },
+      items: [
+        {
+          productId: 'a',
+          name: 'Mask',
+          price: 1,
+          image: '/x',
+          quantity: 1,
+          customizations: {},
+          salesModeAtOrder: 'preorder',
+          preorderShipsFrom: '2026-11-15',
+        },
+      ],
+    } as OrderRecord
+
+    const html = buildPreorderDelayEmailHtml({
+      order,
+      previousShipsFrom: '2026-11-15',
+      newShipsFrom: '2026-11-01',
+    })
+    expect(html).toContain(MARKET_S_PREORDER_EARLY_DEFAULT_REASON)
+    expect(html).not.toContain(MARKET_S_PREORDER_DELAY_DEFAULT_REASON)
+    expect(html).toContain('We are writing with an update')
+    expect(html).not.toContain('We sincerely apologize for this delay')
   })
 
   it('uses admin note as reason when provided', () => {

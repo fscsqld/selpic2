@@ -144,6 +144,7 @@ interface ProductFormData {
   preorderSupplierNote?: string
   preorderShipsFrom?: string
   preorderClosesAt?: string
+  preorderCountdownEnabled?: boolean
   preorderMaxQty?: number
   preorderSoldCount?: number
   preorderNote?: string
@@ -242,6 +243,7 @@ function AdminProductsPageContent() {
     preorderSupplierNote: '',
     preorderShipsFrom: '',
     preorderClosesAt: '',
+    preorderCountdownEnabled: false,
     preorderMaxQty: undefined,
     preorderSoldCount: 0,
     preorderNote: '',
@@ -484,6 +486,7 @@ function AdminProductsPageContent() {
         preorderSupplierNote: (product as any).preorderSupplierNote || '',
         preorderShipsFrom: (product as any).preorderShipsFrom || '',
         preorderClosesAt: (product as any).preorderClosesAt || '',
+        preorderCountdownEnabled: !!(product as any).preorderCountdownEnabled,
         preorderMaxQty:
           typeof (product as any).preorderMaxQty === 'number'
             ? (product as any).preorderMaxQty
@@ -544,6 +547,7 @@ function AdminProductsPageContent() {
         preorderSupplierNote: '',
         preorderShipsFrom: '',
         preorderClosesAt: '',
+        preorderCountdownEnabled: false,
         preorderMaxQty: undefined,
         preorderSoldCount: 0,
         preorderNote: '',
@@ -622,6 +626,7 @@ function AdminProductsPageContent() {
       preorderSupplierNote: '',
       preorderShipsFrom: '',
       preorderClosesAt: '',
+      preorderCountdownEnabled: false,
       preorderMaxQty: undefined,
       preorderSoldCount: 0,
       preorderNote: '',
@@ -654,6 +659,7 @@ function AdminProductsPageContent() {
       preorderSupplierNote: formData.preorderSupplierNote,
       preorderShipsFrom: formData.preorderShipsFrom,
       preorderClosesAt: formData.preorderClosesAt,
+      preorderCountdownEnabled: formData.preorderCountdownEnabled,
       preorderMaxQty: formData.preorderMaxQty,
       preorderSoldCount: formData.preorderSoldCount,
       preorderNote: formData.preorderNote,
@@ -962,6 +968,7 @@ function AdminProductsPageContent() {
           newData.preorderSupplierNote = ''
           newData.preorderShipsFrom = ''
           newData.preorderClosesAt = ''
+          newData.preorderCountdownEnabled = false
           newData.preorderMaxQty = undefined
           newData.preorderNote = ''
         }
@@ -2730,11 +2737,35 @@ function AdminProductsPageContent() {
                                 preorderClosesAt: e.target.value
                                   ? new Date(e.target.value).toISOString()
                                   : '',
+                                preorderCountdownEnabled: e.target.value
+                                  ? prev.preorderCountdownEnabled
+                                  : false,
                               }))
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                           />
                         </div>
+                        <label className="md:col-span-2 inline-flex items-start gap-2 text-sm text-gray-900">
+                          <input
+                            type="checkbox"
+                            checked={!!formData.preorderCountdownEnabled}
+                            disabled={!formData.preorderClosesAt}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                preorderCountdownEnabled: e.target.checked,
+                              }))
+                            }
+                            className="mt-0.5 h-4 w-4 text-emerald-600 rounded border-gray-300 disabled:opacity-50"
+                          />
+                          <span>
+                            Run countdown to pre-order close
+                            <span className="block text-xs text-gray-500 font-normal">
+                              On = storefront timer in the last 7 days before Closes at. Off =
+                              pause / no timer (date text only). Set Closes at first.
+                            </span>
+                          </span>
+                        </label>
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">
                             Max units (optional)
