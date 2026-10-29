@@ -105,6 +105,8 @@ function recompute(doc: PurchaseOrderDoc): PurchaseOrderDoc {
 type Props = {
   /** When opening from send history */
   initialDoc?: PurchaseOrderDoc | null
+  /** Sent email body from history (Message field). */
+  initialMessage?: string | null
   onClearInitial?: () => void
   /** Load a saved draft from PO Dashboard */
   loadDraftId?: string | null
@@ -113,6 +115,7 @@ type Props = {
 
 export default function PurchaseOrderCreatePanel({
   initialDoc,
+  initialMessage,
   onClearInitial,
   loadDraftId,
   onClearLoadDraftId,
@@ -187,9 +190,12 @@ export default function PurchaseOrderCreatePanel({
     if (!initialDoc) return
     setDoc(recompute(initialDoc))
     setRecipientEmail(initialDoc.vendor.email || '')
+    if (typeof initialMessage === 'string') {
+      setMessage(initialMessage)
+    }
     setShowEditForm(true)
     onClearInitial?.()
-  }, [initialDoc, onClearInitial])
+  }, [initialDoc, initialMessage, onClearInitial])
 
   useEffect(() => {
     if (!loadDraftId) return
@@ -480,6 +486,12 @@ export default function PurchaseOrderCreatePanel({
         documentSnapshot: JSON.parse(JSON.stringify(snapshot)) as Record<string, unknown>,
         errorMessage: emailResponse.success ? undefined : emailResponse.message,
       })
+
+      // Persist sent PO into dashboard drafts so logistics/history keep the same record.
+      if (emailResponse.success) {
+        const saved = saveDraft(snapshot, draftId || undefined)
+        setDraftId(saved.id)
+      }
 
       scheduleLogAdminActivity({
         action: 'purchase_order_sent',

@@ -180,6 +180,7 @@ function InvoicePreviewPageContent() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [documentType, setDocumentType] = useState<'invoice' | 'quote' | 'po'>('invoice')
   const [initialPoDoc, setInitialPoDoc] = useState<PurchaseOrderDoc | null>(null)
+  const [initialPoMessage, setInitialPoMessage] = useState<string | null>(null)
   const [poWorkspaceTab, setPoWorkspaceTab] = useState<'creator' | 'dashboard'>('creator')
   const [poLoadDraftId, setPoLoadDraftId] = useState<string | null>(null)
   const [invoiceData, setInvoiceData] = useState(() => getDefaultInvoiceData())
@@ -533,16 +534,19 @@ function InvoicePreviewPageContent() {
 
     if (log.documentType === 'po') {
       setDocumentType('po')
+      setPoWorkspaceTab('creator')
       setInitialPoDoc(snapshot as unknown as PurchaseOrderDoc)
+      setInitialPoMessage(log.content || '')
     } else if (log.documentType === 'quote') {
       setDocumentType('quote')
       setQuoteData(snapshot as typeof quoteData)
+      setMessage(log.content || '')
     } else {
       setDocumentType('invoice')
       setInvoiceData(snapshot as typeof invoiceData)
+      setMessage(log.content || '')
     }
     setRecipientEmail(log.recipientEmail || '')
-    setMessage(log.content || '')
     setShowEditForm(true)
     return true
   }
@@ -837,7 +841,11 @@ function InvoicePreviewPageContent() {
               {poWorkspaceTab === 'creator' ? (
                 <PurchaseOrderCreatePanel
                   initialDoc={initialPoDoc}
-                  onClearInitial={() => setInitialPoDoc(null)}
+                  initialMessage={initialPoMessage}
+                  onClearInitial={() => {
+                    setInitialPoDoc(null)
+                    setInitialPoMessage(null)
+                  }}
                   loadDraftId={poLoadDraftId}
                   onClearLoadDraftId={() => setPoLoadDraftId(null)}
                 />
