@@ -35,20 +35,13 @@ function ModeFields({
           value={value.destinationLabel}
           onChange={(e) => {
             const destinationLabel = e.target.value
-            const prevLabel = value.destinationLabel
-            const prevCarton = (value.cartonMarkingTemplate || '').trim()
-            const looksAuto =
-              !prevCarton ||
-              /^SELPIC\s*\/\s*.+\s*\/\s*PO No:\s*\{PO_NUMBER\}$/i.test(prevCarton) ||
-              (prevLabel && prevCarton.includes(prevLabel))
+            // Keep internal cartonMarkingTemplate in sync (no admin UI — carton block removed from PO).
             onChange({
               ...value,
               destinationLabel,
-              cartonMarkingTemplate: looksAuto
-                ? destinationLabel
-                  ? `SELPIC / ${destinationLabel} / PO No: {PO_NUMBER}`
-                  : ''
-                : value.cartonMarkingTemplate,
+              cartonMarkingTemplate: destinationLabel
+                ? `SELPIC / ${destinationLabel} / PO No: {PO_NUMBER}`
+                : '',
             })
           }}
         />
@@ -79,15 +72,6 @@ function ModeFields({
           placeholder="e.g. 경기도 김포시 승가로 110-30 (SELPIC / +61 466 894 279)"
           value={value.domesticAddress}
           onChange={(e) => onChange({ ...value, domesticAddress: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className={label}>Carton marking template (use {'{PO_NUMBER}'})</label>
-        <input
-          className={field}
-          placeholder="SELPIC / 브리즈번해상 / PO No: {PO_NUMBER}"
-          value={value.cartonMarkingTemplate}
-          onChange={(e) => onChange({ ...value, cartonMarkingTemplate: e.target.value })}
         />
       </div>
     </div>

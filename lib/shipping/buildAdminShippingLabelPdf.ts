@@ -159,26 +159,12 @@ type BuildOptions = {
   orientation?: ShippingLabelOrientation
 }
 
-function drawLabelFrame(doc: jsPDF, box: LabelBox): void {
-  // Stroke is centered on the path in PDF — drawing on the exact Avery die edge
-  // puts half the line outside the label (looks like the border "isn't on the page").
-  // Inset by half stroke + a tiny print tolerance so the full frame stays inside the cell.
-  const strokeMm = 0.3
-  const insetMm = strokeMm / 2 + 0.15
-  doc.setDrawColor(30, 41, 59)
-  doc.setLineWidth(strokeMm)
-  doc.rect(
-    box.x + insetMm,
-    box.y + insetMm,
-    Math.max(0, box.width - insetMm * 2),
-    Math.max(0, box.height - insetMm * 2),
-    'S'
-  )
-}
-
 /**
  * Portrait content (unchanged layout). Also reused for landscape after a CTM rotate
  * into a virtual 139×99.1 mm box.
+ *
+ * No outer cell frame — Avery die cut is the edge; a drawn border often looked
+ * slightly off vs the physical label after printer registration drift.
  */
 async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox): Promise<void> {
   const innerL = box.x + LABEL_INNER_MARGIN_MM
@@ -192,8 +178,6 @@ async function drawShippingLabel(doc: jsPDF, order: OrderRecord, box: LabelBox):
   const fromBlockH = 15
   const midMaxY = contentMaxY - labelBottomReservedMm(barH, fromBlockH, 2)
   let y = box.y + LABEL_INNER_MARGIN_MM + 2.5
-
-  drawLabelFrame(doc, box)
 
   // 1) DELIVER TO — address block emphasized (bold, larger, high contrast)
   const ADDR_SIZE = 11

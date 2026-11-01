@@ -46,12 +46,10 @@ Ship To / Domestic Logistics Hub (공급처 국내 배송지 정보)
 - 수취인 명의 (Recipient / Attn)  : {RECIPIENT_ATTN}
 - 연  락  처 (Phone Number)      : {HUB_PHONE}
 - 배송지 주소 (Domestic Address) : {DOMESTIC_ADDRESS}
-
-[박스 외관 필수 표기 지침 (Carton Marking)]
-* …
-  "{CARTON_MARKING}"
 ================================================================================
 ```
+
+Do **not** re-add a Carton Marking / box-exterior phrase block (removed — owner: not needed on supplier PO instructions).
 
 `TRANSPORT_MODE` = `Sea Freight` | `Air Freight`. Snapshot `shipTo.forwarderName` when applying a forwarder so PDF does not depend on live store.
 

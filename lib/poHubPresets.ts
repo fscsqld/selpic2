@@ -70,16 +70,18 @@ export function formatTransportModeLabel(
 
 /**
  * Approved domestic hub instruction block for UI & PDF (KR forwarder Ship To).
- * Placeholders: FORWARDER_NAME, TRANSPORT_MODE, RECIPIENT_ATTN, HUB_PHONE,
- * DOMESTIC_ADDRESS, CARTON_MARKING.
+ * Fields: FORWARDER_NAME, TRANSPORT_MODE, RECIPIENT_ATTN, HUB_PHONE, DOMESTIC_ADDRESS.
+ * (No carton-marking section — removed from supplier-facing copy.)
  */
 export function buildDomesticHubInstructionBlock(input: {
   recipientName: string
   phone: string
   address: string
+  /** Kept for call-site compatibility; not shown in the block. */
   destinationIdentifier: string
+  /** Kept for call-site compatibility; not shown in the block. */
   poNumber: string
-  /** Optional full carton line (already resolved with PO number). */
+  /** Kept for call-site compatibility; not shown in the block. */
   cartonMarking?: string
   /** Registered forwarder display name */
   forwarderName?: string
@@ -91,11 +93,8 @@ export function buildDomesticHubInstructionBlock(input: {
   const address = (input.address || '').trim() || '—'
   const recipient = normalizeHubRecipientForDisplay(input.recipientName, address)
   const phone = (input.phone || '').trim() || '—'
-  const carton =
-    (input.cartonMarking || '').trim() ||
-    resolveCartonMarking('', input.destinationIdentifier, input.poNumber)
-
   // Plain-text twin of PoHubInstructionCard (email / waybillInstructions copy).
+  // Carton marking block intentionally omitted (owner: not needed on supplier instructions).
   return (
     'Ship To / Domestic Logistics Hub (공급처 국내 배송지 정보)\n' +
     '* [공급사 필독] 한국 국내 택배/화물 발송 시 아래 수취인 명의 및 주소를 정확히 기재해 주십시오.\n' +
@@ -103,11 +102,7 @@ export function buildDomesticHubInstructionBlock(input: {
     `- Forwarder Company : ${forwarder} (${transport})\n` +
     `- Recipient / Attn  : ${recipient}\n` +
     `- Phone Number      : ${phone}\n` +
-    `- Domestic Address  : ${address}\n` +
-    '\n' +
-    '[Carton Marking]\n' +
-    '* 물류센터 입고 및 호주 운송 분류를 위해 모든 박스 외관에 아래 문구를 명확히 표기해 주십시오:\n' +
-    `  "${carton}"`
+    `- Domestic Address  : ${address}`
   )
 }
 

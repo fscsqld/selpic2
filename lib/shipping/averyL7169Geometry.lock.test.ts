@@ -34,14 +34,7 @@ describe('Avery L7169 geometry lock', () => {
     expect(A4_H - bottomEdge).toBeCloseTo(11.94, 1)
   })
 
-  it('decorative frame stroke fully insets inside the die (no gutter bleed)', () => {
-    const strokeMm = 0.3
-    const insetMm = strokeMm / 2 + 0.15
-    // Outer edge of stroke = path ± stroke/2 → path at inset → outer at inset - stroke/2 = 0.15 inside die
-    const outerFromDieEdge = insetMm - strokeMm / 2
-    expect(outerFromDieEdge).toBeGreaterThan(0)
-    expect(outerFromDieEdge).toBeCloseTo(0.15, 5)
-  })
+  // Outer decorative cell frame intentionally omitted (die cut = edge; stroke looked off when printed).
 
   it('content inner margin is at least typical Avery ~2.12 mm', () => {
     const LABEL_INNER_MARGIN_MM = 3

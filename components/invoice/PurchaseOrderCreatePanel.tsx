@@ -40,7 +40,6 @@ import {
   buildDomesticHubInstructionBlock,
   cartonMarkSample,
   getPoSystemShipPreset,
-  syncCartonMarkingToPoNumber,
 } from '@/lib/poHubPresets'
 import { usePoForwarderStore } from '@/lib/poForwarderStore'
 import {
@@ -163,12 +162,6 @@ export default function PurchaseOrderCreatePanel({
   const supplierCatalogItems = useMemo(
     () => (selectedSupplier?.items || []).filter((i) => i.isActive !== false),
     [selectedSupplier]
-  )
-
-  const resolvedCartonMark = syncCartonMarkingToPoNumber(
-    doc.shipTo.cartonMarking,
-    doc.shipTo.destinationIdentifier,
-    doc.poMeta.poNumber
   )
 
   const toggleSection = useCallback((key: keyof typeof sectionOpen) => {
@@ -1188,16 +1181,7 @@ export default function PurchaseOrderCreatePanel({
                           }
                         />
                       </div>
-                    ) : (
-                      <div>
-                        <label className={label}>Carton mark (from profile)</label>
-                        <input
-                          className={lockedField}
-                          readOnly
-                          value={resolvedCartonMark}
-                        />
-                      </div>
-                    )}
+                    ) : null}
                     <div className="md:col-span-2">
                       <label className={label}>Domestic Ship To address</label>
                       <textarea
@@ -1237,7 +1221,6 @@ export default function PurchaseOrderCreatePanel({
                     recipientName={doc.shipTo.hubCompanyName || ''}
                     phone={doc.shipTo.hubPhone || ''}
                     address={doc.shipTo.address}
-                    cartonMarking={resolvedCartonMark}
                   />
                 </div>
               </details>

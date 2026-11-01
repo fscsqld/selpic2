@@ -11,7 +11,6 @@ import {
   type PoLabelLocale,
   type PurchaseOrderDoc,
 } from '@/lib/purchaseOrderTypes'
-import { syncCartonMarkingToPoNumber } from '@/lib/poHubPresets'
 import {
   formatPoPersonName,
   resolveBillToDisplay,
@@ -63,11 +62,6 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
 
   const showZeroDisclaimer = doc.taxRule === 'overseas_zero'
   const billTo = resolveBillToDisplay(doc.billTo)
-  const cartonMarking = syncCartonMarkingToPoNumber(
-    doc.shipTo.cartonMarking,
-    doc.shipTo.destinationIdentifier,
-    doc.poMeta.poNumber
-  )
   const vendorAttn = formatPoPersonName(doc.vendor.contactPerson)
   const authorizedSignatureUrl = resolvePoAuthorizedSignatureUrl(doc.signatureImageUrl)
   const authorizedSignatureDate = formatPoSignatureDate(doc.poMeta.issueDate)
@@ -264,7 +258,7 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
         </div>
       </div>
 
-      {/* Domestic hub shipping + carton marking — Korean hub only */}
+      {/* Domestic hub shipping — Korean hub only (no carton-marking block) */}
       {doc.shipTo.mode === 'forwarder_kr' ? (
         <div className="px-8 py-3 border-b border-slate-100 bg-amber-50/50">
           <PoHubInstructionCard
@@ -273,7 +267,6 @@ export default function PurchaseOrderTemplate({ doc }: PurchaseOrderTemplateProp
             recipientName={doc.shipTo.hubCompanyName || ''}
             phone={doc.shipTo.hubPhone || ''}
             address={doc.shipTo.address}
-            cartonMarking={cartonMarking}
           />
         </div>
       ) : null}

@@ -16,7 +16,7 @@ describe('PO system ship presets (no seeded KR forwarders)', () => {
     expect(PO_SYSTEM_SHIP_PRESETS.some((p) => p.label.includes('Forwarder A'))).toBe(false)
   })
 
-  it('builds approved domestic hub block with forwarder + Air/Sea + carton', () => {
+  it('builds approved domestic hub block with forwarder + Air/Sea (no carton block)', () => {
     const block = buildDomesticHubInstructionBlock({
       forwarderName: 'Sample Forwarder Co',
       transportMode: 'sea',
@@ -35,7 +35,9 @@ describe('PO system ship presets (no seeded KR forwarders)', () => {
     expect(block).toContain(
       'Domestic Address  : 경기도 김포시 승가로 110-30 (SELPIC / +61 466 894 279)'
     )
-    expect(block).toContain('"SELPIC / 브리즈번해상 / PO No: PO-2026-10-003"')
+    expect(block).not.toContain('Carton Marking')
+    expect(block).not.toContain('박스 외관')
+    expect(block).not.toContain('SELPIC / 브리즈번해상 / PO No:')
     expect(cartonMarkSample('브리즈번항공', 'PO-1')).toContain('브리즈번항공')
   })
 
@@ -65,7 +67,7 @@ describe('PO system ship presets (no seeded KR forwarders)', () => {
     ).toBe('SELPIC / 브리즈번해상 / PO No: PO-2026-10-003')
   })
 
-  it('applyFinalizedPoNumber refreshes hub carton + instruction text', () => {
+  it('applyFinalizedPoNumber refreshes hub carton field and instruction without draft id', () => {
     const base = getDefaultPurchaseOrderDoc()
     const draft = {
       ...base,
@@ -84,7 +86,8 @@ describe('PO system ship presets (no seeded KR forwarders)', () => {
     const next = applyFinalizedPoNumber(draft, 'PO-2026-10-003', 'sent')
     expect(next.poMeta.poNumber).toBe('PO-2026-10-003')
     expect(next.shipTo.cartonMarking).toBe('SELPIC / 브리즈번해상 / PO No: PO-2026-10-003')
-    expect(next.waybillInstructions?.instructionText || '').toContain('PO-2026-10-003')
+    expect(next.waybillInstructions?.instructionText || '').toContain('브리즈번해상')
     expect(next.waybillInstructions?.instructionText || '').not.toContain('PO-DRAFT-000')
+    expect(next.waybillInstructions?.instructionText || '').not.toContain('Carton Marking')
   })
 })
