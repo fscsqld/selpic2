@@ -571,6 +571,7 @@ interface Store {
   updateOrderCustomer: (orderId: string, customer: Partial<OrderRecord['customer']>, performedBy?: string) => void
   updateOrderAddress: (orderId: string, address: Partial<OrderRecord['address']>, performedBy?: string) => void
   updateOrderItems: (orderId: string, items: OrderRecord['items'], performedBy?: string) => void
+  updateOrderPlatformSource: (orderId: string, platformSource: OrderPlatformSource, performedBy?: string) => void
   updateOrderDiscounts: (orderId: string, discounts: { vipDiscount?: number; promoDiscount?: number; promoCode?: string }, performedBy?: string) => void
   updateOrderShipping: (orderId: string, shippingOptionId: string, shippingOptionName?: string, performedBy?: string) => void
   recalculateOrderTotal: (orderId: string) => void
@@ -1041,6 +1042,12 @@ export const useStore = create<Store>()(
               const latest = get().orders.find((o) => o.id === orderId)
               if (!latest?.customer?.email) return
 
+              const { shouldSendCustomerOrderEmail } = await import('@/lib/orders/customerOrderEmailPolicy')
+              if (!shouldSendCustomerOrderEmail(latest)) {
+                console.log('[updateOrderStatus] skip customer emails for marketplace order', orderId)
+                return
+              }
+
               const markConfirmationSent = () => {
                 const sentAt = new Date().toISOString()
                 set({
@@ -1282,6 +1289,42 @@ export const useStore = create<Store>()(
           } : o)
         })
         get().recalculateOrderTotal(orderId)
+      },
+
+      updateOrderPlatformSource: (orderId, platformSource, performedBy = 'system') => {
+        const { orders } = get()
+        const order = orders.find((o) => o.id === orderId)
+        if (!order) return
+        const next = ORDER_PLATFORM_SOURCES.includes(platformSource) ? platformSource : 'website'
+        const prev = order.platformSource || 'website'
+        if (prev === next) return
+
+        const auditEntry = {
+          id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: new Date().toISOString(),
+          action: 'customer_updated' as const,
+          performedBy,
+          changes: [
+            {
+              field: 'platformSource',
+              oldValue: prev,
+              newValue: next,
+            },
+          ],
+          description: `Sales platform updated (${ORDER_PLATFORM_LABEL[prev]} → ${ORDER_PLATFORM_LABEL[next]})`,
+        }
+
+        set({
+          orders: orders.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  platformSource: next,
+                  auditLog: [...(o.auditLog || []), auditEntry],
+                }
+              : o
+          ),
+        })
       },
 
       updateOrderDiscounts: (orderId, discounts, performedBy = 'system') => {
@@ -1619,6 +1662,14 @@ export const useStore = create<Store>()(
           return false
         }
 
+        const { shouldSendCustomerOrderEmail, marketplaceCustomerEmailSkipReason } = await import(
+          '@/lib/orders/customerOrderEmailPolicy'
+        )
+        if (!shouldSendCustomerOrderEmail(order)) {
+          console.log('[sendOrderConfirmationEmail] skipped marketplace channel:', marketplaceCustomerEmailSkipReason(order))
+          return false
+        }
+
         const isAdminSession =
           typeof window !== 'undefined' &&
           (await import('./adminAuth')).useAdminAuth.getState().isLoggedIn
@@ -1813,6 +1864,14 @@ export const useStore = create<Store>()(
           return false
         }
 
+        const { shouldSendCustomerOrderEmail, marketplaceCustomerEmailSkipReason } = await import(
+          '@/lib/orders/customerOrderEmailPolicy'
+        )
+        if (!shouldSendCustomerOrderEmail(order)) {
+          console.log('[resendOrderConfirmationEmail] skipped marketplace channel:', marketplaceCustomerEmailSkipReason(order))
+          return false
+        }
+
         try {
           // 템플릿 스토어에서 Order Confirmation 템플릿 가져오기
           const templateStore = useDocumentTemplateStore.getState()
@@ -1893,6 +1952,14 @@ export const useStore = create<Store>()(
           return false
         }
 
+        const { shouldSendCustomerOrderEmail, marketplaceCustomerEmailSkipReason } = await import(
+          '@/lib/orders/customerOrderEmailPolicy'
+        )
+        if (!shouldSendCustomerOrderEmail(order)) {
+          console.log('[sendShippingNotificationEmail] skipped marketplace channel:', marketplaceCustomerEmailSkipReason(order))
+          return false
+        }
+
         if (order.shippingNotification?.sent) {
           console.log('Shipping notification already sent:', orderId)
           return true
@@ -1956,6 +2023,14 @@ export const useStore = create<Store>()(
         const order = orders.find((o) => o.id === orderId)
         if (!order) {
           console.error('Order not found for receipt email:', orderId)
+          return false
+        }
+
+        const { shouldSendCustomerOrderEmail, marketplaceCustomerEmailSkipReason } = await import(
+          '@/lib/orders/customerOrderEmailPolicy'
+        )
+        if (!shouldSendCustomerOrderEmail(order)) {
+          console.log('[sendReceiptEmail] skipped marketplace channel:', marketplaceCustomerEmailSkipReason(order))
           return false
         }
 

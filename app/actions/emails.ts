@@ -18,6 +18,7 @@ import {
 } from '@/lib/depositConfirmedEmail'
 import { buildSimpleReceiptEmailHtml, buildSimpleReceiptSubject } from '@/lib/email/simpleReceiptEmail'
 import { buildOrderReceiptPdfBase64 } from '@/lib/pdf/serverReceiptPdf'
+import { shouldSendCustomerOrderEmail } from '@/lib/orders/customerOrderEmailPolicy'
 import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
 import {
   applyNewPreorderShipsFromToItems,
@@ -401,6 +402,11 @@ export async function sendAdminOrderEmailAction(input: {
     return { ok: false, error: 'NOT_FOUND' }
   }
 
+  if (!shouldSendCustomerOrderEmail(order)) {
+    console.log('[sendAdminOrderEmailAction] skipped marketplace channel', order.id, order.platformSource)
+    return { ok: false, error: 'MARKETPLACE_CHANNEL' }
+  }
+
   const to = order.customer.email.trim()
 
   if (input.kind === 'deposit_confirmed') {
@@ -460,6 +466,9 @@ export async function sendAdminShippingNotificationEmailAction(input: {
     ? orderFromInput
     : await loadOrderFromSupabaseById(input.orderId)
   if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
+  if (!shouldSendCustomerOrderEmail(order)) {
+    return { ok: false, error: 'MARKETPLACE_CHANNEL' }
+  }
   const result = await sendShippingNotificationEmailForOrder(order, input.recipientEmail)
   return result.ok ? { ok: true } : result
 }
@@ -485,6 +494,9 @@ export async function sendAdminPreorderDelayEmailAction(input: {
       ? orderFromInput
       : await loadOrderFromSupabaseById(input.orderId)
   if (!order?.customer?.email) return { ok: false, error: 'NOT_FOUND' }
+  if (!shouldSendCustomerOrderEmail(order)) {
+    return { ok: false, error: 'MARKETPLACE_CHANNEL' }
+  }
   if (!orderIncludesPreorder(order)) {
     return { ok: false, error: 'NOT_PREORDER' }
   }

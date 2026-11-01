@@ -1,5 +1,6 @@
 import type { OrderRecord } from '@/lib/store'
 import { sendEmailViaResendServer, type ResendAttachmentInput } from '@/lib/email/resendServer'
+import { shouldSendCustomerOrderEmail } from '@/lib/orders/customerOrderEmailPolicy'
 import { buildShippingNotificationPdfBase64 } from '@/lib/pdf/serverShippingNotificationPdf'
 import {
   orderRequiresTrackingNumber,
@@ -8,7 +9,7 @@ import {
 
 export type ShippingNotificationSendResult =
   | { ok: true; sentAt: string }
-  | { ok: false; error: 'INVALID_RECIPIENT' | 'NO_TRACKING' | 'SEND_FAILED' }
+  | { ok: false; error: 'INVALID_RECIPIENT' | 'NO_TRACKING' | 'SEND_FAILED' | 'MARKETPLACE_CHANNEL' }
 
 function escHtml(value: string): string {
   return value
@@ -50,6 +51,10 @@ export async function sendShippingNotificationEmailForOrder(
   order: OrderRecord,
   recipientEmail?: string
 ): Promise<ShippingNotificationSendResult> {
+  if (!shouldSendCustomerOrderEmail(order)) {
+    return { ok: false, error: 'MARKETPLACE_CHANNEL' }
+  }
+
   const to = (recipientEmail || order.customer?.email || '').trim()
   if (!to || !to.includes('@')) return { ok: false, error: 'INVALID_RECIPIENT' }
 

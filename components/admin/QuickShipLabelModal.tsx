@@ -2,7 +2,12 @@
 
 import { useState } from 'react'
 import { X, Loader2, Printer } from 'lucide-react'
-import type { OrderRecord } from '@/lib/store'
+import {
+  ORDER_PLATFORM_LABEL,
+  ORDER_PLATFORM_SOURCES,
+  type OrderPlatformSource,
+  type OrderRecord,
+} from '@/lib/store'
 import { openInternalShippingLabelPdf } from '@/lib/admin/shippingLabelClient'
 import type { AdminShippingLabelSlot } from '@/lib/shipping/buildAdminShippingLabelPdf'
 import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
@@ -51,6 +56,10 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
   const [country, setCountry] = useState('Australia')
   const [parcelPreset, setParcelPreset] = useState<QuickShipParcelPresetId>('none')
   const [customParcelNote, setCustomParcelNote] = useState('')
+  const [platformSource, setPlatformSource] = useState<OrderPlatformSource>('website')
+  const [itemDescription, setItemDescription] = useState('')
+  const [quantity, setQuantity] = useState(1)
+  const [unitPrice, setUnitPrice] = useState('')
   const [useCustomFrom, setUseCustomFrom] = useState(false)
   const [fromOverride, setFromOverride] = useState<ShippingLabelFromOverride>(EMPTY_SHIPPING_LABEL_FROM_FORM)
   const [busy, setBusy] = useState(false)
@@ -72,6 +81,10 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
     setCountry('Australia')
     setParcelPreset('none')
     setCustomParcelNote('')
+    setPlatformSource('website')
+    setItemDescription('')
+    setQuantity(1)
+    setUnitPrice('')
     setUseCustomFrom(false)
     setFromOverride(EMPTY_SHIPPING_LABEL_FROM_FORM)
     setError('')
@@ -106,6 +119,10 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           state: state.trim(),
           postcode: postcode.trim(),
           country: country.trim(),
+          platformSource,
+          itemDescription: itemDescription.trim(),
+          quantity: Math.max(1, Math.floor(quantity) || 1),
+          unitPrice: unitPrice.trim() === '' ? undefined : Number(unitPrice),
           labelNotes: resolveQuickShipParcelNote(parcelPreset, customParcelNote),
           useCustomFrom,
           fromOverride: useCustomFrom ? fromOverride : undefined,
@@ -151,8 +168,8 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Quick ship label</h2>
             <p className="mt-1 text-xs text-gray-500">
-              Address-only label for Avery L7169 / AV959020 A4 4-up. Saves a minimal ledger row — no storefront
-              checkout or customer email required.
+              Avery L7169 / AV959020 A4 4-up label. Optionally record sold item + sales channel (eBay / Amazon /
+              Etsy) for marketplace fulfillment without storefront checkout.
             </p>
           </div>
           <button
@@ -295,6 +312,64 @@ export default function QuickShipLabelModal({ open, onClose, onCreated, mergeOrd
                   className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Sale (optional)
+              </legend>
+              <label className="block text-xs text-gray-600">
+                <span className="mb-1 block font-medium text-gray-700">Sales platform</span>
+                <select
+                  value={platformSource}
+                  onChange={(e) => setPlatformSource(e.target.value as OrderPlatformSource)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  {ORDER_PLATFORM_SOURCES.map((id) => (
+                    <option key={id} value={id}>
+                      {ORDER_PLATFORM_LABEL[id]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-gray-600">
+                <span className="mb-1 block font-medium text-gray-700">Sold item / description</span>
+                <input
+                  value={itemDescription}
+                  onChange={(e) => setItemDescription(e.target.value)}
+                  placeholder="e.g. Name labels pack — eBay order #123"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  maxLength={300}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">Quantity</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block text-xs text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">Unit price (AUD, optional)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Shows on the Orders list (product column + platform badge). Leave blank for address-only label rows.
+              </p>
             </fieldset>
 
             <ShippingLabelFromOverrideFields

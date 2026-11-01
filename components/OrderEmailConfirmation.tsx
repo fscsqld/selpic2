@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { useTranslation } from '@/lib/useTranslation'
 import { Mail, CheckCircle, XCircle, Clock, RefreshCw, AlertCircle, Receipt } from 'lucide-react'
 import type { OrderRecord } from '@/lib/store'
+import {
+  marketplaceCustomerEmailSkipReason,
+  shouldSendCustomerOrderEmail,
+} from '@/lib/orders/customerOrderEmailPolicy'
 import OrderReceipt from './OrderReceipt'
 
 interface OrderEmailConfirmationProps {
@@ -25,6 +29,8 @@ export default function OrderEmailConfirmation({
   const [showReceipt, setShowReceipt] = useState(false)
 
   const emailConfirmation = order.emailConfirmation
+  const canSendCustomerEmail = shouldSendCustomerOrderEmail(order)
+  const marketplaceSkipReason = marketplaceCustomerEmailSkipReason(order)
 
   const getEmailStatusIcon = (status: string) => {
     switch (status) {
@@ -103,6 +109,20 @@ export default function OrderEmailConfirmation({
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (!canSendCustomerEmail) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Mail className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-gray-900">{t('ordersPage.orderConfirmation')}</h3>
+            <p className="text-sm text-amber-900 mt-1">{marketplaceSkipReason}</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!emailConfirmation) {

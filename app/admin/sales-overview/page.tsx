@@ -4,7 +4,7 @@ import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
 import { useStore } from '@/lib/store'
 import { useState, useMemo } from 'react'
-import { ArrowLeft, DollarSign, TrendingUp, BarChart3, Calendar, ArrowRight, Download, FileText, Package, Tag, Award, FileDown, X } from 'lucide-react'
+import { DollarSign, TrendingUp, BarChart3, FileText, Package, Tag, Award, Store } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import SafeResponsiveChart from '@/components/admin/SafeResponsiveChart'
@@ -13,8 +13,15 @@ import {
   formatAdminWeekRangeLabel,
   listRecentSundayWeeks,
 } from '@/lib/adminSalesPeriod'
+import { aggregateSalesByPlatform } from '@/lib/orders/salesByPlatform'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
+const PLATFORM_COLORS: Record<string, string> = {
+  website: '#3b82f6',
+  etsy: '#f97316',
+  ebay: '#eab308',
+  amazon: '#10b981',
+}
 
 export default function SalesOverviewPage() {
   return (
@@ -66,6 +73,9 @@ function SalesOverviewPageContent() {
         revenueChart: '매출 추이',
         productAnalysis: '제품별 분석',
         categoryAnalysis: '카테고리별 분석',
+        platformAnalysis: '판매 플랫폼별 분석',
+        platform: '플랫폼',
+        share: '비중',
         vipAnalysis: 'VIP 등급별 분석',
         generateReport: '리포트 생성',
         exportPDF: 'PDF 내보내기',
@@ -114,6 +124,9 @@ function SalesOverviewPageContent() {
         revenueChart: 'Revenue Trend',
         productAnalysis: 'Product Analysis',
         categoryAnalysis: 'Category Analysis',
+        platformAnalysis: 'Sales by platform',
+        platform: 'Platform',
+        share: 'Share',
         vipAnalysis: 'VIP Grade Analysis',
         generateReport: 'Generate Report',
         exportPDF: 'Export PDF',
@@ -278,6 +291,13 @@ function SalesOverviewPageContent() {
     return data
   }, [orders, selectedPeriod])
 
+  // Sales channel breakdown (Website / Etsy / eBay / Amazon) — ops order totals
+  const platformAnalysis = useMemo(() => aggregateSalesByPlatform(orders), [orders])
+  const platformChartData = useMemo(
+    () => platformAnalysis.filter((r) => r.orders > 0 || r.revenue > 0),
+    [platformAnalysis]
+  )
+
   // Product Analysis
   const productAnalysis = useMemo(() => {
     const productMap = new Map<string, { name: string; revenue: number; quantity: number; orders: number }>()
@@ -403,6 +423,20 @@ function SalesOverviewPageContent() {
     data.push([T.thisYear, `$${realTimeStats.thisYear.revenue.toFixed(2)}`, realTimeStats.thisYear.orders])
     data.push([])
     
+    // Platform Analysis
+    data.push([T.platformAnalysis])
+    data.push([T.platform, T.sales, T.orders, T.averageOrderValue, T.share])
+    platformAnalysis.forEach((p) => {
+      data.push([
+        p.label,
+        `$${p.revenue.toFixed(2)}`,
+        p.orders,
+        `$${p.avgOrderValue.toFixed(2)}`,
+        `${p.sharePct.toFixed(1)}%`,
+      ])
+    })
+    data.push([])
+
     // Product Analysis
     data.push([T.productAnalysis])
     data.push([T.product, T.sales, T.quantity, T.avgPrice])
@@ -448,6 +482,11 @@ function SalesOverviewPageContent() {
         <tr><td>${T.thisWeek}</td><td>$${realTimeStats.thisWeek.revenue.toFixed(2)}</td><td>${realTimeStats.thisWeek.orders}</td><td>${realTimeStats.thisWeek.growth.toFixed(1)}%</td></tr>
         <tr><td>${T.thisMonth}</td><td>$${realTimeStats.thisMonth.revenue.toFixed(2)}</td><td>${realTimeStats.thisMonth.orders}</td><td>${realTimeStats.thisMonth.growth.toFixed(1)}%</td></tr>
         <tr><td>${T.thisYear}</td><td>$${realTimeStats.thisYear.revenue.toFixed(2)}</td><td>${realTimeStats.thisYear.orders}</td><td>${realTimeStats.thisYear.growth.toFixed(1)}%</td></tr>
+      </table>
+      <h2>${T.platformAnalysis}</h2>
+      <table>
+        <tr><th>${T.platform}</th><th>${T.sales}</th><th>${T.orders}</th><th>${T.averageOrderValue}</th><th>${T.share}</th></tr>
+        ${platformAnalysis.map((p) => `<tr><td>${p.label}</td><td>$${p.revenue.toFixed(2)}</td><td>${p.orders}</td><td>$${p.avgOrderValue.toFixed(2)}</td><td>${p.sharePct.toFixed(1)}%</td></tr>`).join('')}
       </table>
       <h2>${T.productAnalysis}</h2>
       <table>
@@ -598,6 +637,78 @@ function SalesOverviewPageContent() {
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} name={T.revenue} />
                   </LineChart>
                 </SafeResponsiveChart>
+              ) : (
+                <div className="text-center py-12 text-gray-500">{T.noData}</div>
+              )}
+            </div>
+
+            {/* Sales by platform */}
+            <div className="bg-white shadow rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <Store className="w-5 h-5 text-indigo-600" />
+                {T.platformAnalysis}
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Order ledger totals by sales channel (Website / Etsy / eBay / Amazon). Marketplace figures are
+                ops gross recorded on orders — company bank deposits may be net of platform fees.
+              </p>
+              {platformAnalysis.some((r) => r.orders > 0) ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{T.platform}</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{T.sales}</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{T.orders}</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{T.averageOrderValue}</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{T.share}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {platformAnalysis.map((p) => (
+                          <tr key={p.platform}>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.label}</td>
+                            <td className="px-6 py-4 text-sm text-gray-900">${p.revenue.toFixed(2)}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{p.orders}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">${p.avgOrderValue.toFixed(2)}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{p.sharePct.toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {platformChartData.length > 0 ? (
+                    <SafeResponsiveChart height={260}>
+                      <PieChart>
+                        <Pie
+                          data={platformChartData}
+                          dataKey="revenue"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={90}
+                          label={({ name, percent }) =>
+                            `${name} ${((percent || 0) * 100).toFixed(0)}%`
+                          }
+                        >
+                          {platformChartData.map((row) => (
+                            <Cell
+                              key={row.platform}
+                              fill={PLATFORM_COLORS[row.platform] || COLORS[0]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) =>
+                            `$${typeof value === 'number' ? value.toFixed(2) : String(value ?? '')}`
+                          }
+                        />
+                        <Legend />
+                      </PieChart>
+                    </SafeResponsiveChart>
+                  ) : null}
+                </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">{T.noData}</div>
               )}

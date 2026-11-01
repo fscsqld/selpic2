@@ -7,6 +7,7 @@ import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { hydrateLedgerOrder } from '@/lib/orders/ledgerOrderHydrate'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import { orderRequiresTrackingNumber, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
+import { shouldSendCustomerOrderEmail } from '@/lib/orders/customerOrderEmailPolicy'
 import { sendShippingNotificationEmailForOrder } from '@/lib/server/shippingNotificationEmail'
 
 type RouteContext = { params: Promise<{ orderId: string }> }
@@ -32,6 +33,11 @@ async function sendDispatchAndPersist(
   order: OrderRecord
 ): Promise<{ order: OrderRecord; warning?: string }> {
   if (order.shippingNotification?.sent) return { order }
+
+  // Marketplace (eBay / Amazon / Etsy) buyers are emailed by the sales platform — skip SELPIC dispatch mail.
+  if (!shouldSendCustomerOrderEmail(order)) {
+    return { order }
+  }
 
   const result = await sendShippingNotificationEmailForOrder(order)
   const now = new Date().toISOString()

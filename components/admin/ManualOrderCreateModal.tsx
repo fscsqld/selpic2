@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import { X, Loader2, MapPin, Palette } from 'lucide-react'
-import type { OrderRecord } from '@/lib/store'
+import {
+  ORDER_PLATFORM_LABEL,
+  ORDER_PLATFORM_SOURCES,
+  type OrderPlatformSource,
+  type OrderRecord,
+} from '@/lib/store'
 import {
   getCustomizationSurchargePerUnit,
   TWO_LINE_SURCHARGE_DEFAULT as DEFAULT_TWO_LINE_SURCHARGE,
@@ -63,6 +68,7 @@ export default function ManualOrderCreateModal({ open, onClose, products, onCrea
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [shipping, setShipping] = useState('0')
+  const [platformSource, setPlatformSource] = useState<OrderPlatformSource>('website')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -192,7 +198,7 @@ export default function ManualOrderCreateModal({ open, onClose, products, onCrea
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderDraft }),
+        body: JSON.stringify({ orderDraft, platformSource }),
       })
       const data = (await res.json().catch(() => ({}))) as { order?: OrderRecord; error?: string }
       if (!res.ok) {
@@ -223,6 +229,7 @@ export default function ManualOrderCreateModal({ open, onClose, products, onCrea
         setProductId('')
         setQuantity(1)
         setShipping('0')
+        setPlatformSource('website')
       }
     } catch {
       setError('Network error.')
@@ -275,6 +282,29 @@ export default function ManualOrderCreateModal({ open, onClose, products, onCrea
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           ) : null}
+
+          <fieldset className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-600">
+              Sales platform
+            </legend>
+            <label className="block text-xs text-gray-600">
+              <span className="mb-1 block font-medium text-gray-700">Where was this sold?</span>
+              <select
+                value={platformSource}
+                onChange={(e) => setPlatformSource(e.target.value as OrderPlatformSource)}
+                className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              >
+                {ORDER_PLATFORM_SOURCES.map((id) => (
+                  <option key={id} value={id}>
+                    {ORDER_PLATFORM_LABEL[id]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-xs text-gray-500">
+              Shows as the platform badge on Orders (Website / Etsy / eBay / Amazon).
+            </p>
+          </fieldset>
 
           <fieldset className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Customer</legend>

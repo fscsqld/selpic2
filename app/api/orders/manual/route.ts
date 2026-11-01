@@ -4,6 +4,10 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase/admin'
 import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
+import {
+  normalizeOrderPlatformSource,
+  paymentFieldsForPlatform,
+} from '@/lib/orders/normalizeOrderPlatformSource'
 import { sanitizeStorefrontBankOrderDraft, type BankOrderDraft } from '@/lib/orders/sanitizeStorefrontBankOrderDraft'
 
 export async function POST(req: Request) {
@@ -24,15 +28,21 @@ export async function POST(req: Request) {
     }
 
     const sanitizedDraft = await sanitizeStorefrontBankOrderDraft(orderDraft)
+    const platformSource = normalizeOrderPlatformSource(
+      body?.platformSource ?? (orderDraft as { platformSource?: string }).platformSource
+    )
+    const pay = paymentFieldsForPlatform(platformSource, {
+      websitePaymentMethodName: sanitizedDraft.paymentMethodName || 'Bank transfer (manual)',
+    })
     const id = `ORD-${Date.now().toString(36)}`
     const order: OrderRecord = {
       id,
       createdAtIso: new Date().toISOString(),
       ...sanitizedDraft,
       status: 'pending',
-      paymentMethod: 'bank',
-      paymentMethodName: sanitizedDraft.paymentMethodName || 'Bank Transfer',
-      platformSource: 'website',
+      paymentMethod: pay.paymentMethod,
+      paymentMethodName: pay.paymentMethodName,
+      platformSource,
     }
 
     const sb = getSupabaseAdmin()

@@ -6,6 +6,10 @@ import { requireAdminPermission } from '@/lib/supabase/requireAdminPermission'
 import { SAFE_API_ERROR_MESSAGE, logAndSafeMessage } from '@/lib/api/safeError'
 import { buildOrdersTableUpdate } from '@/lib/orders/orderDbColumns'
 import {
+  normalizeOrderPlatformSource,
+  paymentFieldsForPlatform,
+} from '@/lib/orders/normalizeOrderPlatformSource'
+import {
   validateShippingLabelFromOverrideInput,
   type ShippingLabelFromOverride,
 } from '@/lib/shipping/shippingLabelFrom'
@@ -26,9 +30,13 @@ export type ManualShipLabelBody = {
   state?: string
   postcode?: string
   country?: string
-  /** Single line for the label “Items” row, e.g. “Custom stickers × 2”. */
+  /** Single line for the label “Items” row / order line name, e.g. “Custom stickers”. */
   itemDescription?: string
   quantity?: number
+  /** Optional unit price (GST-incl.) for ledger totals — marketplace / counter sales. */
+  unitPrice?: number
+  /** Sales channel badge: website | etsy | ebay | amazon */
+  platformSource?: string
   declaredWeightKg?: number
   /** Optional notes for the PDF PERSONALIZATION block (omitted when empty). */
   labelNotes?: string
@@ -83,6 +91,13 @@ export async function POST(req: Request) {
 
     const itemDescription = String(body.itemDescription || '').trim().slice(0, 300)
     const qty = Math.max(1, Math.min(999, Math.floor(Number(body.quantity) || 1)))
+    const unitPriceRaw = Number(body.unitPrice)
+    const unitPrice =
+      Number.isFinite(unitPriceRaw) && unitPriceRaw >= 0
+        ? Math.round(unitPriceRaw * 100) / 100
+        : 0
+    const platformSource = normalizeOrderPlatformSource(body.platformSource)
+    const pay = paymentFieldsForPlatform(platformSource)
     const labelNotes = String(body.labelNotes || '').trim().slice(0, 2000)
 
     let w = Number(body.declaredWeightKg)
@@ -137,10 +152,27 @@ export async function POST(req: Request) {
       'admin'
     ).slice(0, 120)
 
+    const hasSaleLine = Boolean(itemDescription) || unitPrice > 0
+    const items: OrderRecord['items'] =
+      hasSaleLine || labelNotes
+        ? [
+            {
+              productId: 'manual-ship-label',
+              name: itemDescription || (platformSource === 'website' ? 'Manual label contents' : `${pay.paymentMethodName} sale`),
+              price: unitPrice,
+              quantity: qty,
+              image: '',
+              customizations: {},
+              buyerPersonalization: labelNotes || undefined,
+            },
+          ]
+        : []
+    const subtotal = items.reduce((sum, it) => sum + it.price * it.quantity, 0)
+
     const order: OrderRecord = {
       id,
       createdAtIso: now,
-      platformSource: 'website',
+      platformSource,
       externalOrderKey: `manual-ship:${id}`,
       customer: {
         name: displayName,
@@ -155,29 +187,16 @@ export async function POST(req: Request) {
         country,
         asSingleLine: asSingle,
       },
-      items:
-        itemDescription || labelNotes
-          ? [
-              {
-                productId: 'manual-ship-label',
-                name: itemDescription || '',
-                price: 0,
-                quantity: qty,
-                image: '',
-                customizations: {},
-                buyerPersonalization: labelNotes || undefined,
-              },
-            ]
-          : [],
-      subtotal: 0,
+      items,
+      subtotal,
       shippingPrice: 0,
       discount: 0,
       paymentFee: 0,
-      total: 0,
+      total: subtotal,
       shippingOptionId: 'manual-ship-label',
       shippingOptionName: 'Standard Letter',
-      paymentMethod: 'bank',
-      paymentMethodName: 'Manual label',
+      paymentMethod: pay.paymentMethod,
+      paymentMethodName: pay.paymentMethodName,
       status: 'processing',
       declaredShippingWeightKg: w,
       shippingLabelFromOverride,
@@ -188,7 +207,9 @@ export async function POST(req: Request) {
           timestamp: now,
           action: 'shipping_updated' as const,
           performedBy,
-          description: 'Quick ship label order created for internal PDF / counter posting.',
+          description: `Quick ship label order created (${platformSource})${
+            itemDescription ? `: ${itemDescription}` : ''
+          }.`,
         },
       ],
     }

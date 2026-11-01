@@ -2,7 +2,14 @@
 
 import AdminRoute from '@/components/AdminRoute'
 import AdminPageHeader from '@/components/AdminPageHeader'
-import { useStore, ORDER_PLATFORM_LABEL, type OrderPlatformSource, type OrderRecord, type OrderStatus } from '@/lib/store'
+import {
+  useStore,
+  ORDER_PLATFORM_LABEL,
+  ORDER_PLATFORM_SOURCES,
+  type OrderPlatformSource,
+  type OrderRecord,
+  type OrderStatus,
+} from '@/lib/store'
 import { orderPlatformBadge, summarizeOrderPersonalization } from '@/lib/adminOrderListUtils'
 import { useAdminAuth } from '@/lib/adminAuth'
 import { adminHasPermission } from '@/lib/adminPermissionCheck'
@@ -66,6 +73,7 @@ export default function AdminOrdersPage() {
     updateOrderCustomer,
     updateOrderAddress,
     updateOrderItems,
+    updateOrderPlatformSource,
     updateOrderDiscounts,
     updateOrderShipping,
     recalculateOrderTotal,
@@ -950,6 +958,12 @@ export default function AdminOrdersPage() {
     }
     if (formData.address) {
       updateOrderAddress(orderId, formData.address, performedBy)
+    }
+    if (formData.platformSource) {
+      updateOrderPlatformSource(orderId, formData.platformSource as OrderPlatformSource, performedBy)
+    }
+    if (Array.isArray(formData.items)) {
+      updateOrderItems(orderId, formData.items, performedBy)
     }
     if (formData.discounts) {
       updateOrderDiscounts(orderId, formData.discounts, performedBy)
@@ -2001,6 +2015,22 @@ export default function AdminOrdersPage() {
 function OrderEditForm({ order, onSave, onCancel, T }: { order: any, onSave: (data: any) => void, onCancel: () => void, T: any }) {
   const [customer, setCustomer] = useState(order.customer)
   const [address, setAddress] = useState(order.address)
+  const [platformSource, setPlatformSource] = useState<OrderPlatformSource>(
+    (ORDER_PLATFORM_SOURCES.includes(order.platformSource) ? order.platformSource : 'website') as OrderPlatformSource
+  )
+  const [items, setItems] = useState(() =>
+    (order.items || []).map((it: OrderRecord['items'][number]) => ({
+      productId: it.productId || 'manual-ship-label',
+      name: it.name || '',
+      price: Number(it.price) || 0,
+      quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+      image: it.image || '',
+      customizations: it.customizations || {},
+      buyerPersonalization: it.buyerPersonalization,
+      baseUnitPrice: it.baseUnitPrice,
+      customizationSurchargePerUnit: it.customizationSurchargePerUnit,
+    }))
+  )
   const [discounts, setDiscounts] = useState({
     vipDiscount: order.vipDiscount || 0,
     promoDiscount: order.promoDiscount || 0,
@@ -2013,11 +2043,123 @@ function OrderEditForm({ order, onSave, onCancel, T }: { order: any, onSave: (da
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave({ customer, address, discounts, shipping })
+    const cleanedItems = items
+      .map((it) => ({
+        ...it,
+        name: String(it.name || '').trim(),
+        price: Math.max(0, Math.round((Number(it.price) || 0) * 100) / 100),
+        quantity: Math.max(1, Math.min(999, Math.floor(Number(it.quantity) || 1))),
+      }))
+      .filter((it) => it.name.length > 0)
+    onSave({ customer, address, platformSource, items: cleanedItems, discounts, shipping })
+  }
+
+  const updateItem = (index: number, patch: Partial<(typeof items)[number]>) => {
+    setItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  }
+
+  const addBlankItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        productId: 'manual-ship-label',
+        name: '',
+        price: 0,
+        quantity: 1,
+        image: '',
+        customizations: {},
+      },
+    ])
+  }
+
+  const removeItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index))
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Sales platform</h3>
+        <select
+          value={platformSource}
+          onChange={(e) => setPlatformSource(e.target.value as OrderPlatformSource)}
+          className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg"
+        >
+          {ORDER_PLATFORM_SOURCES.map((id) => (
+            <option key={id} value={id}>
+              {ORDER_PLATFORM_LABEL[id]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-500">Website, Etsy, eBay, or Amazon — shown as the Orders list badge.</p>
+      </div>
+
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold">Order items / sold contents</h3>
+          <button
+            type="button"
+            onClick={addBlankItem}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Add line
+          </button>
+        </div>
+        {items.length === 0 ? (
+          <p className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            No line items. Add a description for marketplace / Quick ship sales, or leave empty for address-only rows.
+          </p>
+        ) : null}
+        <div className="space-y-3">
+          {items.map((it, index) => (
+            <div key={`${it.productId}-${index}`} className="grid grid-cols-12 gap-2 rounded-lg border border-gray-200 p-3">
+              <div className="col-span-12 sm:col-span-6">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={it.name}
+                  onChange={(e) => updateItem(index, { name: e.target.value })}
+                  placeholder="Sold item name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div className="col-span-4 sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={it.quantity}
+                  onChange={(e) => updateItem(index, { quantity: Math.max(1, Math.floor(Number(e.target.value) || 1)) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div className="col-span-5 sm:col-span-3">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Unit price</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={it.price}
+                  onChange={(e) => updateItem(index, { price: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div className="col-span-3 sm:col-span-1 flex items-end">
+                <button
+                  type="button"
+                  onClick={() => removeItem(index)}
+                  className="w-full rounded-lg border border-gray-300 px-2 py-2 text-xs text-red-600 hover:bg-red-50"
+                  aria-label="Remove line"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div>
         <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
         <div className="grid grid-cols-2 gap-4">
