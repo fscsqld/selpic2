@@ -59,6 +59,7 @@ import PaymentOptionsManager from './components/PaymentOptionsManager'
 import PromoCodeManager from './components/PromoCodeManager'
 import VIPGradeConfigManager from './components/VIPGradeConfigManager'
 import VIPGradeBenefitManager from './components/VIPGradeBenefitManager'
+import MarketSAuthorisedBrandsManager from './components/MarketSAuthorisedBrandsManager'
 
 export default function ContentManagementPage() {
   const router = useRouter()
@@ -1287,6 +1288,13 @@ export default function ContentManagementPage() {
                   showNotification={showNotificationToast}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Market S — authorised supply brands (hub trust strip) */}
+          {selectedSection === 'hot-goods' && (
+            <div className="bg-white rounded-xl border shadow-sm p-6">
+              <MarketSAuthorisedBrandsManager />
             </div>
           )}
 
@@ -4274,7 +4282,7 @@ export default function ContentManagementPage() {
         )}
 
           {/* Search and add button - Exclude Hero section */}
-          {selectedSection !== 'hero' && (
+          {selectedSection !== 'hero' && selectedSection !== 'hot-goods' && (
             <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="relative w-full md:w-96">
@@ -4512,8 +4520,8 @@ export default function ContentManagementPage() {
           </div>
         )}
 
-        {/* 콘텐츠 목록 - Hero 섹션 제외 */}
-        {selectedSection !== 'hero' && (
+        {/* Content list — Hero / Market S authorised brands use dedicated managers */}
+        {selectedSection !== 'hero' && selectedSection !== 'hot-goods' && (
           <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">

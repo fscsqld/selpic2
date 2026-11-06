@@ -32,6 +32,11 @@ import {
   MARKET_S_PREORDER_CTA,
 } from '@/lib/marketSPreorder'
 import MarketSPreorderCountdown from '@/components/market-s/MarketSPreorderCountdown'
+import { useContentStore } from '@/lib/contentStore'
+import {
+  findAuthorisedMarketSBrand,
+  MARKET_S_AUTHORISED_BADGE_LABEL,
+} from '@/lib/marketSAuthorisedBrands'
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
@@ -40,6 +45,7 @@ export default function ProductDetailPage() {
   const { products, addToCart, _hasHydrated, refreshProducts, updateProduct } = useStore()
   const { refreshMediaFilesFromStorage } = useMediaStore()
   const { isLoggedIn } = useUserAuth()
+  const marketSAuthorisedBrands = useContentStore((s) => s.marketSAuthorisedBrands)
   const [quantity, setQuantity] = useState(1)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [forceUpdate, setForceUpdate] = useState(0)
@@ -435,13 +441,33 @@ export default function ProductDetailPage() {
                 </div>
               )}
               {(product as any).brand && (
-                <div className="flex items-center">
+                <div className="flex items-center flex-wrap gap-2">
                   <span className="text-sm font-medium text-gray-700 w-24">Brand:</span>
                   <span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-sm">
-                    🏷️ {(product as any).brand}
+                    {(product as any).brand}
                   </span>
+                  {isMarketSCatalogProduct(product) &&
+                    findAuthorisedMarketSBrand(marketSAuthorisedBrands, (product as any).brand) && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium">
+                        {MARKET_S_AUTHORISED_BADGE_LABEL}
+                      </span>
+                    )}
                 </div>
               )}
+              {isMarketSCatalogProduct(product) &&
+                (() => {
+                  const authorised = findAuthorisedMarketSBrand(
+                    marketSAuthorisedBrands,
+                    (product as any).brand
+                  )
+                  if (!authorised) return null
+                  return (
+                    <p className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                      {authorised.tagline?.trim() ||
+                        `${authorised.name} — official authorised partner for Market S.`}
+                    </p>
+                  )
+                })()}
               {(product as any).size && (
                 <div className="flex items-center">
                   <span className="text-sm font-medium text-gray-700 w-24">Size:</span>

@@ -25,8 +25,10 @@ import {
 import { getCustomizationSurchargePerUnit } from '@/lib/orderCustomizationSurcharge'
 import { isStickerPackCartCustomizations } from '@/lib/stickerSheetBundles'
 import {
+  cartPrefersTrackedLetterOverUntracked,
   getCartShippingRequirement,
   mergeShippingOptionsForCart,
+  preferredMarketSLetterOptionId,
 } from '@/lib/shipping/productShippingEligibility'
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 import MarketSBundleUpsell from '@/components/MarketSBundleUpsell'
@@ -79,14 +81,29 @@ export default function CartPage() {
         freeShippingSettings.marketSUntrackedLetterFreeWhenThresholdMet,
     }
   ) as ShippingOption[]
+  const cartSubtotalForShip = cart.reduce(
+    (sum, item) => sum + getStorefrontLineUnitPrice(item) * item.quantity,
+    0
+  )
+  const preferTrackedLetter =
+    shippingRequirement.allowUntrackedMaskLetter &&
+    cartPrefersTrackedLetterOverUntracked(
+      cart.map((item) => ({
+        product: { price: getStorefrontLineUnitPrice(item) },
+        quantity: item.quantity,
+      })),
+      cartSubtotalForShip
+    )
   const estimatedShippingOption =
     shippingOptions.find((option) =>
       shippingRequirement.allowUntrackedMaskLetter
-        ? option.id === 'market-s-untracked-letter'
+        ? option.id === preferredMarketSLetterOptionId(preferTrackedLetter)
         : shippingRequirement.requiresParcel
           ? option.id === 'parcel-post'
           : option.isDefault
-    ) || shippingOptions[0]
+    ) ||
+    shippingOptions.find((option) => option.id === 'market-s-untracked-letter') ||
+    shippingOptions[0]
 
   const getStockMeta = (productId: string) => {
     const storeProduct = products.find(p => p.id === productId)
@@ -753,7 +770,9 @@ export default function CartPage() {
                   <p className="font-semibold">Shipping estimate</p>
                   <p className="mt-1">
                     {shippingRequirement.allowUntrackedMaskLetter
-                      ? 'Untracked letter is the default estimate for 1–3 Market S Single Item packs (and up to 3 sticker sheets) at 20 mm / 500 g or under. Tracking is not included. Parcel Post is available at checkout if you need tracking.'
+                      ? preferTrackedLetter
+                        ? 'Tracked Letter (~$8.10) is the default estimate for higher-value Market S Single Item packs (e.g. 1+1 not saved as Family Bundle). Untracked letter and Parcel Post are still available at checkout.'
+                        : 'Untracked letter is the default estimate for 1–3 Market S Single Item packs (and up to 3 sticker sheets) at 20 mm / 500 g or under. Tracked Letter (~$8.10) and Parcel Post are available at checkout.'
                       : shippingRequirement.requiresParcel
                       ? `Parcel service is required because this cart contains parcel-class goods, a Family Bundle, 4+ mask singles, more than 3 sticker sheets with Market S, or exceeds the 500 g / 20 mm letter limit (estimated ${shippingRequirement.totalWeightGrams} g).`
                       : 'Standard Letter is the default estimate and does not include tracking.'}{' '}

@@ -2399,8 +2399,11 @@ function AdminProductsPageContent() {
                       value={formData.brand || ''}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      placeholder="Enter brand name"
+                      placeholder="e.g. DermaFirm"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Match an Authorised brand name (Content → Market S) for the hub/PDP Authorised badge.
+                    </p>
                   </div>
                 ) : formData.category === 'PhoneCases' ? (
                   <>

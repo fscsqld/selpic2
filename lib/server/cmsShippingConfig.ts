@@ -10,6 +10,7 @@ import {
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
   resolveMarketSUntrackedLetterPricingOption,
 } from '@/lib/shipping/marketSLetterOption'
+import { migrateAusPostShippingOptionPrices } from '@/lib/shipping/ausPostRetailRates'
 import type { ShippingOptionForPricing, FreeShippingSettingsLike } from '@/lib/shipping/computeChargedShippingPrice'
 import type { ShippingServiceType } from '@/lib/shipping/shippingSnapshot'
 
@@ -121,9 +122,10 @@ export async function readCmsShippingConfig(): Promise<CmsShippingConfig> {
 
           if (options.length > 0) {
             return {
-              shippingOptions: ensureMarketSUntrackedLetterInShippingOptions(
-                options,
-                () => ({ ...MARKET_S_UNTRACKED_LETTER_OPTION })
+              shippingOptions: migrateAusPostShippingOptionPrices(
+                ensureMarketSUntrackedLetterInShippingOptions(options, () => ({
+                  ...MARKET_S_UNTRACKED_LETTER_OPTION,
+                }))
               ),
               freeShippingSettings,
               vipFreeShippingByGrade,

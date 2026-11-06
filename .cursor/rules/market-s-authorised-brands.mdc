@@ -1,0 +1,25 @@
+# Market S authorised brands (learned 2026-11-05)
+
+## Invariant
+
+Trust marketing for supply partners is a **CMS list** (`marketSAuthorisedBrands` in `storefront_cms`), not DermaFirm-only hardcoding and not a long homepage Category Description.
+
+## Surfaces
+
+| Surface | Behavior |
+|---|---|
+| **Admin → Content → Market S** | Manage authorised brands (name, tagline, logo, link, active) |
+| **`/hot-goods` hub** | Trust strip when ≥1 active brand |
+| **Hub cards / Market S PDP** | `Authorised` badge when `product.brand` matches an active row (normalised) |
+| **Homepage category card** | Keep **short** Description (benefit line only) — do not paste partner essays |
+
+## Product brand
+
+Admin Market S form Brand field must match the authorised list name (spacing/case tolerant via `normalizeMarketSBrandKey`). New partners = add CMS row + set SKU brand — no code deploy.
+
+## Do not
+
+- Redesign homepage Hero for brand trust
+- Hardcode a single brand in hub UI
+- Put long authorised-partner copy on the home Category Description
+---

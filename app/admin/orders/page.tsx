@@ -31,6 +31,7 @@ import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrien
 import { selectPostOfficeCutoffOrders } from '@/lib/shipping/postOfficeCutoffBatch'
 import { orderRequiresTrackingNumber, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
+import { getShippingCarrierRecommendation } from '@/lib/shipping/shippingCarrierRecommend'
 
 const LABEL_SLOT_OPTIONS: Array<{ value: AdminShippingLabelSlot; label: string }> = [
   { value: 'top-left', label: 'Top left' },
@@ -1597,6 +1598,7 @@ export default function AdminOrdersPage() {
                     const plat = orderPlatformBadge(order)
                     const pers = summarizeOrderPersonalization(order)
                     const shipBadge = getShippingFulfillmentBadge(order)
+                    const carrierRec = getShippingCarrierRecommendation(order)
                     const orderIsPreorder =
                       order.hasPreorderItems === true ||
                       (Array.isArray(order.items) &&
@@ -1620,9 +1622,30 @@ export default function AdminOrdersPage() {
                             click_collect: 'C&C',
                             notified: 'Sent',
                           }
+                          const carrierShort: Record<string, string> = {
+                            pickup: 'C&C',
+                            auspost_untracked: 'AP letter',
+                            auspost_letter_tracked: 'AP trk L',
+                            auspost_po_box: 'AP PO Box',
+                            auspost_remote: 'AP parcel',
+                            auspost_express: 'AP Express',
+                            transdirect_metro: 'TD',
+                            auspost_parcel: 'AP parcel',
+                          }
+                          const packShort =
+                            carrierRec.packaging?.preset.kind === 'envelope'
+                              ? carrierRec.packaging.preset.id === 'envelope-160x240'
+                                ? 'Env S'
+                                : 'Env L'
+                              : carrierRec.packaging?.preset.id === 'box-310x220x75'
+                                ? 'Box L'
+                                : carrierRec.packaging
+                                  ? 'Box S'
+                                  : ''
                           const pKey = String(order.platformSource || 'website')
                           const pShort = platformShort[pKey] || plat.text.replace(/[\[\]]/g, '').slice(0, 2)
                           const sShort = shipShort[shipBadge.key] || shipBadge.label
+                          const cShort = carrierShort[carrierRec.key] || carrierRec.label
                           const created = new Date(order.createdAtIso)
                           const shortWhen = Number.isNaN(created.getTime())
                             ? ''
@@ -1647,6 +1670,15 @@ export default function AdminOrdersPage() {
                                 >
                                   {sShort}
                                 </span>
+                                {carrierRec.key !== 'pickup' ? (
+                                  <span
+                                    className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${carrierRec.className}`}
+                                    title={carrierRec.reason}
+                                  >
+                                    {cShort}
+                                    {packShort ? ` · ${packShort}` : ''}
+                                  </span>
+                                ) : null}
                                 {orderIsPreorder ? (
                                   <span
                                     className="inline-flex shrink-0 items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-900"

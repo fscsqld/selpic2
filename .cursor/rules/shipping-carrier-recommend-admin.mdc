@@ -1,0 +1,67 @@
+# Admin carrier recommendation (AusPost vs Transdirect)
+
+**Phase 1 shipped 2026-11-06.** **Phase 2 (pack presets + chargeable weight) shipped 2026-11-06.**  
+Admin-only advisory — does **not** change checkout prices or auto-book carriers.
+
+## What the owner wanted
+
+| Customer paid | Admin “Book: …” tip |
+|---|---|
+| Untracked letter | **AusPost letter** (cheapest; no Transdirect equivalent) |
+| Tracked parcel to metro (Syd / Mel / Bris / GC / Perth / Adelaide) | **Transdirect** (Aramex / CP often undercut Parcel Post) |
+| PO Box / Parcel Locker | **AusPost only** |
+| Regional / NT / TAS / remote WA | **AusPost Parcel** |
+| Express / tracked letter | Stay on **AusPost** |
+
+Helpers: `lib/shipping/shippingCarrierRecommend.ts`, `lib/shipping/auMetroPostcodes.ts`, `lib/shipping/packagingPresets.ts`.  
+UI: Admin Orders list chip (`TD · Box L`) + order detail pack / chargeable lines.
+
+## Phase 2 — four warehouse packs
+
+| Preset id | Outer size | Typical use | Cubic @ 250 kg/m³ |
+|---|---|---|---|
+| `envelope-160x240` | 160×240×~12 mm | Stickers / thin letter | letter bands (not cubic-priced) |
+| `envelope-240x280` | 240×280×~15 mm | Website: Market S letter singles **and 1+1 tracked** (≤20 mm) | letter / thin pack |
+| `box-220x160x77` | 220×160×77 mm | **Etsy / eBay / Amazon gift box** (presentation for gift buyers) | ~**678 g** |
+| `box-310x220x75` | 310×220×75 mm | DermaFix 8-pack / bulk (any channel when size needs it) | ~**1279 g** |
+
+**Learned 2026-11-06 (owner):**  
+- Website **1+1** can ship **tracked in Env 240×280** (not Box S).  
+- **Box 220×160×77** is reserved for **marketplace gift packaging** (Etsy first; same for eBay/Amazon). Gift buyers expect a box.  
+- **8-pack** still uses Box L even on Etsy when size requires it.
+
+**Chargeable grams** = `max(physical, cubic)`. Couriers and AusPost own-packaging bill this way.  
+An 8-pack at 280 g physical in Box L is still **~1.28 kg chargeable** → AusPost **over 1 kg up to 3 kg** band (~$20.25), not ≤500 g ($11.70).
+
+Inference: `platformSource` etsy/ebay/amazon → Box S (unless 8-pack/≥200 g → Box L); website 1+1 / light Family Bundle → Env L; letter stickers → Env S. Optional `order.packagingPresetId` override.
+
+Metro Transdirect tip uses **chargeable** grams (cap 2000 g). At chargeable ≥1000 g the reason warns to quote carefully vs AusPost 1 kg band.
+
+## Market S catalogue policy ($20+ tracked)
+
+| SKU type | Subcategory | Checkout shipping | Typical grams | Suggested pack |
+|---|---|---|---|---|
+| Single mask sheet (low price bait) | **Single Item** | Untracked letter default; Tracked Letter ($8.10) also offered | ~30 g default | Env L / Env S |
+| **1+1** as **Single Item** (≥ ~$20, not Family Bundle) | **Single Item** | Checkout **defaults to Tracked Letter $8.10**; untracked + parcel still available | ~60 g | Env L |
+| **1+1** / **8-pack** as **Family Bundle** | **Family Bundle** | Parcel only (~$11.70) — no letter options | ~60 / ~280–450 g | Env L or Box L |
+| **8-pack** (≥ ~$20) | **Family Bundle** | Parcel / tracked only | ~280–450 g | Box L (all channels) |
+| Existing Family Bundle | Family Bundle | Parcel | default 250 g if unset | Box S or L by weight |
+
+Do **not** register 1+1 / 8-packs as Single Item if the owner wants tracking by default.
+
+## CMS rates vs AusPost (check periodically)
+
+| Our CMS / code default | AusPost reference (2026) |
+|---|---|
+| Market S / Standard letter **$3.70** | Large letter ≤125 g **$3.70** — OK |
+| Tracked letter **$8.10** | Domestic letter with tracking Medium C5 **$8.10** (was wrongly $5.55 = untracked ≤250 g) |
+| Parcel Post **$11.70** | Own packaging ≤500 g **$11.70** — OK only when **chargeable** ≤500 g |
+| Express **$15.20** | Own packaging ≤500 g **$15.20** |
+
+Live prices: Admin → Shipping. Transdirect is **not** a checkout option — ops quotes on Transdirect.com.au with L×W×H + weight.
+
+## Do / Do not
+
+**Do** — Show recommendation from paid option + postcode + pack preset + chargeable grams; paste whatever tracking was booked.
+
+**Do not** — Auto-switch customer shipping fee; treat advisory as a live API quote; assume physical grams alone for Box L.

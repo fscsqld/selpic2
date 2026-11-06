@@ -11,6 +11,15 @@ import {
   ensureMarketSUntrackedLetterInShippingOptions,
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
 } from '@/lib/shipping/marketSLetterOption'
+import { migrateAusPostShippingOptionPrices } from '@/lib/shipping/ausPostRetailRates'
+import {
+  createDefaultMarketSAuthorisedBrands,
+  ensureMarketSAuthorisedBrands,
+  normalizeAuthorisedBrandRow,
+  type MarketSAuthorisedBrand,
+} from '@/lib/marketSAuthorisedBrands'
+
+export type { MarketSAuthorisedBrand }
 
 const CONTENT_STORE_DEBUG =
   process.env.NODE_ENV === 'development' &&
@@ -375,6 +384,8 @@ interface ContentStore {
   promoCodes: PromoCode[]
   vipGradeConfigs: VIPGradeConfig[]
   vipGradeBenefits: VIPGradeBenefit[]
+  /** Market S hub trust strip — authorised supply partners (multi-brand). */
+  marketSAuthorisedBrands: MarketSAuthorisedBrand[]
   /** Set true after Supabase storefront_cms was merged in this tab (not persisted). */
   siteConfigRemoteSynced: boolean
   setSiteConfigRemoteSynced: (value: boolean) => void
@@ -434,6 +445,14 @@ interface ContentStore {
   togglePickupLocationActive: (id: string) => void
   getDefaultPickupLocation: () => PickupLocation | undefined
   getActivePickupLocations: () => PickupLocation[]
+  // Market S authorised brands
+  addMarketSAuthorisedBrand: (
+    brand: Omit<MarketSAuthorisedBrand, 'id' | 'createdAt' | 'updatedAt'>
+  ) => void
+  updateMarketSAuthorisedBrand: (id: string, updates: Partial<MarketSAuthorisedBrand>) => void
+  deleteMarketSAuthorisedBrand: (id: string) => void
+  toggleMarketSAuthorisedBrandActive: (id: string) => void
+  getActiveMarketSAuthorisedBrands: () => MarketSAuthorisedBrand[]
   // 배송 옵션 관리 함수들
   addShippingOption: (option: Omit<ShippingOption, 'id' | 'createdAt' | 'updatedAt'>) => void
   updateShippingOption: (id: string, updates: Partial<ShippingOption>) => void
@@ -3202,9 +3221,10 @@ const defaultShippingOptions: ShippingOption[] = [
   {
     id: 'tracked-letter',
     name: 'Tracked Letter',
-    description: 'Tracked letter service — delivery with tracking (peace of mind)',
-    price: 5.55,
-    deliveryTime: '2–8 business days',
+    description:
+      'Australia Post Domestic letter with tracking (Medium C5 ~$8.10) — Env 240×280 / tracked thin packs. Not the untracked ≤250 g $5.55 stamp rate.',
+    price: 8.1,
+    deliveryTime: '3–7 business days',
     tracking: true,
     insurance: false,
     type: 'delivery',
@@ -3218,8 +3238,8 @@ const defaultShippingOptions: ShippingOption[] = [
   {
     id: 'express-post',
     name: 'Express Post',
-    description: 'Fastest service where available (1–3 business days, tracking)',
-    price: 14.5,
+    description: 'Express Post own packaging ≤500 g band (1–3 business days, tracking)',
+    price: 15.2,
     deliveryTime: '1–3 business days',
     tracking: true,
     insurance: true,
@@ -3788,7 +3808,12 @@ export function partializedSiteConfigForPersist(state: ContentStore): Record<str
       createdAt: template.createdAt instanceof Date ? template.createdAt.toISOString() : template.createdAt,
       updatedAt: template.updatedAt instanceof Date ? template.updatedAt.toISOString() : template.updatedAt
     })),
-    freeShippingSettings: state.freeShippingSettings
+    freeShippingSettings: state.freeShippingSettings,
+    marketSAuthorisedBrands: (state.marketSAuthorisedBrands || []).map((brand: any) => ({
+      ...brand,
+      createdAt: brand.createdAt instanceof Date ? brand.createdAt.toISOString() : brand.createdAt,
+      updatedAt: brand.updatedAt instanceof Date ? brand.updatedAt.toISOString() : brand.updatedAt,
+    })),
   }
 }
 
@@ -3976,9 +4001,11 @@ export function mergePersistedSiteConfig(
         : persistedState?.shippingOptions && Array.isArray(persistedState.shippingOptions) && persistedState.shippingOptions.length >= 0
           ? persistedState.shippingOptions
           : currentState.shippingOptions
-      return ensureMarketSUntrackedLetterInShippingOptions(
-        Array.isArray(raw) ? raw : [],
-        () => createDefaultMarketSUntrackedLetterCmsRow()
+      return migrateAusPostShippingOptionPrices(
+        ensureMarketSUntrackedLetterInShippingOptions(
+          Array.isArray(raw) ? raw : [],
+          () => createDefaultMarketSUntrackedLetterCmsRow()
+        )
       )
     })(),
     freeShippingSettings: fromRemoteSupabaseSync
@@ -4002,6 +4029,18 @@ export function mergePersistedSiteConfig(
       : persistedState?.pickupLocations && Array.isArray(persistedState.pickupLocations) && persistedState.pickupLocations.length >= 0
         ? persistedState.pickupLocations
         : currentState.pickupLocations,
+    marketSAuthorisedBrands: (() => {
+      const keyPresent =
+        !!persistedState &&
+        Object.prototype.hasOwnProperty.call(persistedState, 'marketSAuthorisedBrands')
+      const raw = keyPresent
+        ? (persistedState as any).marketSAuthorisedBrands
+        : currentState.marketSAuthorisedBrands
+      return ensureMarketSAuthorisedBrands(
+        Array.isArray(raw) ? raw : undefined,
+        keyPresent
+      )
+    })(),
     vipGradeBenefits: fromRemoteSupabaseSync
       ? (() => {
           const m = mergeRecordArraysByLastWrite(persistedState?.vipGradeBenefits, currentState.vipGradeBenefits)
@@ -4043,6 +4082,7 @@ const REMOTE_CMS_ARRAY_KEYS = [
   'pickupLocations',
   'vipGradeBenefits',
   'vipGradeConfigs',
+  'marketSAuthorisedBrands',
 ] as const
 
 /**
@@ -4183,13 +4223,15 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
     )
   }
   if (state.shippingOptions) {
-    state.shippingOptions = ensureMarketSUntrackedLetterInShippingOptions(
-      state.shippingOptions.map((option: any) => ({
-        ...option,
-        createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
-        updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
-      })),
-      () => createDefaultMarketSUntrackedLetterCmsRow()
+    state.shippingOptions = migrateAusPostShippingOptionPrices(
+      ensureMarketSUntrackedLetterInShippingOptions(
+        state.shippingOptions.map((option: any) => ({
+          ...option,
+          createdAt: typeof option.createdAt === 'string' ? new Date(option.createdAt) : option.createdAt,
+          updatedAt: typeof option.updatedAt === 'string' ? new Date(option.updatedAt) : option.updatedAt
+        })),
+        () => createDefaultMarketSUntrackedLetterCmsRow()
+      )
     )
   }
   if (state.pickupLocations) {
@@ -4198,6 +4240,14 @@ export function normalizeRehydratedContentStoreState(state: ContentStore | undef
       createdAt: typeof location.createdAt === 'string' ? new Date(location.createdAt) : location.createdAt,
       updatedAt: typeof location.updatedAt === 'string' ? new Date(location.updatedAt) : location.updatedAt
     }))
+  }
+  {
+    const keyPresent = Object.prototype.hasOwnProperty.call(state, 'marketSAuthorisedBrands')
+    const raw = Array.isArray(state.marketSAuthorisedBrands) ? state.marketSAuthorisedBrands : undefined
+    state.marketSAuthorisedBrands = ensureMarketSAuthorisedBrands(raw, keyPresent).map((brand) => {
+      const n = normalizeAuthorisedBrandRow(brand)
+      return n || brand
+    })
   }
   if (state.vipGradeBenefits) {
     state.vipGradeBenefits = state.vipGradeBenefits.map((benefit: any) => ({
@@ -4335,6 +4385,7 @@ export const useContentStore = create<ContentStore>()(
       promoCodes: defaultPromoCodes,
       vipGradeConfigs: defaultVIPGradeConfigs,
       vipGradeBenefits: defaultVIPGradeBenefits,
+      marketSAuthorisedBrands: createDefaultMarketSAuthorisedBrands(),
       siteConfigRemoteSynced: false,
       setSiteConfigRemoteSynced: (value: boolean) => {
         set({ siteConfigRemoteSynced: value })
@@ -5318,6 +5369,85 @@ scheduleLogAdminActivity({
           .sort((a: PickupLocation, b: PickupLocation) => a.order - b.order)
       },
 
+      addMarketSAuthorisedBrand: (
+        brand: Omit<MarketSAuthorisedBrand, 'id' | 'createdAt' | 'updatedAt'>
+      ) => {
+        const newBrand: MarketSAuthorisedBrand = {
+          ...brand,
+          name: String(brand.name || '').trim(),
+          tagline: String(brand.tagline || '').trim(),
+          logoUrl: String(brand.logoUrl || '').trim(),
+          linkUrl: String(brand.linkUrl || '').trim(),
+          id: `market-s-brand-${Date.now()}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+        if (!newBrand.name) return
+        set((state: ContentStore) => ({
+          marketSAuthorisedBrands: [...(state.marketSAuthorisedBrands || []), newBrand],
+        }))
+      },
+
+      updateMarketSAuthorisedBrand: (id: string, updates: Partial<MarketSAuthorisedBrand>) => {
+        set((state: ContentStore) => ({
+          marketSAuthorisedBrands: (state.marketSAuthorisedBrands || []).map(
+            (b: MarketSAuthorisedBrand) =>
+              b.id === id
+                ? {
+                    ...b,
+                    ...updates,
+                    name:
+                      updates.name !== undefined
+                        ? String(updates.name).trim()
+                        : b.name,
+                    tagline:
+                      updates.tagline !== undefined
+                        ? String(updates.tagline).trim()
+                        : b.tagline,
+                    logoUrl:
+                      updates.logoUrl !== undefined
+                        ? String(updates.logoUrl).trim()
+                        : b.logoUrl,
+                    linkUrl:
+                      updates.linkUrl !== undefined
+                        ? String(updates.linkUrl).trim()
+                        : b.linkUrl,
+                    updatedAt: new Date(),
+                  }
+                : b
+          ),
+        }))
+      },
+
+      deleteMarketSAuthorisedBrand: (id: string) => {
+        set((state: ContentStore) => ({
+          marketSAuthorisedBrands: (state.marketSAuthorisedBrands || []).filter(
+            (b: MarketSAuthorisedBrand) => b.id !== id
+          ),
+        }))
+      },
+
+      toggleMarketSAuthorisedBrandActive: (id: string) => {
+        set((state: ContentStore) => ({
+          marketSAuthorisedBrands: (state.marketSAuthorisedBrands || []).map(
+            (b: MarketSAuthorisedBrand) =>
+              b.id === id
+                ? { ...b, isActive: !b.isActive, updatedAt: new Date() }
+                : b
+          ),
+        }))
+      },
+
+      getActiveMarketSAuthorisedBrands: () => {
+        const state = get()
+        return (state.marketSAuthorisedBrands || [])
+          .filter((b: MarketSAuthorisedBrand) => b.isActive && String(b.name || '').trim())
+          .sort(
+            (a: MarketSAuthorisedBrand, b: MarketSAuthorisedBrand) =>
+              (a.order ?? 0) - (b.order ?? 0)
+          )
+      },
+
       // 배송 옵션 관리 함수들
       addShippingOption: (option: Omit<ShippingOption, 'id' | 'createdAt' | 'updatedAt'>) => {
         const newOption: ShippingOption = {
@@ -6151,6 +6281,7 @@ scheduleLogAdminActivity({
           promoCodes: defaultPromoCodes,
           vipGradeConfigs: defaultVIPGradeConfigs,
           vipGradeBenefits: defaultVIPGradeBenefits,
+          marketSAuthorisedBrands: createDefaultMarketSAuthorisedBrands(),
           siteConfigRemoteSynced: true,
           _hasHydrated: true
         }

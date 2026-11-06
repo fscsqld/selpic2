@@ -28,6 +28,7 @@ import ShippingLabelFromOverrideFields, {
 } from '@/components/admin/ShippingLabelFromOverrideFields'
 import { orderRequiresTrackingNumber, resolveOrderShippingSnapshot, isOrderClickAndCollect } from '@/lib/shipping/shippingSnapshot'
 import { getShippingFulfillmentBadge } from '@/lib/shipping/shippingFulfillmentBadge'
+import { getShippingCarrierRecommendation } from '@/lib/shipping/shippingCarrierRecommend'
 import {
   formatOrderItemPreorderNote,
   MARKET_S_PREORDER_BADGE,
@@ -928,6 +929,22 @@ Selpic Team`
                   Paid Australia Post labels (with tracking) are created in{' '}
                   <strong>MyPost Business</strong>, then paste the tracking number into the Tracking section above.
                   Mark the order <strong>Shipped</strong> to email the customer.
+                  {(() => {
+                    const carrier = getShippingCarrierRecommendation(order)
+                    if (carrier.key === 'transdirect_metro') {
+                      return (
+                        <>
+                          {' '}
+                          This order prefers <strong>Transdirect</strong> (Aramex / Couriers Please) for cost —
+                          book there when cheaper, then paste that tracking number here.
+                        </>
+                      )
+                    }
+                    if (carrier.key === 'auspost_po_box') {
+                      return <> {' '}PO Box / locker — use AusPost only (couriers cannot deliver).</>
+                    }
+                    return null
+                  })()}
                 </p>
                 {isClickAndCollect ? (
                   <p className="text-sm text-gray-500">Click &amp; Collect — postal label not required.</p>
@@ -1348,7 +1365,47 @@ Selpic Team`
                         </span>
                       )
                     })()}
+                    {(() => {
+                      const carrier = getShippingCarrierRecommendation(order)
+                      return (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${carrier.className}`}
+                          title={carrier.reason}
+                        >
+                          Book: {carrier.label}
+                        </span>
+                      )
+                    })()}
                   </div>
+                  {(() => {
+                    const carrier = getShippingCarrierRecommendation(order)
+                    if (carrier.key === 'pickup') return null
+                    const pack = carrier.packaging
+                    return (
+                      <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-2 space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-900">
+                          Carrier recommendation (Admin)
+                        </p>
+                        <p className="text-sm text-indigo-950">{carrier.reason}</p>
+                        {pack ? (
+                          <p className="text-xs text-indigo-900">
+                            Suggested pack:{' '}
+                            <span className="font-semibold">{pack.preset.label}</span> ({pack.dimsLabel})
+                            {' · '}physical ~{pack.physicalGrams} g
+                            {' · '}cubic ~{pack.cubicGrams} g
+                            {' · '}
+                            <span className="font-semibold">chargeable ~{pack.chargeableGrams} g</span>
+                            {' · '}
+                            {pack.ausPostBandHint}
+                          </p>
+                        ) : null}
+                        <p className="text-xs text-indigo-800/80">
+                          Advisory only — does not change the shipping fee the customer already paid.
+                          Use chargeable weight (not physical alone) when quoting Transdirect / MyPost.
+                        </p>
+                      </div>
+                    )
+                  })()}
                   {orderIsPreorder ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">

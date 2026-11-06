@@ -33,7 +33,8 @@ Do **not** add a new product subcategory for every new Market S SKU. The two val
 
 | New SKU | Subcategory to pick | Why |
 |----|---|---|
-| Another mask brand / size (single) | **Single Item** | Same letter rule (1–3, pack ≤20 mm, default 40 g) |
+| Another mask brand / size (single, low price) | **Single Item** | Same letter rule (1–3, pack ≤20 mm, default ~30 g) |
+| **1+1** or **8-pack** DermaFix (≥ ~$20) | **Family Bundle** | Owner wants **tracked** by default — do not use Single Item (untracked letter risk). Set `shippingWeightGrams` (~60 / ~280–450) |
 | Another multi-pack / family SKU | **Family Bundle** | Same tracked parcel (one SKU + one price) |
 | Sunscreen, serum, cream, gadget that is still a **thin light single** | **Single Item** | Checkout only looks at this string, not the product name |
 | Anything bulky / liquid-heavy / cannot go untracked letter | **Family Bundle** today (parcel). A third value is only needed if we want a parcel-single that must not look like a family pack |

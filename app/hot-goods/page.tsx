@@ -30,7 +30,12 @@ import {
   type MarketSSalesMode,
 } from '@/lib/marketSPreorder'
 import MarketSPreorderCountdown from '@/components/market-s/MarketSPreorderCountdown'
+import MarketSAuthorisedBrandsTrust from '@/components/market-s/MarketSAuthorisedBrandsTrust'
 import { resolveStorefrontImageSrc } from '@/lib/optimizeStorefrontImageUrl'
+import {
+  isAuthorisedMarketSBrand,
+  MARKET_S_AUTHORISED_BADGE_LABEL,
+} from '@/lib/marketSAuthorisedBrands'
 
 // Market S 상품 타입 정의
 interface MarketSProduct {
@@ -105,7 +110,8 @@ export default function HotGoodsPage() {
     categoryHeroSlides: allCategoryHeroSlides,
     _hasHydrated: contentHydrated,
     categoryItems,
-    getActiveCategoryItems
+    getActiveCategoryItems,
+    marketSAuthorisedBrands,
   } = useContentStore()
   
   // 카테고리별 Hero Slide 가져오기
@@ -438,6 +444,11 @@ export default function HotGoodsPage() {
             <p className="mt-4 text-base sm:text-lg text-slate-600">
               We’re curating only the hottest items—coming soon.
             </p>
+            <div className="mt-8 text-left max-w-2xl mx-auto">
+              <MarketSAuthorisedBrandsTrust
+                brands={contentHydrated ? marketSAuthorisedBrands : []}
+              />
+            </div>
 
             <div className="mt-10 flex justify-center">
               <div className="w-full max-w-xl rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg ring-1 ring-slate-200/80 p-6 sm:p-7 text-left">
@@ -514,6 +525,11 @@ export default function HotGoodsPage() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <MarketSAuthorisedBrandsTrust
+          brands={contentHydrated ? marketSAuthorisedBrands : []}
+          className="mb-8"
+        />
+
         {openPreorderProducts.length > 0 && (
           <div
             id="preorder"
@@ -746,7 +762,12 @@ export default function HotGoodsPage() {
                   )}
                   {product.brand && (
                     <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded">
-                      🏷️ {product.brand}
+                      {product.brand}
+                    </span>
+                  )}
+                  {isAuthorisedMarketSBrand(marketSAuthorisedBrands, product.brand) && (
+                    <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-medium">
+                      {MARKET_S_AUTHORISED_BADGE_LABEL}
                     </span>
                   )}
                   {product.size && (

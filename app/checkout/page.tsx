@@ -31,6 +31,8 @@ import {
   getCartShippingRequirement,
   isShippingOptionCompatible,
   mergeShippingOptionsForCart,
+  cartPrefersTrackedLetterOverUntracked,
+  preferredMarketSLetterOptionId,
 } from '@/lib/shipping/productShippingEligibility'
 import type { OrderRecord } from '@/lib/store'
 import { cartContainsMarketSGoods, MARKET_S_HYGIENE_CHECKOUT } from '@/lib/marketSHygieneCopy'
@@ -192,9 +194,21 @@ export default function CheckoutPage() {
     }
   ) as ShippingOption[]
   const configuredDefaultShippingOption = getDefaultShippingOption()
+  const preferTrackedLetter =
+    shippingRequirement.allowUntrackedMaskLetter &&
+    cartPrefersTrackedLetterOverUntracked(
+      cart.map((item) => ({
+        product: { price: getStorefrontLineUnitPrice(item) },
+        quantity: item.quantity,
+      })),
+      cart.reduce((sum, item) => sum + getStorefrontLineUnitPrice(item) * item.quantity, 0)
+    )
   const defaultShippingOption =
     shippingRequirement.allowUntrackedMaskLetter
-      ? shippingOptions.find((option) => option.id === 'market-s-untracked-letter') ||
+      ? shippingOptions.find(
+          (option) => option.id === preferredMarketSLetterOptionId(preferTrackedLetter)
+        ) ||
+        shippingOptions.find((option) => option.id === 'market-s-untracked-letter') ||
         shippingOptions[0]
       : configuredDefaultShippingOption &&
           isShippingOptionCompatible(configuredDefaultShippingOption, shippingRequirement)
@@ -1247,11 +1261,17 @@ export default function CheckoutPage() {
 
               {shippingRequirement.allowUntrackedMaskLetter && (
                 <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-                  <p className="font-semibold">Untracked letter available for this cart</p>
+                  <p className="font-semibold">
+                    {preferTrackedLetter
+                      ? 'Tracked letter recommended for this cart'
+                      : 'Letter options available for this cart'}
+                  </p>
                   <p className="mt-1 text-xs leading-relaxed">
-                    1–3 Market S Single Item packs (and up to 3 sticker sheets in the same large
-                    letter) at 20 mm / 500 g or under can ship as an untracked letter. Tracking is
-                    not included. Choose Parcel Post if you need tracking.
+                    1–3 Market S Single Item packs (and up to 3 sticker sheets) at 20 mm / 500 g or
+                    under can ship as a letter. Untracked letter is the lowest cost;{' '}
+                    <strong>Tracked Letter</strong> (~$8.10 AusPost) includes tracking — preferred
+                    for higher-value packs (e.g. 1+1) when not registered as Family Bundle. Parcel
+                    Post remains available if you prefer a parcel.
                   </p>
                 </div>
               )}

@@ -268,14 +268,14 @@ const DOCUMENT_SHIPPING_FALLBACK: DocumentShippingOptionLike[] = [
   {
     id: 'tracked-letter',
     name: 'Tracked Letter',
-    price: 5.55,
+    price: 8.1,
     order: 2,
     isActive: true,
   },
   {
     id: 'express-post',
     name: 'Express Post',
-    price: 14.5,
+    price: 15.2,
     order: 3,
     isActive: true,
   },

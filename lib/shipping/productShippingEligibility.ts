@@ -63,7 +63,9 @@ export function resolveProductShippingClass(product: ProductShippingLike): Produ
 export function resolveProductShippingWeightGrams(product: ProductShippingLike): number {
   const configured = Number(product.shippingWeightGrams)
   if (Number.isFinite(configured) && configured > 0) return Math.round(configured)
-  if (isMarketSMaskSingle(product)) return 40
+  // Market S Single Item sheet packs are typically under ~30 g; 1+1 / 8-packs
+  // should be Family Bundle with an explicit shippingWeightGrams (≈60 / ≈280–450).
+  if (isMarketSMaskSingle(product)) return 30
   return resolveProductShippingClass(product) === 'letter' ? 20 : 250
 }
 
@@ -89,10 +91,40 @@ export function resolveMaskPackThicknessMm(product: ProductShippingLike): number
   return DEFAULT_MASK_THICKNESS_MM
 }
 
+export const TRACKED_LETTER_OPTION_ID = 'tracked-letter'
+
+/**
+ * When Market S letter-eligible cart merchandise reaches this (e.g. 1+1 Single Item
+ * not saved as Family Bundle), checkout prefers Tracked Letter (~$8.10) over untracked.
+ */
+export const MARKET_S_PREFERRED_TRACKED_LETTER_MIN_AUD = 20
+
 function isCmsLetterOption(option: ShippingOptionEligibilityLike): boolean {
   if (option.id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) return true
   const key = `${option.id || ''} ${option.name || ''}`.toLowerCase()
   return /standard[\s-]*letter|tracked[\s-]*letter/.test(key)
+}
+
+export function isTrackedLetterShippingOption(option: ShippingOptionEligibilityLike): boolean {
+  const id = String(option.id || '').trim()
+  if (id === TRACKED_LETTER_OPTION_ID) return true
+  return /tracked[\s-]*letter/i.test(`${id} ${option.name || ''}`)
+}
+
+/**
+ * True when cart value suggests the owner wants tracking on letter packs
+ * (1+1 / higher Single Item SKUs not registered as Family Bundle).
+ */
+export function cartPrefersTrackedLetterOverUntracked(
+  lines: Array<{ product?: { price?: number }; quantity?: number }>,
+  itemsSubtotal?: number
+): boolean {
+  const sub = Number(itemsSubtotal)
+  if (Number.isFinite(sub) && sub >= MARKET_S_PREFERRED_TRACKED_LETTER_MIN_AUD) return true
+  return (lines || []).some((line) => {
+    const unit = Number(line?.product?.price)
+    return Number.isFinite(unit) && unit >= MARKET_S_PREFERRED_TRACKED_LETTER_MIN_AUD
+  })
 }
 
 /**
@@ -178,16 +210,25 @@ export function isShippingOptionCompatible(
   if (option.type === 'pickup') return true
 
   if (allowUntrackedMaskLetter) {
+    // Market S letter cart: untracked Market S letter + Tracked Letter ($8.10).
+    // Hide Standard Letter (sticker duplicate). Keep parcel / express / pickup.
     if (option.id === MARKET_S_UNTRACKED_LETTER_OPTION_ID) return true
+    if (isTrackedLetterShippingOption(option)) return true
     if (isCmsLetterOption(option)) return false
     return true
   }
 
   if (requiresParcel) {
+    // Family Bundle / parcel SKUs: no letter rates (including Tracked Letter).
     return !isCmsLetterOption(option)
   }
 
   return option.id !== MARKET_S_UNTRACKED_LETTER_OPTION_ID
+}
+
+/** Preferred option id for Market S letter-eligible carts (default on cart/checkout). */
+export function preferredMarketSLetterOptionId(preferTracked: boolean): string {
+  return preferTracked ? TRACKED_LETTER_OPTION_ID : MARKET_S_UNTRACKED_LETTER_OPTION_ID
 }
 
 export type MergeShippingOptionsParams = {

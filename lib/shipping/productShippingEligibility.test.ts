@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cartPrefersTrackedLetterOverUntracked,
   getCartShippingRequirement,
   isShippingOptionCompatible,
   mergeShippingOptionsForCart,
   MIXED_LETTER_MAX_STICKER_SHEETS,
+  preferredMarketSLetterOptionId,
+  TRACKED_LETTER_OPTION_ID,
 } from './productShippingEligibility'
 import {
   MARKET_S_UNTRACKED_LETTER_OPTION_ID,
@@ -43,6 +46,7 @@ describe('Market S shipping dual-rate', () => {
     const options = mergeShippingOptionsForCart([letter, trackedLetter, parcel, pickup], req)
     expect(options.map((option) => option.id)).toEqual([
       MARKET_S_UNTRACKED_LETTER_OPTION_ID,
+      'tracked-letter',
       'parcel-post',
       'click-collect-mansfield',
     ])
@@ -55,6 +59,25 @@ describe('Market S shipping dual-rate', () => {
     expect(synthetic.freeShippingWhenThresholdMet).toBe(true)
     expect(synthetic.price).toBe(MARKET_S_UNTRACKED_LETTER_PRICE)
     expect(isShippingOptionCompatible(letter, req)).toBe(false)
+    expect(isShippingOptionCompatible(trackedLetter, req)).toBe(true)
+  })
+
+  it('hides Tracked Letter when Family Bundle forces parcel', () => {
+    const req = getCartShippingRequirement([{ product: familyBundle, quantity: 1 }])
+    expect(req.requiresParcel).toBe(true)
+    expect(isShippingOptionCompatible(trackedLetter, req)).toBe(false)
+    expect(isShippingOptionCompatible(parcel, req)).toBe(true)
+  })
+
+  it('prefers Tracked Letter default when Single Item merchandise is ≥ $20 (e.g. 1+1)', () => {
+    expect(
+      cartPrefersTrackedLetterOverUntracked([{ product: { price: 22 }, quantity: 1 }])
+    ).toBe(true)
+    expect(
+      cartPrefersTrackedLetterOverUntracked([{ product: { price: 8 }, quantity: 1 }])
+    ).toBe(false)
+    expect(preferredMarketSLetterOptionId(true)).toBe(TRACKED_LETTER_OPTION_ID)
+    expect(preferredMarketSLetterOptionId(false)).toBe(MARKET_S_UNTRACKED_LETTER_OPTION_ID)
   })
 
   it('allows untracked letter when Market S singles mix with up to 3 sticker sheets', () => {
