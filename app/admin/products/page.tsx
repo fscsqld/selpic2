@@ -43,6 +43,8 @@ import {
 } from '@/lib/marketSBundleUpsell'
 import {
   buildMarketSSalesModePayload,
+  datetimeLocalValueToIso,
+  isoToDatetimeLocalValue,
   normalizeMarketSSalesMode,
   type MarketSSalesMode,
 } from '@/lib/marketSPreorder'
@@ -2729,16 +2731,12 @@ function AdminProductsPageContent() {
                           </label>
                           <input
                             type="datetime-local"
-                            value={
-                              formData.preorderClosesAt
-                                ? formData.preorderClosesAt.slice(0, 16)
-                                : ''
-                            }
+                            value={isoToDatetimeLocalValue(formData.preorderClosesAt)}
                             onChange={(e) =>
                               setFormData((prev) => ({
                                 ...prev,
                                 preorderClosesAt: e.target.value
-                                  ? new Date(e.target.value).toISOString()
+                                  ? datetimeLocalValueToIso(e.target.value)
                                   : '',
                                 preorderCountdownEnabled: e.target.value
                                   ? prev.preorderCountdownEnabled
@@ -2747,6 +2745,10 @@ function AdminProductsPageContent() {
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                           />
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            Enter your computer&apos;s local time. Storefront shows Brisbane
+                            (AEST) with the zone label.
+                          </p>
                         </div>
                         <label className="md:col-span-2 inline-flex items-start gap-2 text-sm text-gray-900">
                           <input

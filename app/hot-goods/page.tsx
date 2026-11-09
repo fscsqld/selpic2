@@ -560,7 +560,10 @@ export default function HotGoodsPage() {
                 Limited drops with confirmed supply. Charged now, ships on the date shown.
               </p>
               {bannerCountdownProduct ? (
-                <MarketSPreorderCountdown product={bannerCountdownProduct} className="mt-1 max-w-md" />
+                <MarketSPreorderCountdown
+                  product={bannerCountdownProduct}
+                  className="mt-2 max-w-lg"
+                />
               ) : null}
               <button
                 type="button"

@@ -490,7 +490,7 @@ export default function ProductDetailPage() {
                   isOutOfStock
                     ? 'bg-gray-200 text-gray-600'
                     : preorderOpen
-                    ? 'bg-stone-100 text-stone-800'
+                    ? 'bg-amber-100 text-amber-950'
                     : isLowStock
                     ? 'bg-red-100 text-red-700'
                     : 'bg-green-100 text-green-700'
@@ -500,7 +500,7 @@ export default function ProductDetailPage() {
                       ? MARKET_S_COMING_SOON_CTA
                       : 'Out of Stock'
                     : preorderOpen
-                    ? shipsLabel || 'Pre-order open'
+                    ? 'Pre-order open'
                     : typeof stockQty === 'number'
                     ? `${stockQty} in stock`
                     : product.inStock
@@ -511,23 +511,27 @@ export default function ProductDetailPage() {
             </div>
 
             {preorderOpen && (
-              <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 space-y-2">
-                <p className="font-semibold tracking-wide text-xs text-stone-500 mb-1">
-                  {MARKET_S_PREORDER_BADGE}
-                </p>
-                {shipsLabel ? <p className="font-medium">{shipsLabel}</p> : null}
-                <MarketSPreorderCountdown product={product} tone="light" />
+              <div className="mb-6 rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-orange-50/40 to-stone-50 px-4 py-3.5 text-sm text-stone-800 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-md bg-stone-900 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-stone-50">
+                    {MARKET_S_PREORDER_BADGE}
+                  </span>
+                  {shipsLabel ? (
+                    <span className="text-sm font-semibold text-stone-900">{shipsLabel}</span>
+                  ) : null}
+                </div>
+                <MarketSPreorderCountdown product={product} tone="light" embedded />
                 {typeof product.preorderMaxQty === 'number' &&
                 product.preorderMaxQty > 0 &&
                 preorderLimit != null ? (
-                  <p className="mt-1 text-stone-600">
+                  <p className="text-stone-700">
                     {preorderLimit} of {product.preorderMaxQty} left
                   </p>
                 ) : null}
                 {product.preorderNote?.trim() ? (
-                  <p className="mt-1 text-stone-600">{product.preorderNote.trim()}</p>
+                  <p className="text-stone-600">{product.preorderNote.trim()}</p>
                 ) : (
-                  <p className="mt-1 text-stone-600">
+                  <p className="text-stone-600">
                     Charged today. We dispatch on or after the ships-from date once stock arrives.
                   </p>
                 )}

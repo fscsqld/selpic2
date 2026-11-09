@@ -179,6 +179,9 @@ export function getMarketSPreorderCountdownParts(
   return { closesAt: closes, totalMs, days, hours, minutes, seconds }
 }
 
+/** Storefront + order emails show close time in Brisbane (AU shop). */
+export const MARKET_S_PREORDER_DISPLAY_TZ = 'Australia/Brisbane'
+
 export function formatPreorderClosesAtLabel(closesAt: string | undefined): string {
   const d = parsePreorderClosesAt(closesAt)
   if (!d) return ''
@@ -188,8 +191,33 @@ export function formatPreorderClosesAtLabel(closesAt: string | undefined): strin
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: MARKET_S_PREORDER_DISPLAY_TZ,
     timeZoneName: 'short',
   })
+}
+
+/** Admin `datetime-local` value from stored ISO (browser local wall clock). */
+export function isoToDatetimeLocalValue(iso: string | undefined | null): string {
+  const raw = (iso || '').trim()
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day}T${h}:${min}`
+}
+
+/** Persist Admin `datetime-local` as ISO (interpreted as the browser's local time). */
+export function datetimeLocalValueToIso(localValue: string): string {
+  const raw = localValue.trim()
+  if (!raw) return ''
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw) ? `${raw}:00` : raw
+  const d = new Date(normalized)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString()
 }
 
 export const MARKET_S_PREORDER_BADGE = 'PRE-ORDER'

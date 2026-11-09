@@ -5,10 +5,13 @@ import {
   buildMarketSSalesModePayload,
   buildOrderItemPreorderSnapshot,
   collectPreorderSoldIncrements,
+  datetimeLocalValueToIso,
   formatOrderItemPreorderNote,
+  formatPreorderClosesAtLabel,
   formatPreorderShipsFromLabel,
   getMarketSPreorderCountdownParts,
   getMarketSPreorderPurchaseLimit,
+  isoToDatetimeLocalValue,
   isMarketSPreorderOpen,
   isMarketSPreorderProduct,
   normalizeMarketSSalesMode,
@@ -270,5 +273,19 @@ describe('Market S preorder countdown', () => {
     expect(parts!.days).toBe(1)
     expect(parts!.hours).toBe(0)
     expect(parts!.minutes).toBe(0)
+  })
+
+  it('formats Closes at in Brisbane and round-trips datetime-local in local wall clock', () => {
+    const label = formatPreorderClosesAtLabel('2026-11-13T02:09:00.000Z')
+    expect(label).toMatch(/13\s+Nov\s+2026/)
+    expect(label).toMatch(/12:09/)
+    expect(label).toMatch(/AEST|GMT\+10/)
+
+    const local = '2026-11-13T12:09'
+    const iso = datetimeLocalValueToIso(local)
+    expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(isoToDatetimeLocalValue(iso)).toBe(local)
+    expect(isoToDatetimeLocalValue('')).toBe('')
+    expect(datetimeLocalValueToIso('')).toBe('')
   })
 })
