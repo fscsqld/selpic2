@@ -219,19 +219,23 @@ export default function ContentModal({ isOpen, onClose, onSave, content, section
             </div>
           )}
 
-          {/* Link URL (for link/button types) */}
+          {/* Link URL (for link/button types) — type=text so relative paths like /stickers validate */}
           {(formData.type === 'link' || formData.type === 'button') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Link URL
               </label>
               <input
-                type="url"
-                value={formData.linkUrl}
+                type="text"
+                inputMode="url"
+                value={formData.linkUrl || ''}
                 onChange={(e) => handleInputChange('linkUrl', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter link URL"
+                placeholder="Enter link URL (e.g. /hot-goods or https://…)"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Site paths like /stickers or /hot-goods are allowed. Absolute https:// URLs also work.
+              </p>
             </div>
           )}
 
