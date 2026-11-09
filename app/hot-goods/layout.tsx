@@ -3,10 +3,15 @@ import { buildPublicMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/hot-goods',
-  title: 'Trending Products',
+  title: 'Market S',
   description:
-    'Explore trending and limited products from Selpic, including popular sticker and merchandise options updated for current demand.',
-  keywords: ['trending stickers', 'limited edition products', 'selpic market s'],
+    'Shop Market S K-beauty and everyday care essentials at Selpic — sheet masks, curated packs, and Australia-wide shipping from Brisbane.',
+  keywords: [
+    'Market S',
+    'K-beauty Australia',
+    'sheet masks australia',
+    'Selpic Market S',
+  ],
 })
 
 export default function HotGoodsLayout({ children }: { children: React.ReactNode }) {

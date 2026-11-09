@@ -3,10 +3,15 @@ import { buildPublicMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/help',
-  title: 'Help Center',
+  title: 'Help Centre',
   description:
-    'Find answers about ordering, file setup, shipping, and product options in the Selpic help center for faster support.',
-  keywords: ['selpic help', 'ordering guide', 'sticker faq'],
+    'Find answers about Market S skincare, name stickers, shipping, returns, payments, and AICIS registration in the Selpic Help Centre.',
+  keywords: [
+    'selpic help',
+    'Market S FAQ',
+    'name sticker shipping',
+    'refund policy australia',
+  ],
 })
 
 export default function HelpLayout({ children }: { children: React.ReactNode }) {

@@ -5,8 +5,13 @@ export const metadata: Metadata = buildPublicMetadata({
   path: '/about',
   title: 'About Selpic',
   description:
-    'Learn about Selpic in Australia, our quality standards for custom stickers and labels, and our commitment to fast turnaround and reliable support.',
-  keywords: ['about selpic', 'custom stickers australia', 'label printing australia'],
+    'Selpic is based in Brisbane, Australia. We offer Market S K-beauty essentials and personalised name stickers, with careful fulfilment and clear customer support.',
+  keywords: [
+    'about selpic',
+    'Market S Australia',
+    'name stickers australia',
+    'K-beauty Brisbane',
+  ],
 })
 
 export default function AboutLayout({ children }: { children: React.ReactNode }) {
