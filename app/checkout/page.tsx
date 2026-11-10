@@ -36,11 +36,13 @@ import {
 } from '@/lib/shipping/productShippingEligibility'
 import type { OrderRecord } from '@/lib/store'
 import { cartContainsMarketSGoods, MARKET_S_HYGIENE_CHECKOUT } from '@/lib/marketSHygieneCopy'
+import { getStorefrontAvailablePurchaseQty } from '@/lib/likedProductStock'
 import {
   buildOrderItemPreorderSnapshot,
-  getMarketSPreorderPurchaseLimit,
+  isMarketSPreorderClosed,
   isMarketSPreorderOpen,
   MARKET_S_PREORDER_CHECKOUT_ACK,
+  MARKET_S_PREORDER_CLOSED_CART_NOTE,
   orderHasPreorderItems,
 } from '@/lib/marketSPreorder'
 
@@ -220,15 +222,13 @@ export default function CheckoutPage() {
   const getAvailableStock = (productId: string) => {
     const storeProduct = products.find(p => p.id === productId)
     if (!storeProduct) return 0
-    // Open Market S pre-order: purchase cap replaces warehouse stock (stock 0 is valid).
-    const preorderLimit = getMarketSPreorderPurchaseLimit(storeProduct)
-    if (preorderLimit != null) return preorderLimit
-    const stock = (storeProduct as any).stockQuantity
-    if (typeof stock === 'number') {
-      return Math.max(0, stock)
-    }
-    return storeProduct.inStock ? Infinity : 0
+    const qty = getStorefrontAvailablePurchaseQty(storeProduct)
+    return Number.isFinite(qty) ? qty : Infinity
   }
+  const closedPreorderItems = cart.filter((item) => {
+    const source = products.find((p) => p.id === item.product.id) || item.product
+    return isMarketSPreorderClosed(source)
+  })
   const insufficientItems = cart.filter(item => item.quantity > getAvailableStock(item.product.id))
   
   // Safe translation wrapper to prevent runtime errors
@@ -976,6 +976,19 @@ export default function CheckoutPage() {
         }
       }
 
+      const latestClosedPreorder = cart.filter((item) => {
+        const source = products.find((p) => p.id === item.product.id) || item.product
+        return isMarketSPreorderClosed(source)
+      })
+      if (latestClosedPreorder.length > 0) {
+        setCheckoutNotice({
+          type: 'error',
+          message: MARKET_S_PREORDER_CLOSED_CART_NOTE,
+        })
+        router.push('/cart')
+        return
+      }
+
       const latestStockIssues = cart.filter(item => item.quantity > getAvailableStock(item.product.id))
       if (latestStockIssues.length > 0) {
         setCheckoutNotice({
@@ -1114,7 +1127,17 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {insufficientItems.length > 0 && (
+        {closedPreorderItems.length > 0 && (
+          <div className="mb-8 p-4 rounded-xl border border-stone-300 bg-stone-50 text-stone-800">
+            {MARKET_S_PREORDER_CLOSED_CART_NOTE}{' '}
+            <Link href="/cart" className="underline font-medium">
+              Return to cart
+            </Link>
+            .
+          </div>
+        )}
+
+        {insufficientItems.length > 0 && closedPreorderItems.length === 0 && (
           <div className="mb-8 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700">
             Some items exceed available stock. Please{' '}
             <Link href="/cart" className="underline font-medium">
@@ -1990,6 +2013,7 @@ export default function CheckoutPage() {
                 type="submit"
                 disabled={
                   isProcessing ||
+                  closedPreorderItems.length > 0 ||
                   insufficientItems.length > 0 ||
                   (cartHasMarketS && !marketSHygieneAck) ||
                   (cartHasPreorder && !preorderAck)

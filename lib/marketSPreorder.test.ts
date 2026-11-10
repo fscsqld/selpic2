@@ -11,9 +11,13 @@ import {
   formatPreorderShipsFromLabel,
   getMarketSPreorderCountdownParts,
   getMarketSPreorderPurchaseLimit,
+  getMarketSPreorderUnavailableLabel,
   isoToDatetimeLocalValue,
+  isMarketSPreorderClosed,
   isMarketSPreorderOpen,
   isMarketSPreorderProduct,
+  MARKET_S_PREORDER_CLOSED_CTA,
+  MARKET_S_PREORDER_SOLD_OUT_CTA,
   normalizeMarketSSalesMode,
   orderHasPreorderItems,
   orderIncludesPreorder,
@@ -79,6 +83,30 @@ describe('isMarketSPreorderOpen', () => {
       })
     ).toBe(3)
     expect(getMarketSPreorderPurchaseLimit({ category: 'HotGoods', stockQuantity: 0 })).toBe(null)
+  })
+
+  it('marks closed / sold-out preorder separately from in_stock', () => {
+    expect(isMarketSPreorderClosed(openPreorder)).toBe(false)
+    expect(
+      isMarketSPreorderClosed({
+        ...openPreorder,
+        preorderClosesAt: '2020-01-01T00:00:00.000Z',
+      })
+    ).toBe(true)
+    expect(
+      getMarketSPreorderUnavailableLabel({
+        ...openPreorder,
+        preorderClosesAt: '2020-01-01T00:00:00.000Z',
+      })
+    ).toBe(MARKET_S_PREORDER_CLOSED_CTA)
+    expect(
+      getMarketSPreorderUnavailableLabel({
+        ...openPreorder,
+        preorderMaxQty: 2,
+        preorderSoldCount: 2,
+        preorderClosesAt: '2099-01-01T00:00:00.000Z',
+      })
+    ).toBe(MARKET_S_PREORDER_SOLD_OUT_CTA)
   })
 })
 

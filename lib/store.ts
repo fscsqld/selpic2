@@ -16,7 +16,7 @@ import type { ShippingLabelFromOverride } from '@/lib/shipping/shippingLabelFrom
 import type { ShippingLabelOrientation } from '@/lib/shipping/shippingLabelOrientation'
 import type { MarketSSubcategory } from '@/lib/marketSSubcategory'
 import { mergeCartFromPersist } from '@/lib/mergePersistedCart'
-import { getMarketSPreorderPurchaseLimit } from '@/lib/marketSPreorder'
+import { getStorefrontAvailablePurchaseQty } from '@/lib/likedProductStock'
 import { resolveOrderCustomerGreetingName } from '@/lib/formatCustomerDisplayName'
 
 export interface Product {
@@ -492,14 +492,10 @@ const generateStockMovementId = () =>
 
 const getAvailableStock = (product?: Product): number => {
   if (!product) return 0
-  // Market S pre-order (admin-enabled only): allow cart qty from preorder cap, not warehouse stock.
-  const preorderLimit = getMarketSPreorderPurchaseLimit(product)
-  if (preorderLimit != null) return preorderLimit
-  const stock = (product as any).stockQuantity
-  if (typeof stock === 'number') {
-    return Math.max(0, stock)
-  }
-  return product.inStock ? DEFAULT_STOCK_LEVEL : 0
+  // Shared helper: open pre-order uses cap; closed pre-order is 0 (never warehouse fallthrough).
+  const qty = getStorefrontAvailablePurchaseQty(product)
+  if (!Number.isFinite(qty)) return DEFAULT_STOCK_LEVEL
+  return qty
 }
 
 // Newsletter 구독자 인터페이스

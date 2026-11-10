@@ -21,10 +21,13 @@ import {
 } from '@/lib/marketSHubFilter'
 import {
   formatPreorderShipsFromLabel,
+  getMarketSPreorderUnavailableLabel,
   isMarketSComingSoonProduct,
+  isMarketSPreorderClosed,
   isMarketSPreorderOpen,
   MARKET_S_COMING_SOON_CTA,
   MARKET_S_PREORDER_BADGE,
+  MARKET_S_PREORDER_CLOSED_BADGE,
   MARKET_S_PREORDER_CTA,
   shouldShowMarketSPreorderCountdown,
   type MarketSSalesMode,
@@ -362,10 +365,13 @@ export default function HotGoodsPage() {
 
   const handleAddToCart = (product: MarketSProduct) => {
     if (isMarketSComingSoonProduct(product) || isProductOutOfStock(product)) {
+      const closedLabel = getMarketSPreorderUnavailableLabel(product)
       alert(
         isMarketSComingSoonProduct(product)
           ? 'This item is coming soon and cannot be purchased yet.'
-          : 'This item is currently out of stock.'
+          : closedLabel
+            ? `${closedLabel}. It will be available again when stock is listed for sale.`
+            : 'This item is currently out of stock.'
       )
       return
     }
@@ -660,10 +666,13 @@ export default function HotGoodsPage() {
             const safety = typeof product.safetyStock === 'number' ? Math.max(0, product.safetyStock) : undefined
             const lowStockThreshold = Math.max(safety ?? 0, 5)
             const preorderOpen = isMarketSPreorderOpen(product)
+            const preorderClosed = isMarketSPreorderClosed(product)
+            const preorderUnavailableLabel = getMarketSPreorderUnavailableLabel(product)
             const comingSoon = isMarketSComingSoonProduct(product)
             const isOutOfStock = isProductOutOfStock(product)
             const isLowStock =
               !preorderOpen &&
+              !preorderClosed &&
               stockQty !== undefined &&
               stockQty > 0 &&
               stockQty <= lowStockThreshold &&
@@ -671,11 +680,13 @@ export default function HotGoodsPage() {
             const shipsLabel = formatPreorderShipsFromLabel(product.preorderShipsFrom)
             const cartLabel = comingSoon
               ? MARKET_S_COMING_SOON_CTA
-              : isOutOfStock
-                ? 'Out of Stock'
-                : preorderOpen
-                  ? MARKET_S_PREORDER_CTA
-                  : 'Cart'
+              : preorderUnavailableLabel
+                ? preorderUnavailableLabel
+                : isOutOfStock
+                  ? 'Out of Stock'
+                  : preorderOpen
+                    ? MARKET_S_PREORDER_CTA
+                    : 'Cart'
             return (
             <div key={product.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               {/* 상품 이미지 */}
@@ -704,7 +715,9 @@ export default function HotGoodsPage() {
                 {isOutOfStock && !preorderOpen && (
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center pointer-events-none z-[5]">
                     <span className="text-white font-medium">
-                      {comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'}
+                      {comingSoon
+                        ? MARKET_S_COMING_SOON_CTA
+                        : preorderUnavailableLabel || 'Out of Stock'}
                     </span>
                   </div>
                 )}
@@ -713,6 +726,11 @@ export default function HotGoodsPage() {
                   {preorderOpen && (
                     <span className="bg-stone-900 text-stone-50 text-[10px] px-2 py-1 rounded font-semibold tracking-wide">
                       {MARKET_S_PREORDER_BADGE}
+                    </span>
+                  )}
+                  {preorderClosed && (
+                    <span className="bg-stone-200 text-stone-700 text-[10px] px-2 py-1 rounded font-semibold tracking-wide">
+                      {MARKET_S_PREORDER_CLOSED_BADGE}
                     </span>
                   )}
                   {comingSoon && !preorderOpen && (

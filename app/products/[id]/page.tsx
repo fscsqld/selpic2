@@ -25,10 +25,13 @@ import { isProductOutOfStock } from '@/lib/likedProductStock'
 import {
   formatPreorderShipsFromLabel,
   getMarketSPreorderPurchaseLimit,
+  getMarketSPreorderUnavailableLabel,
   isMarketSComingSoonProduct,
+  isMarketSPreorderClosed,
   isMarketSPreorderOpen,
   MARKET_S_COMING_SOON_CTA,
   MARKET_S_PREORDER_BADGE,
+  MARKET_S_PREORDER_CLOSED_BADGE,
   MARKET_S_PREORDER_CTA,
 } from '@/lib/marketSPreorder'
 import MarketSPreorderCountdown from '@/components/market-s/MarketSPreorderCountdown'
@@ -154,6 +157,8 @@ export default function ProductDetailPage() {
     : undefined
   const lowStockThreshold = Math.max(safety ?? 0, 5)
   const preorderOpen = isMarketSPreorderOpen(product)
+  const preorderClosed = isMarketSPreorderClosed(product)
+  const preorderUnavailableLabel = getMarketSPreorderUnavailableLabel(product)
   const comingSoon = isMarketSComingSoonProduct(product)
   const preorderLimit = getMarketSPreorderPurchaseLimit(product)
   const maxPurchasableQty =
@@ -237,7 +242,9 @@ export default function ProductDetailPage() {
       alert(
         comingSoon
           ? 'This item is coming soon and cannot be purchased yet.'
-          : 'This product is currently out of stock.'
+          : preorderClosed
+            ? `${preorderUnavailableLabel || 'Pre-order closed'}. It will be available again when stock is listed for sale.`
+            : 'This product is currently out of stock.'
       )
       return
     }
@@ -306,6 +313,11 @@ export default function ProductDetailPage() {
                   {MARKET_S_PREORDER_BADGE}
                 </span>
               )}
+              {preorderClosed && (
+                <span className="bg-stone-200 text-stone-700 text-xs px-3 py-1 rounded font-semibold tracking-wide">
+                  {MARKET_S_PREORDER_CLOSED_BADGE}
+                </span>
+              )}
               {comingSoon && !preorderOpen && (
                 <span className="bg-amber-100 text-amber-900 text-xs px-3 py-1 rounded font-semibold tracking-wide">
                   COMING SOON
@@ -331,7 +343,7 @@ export default function ProductDetailPage() {
                   LIMITED EDITION
                 </span>
               )}
-              {isOutOfStock && !preorderOpen && (
+              {isOutOfStock && !preorderOpen && !preorderClosed && (
                 <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
                   {comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'}
                 </span>
@@ -498,7 +510,7 @@ export default function ProductDetailPage() {
                   {isOutOfStock
                     ? comingSoon
                       ? MARKET_S_COMING_SOON_CTA
-                      : 'Out of Stock'
+                      : preorderUnavailableLabel || 'Out of Stock'
                     : preorderOpen
                     ? 'Pre-order open'
                     : typeof stockQty === 'number'
@@ -509,6 +521,18 @@ export default function ProductDetailPage() {
                 </span>
               </div>
             </div>
+
+            {preorderClosed && (
+              <div className="mb-6 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3.5 text-sm text-stone-700">
+                <p className="font-semibold text-stone-900">
+                  {preorderUnavailableLabel || 'Pre-order closed'}
+                </p>
+                <p className="mt-1 text-stone-600">
+                  This drop is no longer accepting pre-orders. It will appear as a regular
+                  in-stock item once Admin lists available stock for sale.
+                </p>
+              </div>
+            )}
 
             {preorderOpen && (
               <div className="mb-6 rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-orange-50/40 to-stone-50 px-4 py-3.5 text-sm text-stone-800 shadow-sm space-y-3">
@@ -627,7 +651,9 @@ export default function ProductDetailPage() {
                       Adding...
                     </>
                   ) : isOutOfStock ? (
-                    comingSoon ? MARKET_S_COMING_SOON_CTA : 'Out of Stock'
+                    comingSoon
+                      ? MARKET_S_COMING_SOON_CTA
+                      : preorderUnavailableLabel || 'Out of Stock'
                   ) : (
                     <>
                       <ShoppingCart className="w-5 h-5" />

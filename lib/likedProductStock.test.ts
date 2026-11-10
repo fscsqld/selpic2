@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getStorefrontAvailablePurchaseQty,
   isProductOutOfStock,
   likedProductStockLabel,
   resolveLikedProductStockStatus,
@@ -48,6 +49,20 @@ describe('isProductOutOfStock', () => {
     ).toBe(false)
   })
 
+  it('keeps closed Market S pre-order unpurchasable even when warehouse stock > 0', () => {
+    expect(
+      isProductOutOfStock({
+        category: 'HotGoods',
+        salesMode: 'preorder',
+        preorderSupplierConfirmed: true,
+        preorderShipsFrom: '2026-10-20',
+        preorderClosesAt: '2020-01-01T00:00:00.000Z',
+        stockQuantity: 12,
+        inStock: true,
+      })
+    ).toBe(true)
+  })
+
   it('keeps coming_soon unpurchasable', () => {
     expect(
       isProductOutOfStock({
@@ -57,5 +72,21 @@ describe('isProductOutOfStock', () => {
         inStock: false,
       })
     ).toBe(true)
+  })
+})
+
+describe('getStorefrontAvailablePurchaseQty', () => {
+  it('returns 0 for closed pre-order regardless of stockQuantity', () => {
+    expect(
+      getStorefrontAvailablePurchaseQty({
+        category: 'HotGoods',
+        salesMode: 'preorder',
+        preorderSupplierConfirmed: true,
+        preorderShipsFrom: '2026-11-14',
+        preorderClosesAt: '2020-01-01T00:00:00.000Z',
+        stockQuantity: 5,
+        inStock: true,
+      })
+    ).toBe(0)
   })
 })

@@ -75,6 +75,17 @@ export function isMarketSPreorderOpen(
   return left > 0
 }
 
+/**
+ * Admin left salesMode=preorder but customers cannot buy (closed / sold out /
+ * missing ships or supplier confirm). Must NOT fall through to warehouse stock.
+ */
+export function isMarketSPreorderClosed(
+  product: MarketSPreorderFields | null | undefined,
+  now: Date = new Date()
+): boolean {
+  return isMarketSPreorderProduct(product) && !isMarketSPreorderOpen(product, now)
+}
+
 export function getMarketSPreorderUnitsLeft(
   product: Pick<Product, 'preorderMaxQty' | 'preorderSoldCount'> | null | undefined
 ): number {
@@ -222,7 +233,32 @@ export function datetimeLocalValueToIso(localValue: string): string {
 
 export const MARKET_S_PREORDER_BADGE = 'PRE-ORDER'
 export const MARKET_S_PREORDER_CTA = 'Pre-order now'
+export const MARKET_S_PREORDER_CLOSED_CTA = 'Pre-order closed'
+export const MARKET_S_PREORDER_SOLD_OUT_CTA = 'Pre-order sold out'
+export const MARKET_S_PREORDER_CLOSED_BADGE = 'CLOSED'
+export const MARKET_S_PREORDER_CLOSED_CART_NOTE =
+  'Pre-order closed — remove this item to continue checkout.'
 export const MARKET_S_COMING_SOON_CTA = 'Coming soon'
+
+/** Storefront CTA/badge when pre-order window is not open. */
+export function getMarketSPreorderUnavailableLabel(
+  product: MarketSPreorderFields | null | undefined,
+  now: Date = new Date()
+): string | null {
+  if (!isMarketSPreorderClosed(product, now) || !product) return null
+  const maxSet =
+    typeof product.preorderMaxQty === 'number' &&
+    Number.isFinite(product.preorderMaxQty) &&
+    product.preorderMaxQty > 0
+  if (
+    maxSet &&
+    getMarketSPreorderUnitsLeft(product) <= 0 &&
+    !closesAtPassed(product.preorderClosesAt, now)
+  ) {
+    return MARKET_S_PREORDER_SOLD_OUT_CTA
+  }
+  return MARKET_S_PREORDER_CLOSED_CTA
+}
 
 export const MARKET_S_PREORDER_CHECKOUT_ACK =
   'I understand pre-order items are charged now and ship on or after the date shown for each item.'

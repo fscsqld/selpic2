@@ -33,10 +33,13 @@ import {
 import MarketSBaitCrossSell from '@/components/MarketSBaitCrossSell'
 import MarketSBundleUpsell from '@/components/MarketSBundleUpsell'
 import { getMarketSBundleUpsellOffers } from '@/lib/marketSBundleUpsell'
+import { getStorefrontAvailablePurchaseQty } from '@/lib/likedProductStock'
 import {
   formatPreorderShipsFromLabel,
-  getMarketSPreorderPurchaseLimit,
+  getMarketSPreorderUnavailableLabel,
+  isMarketSPreorderClosed,
   isMarketSPreorderOpen,
+  MARKET_S_PREORDER_CLOSED_CART_NOTE,
 } from '@/lib/marketSPreorder'
 
 export default function CartPage() {
@@ -115,17 +118,9 @@ export default function CartPage() {
         trackable: false
       }
     }
-    // Open Market S pre-order uses purchase cap, not warehouse stock (stock 0 is valid).
-    const preorderLimit = getMarketSPreorderPurchaseLimit(storeProduct)
-    const rawStock = (storeProduct as any).stockQuantity
-    const available =
-      preorderLimit != null
-        ? preorderLimit
-        : typeof rawStock === 'number'
-          ? Math.max(0, rawStock)
-          : storeProduct.inStock
-            ? Infinity
-            : 0
+    // Shared helper: closed pre-order is 0; open pre-order uses cap; else warehouse.
+    const qty = getStorefrontAvailablePurchaseQty(storeProduct)
+    const available = Number.isFinite(qty) ? qty : Infinity
     const safety =
       typeof (storeProduct as any).safetyStock === 'number'
         ? Math.max(0, (storeProduct as any).safetyStock)
@@ -145,18 +140,26 @@ export default function CartPage() {
 
   const stockStatuses = validCart.map(item => {
     const meta = getStockMeta(item.product.id)
-    const isExceeded = meta.trackable ? item.quantity > meta.available : false
+    const live = products.find((p) => p.id === item.product.id) || item.product
+    const preorderClosed = isMarketSPreorderClosed(live)
+    const preorderUnavailableLabel = getMarketSPreorderUnavailableLabel(live)
+    const isExceeded =
+      preorderClosed || (meta.trackable ? item.quantity > meta.available : false)
     const lowThreshold = Math.max(meta.safety || 0, 5)
-    const isLowStock = meta.trackable && meta.available <= lowThreshold
+    const isLowStock =
+      !preorderClosed && meta.trackable && meta.available <= lowThreshold
     return {
       item,
       ...meta,
       isExceeded,
-      isLowStock
+      isLowStock,
+      preorderClosed,
+      preorderUnavailableLabel,
     }
   })
 
   const insufficientItems = stockStatuses.filter(status => status.isExceeded)
+  const closedPreorderItems = stockStatuses.filter(status => status.preorderClosed)
 
   // Drop invalid lines only — never clearCart() the whole basket (would wipe a
   // valid customize→Checkout add sitting next to a stale broken row).
@@ -298,6 +301,10 @@ export default function CartPage() {
   const total = subtotal + finalShipping - vipDiscount
 
   const handleCheckout = () => {
+    if (closedPreorderItems.length > 0) {
+      alert(MARKET_S_PREORDER_CLOSED_CART_NOTE)
+      return
+    }
     if (insufficientItems.length > 0) {
       alert('One or more items exceed available stock. Please adjust your cart before checkout.')
       return
@@ -374,12 +381,27 @@ export default function CartPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {insufficientItems.length > 0 && (
+            {closedPreorderItems.length > 0 && (
+              <div className="p-4 rounded-lg bg-stone-100 text-stone-800 text-sm border border-stone-200">
+                {MARKET_S_PREORDER_CLOSED_CART_NOTE}
+              </div>
+            )}
+            {insufficientItems.length > 0 && closedPreorderItems.length === 0 && (
               <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">
                 Some items exceed available stock. Please adjust highlighted items before checkout.
               </div>
             )}
-            {stockStatuses.map(({ item, available, safety, incoming, isExceeded, isLowStock, trackable }, index) => {
+            {stockStatuses.map(({
+              item,
+              available,
+              safety,
+              incoming,
+              isExceeded,
+              isLowStock,
+              trackable,
+              preorderClosed,
+              preorderUnavailableLabel,
+            }, index) => {
               return (
                 <div
                   key={`${item.product.id}-${JSON.stringify(item.customizations)}-${index}-${item.quantity || 0}`}
@@ -415,6 +437,13 @@ export default function CartPage() {
                         {(() => {
                           const live =
                             products.find((p) => p.id === item.product.id) || item.product
+                          if (preorderClosed) {
+                            return (
+                              <p className="text-sm text-red-700 mt-1 font-medium">
+                                {preorderUnavailableLabel || 'Pre-order closed'} — remove to continue
+                              </p>
+                            )
+                          }
                           if (!isMarketSPreorderOpen(live)) return null
                           const ships = formatPreorderShipsFromLabel(live.preorderShipsFrom)
                           return (
