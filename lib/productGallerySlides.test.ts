@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dedupeLinkedSlidesAgainstPrimary,
   isUsablePrimaryGalleryUrl,
+  mergeProductGalleryMediaSources,
   normalizeMediaCompareUrl,
   orderProductGallerySlides,
 } from './productGallerySlides'
@@ -47,5 +48,31 @@ describe('productGallerySlides', () => {
         buildPrimary: () => ({ compareUrl: primary, id: 'primary' }),
       }).map((r) => r.id)
     ).toEqual(['extra'])
+  })
+
+  it('uses server gallery when Admin media-store exists but this SKU has no local links', () => {
+    const remote = [
+      { id: 'r1', order: 2, url: extra },
+      { id: 'r0', order: 1, url: primary },
+    ]
+    const merged = mergeProductGalleryMediaSources({
+      hasClientMediaStore: true,
+      local: [],
+      remote,
+      remoteLoaded: true,
+    })
+    expect(merged.map((r) => r.id)).toEqual(['r0', 'r1'])
+  })
+
+  it('keeps local Admin links when present even if media-store flag is on', () => {
+    const local = [{ id: 'local-only', order: 1, url: extra }]
+    const remote = [{ id: 'r0', order: 1, url: primary }]
+    const merged = mergeProductGalleryMediaSources({
+      hasClientMediaStore: true,
+      local,
+      remote,
+      remoteLoaded: true,
+    })
+    expect(merged.map((r) => r.id)).toEqual(['local-only'])
   })
 })

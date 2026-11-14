@@ -14,6 +14,7 @@ import ProductImageZoomPan from '@/components/ProductImageZoomPan'
 import { toSameOriginStorefrontMediaUrl } from '@/lib/storefrontMediaProxy'
 import {
   isUsablePrimaryGalleryUrl,
+  mergeProductGalleryMediaSources,
   orderProductGallerySlides,
 } from '@/lib/productGallerySlides'
 
@@ -253,17 +254,12 @@ export default function ProductGallery({
   }, [productId, bumpRemoteRefresh, bumpSuppression, refreshMediaFilesFromStorage])
 
   /**
-   * Local `media-store`: never merge stale `/api/media/public` rows (POST may lag).
-   * Production visitors (no media-store): hydrate gallery URLs from server snapshot only.
+   * Admin browsers keep `media-store` in localStorage. Prefer local rows when this SKU
+   * has linked files (pending uploads / unsynced edits). If local is empty for this SKU,
+   * use `/api/media/public` so laptop Admin tabs match mobile / incognito.
    */
   const mergedProductMedia = useMemo(() => {
     if (!productId) return []
-
-    if (hasClientMediaStore()) {
-      return productMedia
-    }
-
-    if (!remoteLoaded) return productMedia
 
     const remoteFiltered = remoteProductMedia.filter((f: { id?: string; url?: string; webpUrl?: string }) => {
       if (!f?.id) return false
@@ -274,21 +270,36 @@ export default function ProductGallery({
       )
     })
 
-    if (productMedia.length > 0) {
-      const remoteById = new Map(remoteFiltered.map((f: { id?: string }) => [String(f.id), f]))
-      return productMedia
-        .map((f) => {
-          const r = remoteById.get(String(f.id))
-          return (r ? { ...r, ...f } : f) as (typeof productMedia)[0]
-        })
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const adminLocal = hasClientMediaStore()
+    if (adminLocal) {
+      return mergeProductGalleryMediaSources({
+        hasClientMediaStore: true,
+        local: productMedia,
+        remote: remoteFiltered,
+        remoteLoaded,
+      })
     }
 
-    const remoteIds = new Set(remoteFiltered.map((f: { id?: string }) => String(f?.id ?? '')))
-    const localOnly = productMedia.filter(
-      (f) => f.id && !remoteIds.has(String(f.id)) && isLikelyPendingClientOnlyMedia(f)
-    )
-    return [...remoteFiltered, ...localOnly].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    if (!remoteLoaded) return productMedia
+
+    const merged = mergeProductGalleryMediaSources({
+      hasClientMediaStore: false,
+      local: productMedia,
+      remote: remoteFiltered,
+      remoteLoaded: true,
+    })
+
+    // Keep very recent client-only uploads that are not on the server snapshot yet.
+    if (productMedia.length > 0 && remoteFiltered.length > 0) {
+      const remoteIds = new Set(remoteFiltered.map((f: { id?: string }) => String(f?.id ?? '')))
+      const localOnly = productMedia.filter(
+        (f) => f.id && !remoteIds.has(String(f.id)) && isLikelyPendingClientOnlyMedia(f)
+      )
+      if (localOnly.length > 0) {
+        return [...merged, ...localOnly].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      }
+    }
+    return merged
   }, [productId, remoteLoaded, remoteProductMedia, productMedia, remoteRefreshToken, suppressionEpoch])
 
   const effectiveProductMedia = mergedProductMedia
