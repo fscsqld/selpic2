@@ -3,14 +3,15 @@ import { buildPublicMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = buildPublicMetadata({
   path: '/hot-goods',
-  title: 'Market S',
+  title: 'K-Beauty',
   description:
-    'Shop Market S K-beauty and everyday care essentials at Selpic — sheet masks, curated packs, and Australia-wide shipping from Brisbane.',
+    'Shop K-beauty essentials at Selpic — sheet masks, curated care packs, and Australia-wide shipping from Brisbane.',
   keywords: [
-    'Market S',
     'K-beauty Australia',
     'sheet masks australia',
-    'Selpic Market S',
+    'Korean skincare Australia',
+    'Brisbane',
+    'Selpic',
   ],
 })
 

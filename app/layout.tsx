@@ -8,9 +8,9 @@ import ClientSwCacheReset from '@/components/ClientSwCacheReset'
 const inter = Inter({ subsets: ['latin'], display: 'swap', preload: true })
 const siteUrl = getPublicSiteUrl()
 const siteName = 'Selpic'
-const siteTitle = 'Custom Stickers & Name Labels Australia | Selpic'
+const siteTitle = 'Custom Name Labels & K-Beauty Australia | Selpic'
 const siteDescription =
-  'Order custom stickers and waterproof name labels in Australia with Selpic. Fast turnaround, premium print quality, and easy online personalization for school, home, and business.'
+  'Selpic in Brisbane — custom name labels and K-beauty essentials (sheet masks & care), with Australia-wide shipping.'
 const defaultOgImage = `${siteUrl.replace(/\/$/, '')}/images/logo.webp`
 
 /** Ensures phones/tablets use device width; viewportFit helps safe-area on notched iOS; theme for browser chrome. */
@@ -29,13 +29,17 @@ export const metadata: Metadata = {
   description: siteDescription,
   applicationName: siteName,
   keywords: [
-    'custom stickers',
+    'custom name labels',
     'name labels',
     'waterproof name labels',
     'school name labels',
+    'custom stickers',
     'waterproof stickers',
     'personalized labels',
     'custom labels australia',
+    'K-beauty Australia',
+    'sheet masks australia',
+    'Brisbane',
     'Selpic',
     'Australia',
   ],
@@ -56,7 +60,7 @@ export const metadata: Metadata = {
         url: defaultOgImage,
         width: 1200,
         height: 630,
-        alt: 'Selpic custom sticker storefront',
+        alt: 'Selpic — custom name labels and K-beauty Australia',
       },
     ],
   },
